@@ -33,10 +33,7 @@ async function transact<T>(mode: IDBTransactionMode, execute: (store: IDBObjectS
       tx.onerror = () => fail(tx.error ?? new Error('Local save transaction failed'));
       execute(store, done, fail);
     } catch (error) { fail(error instanceof Error ? error : new Error(String(error))); }
-    // A fresh database connection is unnecessary after the transaction ends.
-    // Close it only once IndexedDB has completed all requests.
-    const tx = (() => { try { return db.transaction(STORE, 'readonly'); } catch { return null; } })();
-    if (tx) tx.oncomplete = () => db.close();
+    // Connection closes after this operation settles; requests are transaction-scoped.
   });
 }
 function requestResult<T>(request: IDBRequest<T>, resolve: (value: T) => void, reject: (error: Error) => void) {
