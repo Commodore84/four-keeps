@@ -13,14 +13,22 @@ const tabs = [
 ] as const;
 
 function Adventure({ campaign }: { campaign: Campaign | null }) {
+  const endRef = useRef<HTMLDivElement>(null);
+  const lastTurn = campaign?.journal.filter((entry) => entry.kind === 'player' || entry.kind === 'dm').at(-1)?.id;
+  useEffect(() => { if (lastTurn) endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' }); }, [lastTurn]);
+  const turns = campaign?.journal.filter((entry) => entry.kind === 'player' || entry.kind === 'dm') ?? [];
   return <section className="space-y-5" aria-label="Adventure">
-    <div className="scene"><div className="scene-glow"/><div className="absolute bottom-5 left-5 right-5"><p className="eyebrow">Chapter One</p><h2 className="font-serif text-3xl">A Road to the Forgotten Keep</h2></div></div>
-    <div className="rounded-xl border border-white/10 bg-panel p-5 space-y-3">
+    {turns.length === 0 && <div className="scene"><div className="scene-glow"/><div className="absolute bottom-5 left-5 right-5"><p className="eyebrow">Chapter One</p><h2 className="font-serif text-3xl">A Road to the Forgotten Keep</h2></div></div>}
+    {turns.length === 0 && <div className="rounded-xl border border-white/10 bg-panel p-5 space-y-3">
       <p className="eyebrow">Dungeon Master</p>
       <p className="leading-7 text-parchment/85">The road bends toward a frontier village, its lanterns glowing beneath the evening mist. Beyond the tree line, an old keep waits in silence.</p>
-      {campaign && campaign.journal.filter((entry) => entry.kind === 'player' || entry.kind === 'dm').slice(-8).map((entry) => <div key={entry.id} className="border-t border-white/10 pt-3"><p className="eyebrow">{entry.kind === 'player' ? 'Nighthawk' : 'Dungeon Master'}</p><p className="mt-2 whitespace-pre-wrap leading-7 text-parchment/85">{entry.text}</p></div>)}
-      <p className="text-xs text-gold/80">{campaign ? 'Campaign saved locally · AI DM not connected yet' : 'Create a local campaign to begin'}</p>
-    </div>
+    </div>}
+    {turns.map((entry) => <article key={entry.id} className={entry.kind === 'player' ? 'ml-8 rounded-xl border border-gold/30 bg-gold/10 p-4' : 'mr-3 rounded-xl border border-white/10 bg-panel p-5'}>
+      <p className="eyebrow">{entry.kind === 'player' ? 'Nighthawk' : 'Dungeon Master'}</p>
+      <p className="mt-2 whitespace-pre-wrap leading-7 text-parchment/90">{entry.text}</p>
+    </article>)}
+    {campaign && <p className="text-xs text-gold/80">Campaign saved on this device · {turns.length ? 'AI Dungeon Master connected' : 'Ready for your first action'}</p>}
+    <div ref={endRef}/>
   </section>;
 }
 function Party() {
@@ -89,7 +97,7 @@ export function App() {
       setCampaign(next);
       setCampaigns((items) => items.map((item) => item.id === next.id ? next : item));
       setDraft('');
-      setNotice('Saved to your local journal. The AI DM is not connected yet.');
+      setNotice('Saved to your local journal.');
     } catch (error) { setNotice('Could not save note: ' + String(error)); }
     finally { setSaving(false); }
   }
@@ -103,10 +111,10 @@ export function App() {
       const history = campaign.journal.filter((entry) => entry.kind === 'player' || entry.kind === 'dm')
         .slice(-12).map((entry) => ({ role: entry.kind === 'player' ? 'user' : 'assistant', content: entry.text }));
       const response = await fetch('/api/dm', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-four-keeps-access': accessCode },
-        body: JSON.stringify({ message: draft, history }) });
-      const result: { narration?: string; error?: string } = await response.json();
+        body: JSON.stringify({ message: draft, history, worldFacts: campaign.worldFacts ?? [] }) });
+      const result: { narration?: string; newFacts?: string[]; error?: string } = await response.json();
       if (!response.ok || !result.narration) throw new Error(result.error || 'DM request failed');
-      const next = addExchange(campaign, draft, result.narration);
+      const next = addExchange(campaign, draft, result.narration, new Date().toISOString(), result.newFacts ?? []);
       await localCampaignStorage.save(next);
       setCampaign(next);
       setCampaigns((items) => items.map((item) => item.id === next.id ? next : item));
@@ -178,6 +186,10 @@ export function App() {
           <input id="access-code" type="password" autoComplete="off" value={accessCode} onChange={(event) => setAccessCode(event.target.value)} placeholder="Enter your private access code" className="w-full rounded-lg border border-white/20 bg-ink px-3 py-2 text-base"/>
           <p className="text-xs text-parchment/55">The AI narrates only. Dice, inventory, and rules are not yet connected.</p></>}
         </section>}
+        {campaign && activeView === 'journal' && (campaign.worldFacts?.length ?? 0) > 0 && <details className="mb-5 rounded-xl border border-gold/25 bg-panel p-4">
+          <summary className="cursor-pointer font-serif text-lg">World memory ({campaign.worldFacts?.length} facts)</summary>
+          <ul className="mt-3 list-disc space-y-2 pl-5 text-sm text-parchment/80">{campaign.worldFacts?.map((fact, index) => <li key={index}>{fact}</li>)}</ul>
+        </details>}
         {content[activeView]}
       </main>
       <div className="sticky bottom-0 z-20 border-t border-white/10 bg-ink/95 backdrop-blur">
