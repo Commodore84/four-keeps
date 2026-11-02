@@ -5,7 +5,7 @@ import { addExchange, addNote, addRoll, newCampaign, type Campaign } from '../ga
 import { localCampaignStorage } from '../game/storage';
 import type { View } from '../game/types';
 import { emptyWorld } from '../game/world';
-import { prototypeNighthawk, skillAbility, skillModifier, rollCheck, describeCheck, type Skill, type RollMode } from '../game/checks';
+import { prototypeNighthawk, abilities, abilityModifier, skillAbility, skillModifier, rollCheck, describeCheck, type Skill, type RollMode } from '../game/checks';
 
 const tabs = [
   { id: 'adventure', label: 'Adventure', Icon: Compass },
@@ -40,11 +40,12 @@ function Party({ campaign, onRoll, saving }: { campaign: Campaign | null; onRoll
   const [skill, setSkill] = useState<Skill>('Stealth');
   const [mode, setMode] = useState<RollMode>('normal');
   const skills = Object.keys(skillAbility) as Skill[];
-  const modifier = skillModifier(prototypeNighthawk, skill);
+  const stats = campaign?.character ?? prototypeNighthawk;
+  const modifier = skillModifier(stats, skill);
   const lastRoll = campaign?.journal.filter(entry => entry.kind === 'system' && entry.text.startsWith('Nighthawk rolled ')).at(-1);
   return <section className="space-y-4"><div className="flex items-center gap-3"><Shield className="text-gold"/><h2 className="font-serif text-2xl">The Party</h2></div>
-    <div className="rounded-xl border border-white/10 bg-panel p-5"><p className="font-semibold">Nighthawk</p><p className="mt-1 text-sm text-parchment/60">Wood Elf Rogue · Level 1 · Playtest statistics</p><p className="mt-3 text-sm">STR 8 · DEX 16 · CON 14 · INT 14 · WIS 12 · CHA 10</p><p className="mt-2 text-xs text-parchment/60">Proficiency bonus +2. These are provisional values until we finalize character creation.</p></div>
-    <div className="rounded-xl border border-gold/30 bg-panel p-5 space-y-3"><h3 className="font-serif text-xl">Skill checks</h3><p className="text-sm text-parchment/70">Tap to roll real d20s. Results are saved to your campaign. The DM does not yet determine success or failure.</p><label className="block text-sm">Skill<select className="mt-1 block w-full rounded-lg border border-white/20 bg-ink p-3 text-base" value={skill} onChange={e => setSkill(e.target.value as Skill)}>{skills.map(s => <option key={s} value={s}>{s} ({skillModifier(prototypeNighthawk,s) >= 0 ? '+' : ''}{skillModifier(prototypeNighthawk,s)})</option>)}</select></label><label className="block text-sm">Roll mode<select className="mt-1 block w-full rounded-lg border border-white/20 bg-ink p-3 text-base" value={mode} onChange={e => setMode(e.target.value as RollMode)}><option value="normal">Normal</option><option value="advantage">Advantage (2d20, higher)</option><option value="disadvantage">Disadvantage (2d20, lower)</option></select></label><button type="button" disabled={!campaign || saving} onClick={() => onRoll(skill,mode)} className="w-full rounded-lg bg-gold px-4 py-3 font-semibold text-ink disabled:opacity-40">Roll {skill} ({modifier >= 0 ? '+' : ''}{modifier})</button>{lastRoll && <p role="status" className="rounded-lg border border-gold/20 p-3 text-sm">{lastRoll.text}</p>}</div>
+    <div className="rounded-xl border border-white/10 bg-panel p-5"><p className="font-semibold">Nighthawk</p><p className="mt-1 text-sm text-parchment/60">Wood Elf Rogue · Level 1 · Playtest statistics</p><div className="mt-4 grid grid-cols-3 gap-2">{abilities.map(ability => <div key={ability} className="rounded-lg border border-white/15 p-3 text-center"><p className="text-xs uppercase text-gold">{ability}</p><p className="text-xl font-semibold">{stats.scores[ability]}</p><p className="text-sm text-parchment/70">{abilityModifier(stats.scores[ability]) >= 0 ? "+" : ""}{abilityModifier(stats.scores[ability])}</p></div>)}</div><p className="mt-3 text-sm">Proficiency bonus +{stats.proficiencyBonus}</p><p className="mt-2 text-xs text-parchment/60">Provisional character sheet, saved with this campaign. Skills marked * include proficiency.</p></div>
+    <div className="rounded-xl border border-gold/30 bg-panel p-5 space-y-3"><h3 className="font-serif text-xl">Skill checks</h3><p className="text-sm text-parchment/70">Tap to roll real d20s. Results are saved to your campaign. The DM does not yet determine success or failure.</p><label className="block text-sm">Skill<select className="mt-1 block w-full rounded-lg border border-white/20 bg-ink p-3 text-base" value={skill} onChange={e => setSkill(e.target.value as Skill)}>{skills.map(s => <option key={s} value={s}>{s} ({skillModifier(stats,s) >= 0 ? '+' : ''}{skillModifier(stats,s)}{stats.proficientSkills.includes(s) ? ' *' : ''})</option>)}</select></label><label className="block text-sm">Roll mode<select className="mt-1 block w-full rounded-lg border border-white/20 bg-ink p-3 text-base" value={mode} onChange={e => setMode(e.target.value as RollMode)}><option value="normal">Normal</option><option value="advantage">Advantage (2d20, higher)</option><option value="disadvantage">Disadvantage (2d20, lower)</option></select></label><button type="button" disabled={!campaign || saving} onClick={() => onRoll(skill,mode)} className="w-full rounded-lg bg-gold px-4 py-3 font-semibold text-ink disabled:opacity-40">Roll {skill} ({modifier >= 0 ? '+' : ''}{modifier})</button>{lastRoll && <p role="status" className="rounded-lg border border-gold/20 p-3 text-sm">{lastRoll.text}</p>}</div>
     <div className="rounded-xl border border-dashed border-gold/30 p-5"><p className="font-semibold">Three companions await</p><p className="mt-2 text-sm text-parchment/60">Companion recruitment will arrive in a later milestone.</p></div>
   </section>;
 }
@@ -106,7 +107,7 @@ export function App() {
     if (!campaign || saving) return;
     setSaving(true);
     try {
-      const result = rollCheck(prototypeNighthawk, skill, mode);
+      const result = rollCheck(campaign.character ?? prototypeNighthawk, skill, mode);
       const next = addRoll(campaign, describeCheck(result));
       await localCampaignStorage.save(next);
       setCampaign(next);
@@ -247,7 +248,7 @@ export function App() {
           <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={dmMode} onChange={(event) => setDmMode(event.target.checked)}/> AI Dungeon Master mode</label>
           {dmMode && <><label htmlFor="access-code" className="block text-xs text-parchment/70">Game access code (enter after refreshing)</label>
           <input id="access-code" type="password" autoComplete="off" value={accessCode} onChange={(event) => setAccessCode(event.target.value)} placeholder="Enter your private access code" className="w-full rounded-lg border border-white/20 bg-ink px-3 py-2 text-base"/>
-          <p className="text-xs text-parchment/55">The AI narrates only. Dice, inventory, and rules are not yet connected.</p></>}
+          <p className="text-xs text-parchment/55">The rules engine resolves skill checks. Combat and inventory are not yet connected.</p></>}
         </section>}
         </>}
         {campaign && activeView === 'journal' && (campaign.worldFacts?.length ?? 0) > 0 && <details className="mb-5 rounded-xl border border-gold/25 bg-panel p-4">
