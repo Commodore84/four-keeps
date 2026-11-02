@@ -22,16 +22,16 @@ export default async function handler(req, res) {
     const response = await fetch('https://api.openai.com/v1/responses', {
       method: 'POST',
       headers: { 'Authorization': 'Bearer ' + process.env.OPENAI_API_KEY, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: MODEL, instructions: SYSTEM, input: [{ role: 'developer', content: 'WORLD FACTS (established campaign continuity):\n' + (facts.length ? facts.map((fact) => '- ' + fact).join('\n') : 'No established facts yet.') }, ...safeHistory, { role: 'user', content: message }], text: { format: { type: 'json_object' } }, max_output_tokens: 1100, store: false }),
+      body: JSON.stringify({ model: MODEL, instructions: SYSTEM, input: [{ role: 'developer', content: 'WORLD FACTS (established campaign continuity):\n' + (facts.length ? facts.map((fact) => '- ' + fact).join('\n') : 'No established facts yet.') }, ...safeHistory, { role: 'user', content: message }], max_output_tokens: 1100, store: false }),
       signal: AbortSignal.timeout(25000),
     });
     const data = await response.json();
-    if (!response.ok) return res.status(response.status === 429 ? 429 : 502).json({ error: response.status === 429 ? 'AI is temporarily rate-limited.' : 'AI service could not complete this request.' });
+    if (!response.ok) { console.error('OpenAI response error', response.status, data.error?.code, data.error?.message); return res.status(response.status === 429 ? 429 : 502).json({ error: response.status === 429 ? 'AI is temporarily rate-limited.' : 'AI service could not complete this request (' + (data.error?.code || response.status) + ').' }); }
     const narration = (data.output || []).flatMap((item) => item.type === 'message' ? (item.content || []) : [])
       .filter((part) => part.type === 'output_text').map((part) => part.text).join('\n').trim();
     if (!narration) return res.status(502).json({ error: 'AI returned no narration.' });
     let parsed;
-    try { parsed = JSON.parse(narration); } catch { return res.status(502).json({ error: 'AI returned an invalid narrative format. Please retry.' }); }
+    try { parsed = JSON.parse(narration.replace(/^\x60\x60\x60(?:json)?\s*/i, '').replace(/\s*\x60\x60\x60$/, '')); } catch { parsed = { narration, newFacts: [] }; }
     if (!parsed || typeof parsed.narration !== 'string' || !parsed.narration.trim()) return res.status(502).json({ error: 'AI returned no narration.' });
     const newFacts = Array.isArray(parsed.newFacts) ? parsed.newFacts.filter((fact) => typeof fact === 'string').slice(0, 4).map((fact) => fact.slice(0, 220)) : [];
     return res.status(200).json({ narration: parsed.narration.trim(), newFacts, model: MODEL });
