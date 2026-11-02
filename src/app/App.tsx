@@ -4,6 +4,7 @@ import { BookOpen, Compass, Map, Send, Shield, Swords, Users } from 'lucide-reac
 import { addExchange, addNote, newCampaign, type Campaign } from '../game/campaign';
 import { localCampaignStorage } from '../game/storage';
 import type { View } from '../game/types';
+import { emptyWorld } from '../game/world';
 
 const tabs = [
   { id: 'adventure', label: 'Adventure', Icon: Compass },
@@ -111,10 +112,10 @@ export function App() {
       const history = campaign.journal.filter((entry) => entry.kind === 'player' || entry.kind === 'dm')
         .slice(-12).map((entry) => ({ role: entry.kind === 'player' ? 'user' : 'assistant', content: entry.text }));
       const response = await fetch('/api/dm', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-four-keeps-access': accessCode },
-        body: JSON.stringify({ message: draft, history, worldFacts: campaign.worldFacts ?? [] }) });
-      const result: { narration?: string; newFacts?: string[]; error?: string } = await response.json();
+        body: JSON.stringify({ message: draft, history, worldFacts: campaign.worldFacts ?? [], world: campaign.world ?? emptyWorld() }) });
+      const result: { narration?: string; newFacts?: string[]; worldUpdates?: unknown; error?: string } = await response.json();
       if (!response.ok || !result.narration) throw new Error(result.error || 'DM request failed');
-      const next = addExchange(campaign, draft, result.narration, new Date().toISOString(), result.newFacts ?? []);
+      const next = addExchange(campaign, draft, result.narration, new Date().toISOString(), result.newFacts ?? [], result.worldUpdates);
       await localCampaignStorage.save(next);
       setCampaign(next);
       setCampaigns((items) => items.map((item) => item.id === next.id ? next : item));
@@ -190,6 +191,24 @@ export function App() {
           <summary className="cursor-pointer font-serif text-lg">World memory ({campaign.worldFacts?.length} facts)</summary>
           <ul className="mt-3 list-disc space-y-2 pl-5 text-sm text-parchment/80">{campaign.worldFacts?.map((fact, index) => <li key={index}>{fact}</li>)}</ul>
         </details>}
+        {campaign && activeView === 'journal' && (() => {
+          const world = campaign.world ?? emptyWorld();
+          return <section className="mb-5 space-y-3" aria-label="World records">
+            <h2 className="font-serif text-2xl">People, Places & Quests</h2>
+            {world.quests.length > 0 && <details open className="rounded-xl border border-gold/25 bg-panel p-4"><summary className="font-serif text-lg">Quests ({world.quests.length})</summary>
+              <div className="mt-3 space-y-3">{world.quests.map(q => <article key={q.id}><p className="font-semibold">{q.title} <span className="text-xs text-gold">· {q.status}</span></p><p className="text-sm">{q.objective}</p>{q.notes.map((n,i) => <p key={i} className="text-xs text-parchment/60">{n}</p>)}</article>)}</div>
+            </details>}
+            {world.npcs.length > 0 && <details className="rounded-xl border border-white/15 bg-panel p-4"><summary className="font-serif text-lg">People ({world.npcs.length})</summary>
+              <div className="mt-3 space-y-3">{world.npcs.map(n => <article key={n.id}><p className="font-semibold">{n.name}</p><p className="text-sm text-parchment/75">{[n.role,n.location,n.relationship].filter(Boolean).join(' · ')}</p>{n.notes.map((note,i) => <p key={i} className="text-xs text-parchment/65">{note}</p>)}</article>)}</div>
+            </details>}
+            {world.places.length > 0 && <details className="rounded-xl border border-white/15 bg-panel p-4"><summary className="font-serif text-lg">Places ({world.places.length})</summary>
+              <div className="mt-3 space-y-3">{world.places.map(p => <article key={p.id}><p className="font-semibold">{p.name}</p><p className="text-sm">{p.description}</p>{p.notes.map((n,i) => <p key={i} className="text-xs text-parchment/65">{n}</p>)}</article>)}</div>
+            </details>}
+            {world.clues.length > 0 && <details className="rounded-xl border border-white/15 bg-panel p-4"><summary className="font-serif text-lg">Clues ({world.clues.length})</summary>
+              <div className="mt-3 space-y-3">{world.clues.map(clue => <article key={clue.id}><p className="text-sm">{clue.text}</p><p className="text-xs text-gold">{clue.evidence} {clue.source && '· ' + clue.source}</p></article>)}</div>
+            </details>}
+          </section>;
+        })()}
         {content[activeView]}
       </main>
       <div className="sticky bottom-0 z-20 border-t border-white/10 bg-ink/95 backdrop-blur">
