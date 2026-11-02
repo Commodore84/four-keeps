@@ -15,8 +15,8 @@ export function normalizeWorld(value: unknown): WorldState {
   return {
     npcs: rows('npcs').map(x => ({ id: key(clean(x.name)), name: clean(x.name, 80), role: clean(x.role), location: clean(x.location), relationship: clean(x.relationship), notes: list(x.notes) })).filter(x => x.id),
     places: rows('places').map(x => ({ id: key(clean(x.name)), name: clean(x.name, 80), description: clean(x.description), notes: list(x.notes) })).filter(x => x.id),
-    clues: rows('clues').map(x => ({ id: key(clean(x.text)), text: clean(x.text), evidence: x.evidence === 'confirmed' || x.evidence === 'reported' ? x.evidence : 'rumor', source: clean(x.source, 80) })).filter(x => x.id),
-    quests: rows('quests').map(x => ({ id: key(clean(x.title)), title: clean(x.title, 80), status: x.status === 'completed' || x.status === 'failed' ? x.status : 'open', objective: clean(x.objective), notes: list(x.notes) })).filter(x => x.id),
+    clues: rows('clues').map(x => ({ id: key(clean(x.text)), text: clean(x.text), evidence: (x.evidence === 'confirmed' || x.evidence === 'reported' ? x.evidence : 'rumor') as Evidence, source: clean(x.source, 80) })).filter(x => x.id),
+    quests: rows('quests').map(x => ({ id: key(clean(x.title)), title: clean(x.title, 80), status: (x.status === 'completed' || x.status === 'failed' ? x.status : 'open') as QuestStatus, objective: clean(x.objective), notes: list(x.notes) })).filter(x => x.id),
   };
 }
 function mergeRows<T extends { id: string }>(oldRows: T[], incoming: T[], merge: (old: T, next: T) => T): T[] {
