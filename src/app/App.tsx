@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { createBackup, parseBackup } from '../game/backup';
 import { BookOpen, Compass, Map, Send, Shield, Swords, Users } from 'lucide-react';
-import { addExchange, addNote, newCampaign, type Campaign } from '../game/campaign';
+import { addExchange, addNote, addRoll, newCampaign, type Campaign } from '../game/campaign';
 import { localCampaignStorage } from '../game/storage';
 import type { View } from '../game/types';
 import { emptyWorld } from '../game/world';
+import { prototypeNighthawk, skillAbility, skillModifier, rollCheck, describeCheck, type Skill, type RollMode } from '../game/checks';
 
 const tabs = [
   { id: 'adventure', label: 'Adventure', Icon: Compass },
@@ -32,9 +33,15 @@ function Adventure({ campaign }: { campaign: Campaign | null }) {
     <div ref={endRef}/>
   </section>;
 }
-function Party() {
+function Party({ campaign, onRoll, saving }: { campaign: Campaign | null; onRoll: (skill: Skill, mode: RollMode) => void; saving: boolean }) {
+  const [skill, setSkill] = useState<Skill>('Stealth');
+  const [mode, setMode] = useState<RollMode>('normal');
+  const skills = Object.keys(skillAbility) as Skill[];
+  const modifier = skillModifier(prototypeNighthawk, skill);
+  const lastRoll = campaign?.journal.filter(entry => entry.kind === 'system' && entry.text.startsWith('Nighthawk rolled ')).at(-1);
   return <section className="space-y-4"><div className="flex items-center gap-3"><Shield className="text-gold"/><h2 className="font-serif text-2xl">The Party</h2></div>
-    <div className="rounded-xl border border-white/10 bg-panel p-5"><p className="font-semibold">Nighthawk</p><p className="mt-1 text-sm text-parchment/60">Wood Elf Rogue · Level 1 · Planned character</p></div>
+    <div className="rounded-xl border border-white/10 bg-panel p-5"><p className="font-semibold">Nighthawk</p><p className="mt-1 text-sm text-parchment/60">Wood Elf Rogue · Level 1 · Playtest statistics</p><p className="mt-3 text-sm">STR 8 · DEX 16 · CON 14 · INT 14 · WIS 12 · CHA 10</p><p className="mt-2 text-xs text-parchment/60">Proficiency bonus +2. These are provisional values until we finalize character creation.</p></div>
+    <div className="rounded-xl border border-gold/30 bg-panel p-5 space-y-3"><h3 className="font-serif text-xl">Skill checks</h3><p className="text-sm text-parchment/70">Tap to roll real d20s. Results are saved to your campaign. The DM does not yet determine success or failure.</p><label className="block text-sm">Skill<select className="mt-1 block w-full rounded-lg border border-white/20 bg-ink p-3 text-base" value={skill} onChange={e => setSkill(e.target.value as Skill)}>{skills.map(s => <option key={s} value={s}>{s} ({skillModifier(prototypeNighthawk,s) >= 0 ? '+' : ''}{skillModifier(prototypeNighthawk,s)})</option>)}</select></label><label className="block text-sm">Roll mode<select className="mt-1 block w-full rounded-lg border border-white/20 bg-ink p-3 text-base" value={mode} onChange={e => setMode(e.target.value as RollMode)}><option value="normal">Normal</option><option value="advantage">Advantage (2d20, higher)</option><option value="disadvantage">Disadvantage (2d20, lower)</option></select></label><button type="button" disabled={!campaign || saving} onClick={() => onRoll(skill,mode)} className="w-full rounded-lg bg-gold px-4 py-3 font-semibold text-ink disabled:opacity-40">Roll {skill} ({modifier >= 0 ? '+' : ''}{modifier})</button>{lastRoll && <p role="status" className="rounded-lg border border-gold/20 p-3 text-sm">{lastRoll.text}</p>}</div>
     <div className="rounded-xl border border-dashed border-gold/30 p-5"><p className="font-semibold">Three companions await</p><p className="mt-2 text-sm text-parchment/60">Companion recruitment will arrive in a later milestone.</p></div>
   </section>;
 }
@@ -86,6 +93,20 @@ export function App() {
       setCampaigns((items) => [next, ...items]);
       setNotice('Campaign saved on this device.');
     } catch (error) { setNotice('Could not save campaign: ' + String(error)); }
+    finally { setSaving(false); }
+  }
+
+  async function saveSkillRoll(skill: Skill, mode: RollMode) {
+    if (!campaign || saving) return;
+    setSaving(true);
+    try {
+      const result = rollCheck(prototypeNighthawk, skill, mode);
+      const next = addRoll(campaign, describeCheck(result));
+      await localCampaignStorage.save(next);
+      setCampaign(next);
+      setCampaigns(items => items.map(item => item.id === next.id ? next : item));
+      setNotice('Dice rolled and result saved. No success or failure has been assigned.');
+    } catch (error) { setNotice('Roll failed: ' + String(error)); }
     finally { setSaving(false); }
   }
 
@@ -155,7 +176,7 @@ export function App() {
     finally { setSaving(false); if (importInput.current) importInput.current.value = ''; }
   }
 
-  const content = { adventure: <Adventure campaign={campaign}/>, party: <Party/>, journal: <Journal campaign={campaign}/>, map: <WorldMap/> };
+  const content = { adventure: <Adventure campaign={campaign}/>, party: <Party campaign={campaign} saving={saving} onRoll={(skill,mode) => void saveSkillRoll(skill,mode)}/>, journal: <Journal campaign={campaign}/>, map: <WorldMap/> };
   return <div className="min-h-dvh bg-ink text-parchment">
     <div className="mx-auto flex min-h-dvh w-full max-w-3xl flex-col">
       <header className="sticky top-0 z-20 border-b border-white/10 bg-ink/95 px-5 pb-4 pt-[max(1.2rem,env(safe-area-inset-top))] backdrop-blur">
