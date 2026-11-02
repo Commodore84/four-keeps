@@ -1,4 +1,4 @@
-export type View = 'adventure' | 'party' | 'journal' | 'map';
+export type View = 'adventure' | 'party' | 'journal' | 'map' | 'settings';
 export interface CampaignPreview {
   id: string;
   title: string;
