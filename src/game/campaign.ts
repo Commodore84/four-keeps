@@ -1,4 +1,4 @@
-export interface JournalEntry { id: string; text: string; createdAt: string; kind: 'note' | 'system' }
+export interface JournalEntry { id: string; text: string; createdAt: string; kind: 'note' | 'system' | 'player' | 'dm' }
 export interface Campaign {
   schemaVersion: 1;
   id: string;
@@ -27,5 +27,12 @@ export function isCampaign(value: unknown): value is Campaign {
     && typeof c.location === 'string' && typeof c.createdAt === 'string'
     && typeof c.updatedAt === 'string' && Array.isArray(c.journal)
     && c.journal.every((entry) => entry && typeof entry.id === 'string' && typeof entry.text === 'string'
-      && typeof entry.createdAt === 'string' && (entry.kind === 'note' || entry.kind === 'system'));
+      && typeof entry.createdAt === 'string' && (entry.kind === 'note' || entry.kind === 'system' || entry.kind === 'player' || entry.kind === 'dm'));
+}
+
+export function addExchange(campaign: Campaign, player: string, dm: string, now: string = new Date().toISOString()): Campaign {
+  return { ...campaign, updatedAt: now, journal: [...campaign.journal,
+    { id: crypto.randomUUID(), kind: 'player', text: player, createdAt: now },
+    { id: crypto.randomUUID(), kind: 'dm', text: dm, createdAt: now },
+  ] };
 }
