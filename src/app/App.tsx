@@ -68,7 +68,7 @@ export function App() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [accessCode, setAccessCode] = useState('');
-  const [dmMode, setDmMode] = useState(false);
+  const [dmMode, setDmMode] = useState(() => { try { return localStorage.getItem('four-keeps-dm-mode') === 'on'; } catch { return false; } });
   const importInput = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -82,6 +82,8 @@ export function App() {
     }).finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, []);
+
+  useEffect(() => { try { localStorage.setItem('four-keeps-dm-mode', dmMode ? 'on' : 'off'); } catch { /* browser storage unavailable */ } }, [dmMode]);
 
   async function createCampaign() {
     if (saving || !newTitle.trim()) return;
@@ -170,7 +172,7 @@ export function App() {
         body: JSON.stringify({ message: draft, history, worldFacts: campaign.worldFacts ?? [], world: campaign.world ?? emptyWorld() }) });
       const result: { narration?: string; newFacts?: string[]; worldUpdates?: unknown; checkRequest?: { skill:string; mode:'normal'|'advantage'|'disadvantage'; reason:string; token:string } | null; error?: string } = await response.json();
       if (!response.ok || !result.narration) throw new Error(result.error || 'DM request failed');
-      const next = addExchange(campaign, draft, result.narration, new Date().toISOString(), result.newFacts ?? [], result.worldUpdates);
+      const next = addExchange(campaign, draft, result.narration, new Date().toISOString(), result.newFacts ?? [], result.worldUpdates, result.checkRequest ?? undefined);
       await localCampaignStorage.save(next);
       setCampaign(next);
       setCampaigns((items) => items.map((item) => item.id === next.id ? next : item));
@@ -238,7 +240,7 @@ export function App() {
         </section>
         {campaign && <section className="mb-4 rounded-xl border border-white/10 bg-panel p-4 space-y-3">
           <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={dmMode} onChange={(event) => setDmMode(event.target.checked)}/> AI Dungeon Master mode</label>
-          {dmMode && <><label htmlFor="access-code" className="block text-xs text-parchment/70">Game access code (not saved)</label>
+          {dmMode && <><label htmlFor="access-code" className="block text-xs text-parchment/70">Game access code (enter after refreshing)</label>
           <input id="access-code" type="password" autoComplete="off" value={accessCode} onChange={(event) => setAccessCode(event.target.value)} placeholder="Enter your private access code" className="w-full rounded-lg border border-white/20 bg-ink px-3 py-2 text-base"/>
           <p className="text-xs text-parchment/55">The AI narrates only. Dice, inventory, and rules are not yet connected.</p></>}
         </section>}
