@@ -148,7 +148,7 @@ export function App() {
       if (!response.ok || !result.narration || !result.checkResult) throw new Error(result.error || 'Check resolution failed');
       const r = result.checkResult;
       const rollText = 'Nighthawk rolled '+r.skill+': ['+r.dice.join(', ')+'], kept '+r.kept+', modifier '+(r.modifier >= 0 ? '+' : '')+r.modifier+', total '+r.total+'.';
-      const next = addExchange(locked, rollText, result.narration, new Date().toISOString(), result.newFacts ?? [], result.worldUpdates, result.checkRequest ?? undefined);
+      const next = addExchange(locked, rollText, result.narration, new Date().toISOString(), result.newFacts ?? [], result.worldUpdates);
       await localCampaignStorage.save(next);
       setCampaign(next);
       setCampaigns(items => items.map(item => item.id === next.id ? next : item));
