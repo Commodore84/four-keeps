@@ -45,3 +45,7 @@ export function addExchange(campaign: Campaign, player: string, dm: string, now:
     { id: crypto.randomUUID(), kind: 'dm', text: dm, createdAt: now },
   ] };
 }
+
+export function addRoll(campaign: Campaign, description: string, now: string = new Date().toISOString()): Campaign {
+  return { ...campaign, updatedAt: now, journal: [...campaign.journal, { id: crypto.randomUUID(), kind: 'system', text: description, createdAt: now }] };
+}
