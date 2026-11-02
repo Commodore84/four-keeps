@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { BookOpen, Compass, Map, Send, Shield, Swords, Users } from 'lucide-react';
-import { previewCampaign } from '../game/state';
+import { addNote, newCampaign, type Campaign } from '../game/campaign';
+import { localCampaignStorage } from '../game/storage';
 import type { View } from '../game/types';
 
 const tabs = [
@@ -10,25 +11,28 @@ const tabs = [
   { id: 'map', label: 'Map', Icon: Map },
 ] as const;
 
-function Adventure() {
+function Adventure({ campaign }: { campaign: Campaign | null }) {
   return <section className="space-y-5" aria-label="Adventure">
-    <div className="scene"><div className="scene-glow" /><div className="absolute bottom-5 left-5 right-5"><p className="eyebrow">Chapter One</p><h2 className="font-serif text-3xl text-parchment">A Road to the Forgotten Keep</h2></div></div>
+    <div className="scene"><div className="scene-glow"/><div className="absolute bottom-5 left-5 right-5"><p className="eyebrow">Chapter One</p><h2 className="font-serif text-3xl">A Road to the Forgotten Keep</h2></div></div>
     <div className="rounded-xl border border-white/10 bg-panel p-5 space-y-3">
       <p className="eyebrow">Dungeon Master</p>
       <p className="leading-7 text-parchment/85">The road bends toward a frontier village, its lanterns glowing beneath the evening mist. Beyond the tree line, an old keep waits in silence.</p>
-      <p className="text-xs text-gold/80">Preview scene · AI Dungeon Master not connected</p>
+      <p className="text-xs text-gold/80">{campaign ? 'Campaign saved locally · AI DM not connected yet' : 'Create a local campaign to begin'}</p>
     </div>
   </section>;
 }
 function Party() {
   return <section className="space-y-4"><div className="flex items-center gap-3"><Shield className="text-gold"/><h2 className="font-serif text-2xl">The Party</h2></div>
     <div className="rounded-xl border border-white/10 bg-panel p-5"><p className="font-semibold">Nighthawk</p><p className="mt-1 text-sm text-parchment/60">Wood Elf Rogue · Level 1 · Planned character</p></div>
-    <div className="rounded-xl border border-dashed border-gold/30 p-5"><p className="font-semibold">Three companions await</p><p className="mt-2 text-sm text-parchment/60">Recruitment and autonomous companion behavior will be implemented in later milestones.</p></div>
+    <div className="rounded-xl border border-dashed border-gold/30 p-5"><p className="font-semibold">Three companions await</p><p className="mt-2 text-sm text-parchment/60">Companion recruitment will arrive in a later milestone.</p></div>
   </section>;
 }
-function Journal() {
+function Journal({ campaign }: { campaign: Campaign | null }) {
   return <section className="space-y-4"><div className="flex items-center gap-3"><BookOpen className="text-gold"/><h2 className="font-serif text-2xl">Campaign Journal</h2></div>
-    <div className="rounded-xl border border-dashed border-gold/30 p-5"><p className="font-semibold">Your story starts here.</p><p className="mt-2 text-sm text-parchment/60">Events, discoveries, quests, and character knowledge will appear when persistence is connected.</p></div>
+    {campaign ? campaign.journal.map((entry) => <div key={entry.id} className="rounded-xl border border-white/10 bg-panel p-4">
+      <p className="text-xs text-gold">{entry.kind === 'note' ? 'Your note' : 'Campaign event'} · {new Date(entry.createdAt).toLocaleString()}</p>
+      <p className="mt-2 text-sm leading-6">{entry.text}</p>
+    </div>) : <p className="text-parchment/60">Create a campaign to start your journal.</p>}
   </section>;
 }
 function WorldMap() {
@@ -39,24 +43,84 @@ function WorldMap() {
 export function App() {
   const [activeView, setActiveView] = useState<View>('adventure');
   const [draft, setDraft] = useState('');
-  const [notice, setNotice] = useState(false);
-  const content = { adventure: <Adventure/>, party: <Party/>, journal: <Journal/>, map: <WorldMap/> };
+  const [notice, setNotice] = useState('');
+  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
+  const [campaign, setCampaign] = useState<Campaign | null>(null);
+  const [newTitle, setNewTitle] = useState('The Forgotten Keep');
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    localCampaignStorage.list().then((items) => {
+      if (!active) return;
+      setCampaigns(items);
+      setCampaign(items[0] ?? null);
+    }).catch((error: unknown) => {
+      if (active) setNotice('Local storage unavailable: ' + String(error));
+    }).finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, []);
+
+  async function createCampaign() {
+    if (saving || !newTitle.trim()) return;
+    setSaving(true);
+    try {
+      const next = newCampaign(newTitle);
+      await localCampaignStorage.save(next);
+      setCampaign(next);
+      setCampaigns((items) => [next, ...items]);
+      setNotice('Campaign saved on this device.');
+    } catch (error) { setNotice('Could not save campaign: ' + String(error)); }
+    finally { setSaving(false); }
+  }
+
+  async function saveNote() {
+    if (saving || !campaign || !draft.trim()) return;
+    setSaving(true);
+    try {
+      const next = addNote(campaign, draft);
+      await localCampaignStorage.save(next);
+      setCampaign(next);
+      setCampaigns((items) => items.map((item) => item.id === next.id ? next : item));
+      setDraft('');
+      setNotice('Saved to your local journal. The AI DM is not connected yet.');
+    } catch (error) { setNotice('Could not save note: ' + String(error)); }
+    finally { setSaving(false); }
+  }
+
+  const content = { adventure: <Adventure campaign={campaign}/>, party: <Party/>, journal: <Journal campaign={campaign}/>, map: <WorldMap/> };
   return <div className="min-h-dvh bg-ink text-parchment">
     <div className="mx-auto flex min-h-dvh w-full max-w-3xl flex-col">
       <header className="sticky top-0 z-20 border-b border-white/10 bg-ink/95 px-5 pb-4 pt-[max(1.2rem,env(safe-area-inset-top))] backdrop-blur">
         <div className="flex items-center justify-between gap-3"><div><p className="eyebrow">A living tabletop adventure</p><h1 className="font-serif text-3xl tracking-wide">Four Keeps</h1></div><span className="rounded-full border border-gold/30 px-3 py-1 text-xs text-gold">Prototype</span></div>
-        <div className="mt-3 flex items-center justify-between text-xs text-parchment/60"><span>{previewCampaign.title}</span><span>{previewCampaign.location}</span></div>
+        <div className="mt-3 flex items-center justify-between text-xs text-parchment/60"><span>{campaign?.title ?? 'No campaign selected'}</span><span>{campaign?.location ?? 'Frontier Village'}</span></div>
       </header>
-      <main className="flex-1 px-5 py-6" id="main-content">{content[activeView]}</main>
+      <main className="flex-1 px-5 py-6" id="main-content">
+        <section className="mb-5 rounded-xl border border-gold/25 bg-panel p-4 space-y-3" aria-label="Local campaigns">
+          <div className="flex items-center justify-between"><h2 className="font-serif text-lg">Local campaigns</h2><span className="text-xs text-parchment/55">{loading ? 'Loading…' : 'Saved on this device'}</span></div>
+          {campaigns.length > 0 && <label className="block text-xs text-parchment/70">Active campaign
+            <select value={campaign?.id ?? ''} onChange={(event) => { setCampaign(campaigns.find((item) => item.id === event.target.value) ?? null); setNotice(''); }} className="mt-1 w-full rounded-lg border border-white/20 bg-ink p-3 text-parchment">
+              {campaigns.map((item) => <option key={item.id} value={item.id}>{item.title}</option>)}
+            </select></label>}
+          <div className="flex gap-2">
+            <label className="sr-only" htmlFor="campaign-title">New campaign name</label>
+            <input id="campaign-title" value={newTitle} onChange={(event) => setNewTitle(event.target.value)} placeholder="Campaign name" className="min-w-0 flex-1 rounded-lg border border-white/20 bg-ink px-3 py-2 text-sm"/>
+            <button type="button" onClick={() => void createCampaign()} disabled={saving || loading || !newTitle.trim()} className="rounded-lg bg-gold px-3 py-2 text-sm font-semibold text-ink disabled:opacity-40">New</button>
+          </div>
+          <p className="text-xs text-parchment/55">Local saves may be lost if browser website data is cleared. Backup export is coming next.</p>
+        </section>
+        {content[activeView]}
+      </main>
       <div className="sticky bottom-0 z-20 border-t border-white/10 bg-ink/95 backdrop-blur">
-        <form className="flex items-end gap-2 px-4 py-3" onSubmit={(event) => { event.preventDefault(); setNotice(true); }}>
+        <form className="flex items-end gap-2 px-4 py-3" onSubmit={(event) => { event.preventDefault(); void saveNote(); }}>
           <label htmlFor="dm-input" className="sr-only">Message the Dungeon Master</label>
-          <textarea id="dm-input" value={draft} onChange={(event) => { setDraft(event.target.value); setNotice(false); }} rows={1} placeholder="What do you do?" className="max-h-32 min-h-11 flex-1 resize-y rounded-xl border border-white/20 bg-panel px-3 py-3 text-sm text-parchment placeholder:text-parchment/45 focus:border-gold focus:outline-none"/>
-          <button type="submit" disabled={!draft.trim()} aria-label="Send message to Dungeon Master" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gold text-ink disabled:opacity-40"><Send size={19}/></button>
+          <textarea id="dm-input" value={draft} onChange={(event) => { setDraft(event.target.value); setNotice(''); }} rows={1} placeholder={campaign ? 'Write a journal note…' : 'Create a campaign first'} disabled={!campaign || saving} className="max-h-32 min-h-11 flex-1 resize-y rounded-xl border border-white/20 bg-panel px-3 py-3 text-sm text-parchment placeholder:text-parchment/45 focus:border-gold focus:outline-none"/>
+          <button type="submit" disabled={!draft.trim() || !campaign || saving} aria-label="Send message to Dungeon Master" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gold text-ink disabled:opacity-40"><Send size={19}/></button>
         </form>
-        {notice && <p role="status" className="px-5 pb-2 text-xs text-gold">The DM is not connected yet. Your message has not been sent.</p>}
+        {notice && <p role="status" className="px-5 pb-2 text-xs text-gold">{notice}</p>}
         <nav aria-label="Primary navigation" className="grid grid-cols-4 border-t border-white/10 pb-[env(safe-area-inset-bottom)]">
-          {tabs.map(({ id, label, Icon }) => <button key={id} type="button" onClick={() => { setActiveView(id); setNotice(false); }} aria-current={activeView === id ? 'page' : undefined} className={`flex min-h-16 flex-col items-center justify-center gap-1 text-xs transition-colors ${activeView === id ? 'text-gold' : 'text-parchment/55'}`}><Icon size={21}/><span>{label}</span></button>)}
+          {tabs.map(({ id, label, Icon }) => <button key={id} type="button" onClick={() => { setActiveView(id); setNotice(''); }} aria-current={activeView === id ? 'page' : undefined} className={`flex min-h-16 flex-col items-center justify-center gap-1 text-xs transition-colors ${activeView === id ? 'text-gold' : 'text-parchment/55'}`}><Icon size={21}/><span>{label}</span></button>)}
         </nav>
       </div>
     </div>
