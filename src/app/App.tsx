@@ -124,8 +124,42 @@ export function App() {
     finally { setSaving(false); }
   }
 
+  async function resolvePendingCheck() {
+    if (saving || !campaign?.pendingCheck || !accessCode) { setNotice('Enter your game access code to resolve the check.'); return; }
+    setSaving(true);
+    setNotice('Resolving the check…');
+    try {
+      const pending = campaign.pendingCheck;
+      const rollD20 = () => {
+        const bytes = new Uint8Array(1);
+        do { crypto.getRandomValues(bytes); } while (bytes[0] >= 240);
+        return (bytes[0] % 20) + 1;
+      };
+      const dice = pending.dice ?? Array.from({ length: pending.mode === 'normal' ? 1 : 2 }, rollD20);
+      const locked = { ...campaign, pendingCheck: { ...pending, dice } };
+      await localCampaignStorage.save(locked);
+      setCampaign(locked);
+      setCampaigns(items => items.map(item => item.id === locked.id ? locked : item));
+      const history = locked.journal.filter(entry => entry.kind === 'player' || entry.kind === 'dm').slice(-12)
+        .map(entry => ({ role: entry.kind === 'player' ? 'user' : 'assistant', content: entry.text }));
+      const response = await fetch('/api/dm', { method:'POST', headers:{ 'Content-Type':'application/json','x-four-keeps-access':accessCode },
+        body:JSON.stringify({ checkToken:pending.token, dice, history, worldFacts:locked.worldFacts ?? [], world:locked.world ?? emptyWorld() }) });
+      const result: { narration?:string; newFacts?:string[]; worldUpdates?:unknown; checkResult?:{skill:string;dice:number[];kept:number;modifier:number;total:number;success:boolean}; error?:string } = await response.json();
+      if (!response.ok || !result.narration || !result.checkResult) throw new Error(result.error || 'Check resolution failed');
+      const r = result.checkResult;
+      const rollText = 'Nighthawk rolled '+r.skill+': ['+r.dice.join(', ')+'], kept '+r.kept+', modifier '+(r.modifier >= 0 ? '+' : '')+r.modifier+', total '+r.total+'.';
+      const next = addExchange(locked, rollText, result.narration, new Date().toISOString(), result.newFacts ?? [], result.worldUpdates, result.checkRequest ?? undefined);
+      await localCampaignStorage.save(next);
+      setCampaign(next);
+      setCampaigns(items => items.map(item => item.id === next.id ? next : item));
+      setActiveView('adventure');
+      setNotice('Check resolved and saved.');
+    } catch(error) { setNotice('Check error: '+String(error)+' Your dice are saved; retry to use the same roll.'); }
+    finally { setSaving(false); }
+  }
+
   async function sendToDM() {
-    if (saving || !campaign || !draft.trim()) return;
+    if (saving || !campaign || !draft.trim() || campaign.pendingCheck) return;
     if (!accessCode) { setNotice('Enter your game access code first.'); return; }
     setSaving(true);
     setNotice('The Dungeon Master is thinking…');
@@ -134,7 +168,7 @@ export function App() {
         .slice(-12).map((entry) => ({ role: entry.kind === 'player' ? 'user' : 'assistant', content: entry.text }));
       const response = await fetch('/api/dm', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-four-keeps-access': accessCode },
         body: JSON.stringify({ message: draft, history, worldFacts: campaign.worldFacts ?? [], world: campaign.world ?? emptyWorld() }) });
-      const result: { narration?: string; newFacts?: string[]; worldUpdates?: unknown; error?: string } = await response.json();
+      const result: { narration?: string; newFacts?: string[]; worldUpdates?: unknown; checkRequest?: { skill:string; mode:'normal'|'advantage'|'disadvantage'; reason:string; token:string } | null; error?: string } = await response.json();
       if (!response.ok || !result.narration) throw new Error(result.error || 'DM request failed');
       const next = addExchange(campaign, draft, result.narration, new Date().toISOString(), result.newFacts ?? [], result.worldUpdates);
       await localCampaignStorage.save(next);
@@ -233,10 +267,17 @@ export function App() {
         {content[activeView]}
       </main>
       <div className="sticky bottom-0 z-20 border-t border-white/10 bg-ink/95 backdrop-blur">
+        {campaign?.pendingCheck && <div className="mx-4 mt-3 rounded-xl border border-gold/40 bg-panel p-4 space-y-2" role="group" aria-label="Pending skill check">
+          <p className="eyebrow">Dungeon Master requests a check</p>
+          <p className="font-serif text-xl">{campaign.pendingCheck.skill} · {campaign.pendingCheck.mode}</p>
+          <p className="text-sm text-parchment/70">{campaign.pendingCheck.reason}</p>
+          <button type="button" disabled={saving || !dmMode} onClick={() => void resolvePendingCheck()} className="w-full rounded-lg bg-gold px-4 py-3 font-semibold text-ink disabled:opacity-40">{campaign.pendingCheck.dice ? 'Retry saved roll' : 'Roll '+campaign.pendingCheck.skill}</button>
+          <p className="text-xs text-parchment/60">The target number is hidden. Your roll is saved before adjudication.</p>
+        </div>}
         <form className="flex items-end gap-2 px-4 py-3" onSubmit={(event) => { event.preventDefault(); void (dmMode ? sendToDM() : saveNote()); }}>
           <label htmlFor="dm-input" className="sr-only">Message the Dungeon Master</label>
-          <textarea id="dm-input" value={draft} onChange={(event) => { setDraft(event.target.value); setNotice(''); }} rows={1} placeholder={campaign ? (dmMode ? 'What does Nighthawk do?' : 'Write a journal note…') : 'Create a campaign first'} disabled={!campaign || saving} className="max-h-32 min-h-11 min-w-0 flex-1 resize-y rounded-xl border border-white/20 bg-panel px-3 py-3 text-base text-parchment placeholder:text-parchment/45 focus:border-gold focus:outline-none"/>
-          <button type="submit" disabled={!draft.trim() || !campaign || saving} aria-label="Send message to Dungeon Master" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gold text-ink disabled:opacity-40"><Send size={19}/></button>
+          <textarea id="dm-input" value={draft} onChange={(event) => { setDraft(event.target.value); setNotice(''); }} rows={1} placeholder={campaign ? (dmMode ? 'What does Nighthawk do?' : 'Write a journal note…') : 'Create a campaign first'} disabled={!campaign || saving || !!campaign.pendingCheck} className="max-h-32 min-h-11 min-w-0 flex-1 resize-y rounded-xl border border-white/20 bg-panel px-3 py-3 text-base text-parchment placeholder:text-parchment/45 focus:border-gold focus:outline-none"/>
+          <button type="submit" disabled={!draft.trim() || !campaign || saving || !!campaign.pendingCheck} aria-label="Send message to Dungeon Master" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gold text-ink disabled:opacity-40"><Send size={19}/></button>
         </form>
         {notice && <p role="status" className="px-5 pb-2 text-xs text-gold">{notice}</p>}
         <nav aria-label="Primary navigation" className="grid grid-cols-4 border-t border-white/10 pb-[env(safe-area-inset-bottom)]">
