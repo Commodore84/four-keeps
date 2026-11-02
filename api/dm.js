@@ -5,6 +5,14 @@ const SKILLS = ['Acrobatics','Animal Handling','Arcana','Athletics','Deception',
 const SKILL_ABILITIES = { Acrobatics:'dex','Animal Handling':'wis',Arcana:'int',Athletics:'str',Deception:'cha',History:'int',Insight:'wis',Intimidation:'cha',Investigation:'int',Medicine:'wis',Nature:'int',Perception:'wis',Performance:'cha',Persuasion:'cha',Religion:'int','Sleight of Hand':'dex',Stealth:'dex',Survival:'wis' };
 const SCORES = {str:8,dex:16,con:14,int:14,wis:12,cha:10};
 const PROFICIENT = ['Stealth','Sleight of Hand','Investigation','Perception'];
+const DEFAULT_CHARACTER = { scores:SCORES, proficiencyBonus:2, proficientSkills:PROFICIENT };
+function validatedCharacter(value) {
+  if (!value || typeof value !== 'object') return DEFAULT_CHARACTER;
+  const scores = value.scores;
+  if (!scores || typeof scores !== 'object' || !Object.keys(SCORES).every(key => Number.isInteger(scores[key]) && scores[key] >= 1 && scores[key] <= 30)) return DEFAULT_CHARACTER;
+  if (!Number.isInteger(value.proficiencyBonus) || value.proficiencyBonus < 2 || value.proficiencyBonus > 9 || !Array.isArray(value.proficientSkills) || !value.proficientSkills.every(s => SKILLS.includes(s))) return DEFAULT_CHARACTER;
+  return {scores:Object.fromEntries(Object.keys(SCORES).map(key => [key,scores[key]])),proficiencyBonus:value.proficiencyBonus,proficientSkills:[...new Set(value.proficientSkills)]};
+}
 const DC = { easy:10, moderate:15, hard:20, veryHard:25 };
 const secret = () => createHash('sha256').update(process.env.OPENAI_API_KEY + ':four-keeps-check-v1').digest();
 function sealCheck(value) {
@@ -25,7 +33,8 @@ function openCheck(token) {
 function adjudicate(value,dice) {
   if (!Array.isArray(dice) || dice.length !== (value.mode === 'normal' ? 1 : 2) || dice.some(n => !Number.isInteger(n) || n < 1 || n > 20)) throw Error('Invalid dice');
   const kept = value.mode === 'advantage' ? Math.max(...dice) : value.mode === 'disadvantage' ? Math.min(...dice) : dice[0];
-  const modifier = Math.floor((SCORES[SKILL_ABILITIES[value.skill]]-10)/2)+(PROFICIENT.includes(value.skill)?2:0);
+  const character = validatedCharacter(value.character);
+  const modifier = Math.floor((character.scores[SKILL_ABILITIES[value.skill]]-10)/2)+(character.proficientSkills.includes(value.skill)?character.proficiencyBonus:0);
   const total = kept+modifier;
   return { skill:value.skill,mode:value.mode,dice,kept,modifier,total,success:total>=value.dc };
 }
@@ -41,6 +50,7 @@ export default async function handler(req, res) {
   if (typeof supplied !== 'string' || supplied !== accessCode) return res.status(401).json({ error: 'Incorrect game access code.' });
   if (!process.env.OPENAI_API_KEY) return res.status(503).json({ error: 'AI key not configured.' });
   const body = req.body || {};
+  const character = validatedCharacter(body.character);
   const resolving = typeof body.checkToken === 'string';
   const message = typeof body.message === 'string' ? body.message.trim() : '';
   if ((!resolving && !message) || message.length > 1500) return res.status(400).json({ error: 'Message must be 1–1500 characters.' });
@@ -70,7 +80,7 @@ export default async function handler(req, res) {
     try { parsed = JSON.parse(narration.replace(/^\x60\x60\x60(?:json)?\s*/i, '').replace(/\s*\x60\x60\x60$/, '')); } catch { parsed = { narration, newFacts: [] }; }
     if (!parsed || typeof parsed.narration !== 'string' || !parsed.narration.trim()) return res.status(502).json({ error: 'AI returned no narration.' });
     const requested = !checkResult && parsed.checkRequest && typeof parsed.checkRequest === 'object' ? parsed.checkRequest : null;
-    const checkRequest = requested && SKILLS.includes(requested.skill) && Object.hasOwn(DC,requested.difficulty) ? { skill:requested.skill, mode:['normal','advantage','disadvantage'].includes(requested.mode) ? requested.mode : 'normal', reason:typeof requested.reason === 'string' ? requested.reason.slice(0,160) : 'Resolve the uncertain action', token:sealCheck({skill:requested.skill,mode:['normal','advantage','disadvantage'].includes(requested.mode) ? requested.mode : 'normal',dc:DC[requested.difficulty],issuedAt:Date.now()}) } : null;
+    const checkRequest = requested && SKILLS.includes(requested.skill) && Object.hasOwn(DC,requested.difficulty) ? { skill:requested.skill, mode:['normal','advantage','disadvantage'].includes(requested.mode) ? requested.mode : 'normal', reason:typeof requested.reason === 'string' ? requested.reason.slice(0,160) : 'Resolve the uncertain action', token:sealCheck({skill:requested.skill,mode:['normal','advantage','disadvantage'].includes(requested.mode) ? requested.mode : 'normal',dc:DC[requested.difficulty],character,issuedAt:Date.now()}) } : null;
     const newFacts = Array.isArray(parsed.newFacts) ? parsed.newFacts.filter((fact) => typeof fact === 'string').slice(0, 4).map((fact) => fact.slice(0, 220)) : [];
     return res.status(200).json({ narration: parsed.narration.trim(), newFacts, checkRequest, checkResult, worldUpdates: parsed.worldUpdates && typeof parsed.worldUpdates === 'object' ? parsed.worldUpdates : {}, model: MODEL });
   } catch {
