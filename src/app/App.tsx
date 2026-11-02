@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { createBackup, parseBackup } from '../game/backup';
 import { BookOpen, Compass, Map, Send, Shield, Swords, Users } from 'lucide-react';
 import { addNote, newCampaign, type Campaign } from '../game/campaign';
 import { localCampaignStorage } from '../game/storage';
@@ -49,6 +50,7 @@ export function App() {
   const [newTitle, setNewTitle] = useState('The Forgotten Keep');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const importInput = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     let active = true;
@@ -89,6 +91,35 @@ export function App() {
     finally { setSaving(false); }
   }
 
+  function exportCampaign() {
+    if (!campaign) return;
+    const blob = new Blob([JSON.stringify(createBackup(campaign), null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = 'four-keeps-' + campaign.id + '.json';
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 30000);
+    setNotice('Backup prepared. Save the downloaded JSON file somewhere safe.');
+  }
+  async function importCampaign(file: File) {
+    if (saving) return;
+    setSaving(true);
+    try {
+      if (file.size > 5_000_000) throw new Error('Backup is too large.');
+      const restored = parseBackup(await file.text());
+      const existing = await localCampaignStorage.get(restored.id);
+      if (existing && !window.confirm('This campaign already exists. Replace its local save with the backup?')) return;
+      await localCampaignStorage.save(restored);
+      setCampaigns(await localCampaignStorage.list());
+      setCampaign(restored);
+      setNotice('Campaign restored from backup.');
+    } catch (error) { setNotice('Import failed: ' + String(error)); }
+    finally { setSaving(false); if (importInput.current) importInput.current.value = ''; }
+  }
+
   const content = { adventure: <Adventure campaign={campaign}/>, party: <Party/>, journal: <Journal campaign={campaign}/>, map: <WorldMap/> };
   return <div className="min-h-dvh bg-ink text-parchment">
     <div className="mx-auto flex min-h-dvh w-full max-w-3xl flex-col">
@@ -108,7 +139,12 @@ export function App() {
             <input id="campaign-title" value={newTitle} onChange={(event) => setNewTitle(event.target.value)} placeholder="Campaign name" className="min-w-0 flex-1 rounded-lg border border-white/20 bg-ink px-3 py-2 text-sm"/>
             <button type="button" onClick={() => void createCampaign()} disabled={saving || loading || !newTitle.trim()} className="rounded-lg bg-gold px-3 py-2 text-sm font-semibold text-ink disabled:opacity-40">New</button>
           </div>
-          <p className="text-xs text-parchment/55">Local saves may be lost if browser website data is cleared. Backup export is coming next.</p>
+          <div className="flex gap-2">
+            <button type="button" onClick={exportCampaign} disabled={!campaign || saving} className="rounded-lg border border-gold/40 px-3 py-2 text-sm text-gold disabled:opacity-40">Export backup</button>
+            <button type="button" onClick={() => importInput.current?.click()} disabled={saving} className="rounded-lg border border-gold/40 px-3 py-2 text-sm text-gold disabled:opacity-40">Import backup</button>
+            <input ref={importInput} type="file" accept=".json,application/json" className="hidden" aria-label="Select Four Keeps backup" onChange={(event) => { const file = event.target.files?.[0]; if (file) void importCampaign(file); }}/>
+          </div>
+          <p className="text-xs text-parchment/55">Local saves may be lost if browser website data is cleared. Export a backup regularly.</p>
         </section>
         {content[activeView]}
       </main>
