@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { createBackup, parseBackup } from '../game/backup';
 import { BookOpen, Compass, Map, Send, Shield, Swords, Users } from 'lucide-react';
-import { addNote, newCampaign, type Campaign } from '../game/campaign';
+import { addExchange, addNote, newCampaign, type Campaign } from '../game/campaign';
 import { localCampaignStorage } from '../game/storage';
 import type { View } from '../game/types';
 
@@ -18,6 +18,7 @@ function Adventure({ campaign }: { campaign: Campaign | null }) {
     <div className="rounded-xl border border-white/10 bg-panel p-5 space-y-3">
       <p className="eyebrow">Dungeon Master</p>
       <p className="leading-7 text-parchment/85">The road bends toward a frontier village, its lanterns glowing beneath the evening mist. Beyond the tree line, an old keep waits in silence.</p>
+      {campaign && campaign.journal.filter((entry) => entry.kind === 'player' || entry.kind === 'dm').slice(-8).map((entry) => <div key={entry.id} className="border-t border-white/10 pt-3"><p className="eyebrow">{entry.kind === 'player' ? 'Nighthawk' : 'Dungeon Master'}</p><p className="mt-2 whitespace-pre-wrap leading-7 text-parchment/85">{entry.text}</p></div>)}
       <p className="text-xs text-gold/80">{campaign ? 'Campaign saved locally · AI DM not connected yet' : 'Create a local campaign to begin'}</p>
     </div>
   </section>;
@@ -31,7 +32,7 @@ function Party() {
 function Journal({ campaign }: { campaign: Campaign | null }) {
   return <section className="space-y-4"><div className="flex items-center gap-3"><BookOpen className="text-gold"/><h2 className="font-serif text-2xl">Campaign Journal</h2></div>
     {campaign ? campaign.journal.map((entry) => <div key={entry.id} className="rounded-xl border border-white/10 bg-panel p-4">
-      <p className="text-xs text-gold">{entry.kind === 'note' ? 'Your note' : 'Campaign event'} · {new Date(entry.createdAt).toLocaleString()}</p>
+      <p className="text-xs text-gold">{entry.kind === 'note' ? 'Your note' : entry.kind === 'player' ? 'Nighthawk' : entry.kind === 'dm' ? 'Dungeon Master' : 'Campaign event'} · {new Date(entry.createdAt).toLocaleString()}</p>
       <p className="mt-2 text-sm leading-6">{entry.text}</p>
     </div>) : <p className="text-parchment/60">Create a campaign to start your journal.</p>}
   </section>;
@@ -50,6 +51,8 @@ export function App() {
   const [newTitle, setNewTitle] = useState('The Forgotten Keep');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [accessCode, setAccessCode] = useState('');
+  const [dmMode, setDmMode] = useState(false);
   const importInput = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -88,6 +91,29 @@ export function App() {
       setDraft('');
       setNotice('Saved to your local journal. The AI DM is not connected yet.');
     } catch (error) { setNotice('Could not save note: ' + String(error)); }
+    finally { setSaving(false); }
+  }
+
+  async function sendToDM() {
+    if (saving || !campaign || !draft.trim()) return;
+    if (!accessCode) { setNotice('Enter your game access code first.'); return; }
+    setSaving(true);
+    setNotice('The Dungeon Master is thinking…');
+    try {
+      const history = campaign.journal.filter((entry) => entry.kind === 'player' || entry.kind === 'dm')
+        .slice(-12).map((entry) => ({ role: entry.kind === 'player' ? 'user' : 'assistant', content: entry.text }));
+      const response = await fetch('/api/dm', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-four-keeps-access': accessCode },
+        body: JSON.stringify({ message: draft, history }) });
+      const result: { narration?: string; error?: string } = await response.json();
+      if (!response.ok || !result.narration) throw new Error(result.error || 'DM request failed');
+      const next = addExchange(campaign, draft, result.narration);
+      await localCampaignStorage.save(next);
+      setCampaign(next);
+      setCampaigns((items) => items.map((item) => item.id === next.id ? next : item));
+      setDraft('');
+      setActiveView('adventure');
+      setNotice('The DM replied. Conversation saved locally.');
+    } catch (error) { setNotice('DM error: ' + String(error)); }
     finally { setSaving(false); }
   }
 
@@ -146,12 +172,18 @@ export function App() {
           </div>
           <p className="text-xs text-parchment/55">Local saves may be lost if browser website data is cleared. Export a backup regularly.</p>
         </section>
+        {campaign && <section className="mb-4 rounded-xl border border-white/10 bg-panel p-4 space-y-3">
+          <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={dmMode} onChange={(event) => setDmMode(event.target.checked)}/> AI Dungeon Master mode</label>
+          {dmMode && <><label htmlFor="access-code" className="block text-xs text-parchment/70">Game access code (not saved)</label>
+          <input id="access-code" type="password" autoComplete="off" value={accessCode} onChange={(event) => setAccessCode(event.target.value)} placeholder="Enter your private access code" className="w-full rounded-lg border border-white/20 bg-ink px-3 py-2 text-sm"/>
+          <p className="text-xs text-parchment/55">The AI narrates only. Dice, inventory, and rules are not yet connected.</p></>}
+        </section>}
         {content[activeView]}
       </main>
       <div className="sticky bottom-0 z-20 border-t border-white/10 bg-ink/95 backdrop-blur">
-        <form className="flex items-end gap-2 px-4 py-3" onSubmit={(event) => { event.preventDefault(); void saveNote(); }}>
+        <form className="flex items-end gap-2 px-4 py-3" onSubmit={(event) => { event.preventDefault(); void (dmMode ? sendToDM() : saveNote()); }}>
           <label htmlFor="dm-input" className="sr-only">Message the Dungeon Master</label>
-          <textarea id="dm-input" value={draft} onChange={(event) => { setDraft(event.target.value); setNotice(''); }} rows={1} placeholder={campaign ? 'Write a journal note…' : 'Create a campaign first'} disabled={!campaign || saving} className="max-h-32 min-h-11 flex-1 resize-y rounded-xl border border-white/20 bg-panel px-3 py-3 text-sm text-parchment placeholder:text-parchment/45 focus:border-gold focus:outline-none"/>
+          <textarea id="dm-input" value={draft} onChange={(event) => { setDraft(event.target.value); setNotice(''); }} rows={1} placeholder={campaign ? (dmMode ? 'What does Nighthawk do?' : 'Write a journal note…') : 'Create a campaign first'} disabled={!campaign || saving} className="max-h-32 min-h-11 flex-1 resize-y rounded-xl border border-white/20 bg-panel px-3 py-3 text-sm text-parchment placeholder:text-parchment/45 focus:border-gold focus:outline-none"/>
           <button type="submit" disabled={!draft.trim() || !campaign || saving} aria-label="Send message to Dungeon Master" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gold text-ink disabled:opacity-40"><Send size={19}/></button>
         </form>
         {notice && <p role="status" className="px-5 pb-2 text-xs text-gold">{notice}</p>}
