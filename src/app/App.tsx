@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { createBackup, parseBackup } from '../game/backup';
-import { BookOpen, Compass, Map, Send, Shield, Swords, Users } from 'lucide-react';
+import { BookOpen, Compass, Map, Send, Settings, Shield, Swords, Users } from 'lucide-react';
 import { addExchange, addNote, addRoll, newCampaign, type Campaign } from '../game/campaign';
 import { localCampaignStorage } from '../game/storage';
 import type { View } from '../game/types';
@@ -12,14 +12,17 @@ const tabs = [
   { id: 'party', label: 'Party', Icon: Users },
   { id: 'journal', label: 'Journal', Icon: BookOpen },
   { id: 'map', label: 'Map', Icon: Map },
+  { id: 'settings', label: 'Settings', Icon: Settings },
 ] as const;
 
-function Adventure({ campaign }: { campaign: Campaign | null }) {
+function Adventure({ campaign, fullHistory, onToggleHistory }: { campaign: Campaign | null; fullHistory: boolean; onToggleHistory: () => void }) {
   const endRef = useRef<HTMLDivElement>(null);
   const lastTurn = campaign?.journal.filter((entry) => entry.kind === 'player' || entry.kind === 'dm').at(-1)?.id;
   useEffect(() => { if (lastTurn) endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' }); }, [lastTurn]);
-  const turns = campaign?.journal.filter((entry) => entry.kind === 'player' || entry.kind === 'dm') ?? [];
+  const allTurns = campaign?.journal.filter((entry) => entry.kind === 'player' || entry.kind === 'dm') ?? [];
+  const turns = fullHistory ? allTurns : allTurns.slice(-6);
   return <section className="space-y-5" aria-label="Adventure">
+    {allTurns.length > 6 && <button type="button" onClick={onToggleHistory} className="w-full rounded-lg border border-gold/30 px-4 py-3 text-sm text-gold">{fullHistory ? "Show recent conversation" : "View full conversation history ("+allTurns.length+" messages)"}</button>}
     {turns.length === 0 && <div className="scene"><div className="scene-glow"/><div className="absolute bottom-5 left-5 right-5"><p className="eyebrow">Chapter One</p><h2 className="font-serif text-3xl">A Road to the Forgotten Keep</h2></div></div>}
     {turns.length === 0 && <div className="rounded-xl border border-white/10 bg-panel p-5 space-y-3">
       <p className="eyebrow">Dungeon Master</p>
@@ -47,7 +50,7 @@ function Party({ campaign, onRoll, saving }: { campaign: Campaign | null; onRoll
 }
 function Journal({ campaign }: { campaign: Campaign | null }) {
   return <section className="space-y-4"><div className="flex items-center gap-3"><BookOpen className="text-gold"/><h2 className="font-serif text-2xl">Campaign Journal</h2></div>
-    {campaign ? campaign.journal.map((entry) => <div key={entry.id} className="rounded-xl border border-white/10 bg-panel p-4">
+    {campaign ? campaign.journal.filter(entry => entry.kind === 'note' || entry.kind === 'system').map((entry) => <div key={entry.id} className="rounded-xl border border-white/10 bg-panel p-4">
       <p className="text-xs text-gold">{entry.kind === 'note' ? 'Your note' : entry.kind === 'player' ? 'Nighthawk' : entry.kind === 'dm' ? 'Dungeon Master' : 'Campaign event'} · {new Date(entry.createdAt).toLocaleString()}</p>
       <p className="mt-2 text-sm leading-6">{entry.text}</p>
     </div>) : <p className="text-parchment/60">Create a campaign to start your journal.</p>}
@@ -60,6 +63,7 @@ function WorldMap() {
 }
 export function App() {
   const [activeView, setActiveView] = useState<View>('adventure');
+  const [fullHistory, setFullHistory] = useState(false);
   const [draft, setDraft] = useState('');
   const [notice, setNotice] = useState('');
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
@@ -212,7 +216,7 @@ export function App() {
     finally { setSaving(false); if (importInput.current) importInput.current.value = ''; }
   }
 
-  const content = { adventure: <Adventure campaign={campaign}/>, party: <Party campaign={campaign} saving={saving} onRoll={(skill,mode) => void saveSkillRoll(skill,mode)}/>, journal: <Journal campaign={campaign}/>, map: <WorldMap/> };
+  const content = { adventure: <Adventure campaign={campaign} fullHistory={fullHistory} onToggleHistory={() => setFullHistory(value => !value)}/>, party: <Party campaign={campaign} saving={saving} onRoll={(skill,mode) => void saveSkillRoll(skill,mode)}/>, journal: <Journal campaign={campaign}/>, map: <WorldMap/>, settings: <section className="space-y-4"><h2 className="font-serif text-2xl">Settings</h2><p className="text-sm text-parchment/60">Manage campaigns, backups, and Dungeon Master access below.</p></section> };
   return <div className="min-h-dvh bg-ink text-parchment">
     <div className="mx-auto flex min-h-dvh w-full max-w-3xl flex-col">
       <header className="sticky top-0 z-20 border-b border-white/10 bg-ink/95 px-5 pb-4 pt-[max(1.2rem,env(safe-area-inset-top))] backdrop-blur">
@@ -220,6 +224,7 @@ export function App() {
         <div className="mt-3 flex items-center justify-between text-xs text-parchment/60"><span>{campaign?.title ?? 'No campaign selected'}</span><span>{campaign?.location ?? 'Frontier Village'}</span></div>
       </header>
       <main className="flex-1 px-5 py-6" id="main-content">
+        {activeView === 'settings' && <>
         <section className="mb-5 rounded-xl border border-gold/25 bg-panel p-4 space-y-3" aria-label="Local campaigns">
           <div className="flex items-center justify-between"><h2 className="font-serif text-lg">Local campaigns</h2><span className="text-xs text-parchment/55">{loading ? 'Loading…' : 'Saved on this device'}</span></div>
           {campaigns.length > 0 && <label className="block text-xs text-parchment/70">Active campaign
@@ -244,6 +249,7 @@ export function App() {
           <input id="access-code" type="password" autoComplete="off" value={accessCode} onChange={(event) => setAccessCode(event.target.value)} placeholder="Enter your private access code" className="w-full rounded-lg border border-white/20 bg-ink px-3 py-2 text-base"/>
           <p className="text-xs text-parchment/55">The AI narrates only. Dice, inventory, and rules are not yet connected.</p></>}
         </section>}
+        </>}
         {campaign && activeView === 'journal' && (campaign.worldFacts?.length ?? 0) > 0 && <details className="mb-5 rounded-xl border border-gold/25 bg-panel p-4">
           <summary className="cursor-pointer font-serif text-lg">World memory ({campaign.worldFacts?.length} facts)</summary>
           <ul className="mt-3 list-disc space-y-2 pl-5 text-sm text-parchment/80">{campaign.worldFacts?.map((fact, index) => <li key={index}>{fact}</li>)}</ul>
@@ -276,13 +282,13 @@ export function App() {
           <button type="button" disabled={saving || !dmMode} onClick={() => void resolvePendingCheck()} className="w-full rounded-lg bg-gold px-4 py-3 font-semibold text-ink disabled:opacity-40">{campaign.pendingCheck.dice ? 'Retry saved roll' : 'Roll '+campaign.pendingCheck.skill}</button>
           <p className="text-xs text-parchment/60">The target number is hidden. Your roll is saved before adjudication.</p>
         </div>}
-        <form className="flex items-end gap-2 px-4 py-3" onSubmit={(event) => { event.preventDefault(); void (dmMode ? sendToDM() : saveNote()); }}>
+        {activeView !== "settings" && <form className="flex items-end gap-2 px-4 py-3" onSubmit={(event) => { event.preventDefault(); void (dmMode ? sendToDM() : saveNote()); }}>
           <label htmlFor="dm-input" className="sr-only">Message the Dungeon Master</label>
           <textarea id="dm-input" value={draft} onChange={(event) => { setDraft(event.target.value); setNotice(''); }} rows={1} placeholder={campaign ? (dmMode ? 'What does Nighthawk do?' : 'Write a journal note…') : 'Create a campaign first'} disabled={!campaign || saving || !!campaign.pendingCheck} className="max-h-32 min-h-11 min-w-0 flex-1 resize-y rounded-xl border border-white/20 bg-panel px-3 py-3 text-base text-parchment placeholder:text-parchment/45 focus:border-gold focus:outline-none"/>
           <button type="submit" disabled={!draft.trim() || !campaign || saving || !!campaign.pendingCheck} aria-label="Send message to Dungeon Master" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gold text-ink disabled:opacity-40"><Send size={19}/></button>
-        </form>
+        </form>}
         {notice && <p role="status" className="px-5 pb-2 text-xs text-gold">{notice}</p>}
-        <nav aria-label="Primary navigation" className="grid grid-cols-4 border-t border-white/10 pb-[env(safe-area-inset-bottom)]">
+        <nav aria-label="Primary navigation" className="grid grid-cols-5 border-t border-white/10 pb-[env(safe-area-inset-bottom)]">
           {tabs.map(({ id, label, Icon }) => <button key={id} type="button" onClick={() => { setActiveView(id); setNotice(''); }} aria-current={activeView === id ? 'page' : undefined} className={`flex min-h-16 flex-col items-center justify-center gap-1 text-xs transition-colors ${activeView === id ? 'text-gold' : 'text-parchment/55'}`}><Icon size={21}/><span>{label}</span></button>)}
         </nav>
       </div>
