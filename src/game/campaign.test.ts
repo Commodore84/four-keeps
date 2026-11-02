@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { addNote, isCampaign, newCampaign } from './campaign';
+import { addExchange, addNote, isCampaign, newCampaign } from './campaign';
 describe('campaign state', () => {
   it('creates a versioned campaign with an introduction', () => {
     const campaign = newCampaign(' The Forgotten Keep ', 'test-id', '2026-11-01T00:00:00.000Z');
@@ -13,6 +13,14 @@ describe('campaign state', () => {
     expect(first.journal).toHaveLength(1);
     expect(next.journal[1].text).toBe('I inspect the gate.');
     expect(next.updatedAt).toBe('2026-11-01T01:00:00.000Z');
+  });
+  it('retains durable world facts without duplicates', () => {
+    const first = newCampaign('Test', 'world');
+    const second = addExchange(first, 'Hello', 'Welcome', '2026-11-02T12:00:00.000Z', ['Mira Thorn runs the inn.']);
+    const third = addExchange(second, 'Goodbye', 'Farewell', '2026-11-02T12:01:00.000Z', ['Mira Thorn runs the inn.', 'Old Bran knows local history.']);
+    expect(third.worldFacts).toEqual(['Mira Thorn runs the inn.', 'Old Bran knows local history.']);
+    expect(first.worldFacts).toEqual([]);
+    expect(isCampaign(third)).toBe(true);
   });
   it('rejects malformed saves', () => {
     expect(isCampaign({ schemaVersion: 1, id: 'x', journal: [] })).toBe(false);
