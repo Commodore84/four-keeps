@@ -75,6 +75,7 @@ export function App() {
   const [accessCode, setAccessCode] = useState(() => { try { return sessionStorage.getItem('four-keeps-access-code') ?? ''; } catch { return ''; } });
   const [dmMode, setDmMode] = useState(() => { try { return localStorage.getItem('four-keeps-dm-mode') === 'on'; } catch { return false; } });
   const importInput = useRef<HTMLInputElement>(null);
+  const resolvingCheckRef = useRef(false);
 
   useEffect(() => {
     let active = true;
@@ -133,9 +134,9 @@ export function App() {
   }
 
   async function resolvePendingCheck() {
-    if (saving || !campaign?.pendingCheck || !accessCode) { setNotice('Enter your game access code to resolve the check.'); return; }
+    if (resolvingCheckRef.current || saving || !campaign?.pendingCheck || !accessCode) { if (!accessCode) setNotice('Enter your game access code to resolve the check.'); return; }
+    resolvingCheckRef.current = true;
     setSaving(true);
-    setNotice('Resolving the check…');
     try {
       const pending = campaign.pendingCheck;
       const rollD20 = () => {
@@ -145,9 +146,11 @@ export function App() {
       };
       const dice = pending.dice ?? Array.from({ length: pending.mode === 'normal' ? 1 : 2 }, rollD20);
       const locked = { ...campaign, pendingCheck: { ...pending, dice } };
-      await localCampaignStorage.save(locked);
+      // Render the immutable dice result immediately; do not wait for disk or AI.
       setCampaign(locked);
       setCampaigns(items => items.map(item => item.id === locked.id ? locked : item));
+      setNotice('Dice rolled. DM is resolving the check…');
+      await localCampaignStorage.save(locked);
       const history = locked.journal.filter(entry => entry.kind === 'player' || entry.kind === 'dm').slice(-12)
         .map(entry => ({ role: entry.kind === 'player' ? 'user' : 'assistant', content: entry.text }));
       const response = await fetch('/api/dm', { method:'POST', headers:{ 'Content-Type':'application/json','x-four-keeps-access':accessCode },
@@ -155,7 +158,7 @@ export function App() {
       const result: { narration?:string; newFacts?:string[]; worldUpdates?:unknown; checkResult?:{skill:string;dice:number[];kept:number;modifier:number;total:number;success:boolean}; error?:string } = await response.json();
       if (!response.ok || !result.narration || !result.checkResult) throw new Error(result.error || 'Check resolution failed');
       const r = result.checkResult;
-      const rollText = 'Nighthawk · '+r.skill+' check: '+(r.dice.length === 1 ? 'd20 '+r.dice[0] : 'd20s '+r.dice.join(' and ')+' ('+pending.mode+', used '+r.kept+')')+' '+(r.modifier >= 0 ? '+' : '−')+Math.abs(r.modifier)+' = '+r.total+'.';
+      const rollText = 'Nighthawk · '+r.skill+': '+(r.dice.length === 1 ? String(r.dice[0]) : r.dice.join(' / ')+' ('+pending.mode+': '+r.kept+')')+' '+(r.modifier >= 0 ? '+' : '−')+Math.abs(r.modifier)+' = '+r.total+'.';
       const next = addExchange(locked, rollText, result.narration, new Date().toISOString(), result.newFacts ?? [], result.worldUpdates);
       await localCampaignStorage.save(next);
       setCampaign(next);
@@ -163,7 +166,7 @@ export function App() {
       setActiveView('adventure');
       setNotice('Check resolved and saved.');
     } catch(error) { setNotice('Check error: '+String(error)+' Your dice are saved; retry to use the same roll.'); }
-    finally { setSaving(false); }
+    finally { resolvingCheckRef.current = false; setSaving(false); }
   }
 
   async function sendToDM() {
@@ -282,7 +285,7 @@ export function App() {
           <p className="font-serif text-xl">{campaign.pendingCheck.skill} · {campaign.pendingCheck.mode}</p>
           <p className="text-sm text-parchment/70">{campaign.pendingCheck.reason}</p>
           <button type="button" disabled={saving || !dmMode} onClick={() => void resolvePendingCheck()} className="w-full rounded-lg bg-gold px-4 py-3 font-semibold text-ink disabled:opacity-40">{campaign.pendingCheck.dice ? (saving ? 'DM is resolving…' : 'Retry DM response') : 'Roll '+campaign.pendingCheck.skill}</button>
-           {campaign.pendingCheck.dice && (() => { const dice = campaign.pendingCheck.dice; const used = dice.length === 1 ? dice[0] : campaign.pendingCheck.mode === 'advantage' ? Math.max(...dice) : Math.min(...dice); const modifier = skillModifier(campaign.character ?? prototypeNighthawk, campaign.pendingCheck.skill); return <div role="status" aria-live="polite" className="rounded-lg border border-gold/30 bg-ink/60 p-3"><p className="text-xs uppercase tracking-widest text-gold">Nighthawk · {campaign.pendingCheck.skill} check</p><p className="mt-2 text-xl font-semibold">{dice.length === 1 ? 'd20: '+dice[0] : 'd20s: '+dice.join(' and ')+' · '+campaign.pendingCheck.mode+' uses '+used} <span className="text-parchment/70">{modifier >= 0 ? '+' : '−'} {Math.abs(modifier)} =</span> {used + modifier}</p><p className="mt-1 text-xs text-parchment/65">{saving ? 'Waiting for the Dungeon Master. Your roll is saved.' : 'Roll saved. Retry the DM response without rerolling.'}</p></div>; })()}
+           {campaign.pendingCheck.dice && (() => { const dice = campaign.pendingCheck.dice; const used = dice.length === 1 ? dice[0] : campaign.pendingCheck.mode === 'advantage' ? Math.max(...dice) : Math.min(...dice); const modifier = skillModifier(campaign.character ?? prototypeNighthawk, campaign.pendingCheck.skill); return <div role="status" aria-live="polite" className="rounded-lg border border-gold/30 bg-ink/60 p-3"><p className="text-xs uppercase tracking-widest text-gold">Nighthawk · {campaign.pendingCheck.skill} check</p><p className="mt-2 text-xl font-semibold">{dice.length === 1 ? String(dice[0]) : dice.join(' / ')+' ('+campaign.pendingCheck.mode+': '+used+')'} <span className="text-parchment/70">{modifier >= 0 ? '+' : '−'}{Math.abs(modifier)} =</span> {used + modifier}</p><p className="mt-1 text-xs text-parchment/65">{saving ? 'Waiting for the Dungeon Master. Your roll is saved.' : 'Roll saved. Retry the DM response without rerolling.'}</p></div>; })()}
           <p className="text-xs text-parchment/60">The target number is hidden. Your roll is saved before adjudication.</p>
         </div>}
         {activeView !== "settings" && <form className="flex items-end gap-2 px-4 py-3" onSubmit={(event) => { event.preventDefault(); void (dmMode ? sendToDM() : saveNote()); }}>
