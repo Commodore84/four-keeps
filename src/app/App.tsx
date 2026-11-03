@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { createBackup, parseBackup } from '../game/backup';
 import { BookOpen, Compass, Map, RefreshCw, Send, Settings, Shield, Swords, Users } from 'lucide-react';
-import { addExchange, addNote, addRoll, newCampaign, type Campaign } from '../game/campaign';
+import { addExchange, addNote, addRoll, newCampaign, awardExperience, levelUpRogue, xpThresholds, type Campaign } from '../game/campaign';
 import { localCampaignStorage } from '../game/storage';
 import type { View } from '../game/types';
 import { emptyWorld } from '../game/world';
@@ -36,8 +36,10 @@ function Adventure({ campaign, fullHistory, onToggleHistory }: { campaign: Campa
     <div ref={endRef}/>
   </section>;
 }
-function Party({ campaign, onRoll, onSaveRoll, saving }: { campaign: Campaign | null; onRoll: (skill: Skill, mode: RollMode) => void; onSaveRoll: (ability: typeof abilities[number], mode: RollMode) => void; saving: boolean }) {
+function Party({ campaign, onRoll, onSaveRoll, onAwardXP, onLevelUp, onRestore, saving }: { campaign: Campaign | null; onRoll: (skill: Skill, mode: RollMode) => void; onSaveRoll: (ability: typeof abilities[number], mode: RollMode) => void; onAwardXP: (amount: number, reason: string) => void; onLevelUp: (hpGain: number) => void; onRestore: () => void; saving: boolean }) {
   const [mode, setMode] = useState<RollMode>('normal');
+  const [testXP, setTestXP] = useState('300');
+  const [hpChoice, setHpChoice] = useState('7');
   const skills = Object.keys(skillAbility) as Skill[];
   const stats = campaign?.character ?? prototypeNighthawk;
   const lastRoll = campaign?.journal.filter(entry => entry.kind === 'system' && (entry.text.startsWith('Nighthawk rolled ') || entry.text.startsWith('Nighthawk · '))).at(-1);
@@ -45,6 +47,7 @@ function Party({ campaign, onRoll, onSaveRoll, saving }: { campaign: Campaign | 
   return <section className="space-y-4"><div className="flex items-center gap-3"><Shield className="text-gold"/><h2 className="font-serif text-2xl">The Party</h2></div>
     <div className="rounded-xl border border-white/10 bg-panel p-5">
       <p className="font-semibold">Nighthawk</p><p className="mt-1 text-sm text-parchment/60">Wood Elf Rogue · Level {stats.level ?? 1} · Playtest character sheet</p>
+      <div className="mt-4 rounded-lg border border-gold/30 p-3"><p className="text-sm">Level {stats.level ?? 1} · {campaign?.xp ?? 0} XP / {xpThresholds[Math.min(stats.level ?? 1,19)]} XP to next level</p><div className="mt-2 h-2 rounded-full bg-ink"><div className="h-full rounded-full bg-gold" style={{ width: Math.min(100, ((campaign?.xp ?? 0) / (xpThresholds[Math.min(stats.level ?? 1,19)] || 1)) * 100) + "%" }}/></div>{(stats.level ?? 1) === 1 && (campaign?.xp ?? 0) >= 300 && <div className="mt-3 space-y-2"><p className="text-sm text-gold">Level 2 unlocked: Cunning Action, +HP</p><label className="block text-xs">HP increase<select className="mt-1 w-full rounded-lg bg-ink p-2 text-base" value={hpChoice} onChange={e => setHpChoice(e.target.value)}><option value="7">Fixed 5 + CON 2 = 7 HP</option>{Array.from({length:8},(_,i)=><option key={i} value={i+3}>Rolled {i+1} + CON 2 = {i+3} HP</option>)}</select></label><button type="button" disabled={saving} onClick={() => onLevelUp(Number(hpChoice))} className="rounded-lg bg-gold px-4 py-2 font-semibold text-ink">Confirm Level 2</button></div>}</div>
       <div className="mt-4 grid grid-cols-3 gap-2">{abilities.map(ability => <div key={ability} className="rounded-lg border border-white/15 p-3 text-center"><p className="text-xs uppercase text-gold">{ability}</p><p className="text-xl font-semibold">{stats.scores[ability]}</p><p className="text-sm text-parchment/70">{signed(abilityModifier(stats.scores[ability]))}</p></div>)}</div>
       <div className="mt-4 grid grid-cols-2 gap-2 text-sm"><p>HP: {stats.currentHitPoints ?? 10} / {stats.maxHitPoints ?? 10}</p><p>Armor Class: {stats.armorClass ?? 14}</p><p>Speed: {stats.speed ?? 35} ft.</p><p>Proficiency: +{stats.proficiencyBonus}</p><p>Passive Perception: {passivePerception(stats)}</p></div>
       <div className="mt-5 rounded-lg border border-gold/30 p-3"><p className="mb-2 text-sm font-semibold">Roll mode</p><div className="grid grid-cols-3 gap-1 text-center text-xs text-parchment/75"><span>Disadvantage</span><span>Normal</span><span>Advantage</span></div><input aria-label="Roll mode" type="range" min={-1} max={1} step={1} value={mode === 'disadvantage' ? -1 : mode === 'advantage' ? 1 : 0} onChange={e => setMode(Number(e.target.value) === -1 ? 'disadvantage' : Number(e.target.value) === 1 ? 'advantage' : 'normal')} className="mt-2 w-full accent-gold"/><p className="mt-1 text-center text-xs text-gold">{mode === 'normal' ? 'Normal roll' : mode === 'advantage' ? 'Advantage: keep higher d20' : 'Disadvantage: keep lower d20'}</p></div>
@@ -53,6 +56,7 @@ function Party({ campaign, onRoll, onSaveRoll, saving }: { campaign: Campaign | 
       <p className="mt-3 text-xs text-parchment/60">Tap any skill or saving throw to roll using the selected mode. * Proficient · ** Expertise. Rolls are saved to the campaign; the DM determines outcomes.</p>
       {lastRoll && <p role="status" className="mt-3 rounded-lg border border-gold/30 p-3 text-sm">{lastRoll.text}</p>}
     </div>
+    <details className="rounded-xl border border-gold/30 bg-panel p-4"><summary className="cursor-pointer font-semibold">Development: XP and level-up testing</summary><p className="mt-2 text-xs text-parchment/70">Test XP only. Your level 1 character is snapshotted before the first grant; restore it to repeat tests. DM XP awards will be integrated separately.</p><div className="mt-3 flex gap-2"><input type="number" min="1" max="100000" value={testXP} onChange={e=>setTestXP(e.target.value)} aria-label="Test XP amount" className="w-28 rounded-lg bg-ink p-2"/><button type="button" disabled={saving || !campaign} onClick={()=>onAwardXP(Number(testXP), "Development test reward")} className="rounded-lg bg-gold px-3 py-2 text-ink">Grant test XP</button></div><button type="button" disabled={saving || !campaign?.levelOneSnapshot} onClick={onRestore} className="mt-3 rounded-lg border border-white/20 px-3 py-2 text-sm">Restore level 1 snapshot</button></details>
     <div className="rounded-xl border border-dashed border-gold/30 p-5"><p className="font-semibold">Three companions await</p><p className="mt-2 text-sm text-parchment/60">Companion recruitment will arrive in a later milestone.</p></div>
   </section>;
 }
@@ -141,6 +145,24 @@ export function App() {
       setCampaigns(items => items.map(item => item.id === next.id ? next : item));
       setNotice('Saving throw rolled and saved.');
     } catch (error) { setNotice('Saving throw failed: ' + String(error)); }
+    finally { setSaving(false); }
+  }
+
+  async function updateProgress(action: 'award' | 'level' | 'restore', amount = 0, reason = '') {
+    if (!campaign || saving) return;
+    setSaving(true);
+    try {
+      const snapshot = campaign.levelOneSnapshot ?? { character: structuredClone(campaign.character ?? prototypeNighthawk), xp: campaign.xp ?? 0, xpAwards: structuredClone(campaign.xpAwards ?? []) };
+      const next = action === 'restore'
+        ? { ...campaign, character: structuredClone(snapshot.character), xp: snapshot.xp, xpAwards: structuredClone(snapshot.xpAwards), levelOneSnapshot: undefined }
+        : action === 'level'
+          ? levelUpRogue(campaign, amount)
+          : awardExperience({ ...campaign, levelOneSnapshot: snapshot }, amount, reason, crypto.randomUUID());
+      await localCampaignStorage.save(next);
+      setCampaign(next);
+      setCampaigns(items => items.map(item => item.id === next.id ? next : item));
+      setNotice(action === 'restore' ? 'Level 1 snapshot restored.' : action === 'level' ? 'Level 2 saved.' : 'XP awarded and saved.');
+    } catch (error) { setNotice('Progression error: ' + String(error)); }
     finally { setSaving(false); }
   }
 
@@ -246,7 +268,7 @@ export function App() {
     finally { setSaving(false); if (importInput.current) importInput.current.value = ''; }
   }
 
-  const content = { adventure: <Adventure campaign={campaign} fullHistory={fullHistory} onToggleHistory={() => setFullHistory(value => !value)}/>, party: <Party campaign={campaign} saving={saving} onRoll={(skill,mode) => void saveSkillRoll(skill,mode)} onSaveRoll={(ability,mode) => void saveSavingThrow(ability,mode)}/>, journal: <Journal campaign={campaign}/>, map: <WorldMap/>, settings: <section className="space-y-4"><h2 className="font-serif text-2xl">Settings</h2><p className="text-sm text-parchment/60">Manage campaigns, backups, and Dungeon Master access below.</p></section> };
+  const content = { adventure: <Adventure campaign={campaign} fullHistory={fullHistory} onToggleHistory={() => setFullHistory(value => !value)}/>, party: <Party campaign={campaign} saving={saving} onRoll={(skill,mode) => void saveSkillRoll(skill,mode)} onSaveRoll={(ability,mode) => void saveSavingThrow(ability,mode)} onAwardXP={(amount,reason) => void updateProgress('award',amount,reason)} onLevelUp={hp => void updateProgress('level',hp)} onRestore={() => void updateProgress('restore')}/>, journal: <Journal campaign={campaign}/>, map: <WorldMap/>, settings: <section className="space-y-4"><h2 className="font-serif text-2xl">Settings</h2><p className="text-sm text-parchment/60">Manage campaigns, backups, and Dungeon Master access below.</p></section> };
   return <div className="min-h-dvh bg-ink text-parchment">
     <div className="mx-auto flex min-h-dvh w-full max-w-3xl flex-col">
       <header className="sticky top-0 z-20 border-b border-white/10 bg-ink/95 px-5 pb-4 pt-[max(1.2rem,env(safe-area-inset-top))] backdrop-blur">
