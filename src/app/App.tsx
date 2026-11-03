@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { createBackup, parseBackup } from '../game/backup';
 import { BookOpen, Compass, Map, RefreshCw, Send, Settings, Shield, Swords, Users } from 'lucide-react';
-import { addExchange, addNote, addRoll, newCampaign, awardExperience, levelUpRogue, levelUpArcaneTrickster, tricksterCantrips, tricksterSpells, isRitualSpell, castNighthawkSpell, endNighthawkConcentration, spellRequiresConcentration, reconcileNighthawkScores, undoNighthawkScoreReconciliation, xpThresholds, type Campaign } from '../game/campaign';
+import { addExchange, addNote, addRoll, newCampaign, awardExperience, levelUpRogue, levelUpArcaneTrickster, tricksterCantrips, tricksterSpells, isRitualSpell, castNighthawkSpell, takeNighthawkRest, endNighthawkConcentration, spellRequiresConcentration, reconcileNighthawkScores, undoNighthawkScoreReconciliation, xpThresholds, type Campaign } from '../game/campaign';
 import { localCampaignStorage } from '../game/storage';
 import type { View } from '../game/types';
 import { emptyWorld } from '../game/world';
@@ -166,6 +166,8 @@ export function App() {
   const [draft, setDraft] = useState('');
   const [pendingAdventureSpell, setPendingAdventureSpell] = useState<{spell:string;ritual:boolean;intent:string}|null>(null);
   const [adventureComponentsConfirmed,setAdventureComponentsConfirmed] = useState(false);
+  const [pendingRest,setPendingRest] = useState<'short'|'long'|null>(null);
+  const [restDice,setRestDice] = useState(0);
   const [notice, setNotice] = useState('');
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [campaign, setCampaign] = useState<Campaign | null>(null);
@@ -337,10 +339,18 @@ export function App() {
     return {spell:name,ritual:isRitualSpell(name)&&/\britual\b/.test(normalized),intent:message};
   }
   async function submitAdventure() {
+    const lower=draft.toLowerCase();
+    if(/\b(short rest|long rest)\b/.test(lower) && /\b(take|start|begin|have|rest)\b/.test(lower)) {setPendingRest(lower.includes('long rest')?'long':'short');setRestDice(0);return;}
     if(pendingAdventureSpell || saving)return;
     const found=detectAdventureSpell(draft);
     if(found){setPendingAdventureSpell(found);setAdventureComponentsConfirmed(false);return;}
     await sendToDM();
+  }
+  async function confirmRest() {
+    if(!campaign || !pendingRest || saving)return;
+    setSaving(true);
+    try {const next=takeNighthawkRest(campaign,pendingRest,pendingRest==='short'?restDice:0);await localCampaignStorage.save(next);setCampaign(next);setCampaigns(items=>items.map(item=>item.id===next.id?next:item));setPendingRest(null);setNotice('Rest completed and saved.');await sendToDM(next,draft,true);}
+    catch(error){setNotice('Rest error: '+String(error));}finally{setSaving(false);}
   }
   async function confirmAdventureSpell() {
     if(!campaign || !pendingAdventureSpell || saving)return;
@@ -470,6 +480,7 @@ export function App() {
         {content[activeView]}
       </main>
       <div className="sticky bottom-0 z-20 border-t border-white/10 bg-ink/95 backdrop-blur">
+        {pendingRest && <div className="mx-4 mt-3 space-y-3 rounded-xl border border-gold/50 bg-panel p-4"><p className="eyebrow">Confirm rest</p><h3 className="font-serif text-xl">{pendingRest==='long'?'Long Rest · 8 hours':'Short Rest · 1 hour'}</h3><p className="text-sm">{pendingRest==='long'?'Restore all HP and expended spell slots. Recover up to half your Hit Dice (minimum one).':'Spend Hit Dice to recover HP. Spell slots do not recover.'}</p><p className="text-xs">HP: {campaign?.character?.currentHitPoints??10}/{campaign?.character?.maxHitPoints??10} · Hit Dice available: {campaign?.hitDiceRemaining??campaign?.character?.level??1} · Level 1 slots remaining: {(campaign?.character?.spellSlots?.level1??0)-(campaign?.character?.spellSlots?.usedLevel1??0)}</p>{pendingRest==='short' && <label className="block text-sm">Hit Dice to roll (d8 + CON each)<select className="mt-2 w-full rounded-lg border border-white/20 bg-ink p-2" value={restDice} onChange={e=>setRestDice(Number(e.target.value))}>{Array.from({length:(campaign?.hitDiceRemaining??campaign?.character?.level??1)+1},(_,i)=><option key={i} value={i}>{i}</option>)}</select></label>}<div className="flex gap-2"><button type="button" className="flex-1 rounded-lg border border-white/30 p-3" onClick={()=>setPendingRest(null)}>Cancel</button><button type="button" disabled={saving} className="flex-1 rounded-lg bg-gold p-3 font-semibold text-ink disabled:opacity-40" onClick={()=>void confirmRest()}>Complete rest</button></div><p className="text-xs text-parchment/60">Prototype: assumes an uninterrupted rest in a safe location. The DM will narrate the outcome afterward.</p></div>}
         {pendingAdventureSpell && <div className="mx-4 mt-3 rounded-xl border border-gold/50 bg-panel p-4 space-y-3" role="group" aria-label="Confirm spell cast"><p className="eyebrow">Confirm Adventure spell</p><h3 className="font-serif text-xl">{pendingAdventureSpell.spell}{pendingAdventureSpell.ritual?' · Ritual':''}</h3><p className="text-sm text-parchment/80">{pendingAdventureSpell.intent}</p><p className="text-xs text-parchment/70">{pendingAdventureSpell.ritual?'No spell slot spent.':campaign?.character?.cantrips?.includes(pendingAdventureSpell.spell)?'Cantrip · no spell slot spent.':'Consumes one Level 1 spell slot.'}</p>{pendingAdventureSpell.spell==='Find Familiar' && <label className="flex gap-2 text-xs"><input type="checkbox" checked={adventureComponentsConfirmed} onChange={e=>setAdventureComponentsConfirmed(e.target.checked)}/> I have and consume the required 10 gp material components (inventory is not yet tracked).</label>}<div className="flex gap-2"><button type="button" className="flex-1 rounded-lg border border-white/30 p-3" onClick={()=>setPendingAdventureSpell(null)}>Edit action</button><button type="button" disabled={saving || (pendingAdventureSpell.spell==='Find Familiar'&&!adventureComponentsConfirmed)} className="flex-1 rounded-lg bg-gold p-3 font-semibold text-ink disabled:opacity-40" onClick={()=>void confirmAdventureSpell()}>Cast and continue</button></div></div>}
         {campaign?.pendingCheck && <div className="mx-4 mt-3 rounded-xl border border-gold/40 bg-panel p-4 space-y-2" role="group" aria-label="Pending skill check">
           <p className="eyebrow">Dungeon Master requests a check</p>
@@ -482,7 +493,7 @@ export function App() {
         {activeView !== "settings" && <form className="flex items-end gap-2 px-4 py-3" onSubmit={(event) => { event.preventDefault(); void (dmMode ? submitAdventure() : saveNote()); }}>
           <button type="button" onClick={() => window.location.reload()} aria-label="Refresh Four Keeps" title="Refresh Four Keeps" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-white/20 bg-panel text-gold"><RefreshCw size={19}/></button>
           <label htmlFor="dm-input" className="sr-only">Message the Dungeon Master</label>
-          <textarea id="dm-input" value={draft} onChange={(event) => { setDraft(event.target.value); setNotice(''); }} rows={1} placeholder={campaign ? (dmMode ? 'What does Nighthawk do?' : 'Write a journal note…') : 'Create a campaign first'} disabled={!campaign || saving || !!campaign.pendingCheck || !!pendingAdventureSpell} className="max-h-32 min-h-11 min-w-0 flex-1 resize-y rounded-xl border border-white/20 bg-panel px-3 py-3 text-base text-parchment placeholder:text-parchment/45 focus:border-gold focus:outline-none"/>
+          <textarea id="dm-input" value={draft} onChange={(event) => { setDraft(event.target.value); setNotice(''); }} rows={1} placeholder={campaign ? (dmMode ? 'What does Nighthawk do?' : 'Write a journal note…') : 'Create a campaign first'} disabled={!campaign || saving || !!campaign.pendingCheck || !!pendingAdventureSpell || !!pendingRest} className="max-h-32 min-h-11 min-w-0 flex-1 resize-y rounded-xl border border-white/20 bg-panel px-3 py-3 text-base text-parchment placeholder:text-parchment/45 focus:border-gold focus:outline-none"/>
           <button type="submit" disabled={!draft.trim() || !campaign || saving || !!campaign.pendingCheck || !!pendingAdventureSpell} aria-label="Send message to Dungeon Master" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gold text-ink disabled:opacity-40"><Send size={19}/></button>
         </form>}
         {notice && <p role="status" className="px-5 pb-2 text-xs text-gold">{notice}</p>}
