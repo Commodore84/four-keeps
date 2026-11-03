@@ -13,6 +13,8 @@ export interface Campaign {
   world?: WorldState;
   character?: CharacterStats;
   preReconciliationScores?: CharacterStats['scores'];
+  elapsedMinutes?: number;
+  familiar?: { form: 'Owl'; summonedAt: string };
   xp?: number;
   xpAwards?: { id: string; amount: number; reason: string }[];
   levelOneSnapshot?: { character: CharacterStats; xp: number; xpAwards: { id: string; amount: number; reason: string }[] };
@@ -98,4 +100,23 @@ export function reconcileNighthawkScores(campaign: Campaign): Campaign {
 export function undoNighthawkScoreReconciliation(campaign: Campaign): Campaign {
   if (!campaign.character || !campaign.preReconciliationScores) throw new Error('No previous scores to restore');
   return { ...campaign, character: { ...campaign.character, scores: structuredClone(campaign.preReconciliationScores) }, preReconciliationScores: undefined, updatedAt: new Date().toISOString(), journal: [...campaign.journal, { id: crypto.randomUUID(), kind: 'system', text: 'Restored prior playtest ability scores.', createdAt: new Date().toISOString() }] };
+}
+
+/** Validate casting and atomically persist resource expenditure. Spell effects remain DM-adjudicated. */
+export function castNighthawkSpell(campaign: Campaign, spell: string, ritual: boolean, familiarComponentsConfirmed = false): Campaign {
+  const character = campaign.character;
+  if (!character || (character.level ?? 1) < 3 || character.subclass !== 'Arcane Trickster') throw new Error('Arcane Trickster spellcasting is not unlocked');
+  const cantrip = character.cantrips?.includes(spell) ?? false;
+  const prepared = character.preparedSpells?.includes(spell) ?? false;
+  if (!cantrip && !prepared) throw new Error('Spell is not known or prepared');
+  if (ritual && (!prepared || !isRitualSpell(spell))) throw new Error('Only prepared ritual spells can be ritual-cast');
+  if (spell === 'Find Familiar' && !familiarComponentsConfirmed) throw new Error('Confirm the required 10 gp of incense, charcoal and herbs consumed in a brass brazier');
+  const slots = character.spellSlots;
+  if (!cantrip && !ritual && (!slots || slots.usedLevel1 >= slots.level1)) throw new Error('No Level 1 spell slots remaining');
+  const nextSlots = slots ? { ...slots, usedLevel1: slots.usedLevel1 + (!cantrip && !ritual ? 1 : 0) } : undefined;
+  // Find Familiar takes one hour normally, or one hour and ten minutes as a ritual.
+  const minutes = spell === 'Find Familiar' ? (ritual ? 70 : 60) : ritual ? 10 : 0;
+  const now = new Date().toISOString();
+  const message = 'Nighthawk casts '+spell+(ritual?' as a ritual':'')+'. '+(ritual||cantrip?'No spell slot spent.':'One Level 1 spell slot spent.')+(minutes?' '+minutes+' minutes pass.':'')+(spell==='Find Familiar'?' Owl familiar summoned; 10 gp material components consumed (player confirmed).':' Spell effect awaits DM adjudication.');
+  return { ...campaign, character: { ...character, spellSlots: nextSlots }, elapsedMinutes: (campaign.elapsedMinutes ?? 0) + minutes, familiar: spell==='Find Familiar' ? { form:'Owl', summonedAt:now } : campaign.familiar, updatedAt:now, journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:message,createdAt:now}] };
 }
