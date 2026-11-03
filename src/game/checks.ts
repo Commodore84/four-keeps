@@ -5,7 +5,7 @@ export type Skill = 'Acrobatics' | 'Animal Handling' | 'Arcana' | 'Athletics' | 
 export const skillAbility: Record<Skill, Ability> = {
   Acrobatics:'dex', 'Animal Handling':'wis', Arcana:'int', Athletics:'str', Deception:'cha', History:'int', Insight:'wis', Intimidation:'cha', Investigation:'int', Medicine:'wis', Nature:'int', Perception:'wis', Performance:'cha', Persuasion:'cha', Religion:'int', 'Sleight of Hand':'dex', Stealth:'dex', Survival:'wis',
 };
-export interface CharacterStats { scores: Record<Ability, number>; proficiencyBonus: number; proficientSkills: Skill[]; expertiseSkills?: Skill[]; level?: number; maxHitPoints?: number; currentHitPoints?: number; armorClass?: number; speed?: number }
+export interface CharacterStats { scores: Record<Ability, number>; proficiencyBonus: number; proficientSkills: Skill[]; expertiseSkills?: Skill[]; level?: number; maxHitPoints?: number; currentHitPoints?: number; armorClass?: number; speed?: number; subclass?: 'Arcane Trickster'; cantrips?: string[]; preparedSpells?: string[]; spellSlots?: { level1: number; usedLevel1: number } }
 export const prototypeNighthawk: CharacterStats = {
   // Temporary playtest values, not a finalized character build.
   scores: { str: 8, dex: 16, con: 14, int: 14, wis: 12, cha: 10 },
