@@ -33,5 +33,6 @@ export function rollCheck(stats: CharacterStats, skill: Skill, mode: RollMode, r
 }
 export function describeCheck(result: CheckResult): string {
   const sign = result.modifier >= 0 ? '+' : '';
-  return `Nighthawk rolled ${result.skill} (${result.mode}): d20 [${result.dice.join(', ')}], kept ${result.selected}, ${sign}${result.modifier} modifier, total ${result.total}. Outcome not determined; the DM must adjudicate against the hidden DC.`;
+  const diceText = result.mode === 'normal' ? `${result.dice[0]}` : `${result.dice.join(' / ')} (${result.mode}: ${result.selected})`;
+  return `Nighthawk · ${result.skill}: ${diceText} ${sign}${result.modifier} = ${result.total}. Outcome awaits DM adjudication.`;
 }
