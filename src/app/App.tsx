@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { createBackup, parseBackup } from '../game/backup';
 import { BookOpen, Compass, Map, RefreshCw, Send, Settings, Shield, Swords, Users } from 'lucide-react';
-import { addExchange, addNote, addRoll, newCampaign, awardExperience, levelUpRogue, xpThresholds, type Campaign } from '../game/campaign';
+import { addExchange, addNote, addRoll, newCampaign, awardExperience, levelUpRogue, levelUpArcaneTrickster, tricksterCantrips, tricksterSpells, xpThresholds, type Campaign } from '../game/campaign';
 import { localCampaignStorage } from '../game/storage';
 import type { View } from '../game/types';
 import { emptyWorld } from '../game/world';
@@ -36,10 +36,12 @@ function Adventure({ campaign, fullHistory, onToggleHistory }: { campaign: Campa
     <div ref={endRef}/>
   </section>;
 }
-function Party({ campaign, onRoll, onSaveRoll, onAwardXP, onLevelUp, onRestore, saving }: { campaign: Campaign | null; onRoll: (skill: Skill, mode: RollMode) => void; onSaveRoll: (ability: typeof abilities[number], mode: RollMode) => void; onAwardXP: (amount: number, reason: string) => void; onLevelUp: (hpGain: number) => void; onRestore: () => void; saving: boolean }) {
+function Party({ campaign, onRoll, onSaveRoll, onAwardXP, onLevelUp, onLevelThree, onRestore, saving }: { campaign: Campaign | null; onRoll: (skill: Skill, mode: RollMode) => void; onSaveRoll: (ability: typeof abilities[number], mode: RollMode) => void; onAwardXP: (amount: number, reason: string) => void; onLevelUp: (hpGain: number) => void; onLevelThree: (hpGain: number, cantrips: string[], spells: string[]) => void; onRestore: () => void; saving: boolean }) {
   const [mode, setMode] = useState<RollMode>('normal');
   const [testXP, setTestXP] = useState('300');
   const [hpChoice, setHpChoice] = useState('7');
+  const [cantripChoices, setCantripChoices] = useState<string[]>([]);
+  const [spellChoices, setSpellChoices] = useState<string[]>([]);
   const skills = Object.keys(skillAbility) as Skill[];
   const stats = campaign?.character ?? prototypeNighthawk;
   const lastRoll = campaign?.journal.filter(entry => entry.kind === 'system' && (entry.text.startsWith('Nighthawk rolled ') || entry.text.startsWith('Nighthawk · '))).at(-1);
@@ -48,7 +50,12 @@ function Party({ campaign, onRoll, onSaveRoll, onAwardXP, onLevelUp, onRestore, 
     <div className="rounded-xl border border-white/10 bg-panel p-5">
       <p className="font-semibold">Nighthawk</p><p className="mt-1 text-sm text-parchment/60">Wood Elf Rogue · Level {stats.level ?? 1} · Playtest character sheet</p>
       <div className="mt-4 rounded-lg border border-gold/30 p-3"><p className="text-sm">Level {stats.level ?? 1} · {campaign?.xp ?? 0} XP / {xpThresholds[Math.min(stats.level ?? 1,19)]} XP to next level</p><div className="mt-2 h-2 rounded-full bg-ink"><div className="h-full rounded-full bg-gold" style={{ width: Math.min(100, ((campaign?.xp ?? 0) / (xpThresholds[Math.min(stats.level ?? 1,19)] || 1)) * 100) + "%" }}/></div>{(stats.level ?? 1) === 1 && (campaign?.xp ?? 0) >= 300 && <div className="mt-3 space-y-2"><p className="text-sm text-gold">Level 2 unlocked: Cunning Action, +HP</p><label className="block text-xs">HP increase<select className="mt-1 w-full rounded-lg bg-ink p-2 text-base" value={hpChoice} onChange={e => setHpChoice(e.target.value)}><option value="7">Fixed 5 + CON 2 = 7 HP</option>{Array.from({length:8},(_,i)=><option key={i} value={i+3}>Rolled {i+1} + CON 2 = {i+3} HP</option>)}</select></label><button type="button" disabled={saving} onClick={() => onLevelUp(Number(hpChoice))} className="rounded-lg bg-gold px-4 py-2 font-semibold text-ink">Confirm Level 2</button></div>}</div>
-      {(stats.level ?? 1) >= 2 && (campaign?.xp ?? 0) >= xpThresholds[Math.min(stats.level ?? 1,19)] && <div role="status" className="mt-3 rounded-xl border-2 border-gold bg-gold/10 p-4"><p className="text-xs font-bold uppercase tracking-widest text-gold">Level up available</p><h3 className="mt-2 font-serif text-xl">Level {(stats.level ?? 1) + 1} unlocked</h3><p className="mt-2 text-sm leading-6">You've earned enough XP to advance. Level {(stats.level ?? 1) + 1} progression is not yet implemented, so Nighthawk remains at Level {stats.level ?? 1} until the guided level-up workflow is ready. Your XP is safely saved.</p></div>}
+      {(stats.level ?? 1) === 2 && (campaign?.xp ?? 0) >= 900 && <div className="mt-3 rounded-xl border-2 border-gold bg-gold/10 p-4 space-y-3"><p className="text-xs font-bold uppercase tracking-widest text-gold">Level up available</p><h3 className="font-serif text-xl">Level 3 · Arcane Trickster</h3><p className="text-sm">Unlock Steady Aim, Mage Hand Legerdemain, Spellcasting, Sneak Attack 2d6 and more HP. Choose your spells before confirming.</p>
+        <label className="block text-sm">HP increase<select className="mt-1 w-full rounded-lg bg-ink p-2 text-base" value={hpChoice} onChange={e=>setHpChoice(e.target.value)}><option value="7">Fixed 5 + CON 2 = 7 HP</option>{Array.from({length:8},(_,i)=><option key={i} value={i+3}>Rolled {i+1} + CON 2 = {i+3} HP</option>)}</select></label>
+        <div><p className="text-sm font-semibold">Cantrips · {cantripChoices.length}/2</p><p className="text-xs text-parchment/70">Mage Hand is granted automatically. Choose two additional Wizard cantrips.</p><div className="mt-2 grid grid-cols-2 gap-2">{tricksterCantrips.filter(s=>s!=='Mage Hand').map(s=><label key={s} className="flex items-center gap-2 rounded-lg border border-white/15 p-2 text-xs"><input type="checkbox" checked={cantripChoices.includes(s)} disabled={!cantripChoices.includes(s) && cantripChoices.length>=2} onChange={e=>setCantripChoices(v=>e.target.checked?[...v,s]:v.filter(x=>x!==s))}/>{s}</label>)}</div></div>
+        <div><p className="text-sm font-semibold">Level 1 Wizard spells · {spellChoices.length}/3</p><p className="text-xs text-parchment/70">Choose three spells to prepare. You have two Level 1 spell slots.</p><div className="mt-2 grid grid-cols-2 gap-2">{tricksterSpells.map(s=><label key={s} className="flex items-center gap-2 rounded-lg border border-white/15 p-2 text-xs"><input type="checkbox" checked={spellChoices.includes(s)} disabled={!spellChoices.includes(s) && spellChoices.length>=3} onChange={e=>setSpellChoices(v=>e.target.checked?[...v,s]:v.filter(x=>x!==s))}/>{s}</label>)}</div></div>
+        <button type="button" disabled={saving || cantripChoices.length!==2 || spellChoices.length!==3} onClick={()=>onLevelThree(Number(hpChoice),cantripChoices,spellChoices)} className="w-full rounded-lg bg-gold px-4 py-3 font-semibold text-ink disabled:opacity-40">Confirm Level 3</button>
+      </div>}
       <div className="mt-4 grid grid-cols-3 gap-2">{abilities.map(ability => <div key={ability} className="rounded-lg border border-white/15 p-3 text-center"><p className="text-xs uppercase text-gold">{ability}</p><p className="text-xl font-semibold">{stats.scores[ability]}</p><p className="text-sm text-parchment/70">{signed(abilityModifier(stats.scores[ability]))}</p></div>)}</div>
       <div className="mt-4 grid grid-cols-2 gap-2 text-sm"><p>HP: {stats.currentHitPoints ?? 10} / {stats.maxHitPoints ?? 10}</p><p>Armor Class: {stats.armorClass ?? 14}</p><p>Speed: {stats.speed ?? 35} ft.</p><p>Proficiency: +{stats.proficiencyBonus}</p><p>Passive Perception: {passivePerception(stats)}</p></div>
       <div className="mt-5 rounded-lg border border-gold/30 p-3"><p className="mb-2 text-sm font-semibold">Roll mode</p><div className="grid grid-cols-3 gap-1 text-center text-xs text-parchment/75"><span>Disadvantage</span><span>Normal</span><span>Advantage</span></div><input aria-label="Roll mode" type="range" min={-1} max={1} step={1} value={mode === 'disadvantage' ? -1 : mode === 'advantage' ? 1 : 0} onChange={e => setMode(Number(e.target.value) === -1 ? 'disadvantage' : Number(e.target.value) === 1 ? 'advantage' : 'normal')} className="mt-2 w-full accent-gold"/><p className="mt-1 text-center text-xs text-gold">{mode === 'normal' ? 'Normal roll' : mode === 'advantage' ? 'Advantage: keep higher d20' : 'Disadvantage: keep lower d20'}</p></div>
@@ -58,6 +65,8 @@ function Party({ campaign, onRoll, onSaveRoll, onAwardXP, onLevelUp, onRestore, 
       {lastRoll && <p role="status" className="mt-3 rounded-lg border border-gold/30 p-3 text-sm">{lastRoll.text}</p>}
     </div>
       <div className="mt-5 space-y-3"><h3 className="font-serif text-xl">Class features</h3>
+        {(stats.level ?? 1)>=3 && <><div className="rounded-xl border-2 border-gold bg-gold/10 p-4"><p className="text-xs font-bold uppercase text-gold">Unlocked at Level 3 · New</p><h4 className="mt-2 font-serif text-xl">Arcane Trickster</h4><p className="mt-2 text-sm">Spellcasting uses Intelligence. Spell save DC {8+stats.proficiencyBonus+abilityModifier(stats.scores.int)} · Spell attack {signed(stats.proficiencyBonus+abilityModifier(stats.scores.int))}. Mage Hand Legerdemain enhances your Mage Hand for subtle manipulation. Steady Aim grants Advantage on your next attack this turn as a Bonus Action if you haven't moved, and your Speed becomes 0 until the turn ends.</p><p className="mt-2 text-sm">Cantrips: {stats.cantrips?.join(', ')}</p><p className="mt-2 text-sm">Prepared spells: {stats.preparedSpells?.join(', ')}</p><p className="mt-2 text-sm">Level 1 spell slots: {(stats.spellSlots?.level1 ?? 2)-(stats.spellSlots?.usedLevel1 ?? 0)} / {stats.spellSlots?.level1 ?? 2}</p><p className="mt-2 text-xs text-parchment/65">Spell casting and slot consumption during adventures are not yet wired into the combat engine.</p></div></>}
+
         {(stats.level ?? 1) >= 2 && <div className="rounded-xl border-2 border-gold bg-gold/10 p-4"><p className="text-xs font-bold uppercase tracking-widest text-gold">Unlocked at Level 2 · New</p><h4 className="mt-2 font-serif text-xl">Cunning Action</h4><p className="mt-2 text-sm leading-6">On each of your turns, you can take Dash, Disengage, or Hide as a Bonus Action.</p><div className="mt-3 space-y-2 text-sm"><p><strong>Dash:</strong> Gain extra movement equal to your Speed for this turn.</p><p><strong>Disengage:</strong> Your movement doesn't provoke Opportunity Attacks for the rest of the turn.</p><p><strong>Hide:</strong> Attempt to become hidden, subject to the normal Hide rules and conditions.</p></div><p className="mt-3 text-xs text-gold">Also gained +{(stats.maxHitPoints ?? 10) - 10} maximum HP at Level 2.</p></div>}
         <div className="rounded-lg border border-white/15 p-4"><p className="text-xs uppercase text-parchment/60">Level 1 · Rogue</p><h4 className="mt-1 font-semibold">Sneak Attack · {rogueSneakAttackDice(stats.level ?? 1)}d6</h4><p className="mt-1 text-sm text-parchment/75">Once per turn, deal an extra {rogueSneakAttackDice(stats.level ?? 1)}d6 damage with a qualifying Finesse or Ranged weapon attack if you have Advantage, or if an eligible ally is next to the target and you don't have Disadvantage. Sneak Attack dice equal half your Rogue level rounded up: Level {stats.level ?? 1} gives {rogueSneakAttackDice(stats.level ?? 1)}d6. The damage increases at odd Rogue levels (3, 5, 7, and so on), reaching 10d6 at Level 19.</p></div>
         <div className="rounded-lg border border-white/15 p-4"><p className="text-xs uppercase text-parchment/60">Level 1 · Rogue</p><h4 className="mt-1 font-semibold">Expertise</h4><p className="mt-1 text-sm text-parchment/75">Double your proficiency bonus for {stats.expertiseSkills?.join(' and ') || 'two chosen proficient skills'}. Expertise is already reflected in your skill modifiers.</p></div>
@@ -161,7 +170,7 @@ export function App() {
     finally { setSaving(false); }
   }
 
-  async function updateProgress(action: 'award' | 'level' | 'restore', amount = 0, reason = '') {
+  async function updateProgress(action: 'award' | 'level' | 'level3' | 'restore', amount = 0, reason = '', cantrips: string[] = [], spells: string[] = []) {
     if (!campaign || saving) return;
     setSaving(true);
     try {
@@ -170,11 +179,13 @@ export function App() {
         ? { ...campaign, character: structuredClone(snapshot.character), xp: snapshot.xp, xpAwards: structuredClone(snapshot.xpAwards), levelOneSnapshot: undefined }
         : action === 'level'
           ? levelUpRogue(campaign, amount)
+          : action === 'level3'
+            ? levelUpArcaneTrickster(campaign, amount, cantrips, spells)
           : awardExperience({ ...campaign, levelOneSnapshot: snapshot }, amount, reason, crypto.randomUUID());
       await localCampaignStorage.save(next);
       setCampaign(next);
       setCampaigns(items => items.map(item => item.id === next.id ? next : item));
-      setNotice(action === 'restore' ? 'Level 1 snapshot restored.' : action === 'level' ? 'Level 2 saved.' : 'XP awarded and saved.');
+      setNotice(action === 'restore' ? 'Level 1 snapshot restored.' : action === 'level3' ? 'Level 3 Arcane Trickster saved.' : action === 'level' ? 'Level 2 saved.' : 'XP awarded and saved.');
     } catch (error) { setNotice('Progression error: ' + String(error)); }
     finally { setSaving(false); }
   }
@@ -281,7 +292,7 @@ export function App() {
     finally { setSaving(false); if (importInput.current) importInput.current.value = ''; }
   }
 
-  const content = { adventure: <Adventure campaign={campaign} fullHistory={fullHistory} onToggleHistory={() => setFullHistory(value => !value)}/>, party: <Party campaign={campaign} saving={saving} onRoll={(skill,mode) => void saveSkillRoll(skill,mode)} onSaveRoll={(ability,mode) => void saveSavingThrow(ability,mode)} onAwardXP={(amount,reason) => void updateProgress('award',amount,reason)} onLevelUp={hp => void updateProgress('level',hp)} onRestore={() => void updateProgress('restore')}/>, journal: <Journal campaign={campaign}/>, map: <WorldMap/>, settings: <section className="space-y-4"><h2 className="font-serif text-2xl">Settings</h2><p className="text-sm text-parchment/60">Manage campaigns, backups, and Dungeon Master access below.</p></section> };
+  const content = { adventure: <Adventure campaign={campaign} fullHistory={fullHistory} onToggleHistory={() => setFullHistory(value => !value)}/>, party: <Party campaign={campaign} saving={saving} onRoll={(skill,mode) => void saveSkillRoll(skill,mode)} onSaveRoll={(ability,mode) => void saveSavingThrow(ability,mode)} onAwardXP={(amount,reason) => void updateProgress('award',amount,reason)} onLevelUp={hp => void updateProgress('level',hp)} onLevelThree={(hp,cantrips,spells) => void updateProgress('level3',hp,'',cantrips,spells)} onRestore={() => void updateProgress('restore')}/>, journal: <Journal campaign={campaign}/>, map: <WorldMap/>, settings: <section className="space-y-4"><h2 className="font-serif text-2xl">Settings</h2><p className="text-sm text-parchment/60">Manage campaigns, backups, and Dungeon Master access below.</p></section> };
   return <div className="min-h-dvh bg-ink text-parchment">
     <div className="mx-auto flex min-h-dvh w-full max-w-3xl flex-col">
       <header className="sticky top-0 z-20 border-b border-white/10 bg-ink/95 px-5 pb-4 pt-[max(1.2rem,env(safe-area-inset-top))] backdrop-blur">
