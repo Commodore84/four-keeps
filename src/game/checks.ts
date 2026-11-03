@@ -5,17 +5,21 @@ export type Skill = 'Acrobatics' | 'Animal Handling' | 'Arcana' | 'Athletics' | 
 export const skillAbility: Record<Skill, Ability> = {
   Acrobatics:'dex', 'Animal Handling':'wis', Arcana:'int', Athletics:'str', Deception:'cha', History:'int', Insight:'wis', Intimidation:'cha', Investigation:'int', Medicine:'wis', Nature:'int', Perception:'wis', Performance:'cha', Persuasion:'cha', Religion:'int', 'Sleight of Hand':'dex', Stealth:'dex', Survival:'wis',
 };
-export interface CharacterStats { scores: Record<Ability, number>; proficiencyBonus: number; proficientSkills: Skill[] }
+export interface CharacterStats { scores: Record<Ability, number>; proficiencyBonus: number; proficientSkills: Skill[]; expertiseSkills?: Skill[]; level?: number; maxHitPoints?: number; currentHitPoints?: number; armorClass?: number; speed?: number }
 export const prototypeNighthawk: CharacterStats = {
   // Temporary playtest values, not a finalized character build.
   scores: { str: 8, dex: 16, con: 14, int: 14, wis: 12, cha: 10 },
   proficiencyBonus: 2,
+  level: 1, maxHitPoints: 10, currentHitPoints: 10, armorClass: 14, speed: 35,
+  expertiseSkills: ['Stealth', 'Investigation'],
   proficientSkills: ['Stealth', 'Sleight of Hand', 'Investigation', 'Perception'],
 };
 export type RollMode = 'normal' | 'advantage' | 'disadvantage';
 export interface CheckResult { skill: Skill; ability: Ability; dice: number[]; selected: number; modifier: number; total: number; mode: RollMode }
 export const abilityModifier = (score: number) => Math.floor((score - 10) / 2);
-export const skillModifier = (stats: CharacterStats, skill: Skill) => abilityModifier(stats.scores[skillAbility[skill]]) + (stats.proficientSkills.includes(skill) ? stats.proficiencyBonus : 0);
+export const skillModifier = (stats: CharacterStats, skill: Skill) => abilityModifier(stats.scores[skillAbility[skill]]) + (stats.expertiseSkills?.includes(skill) ? 2 * stats.proficiencyBonus : stats.proficientSkills.includes(skill) ? stats.proficiencyBonus : 0);
+export const savingThrowModifier = (stats: CharacterStats, ability: Ability) => abilityModifier(stats.scores[ability]) + (ability === 'dex' || ability === 'int' ? stats.proficiencyBonus : 0);
+export const passivePerception = (stats: CharacterStats) => 10 + skillModifier(stats, 'Perception');
 export function resolveCheck(stats: CharacterStats, skill: Skill, mode: RollMode, dice: number[]): CheckResult {
   if (dice.length !== (mode === 'normal' ? 1 : 2) || dice.some(d => !Number.isInteger(d) || d < 1 || d > 20)) throw new Error('Invalid d20 results');
   const selected = mode === 'advantage' ? Math.max(...dice) : mode === 'disadvantage' ? Math.min(...dice) : dice[0];
