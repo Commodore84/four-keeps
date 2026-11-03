@@ -105,7 +105,7 @@ export function undoNighthawkScoreReconciliation(campaign: Campaign): Campaign {
 }
 
 /** Validate casting and atomically persist resource expenditure. Spell effects remain DM-adjudicated. */
-export const concentrationSpells = ['Friends','Dancing Lights','Blade Ward','Disguise Self','Tasha’s Hideous Laughter','Silent Image','Fog Cloud','Witch Bolt','Protection from Evil and Good','Expeditious Retreat','Detect Magic'] as const;
+export const concentrationSpells = ['Friends','Dancing Lights','Blade Ward','Tasha’s Hideous Laughter','Silent Image','Fog Cloud','Witch Bolt','Protection from Evil and Good','Expeditious Retreat','Detect Magic'] as const;
 export const spellRequiresConcentration = (spell: string): boolean => (concentrationSpells as readonly string[]).includes(spell);
 export function endNighthawkConcentration(campaign: Campaign): Campaign {
   if (!campaign.concentration) throw new Error('Not concentrating');
