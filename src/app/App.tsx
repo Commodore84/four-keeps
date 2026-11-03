@@ -154,7 +154,7 @@ export function App() {
       const result: { narration?:string; newFacts?:string[]; worldUpdates?:unknown; checkResult?:{skill:string;dice:number[];kept:number;modifier:number;total:number;success:boolean}; error?:string } = await response.json();
       if (!response.ok || !result.narration || !result.checkResult) throw new Error(result.error || 'Check resolution failed');
       const r = result.checkResult;
-      const rollText = 'Nighthawk rolled '+r.skill+': ['+r.dice.join(', ')+'], kept '+r.kept+', modifier '+(r.modifier >= 0 ? '+' : '')+r.modifier+', total '+r.total+'.';
+      const rollText = 'Nighthawk · '+r.skill+' check: '+(r.dice.length === 1 ? 'd20 '+r.dice[0] : 'd20s '+r.dice.join(' and ')+' ('+pending.mode+', used '+r.kept+')')+' '+(r.modifier >= 0 ? '+' : '−')+Math.abs(r.modifier)+' = '+r.total+'.';
       const next = addExchange(locked, rollText, result.narration, new Date().toISOString(), result.newFacts ?? [], result.worldUpdates);
       await localCampaignStorage.save(next);
       setCampaign(next);
@@ -280,7 +280,8 @@ export function App() {
           <p className="eyebrow">Dungeon Master requests a check</p>
           <p className="font-serif text-xl">{campaign.pendingCheck.skill} · {campaign.pendingCheck.mode}</p>
           <p className="text-sm text-parchment/70">{campaign.pendingCheck.reason}</p>
-          <button type="button" disabled={saving || !dmMode} onClick={() => void resolvePendingCheck()} className="w-full rounded-lg bg-gold px-4 py-3 font-semibold text-ink disabled:opacity-40">{campaign.pendingCheck.dice ? 'Retry saved roll' : 'Roll '+campaign.pendingCheck.skill}</button>
+          <button type="button" disabled={saving || !dmMode} onClick={() => void resolvePendingCheck()} className="w-full rounded-lg bg-gold px-4 py-3 font-semibold text-ink disabled:opacity-40">{campaign.pendingCheck.dice ? (saving ? 'DM is resolving…' : 'Retry DM response') : 'Roll '+campaign.pendingCheck.skill}</button>
+           {campaign.pendingCheck.dice && (() => { const dice = campaign.pendingCheck.dice; const used = dice.length === 1 ? dice[0] : campaign.pendingCheck.mode === 'advantage' ? Math.max(...dice) : Math.min(...dice); const modifier = skillModifier(campaign.character ?? prototypeNighthawk, campaign.pendingCheck.skill); return <div role="status" aria-live="polite" className="rounded-lg border border-gold/30 bg-ink/60 p-3"><p className="text-xs uppercase tracking-widest text-gold">Nighthawk · {campaign.pendingCheck.skill} check</p><p className="mt-2 text-xl font-semibold">{dice.length === 1 ? 'd20: '+dice[0] : 'd20s: '+dice.join(' and ')+' · '+campaign.pendingCheck.mode+' uses '+used} <span className="text-parchment/70">{modifier >= 0 ? '+' : '−'} {Math.abs(modifier)} =</span> {used + modifier}</p><p className="mt-1 text-xs text-parchment/65">{saving ? 'Waiting for the Dungeon Master. Your roll is saved.' : 'Roll saved. Retry the DM response without rerolling.'}</p></div>; })()}
           <p className="text-xs text-parchment/60">The target number is hidden. Your roll is saved before adjudication.</p>
         </div>}
         {activeView !== "settings" && <form className="flex items-end gap-2 px-4 py-3" onSubmit={(event) => { event.preventDefault(); void (dmMode ? sendToDM() : saveNote()); }}>
