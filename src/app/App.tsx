@@ -72,7 +72,7 @@ export function App() {
   const [newTitle, setNewTitle] = useState('The Forgotten Keep');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [accessCode, setAccessCode] = useState(() => { try { return sessionStorage.getItem('four-keeps-access-code') ?? ''; } catch { return ''; } });
+  const [accessCode, setAccessCode] = useState(() => { try { return localStorage.getItem('four-keeps-access-code') ?? sessionStorage.getItem('four-keeps-access-code') ?? ''; } catch { return ''; } });
   const [dmMode, setDmMode] = useState(() => { try { return localStorage.getItem('four-keeps-dm-mode') === 'on'; } catch { return false; } });
   const importInput = useRef<HTMLInputElement>(null);
   const resolvingCheckRef = useRef(false);
@@ -90,7 +90,7 @@ export function App() {
   }, []);
 
   useEffect(() => { try { localStorage.setItem('four-keeps-dm-mode', dmMode ? 'on' : 'off'); } catch { /* browser storage unavailable */ } }, [dmMode]);
-  useEffect(() => { try { if (accessCode) sessionStorage.setItem('four-keeps-access-code', accessCode); else sessionStorage.removeItem('four-keeps-access-code'); } catch { /* session storage unavailable */ } }, [accessCode]);
+  useEffect(() => { try { if (accessCode) localStorage.setItem('four-keeps-access-code', accessCode); else localStorage.removeItem('four-keeps-access-code'); sessionStorage.removeItem('four-keeps-access-code'); } catch { /* browser storage unavailable */ } }, [accessCode]);
 
   async function createCampaign() {
     if (saving || !newTitle.trim()) return;
@@ -250,9 +250,9 @@ export function App() {
         </section>
         {campaign && <section className="mb-4 rounded-xl border border-white/10 bg-panel p-4 space-y-3">
           <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={dmMode} onChange={(event) => setDmMode(event.target.checked)}/> AI Dungeon Master mode</label>
-          {dmMode && <><label htmlFor="access-code" className="block text-xs text-parchment/70">Game access code (enter after refreshing)</label>
+          {dmMode && <><label htmlFor="access-code" className="block text-xs text-parchment/70">Game access code (remembered on this device)</label>
           <input id="access-code" type="password" autoComplete="off" value={accessCode} onChange={(event) => setAccessCode(event.target.value)} placeholder="Enter your private access code" className="w-full rounded-lg border border-white/20 bg-ink px-3 py-2 text-base"/>
-          <p className="text-xs text-parchment/55">The rules engine resolves skill checks. Combat and inventory are not yet connected.</p></>}
+          <button type="button" onClick={() => { setAccessCode(''); setNotice('Saved access code cleared from this browser.'); }} className="rounded-lg border border-white/20 px-3 py-2 text-xs text-parchment/70">Forget access code</button><p className="text-xs text-parchment/55">Your access code stays in this browser until you clear it. Do not use this on a shared device. The rules engine resolves skill checks; combat and inventory are not yet connected.</p></>}
         </section>}
         </>}
         {campaign && activeView === 'journal' && (campaign.worldFacts?.length ?? 0) > 0 && <details className="mb-5 rounded-xl border border-gold/25 bg-panel p-4">
