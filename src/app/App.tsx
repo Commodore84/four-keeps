@@ -72,7 +72,7 @@ export function App() {
   const [newTitle, setNewTitle] = useState('The Forgotten Keep');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [accessCode, setAccessCode] = useState('');
+  const [accessCode, setAccessCode] = useState(() => { try { return sessionStorage.getItem('four-keeps-access-code') ?? ''; } catch { return ''; } });
   const [dmMode, setDmMode] = useState(() => { try { return localStorage.getItem('four-keeps-dm-mode') === 'on'; } catch { return false; } });
   const importInput = useRef<HTMLInputElement>(null);
 
@@ -89,6 +89,7 @@ export function App() {
   }, []);
 
   useEffect(() => { try { localStorage.setItem('four-keeps-dm-mode', dmMode ? 'on' : 'off'); } catch { /* browser storage unavailable */ } }, [dmMode]);
+  useEffect(() => { try { if (accessCode) sessionStorage.setItem('four-keeps-access-code', accessCode); else sessionStorage.removeItem('four-keeps-access-code'); } catch { /* session storage unavailable */ } }, [accessCode]);
 
   async function createCampaign() {
     if (saving || !newTitle.trim()) return;
