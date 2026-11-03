@@ -14,6 +14,7 @@ export interface Campaign {
   character?: CharacterStats;
   preReconciliationScores?: CharacterStats['scores'];
   elapsedMinutes?: number;
+  hitDiceRemaining?: number;
   concentration?: { spell: string; target?: string; startedAt: string };
   spellEffects?: { id: string; spell: string; target?: string; status: 'awaiting-adjudication' | 'active'; createdAt: string }[];
   familiar?: { form: 'Owl'; summonedAt: string };
@@ -132,4 +133,25 @@ export function castNighthawkSpell(campaign: Campaign, spell: string, ritual: bo
   const effect = { id:crypto.randomUUID(), spell, target:cleanTarget || undefined, status:'awaiting-adjudication' as const, createdAt:now };
   const message = 'Nighthawk casts '+spell+(ritual?' as a ritual':'')+'. '+(ritual||cantrip?'No spell slot spent.':'One Level 1 spell slot spent.')+(minutes?' '+minutes+' minutes pass.':'')+(spell==='Find Familiar'?' Owl familiar summoned; 10 gp material components consumed (player confirmed).':' Spell effect awaits DM adjudication.')+(cleanTarget?' Target/intent: '+cleanTarget+'.':'')+(concentrating?' Concentrating on '+spell+(prior?' (replaces '+prior.spell+').':'.'):'');
   return { ...campaign, character: { ...character, spellSlots: nextSlots }, elapsedMinutes: (campaign.elapsedMinutes ?? 0) + minutes, familiar: spell==='Find Familiar' ? { form:'Owl', summonedAt:now } : campaign.familiar, concentration:concentrating?{spell,target:cleanTarget||undefined,startedAt:now}:campaign.concentration, spellEffects:spell==='Find Familiar'?(campaign.spellEffects??[]):[...(campaign.spellEffects??[]).filter(e=>!prior || !concentrating || e.spell!==prior.spell),effect].slice(-30), updatedAt:now, journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:message,createdAt:now}] };
+}
+
+export function takeNighthawkRest(campaign: Campaign, kind: 'short'|'long', hitDiceToSpend = 0): Campaign {
+  const character=campaign.character ?? prototypeNighthawk;
+  const level=character.level??1;
+  const maxHp=character.maxHitPoints??10;
+  const currentHp=character.currentHitPoints??maxHp;
+  const available=campaign.hitDiceRemaining??level;
+  if(!Number.isInteger(hitDiceToSpend)||hitDiceToSpend<0||hitDiceToSpend>available || (kind==='long'&&hitDiceToSpend!==0)) throw new Error('Invalid Hit Dice expenditure');
+  const now=new Date().toISOString();
+  const conBonus=Math.floor(((character.scores.con??10)-10)/2);
+  // 2024 short rests recover HP via individually rolled Hit Dice; use secure random dice.
+  const rolls=kind==='short'?Array.from({length:hitDiceToSpend},()=>crypto.getRandomValues(new Uint32Array(1))[0]%8+1):[];
+  const healing=rolls.reduce((sum,die)=>sum+Math.max(0,die+conBonus),0);
+  const nextHp=kind==='long'?maxHp:Math.min(maxHp,currentHp+healing);
+  const remaining=kind==='long'?Math.min(level,available+Math.max(1,Math.floor(level/2))):available-hitDiceToSpend;
+  const slots=character.spellSlots;
+  const nextCharacter={...character,currentHitPoints:nextHp,spellSlots:slots?{...slots,usedLevel1:kind==='long'?0:slots.usedLevel1}:slots};
+  const minutes=kind==='long'?480:60;
+  const details=kind==='long'?'HP restored to maximum; spell slots restored; Hit Dice recovered.':'Spent '+hitDiceToSpend+' Hit Dice'+(rolls.length?' ('+rolls.join(', ')+')':'')+'; healed '+(nextHp-currentHp)+' HP. Spell slots unchanged.';
+  return {...campaign,character:nextCharacter,hitDiceRemaining:remaining,elapsedMinutes:(campaign.elapsedMinutes??0)+minutes,updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:'Nighthawk completes a '+kind+' rest ('+minutes+' minutes). '+details,createdAt:now}]};
 }
