@@ -14,6 +14,8 @@ export interface Campaign {
   character?: CharacterStats;
   preReconciliationScores?: CharacterStats['scores'];
   elapsedMinutes?: number;
+  concentration?: { spell: string; target?: string; startedAt: string };
+  spellEffects?: { id: string; spell: string; target?: string; status: 'awaiting-adjudication' | 'active'; createdAt: string }[];
   familiar?: { form: 'Owl'; summonedAt: string };
   xp?: number;
   xpAwards?: { id: string; amount: number; reason: string }[];
@@ -103,7 +105,14 @@ export function undoNighthawkScoreReconciliation(campaign: Campaign): Campaign {
 }
 
 /** Validate casting and atomically persist resource expenditure. Spell effects remain DM-adjudicated. */
-export function castNighthawkSpell(campaign: Campaign, spell: string, ritual: boolean, familiarComponentsConfirmed = false): Campaign {
+export const concentrationSpells = ['Friends','Dancing Lights','Blade Ward','Disguise Self','Tasha’s Hideous Laughter','Silent Image','Fog Cloud','Witch Bolt','Protection from Evil and Good','Expeditious Retreat','Detect Magic'] as const;
+export const spellRequiresConcentration = (spell: string): boolean => (concentrationSpells as readonly string[]).includes(spell);
+export function endNighthawkConcentration(campaign: Campaign): Campaign {
+  if (!campaign.concentration) throw new Error('Not concentrating');
+  const now = new Date().toISOString();
+  return {...campaign, concentration:undefined, spellEffects:(campaign.spellEffects??[]).filter(e=>e.spell!==campaign.concentration?.spell || e.status!=='active'), updatedAt:now, journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:'Nighthawk ends concentration on '+campaign.concentration.spell+'.',createdAt:now}]};
+}
+export function castNighthawkSpell(campaign: Campaign, spell: string, ritual: boolean, familiarComponentsConfirmed = false, target = ''): Campaign {
   const character = campaign.character;
   if (!character || (character.level ?? 1) < 3 || character.subclass !== 'Arcane Trickster') throw new Error('Arcane Trickster spellcasting is not unlocked');
   const cantrip = character.cantrips?.includes(spell) ?? false;
@@ -117,6 +126,10 @@ export function castNighthawkSpell(campaign: Campaign, spell: string, ritual: bo
   // Find Familiar takes one hour normally, or one hour and ten minutes as a ritual.
   const minutes = spell === 'Find Familiar' ? (ritual ? 70 : 60) : ritual ? 10 : 0;
   const now = new Date().toISOString();
-  const message = 'Nighthawk casts '+spell+(ritual?' as a ritual':'')+'. '+(ritual||cantrip?'No spell slot spent.':'One Level 1 spell slot spent.')+(minutes?' '+minutes+' minutes pass.':'')+(spell==='Find Familiar'?' Owl familiar summoned; 10 gp material components consumed (player confirmed).':' Spell effect awaits DM adjudication.');
-  return { ...campaign, character: { ...character, spellSlots: nextSlots }, elapsedMinutes: (campaign.elapsedMinutes ?? 0) + minutes, familiar: spell==='Find Familiar' ? { form:'Owl', summonedAt:now } : campaign.familiar, updatedAt:now, journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:message,createdAt:now}] };
+  const cleanTarget = target.trim().slice(0,120);
+  const concentrating = spellRequiresConcentration(spell);
+  const prior = campaign.concentration;
+  const effect = { id:crypto.randomUUID(), spell, target:cleanTarget || undefined, status:'awaiting-adjudication' as const, createdAt:now };
+  const message = 'Nighthawk casts +spell+(ritual?' as a ritual':'')+'. '+(ritual||cantrip?'No spell slot spent.':'One Level 1 spell slot spent.')+(minutes?' '+minutes+' minutes pass.':'')+(spell==='Find Familiar'?' Owl familiar summoned; 10 gp material components consumed (player confirmed).':' Spell effect awaits DM adjudication.')+(cleanTarget?' Target/intent: '+cleanTarget+'.':'')+(concentrating?' Concentrating on '+spell+(prior?' (replaces '+prior.spell+').':'.'):'');
+  return { ...campaign, character: { ...character, spellSlots: nextSlots }, elapsedMinutes: (campaign.elapsedMinutes ?? 0) + minutes, familiar: spell==='Find Familiar' ? { form:'Owl', summonedAt:now } : campaign.familiar, concentration:concentrating?{spell,target:cleanTarget||undefined,startedAt:now}:campaign.concentration, spellEffects:spell==='Find Familiar'?(campaign.spellEffects??[]):[...(campaign.spellEffects??[]).filter(e=>!prior || !concentrating || e.spell!==prior.spell),effect].slice(-30), updatedAt:now, journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:message,createdAt:now}] };
 }
