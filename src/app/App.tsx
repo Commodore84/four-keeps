@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { createBackup, parseBackup } from '../game/backup';
 import { BookOpen, Compass, Map, RefreshCw, Send, Settings, Shield, Swords, Users } from 'lucide-react';
-import { addExchange, addNote, addRoll, newCampaign, awardExperience, levelUpRogue, levelUpArcaneTrickster, tricksterCantrips, tricksterSpells, xpThresholds, type Campaign } from '../game/campaign';
+import { addExchange, addNote, addRoll, newCampaign, awardExperience, levelUpRogue, levelUpArcaneTrickster, tricksterCantrips, tricksterSpells, reconcileNighthawkScores, undoNighthawkScoreReconciliation, xpThresholds, type Campaign } from '../game/campaign';
 import { localCampaignStorage } from '../game/storage';
 import type { View } from '../game/types';
 import { emptyWorld } from '../game/world';
@@ -36,12 +36,12 @@ function Adventure({ campaign, fullHistory, onToggleHistory }: { campaign: Campa
     <div ref={endRef}/>
   </section>;
 }
-function Party({ campaign, onRoll, onSaveRoll, onAwardXP, onLevelUp, onLevelThree, onRestore, saving }: { campaign: Campaign | null; onRoll: (skill: Skill, mode: RollMode) => void; onSaveRoll: (ability: typeof abilities[number], mode: RollMode) => void; onAwardXP: (amount: number, reason: string) => void; onLevelUp: (hpGain: number) => void; onLevelThree: (hpGain: number, cantrips: string[], spells: string[]) => void; onRestore: () => void; saving: boolean }) {
+function Party({ campaign, onRoll, onSaveRoll, onAwardXP, onLevelUp, onLevelThree, onReconcile, onUndoReconcile, onRestore, saving }: { campaign: Campaign | null; onRoll: (skill: Skill, mode: RollMode) => void; onSaveRoll: (ability: typeof abilities[number], mode: RollMode) => void; onAwardXP: (amount: number, reason: string) => void; onLevelUp: (hpGain: number) => void; onLevelThree: (hpGain: number, cantrips: string[], spells: string[]) => void; onReconcile: () => void; onUndoReconcile: () => void; onRestore: () => void; saving: boolean }) {
   const [mode, setMode] = useState<RollMode>('normal');
   const [testXP, setTestXP] = useState('300');
   const [hpChoice, setHpChoice] = useState('7');
-  const [cantripChoices, setCantripChoices] = useState<string[]>([]);
-  const [spellChoices, setSpellChoices] = useState<string[]>([]);
+  const [cantripChoices, setCantripChoices] = useState<string[]>(['Minor Illusion','Mind Sliver']);
+  const [spellChoices, setSpellChoices] = useState<string[]>(['Find Familiar','Tasha’s Hideous Laughter','Disguise Self']);
   const skills = Object.keys(skillAbility) as Skill[];
   const stats = campaign?.character ?? prototypeNighthawk;
   const lastRoll = campaign?.journal.filter(entry => entry.kind === 'system' && (entry.text.startsWith('Nighthawk rolled ') || entry.text.startsWith('Nighthawk · '))).at(-1);
@@ -56,6 +56,7 @@ function Party({ campaign, onRoll, onSaveRoll, onAwardXP, onLevelUp, onLevelThre
         <div><p className="text-sm font-semibold">Level 1 Wizard spells · {spellChoices.length}/3</p><p className="text-xs text-parchment/70">Choose three spells to prepare. You have two Level 1 spell slots.</p><div className="mt-2 grid grid-cols-2 gap-2">{tricksterSpells.map(s=><label key={s} className="flex items-center gap-2 rounded-lg border border-white/15 p-2 text-xs"><input type="checkbox" checked={spellChoices.includes(s)} disabled={!spellChoices.includes(s) && spellChoices.length>=3} onChange={e=>setSpellChoices(v=>e.target.checked?[...v,s]:v.filter(x=>x!==s))}/>{s}</label>)}</div></div>
         <button type="button" disabled={saving || cantripChoices.length!==2 || spellChoices.length!==3} onClick={()=>onLevelThree(Number(hpChoice),cantripChoices,spellChoices)} className="w-full rounded-lg bg-gold px-4 py-3 font-semibold text-ink disabled:opacity-40">Confirm Level 3</button>
       </div>}
+      <details className="mt-3 rounded-lg border border-gold/30 p-3"><summary className="cursor-pointer text-sm font-semibold">Review provisional ability scores</summary><p className="mt-2 text-sm text-parchment/75">Earlier build notes suggest STR 8, DEX 17, CON 14, INT 16, WIS 10, CHA 8. Your current campaign may have different provisional scores. Nothing changes unless you confirm, and you can undo the correction.</p><p className="mt-2 text-xs">Current: STR {stats.scores.str}, DEX {stats.scores.dex}, CON {stats.scores.con}, INT {stats.scores.int}, WIS {stats.scores.wis}, CHA {stats.scores.cha}</p>{campaign?.preReconciliationScores ? <button type="button" disabled={saving} onClick={onUndoReconcile} className="mt-3 rounded-lg border border-gold px-3 py-2 text-sm">Undo score correction</button> : <button type="button" disabled={saving || !campaign} onClick={onReconcile} className="mt-3 rounded-lg border border-gold px-3 py-2 text-sm">Confirm and apply proposed scores</button>}</details>
       <div className="mt-4 grid grid-cols-3 gap-2">{abilities.map(ability => <div key={ability} className="rounded-lg border border-white/15 p-3 text-center"><p className="text-xs uppercase text-gold">{ability}</p><p className="text-xl font-semibold">{stats.scores[ability]}</p><p className="text-sm text-parchment/70">{signed(abilityModifier(stats.scores[ability]))}</p></div>)}</div>
       <div className="mt-4 grid grid-cols-2 gap-2 text-sm"><p>HP: {stats.currentHitPoints ?? 10} / {stats.maxHitPoints ?? 10}</p><p>Armor Class: {stats.armorClass ?? 14}</p><p>Speed: {stats.speed ?? 35} ft.</p><p>Proficiency: +{stats.proficiencyBonus}</p><p>Passive Perception: {passivePerception(stats)}</p></div>
       <div className="mt-5 rounded-lg border border-gold/30 p-3"><p className="mb-2 text-sm font-semibold">Roll mode</p><div className="grid grid-cols-3 gap-1 text-center text-xs text-parchment/75"><span>Disadvantage</span><span>Normal</span><span>Advantage</span></div><input aria-label="Roll mode" type="range" min={-1} max={1} step={1} value={mode === 'disadvantage' ? -1 : mode === 'advantage' ? 1 : 0} onChange={e => setMode(Number(e.target.value) === -1 ? 'disadvantage' : Number(e.target.value) === 1 ? 'advantage' : 'normal')} className="mt-2 w-full accent-gold"/><p className="mt-1 text-center text-xs text-gold">{mode === 'normal' ? 'Normal roll' : mode === 'advantage' ? 'Advantage: keep higher d20' : 'Disadvantage: keep lower d20'}</p></div>
@@ -170,7 +171,7 @@ export function App() {
     finally { setSaving(false); }
   }
 
-  async function updateProgress(action: 'award' | 'level' | 'level3' | 'restore', amount = 0, reason = '', cantrips: string[] = [], spells: string[] = []) {
+  async function updateProgress(action: 'award' | 'level' | 'level3' | 'reconcile' | 'undoReconcile' | 'restore', amount = 0, reason = '', cantrips: string[] = [], spells: string[] = []) {
     if (!campaign || saving) return;
     setSaving(true);
     try {
@@ -181,11 +182,13 @@ export function App() {
           ? levelUpRogue(campaign, amount)
           : action === 'level3'
             ? levelUpArcaneTrickster(campaign, amount, cantrips, spells)
+          : action === 'reconcile' ? reconcileNighthawkScores(campaign)
+          : action === 'undoReconcile' ? undoNighthawkScoreReconciliation(campaign)
           : awardExperience({ ...campaign, levelOneSnapshot: snapshot }, amount, reason, crypto.randomUUID());
       await localCampaignStorage.save(next);
       setCampaign(next);
       setCampaigns(items => items.map(item => item.id === next.id ? next : item));
-      setNotice(action === 'restore' ? 'Level 1 snapshot restored.' : action === 'level3' ? 'Level 3 Arcane Trickster saved.' : action === 'level' ? 'Level 2 saved.' : 'XP awarded and saved.');
+      setNotice(action === 'restore' ? 'Level 1 snapshot restored.' : action === 'reconcile' ? 'Ability scores updated.' : action === 'undoReconcile' ? 'Previous scores restored.' : action === 'level3' ? 'Level 3 Arcane Trickster saved.' : action === 'level' ? 'Level 2 saved.' : 'XP awarded and saved.');
     } catch (error) { setNotice('Progression error: ' + String(error)); }
     finally { setSaving(false); }
   }
@@ -292,7 +295,7 @@ export function App() {
     finally { setSaving(false); if (importInput.current) importInput.current.value = ''; }
   }
 
-  const content = { adventure: <Adventure campaign={campaign} fullHistory={fullHistory} onToggleHistory={() => setFullHistory(value => !value)}/>, party: <Party campaign={campaign} saving={saving} onRoll={(skill,mode) => void saveSkillRoll(skill,mode)} onSaveRoll={(ability,mode) => void saveSavingThrow(ability,mode)} onAwardXP={(amount,reason) => void updateProgress('award',amount,reason)} onLevelUp={hp => void updateProgress('level',hp)} onLevelThree={(hp,cantrips,spells) => void updateProgress('level3',hp,'',cantrips,spells)} onRestore={() => void updateProgress('restore')}/>, journal: <Journal campaign={campaign}/>, map: <WorldMap/>, settings: <section className="space-y-4"><h2 className="font-serif text-2xl">Settings</h2><p className="text-sm text-parchment/60">Manage campaigns, backups, and Dungeon Master access below.</p></section> };
+  const content = { adventure: <Adventure campaign={campaign} fullHistory={fullHistory} onToggleHistory={() => setFullHistory(value => !value)}/>, party: <Party campaign={campaign} saving={saving} onRoll={(skill,mode) => void saveSkillRoll(skill,mode)} onSaveRoll={(ability,mode) => void saveSavingThrow(ability,mode)} onAwardXP={(amount,reason) => void updateProgress('award',amount,reason)} onLevelUp={hp => void updateProgress('level',hp)} onLevelThree={(hp,cantrips,spells) => void updateProgress('level3',hp,'',cantrips,spells)} onReconcile={() => void updateProgress('reconcile')} onUndoReconcile={() => void updateProgress('undoReconcile')} onRestore={() => void updateProgress('restore')}/>, journal: <Journal campaign={campaign}/>, map: <WorldMap/>, settings: <section className="space-y-4"><h2 className="font-serif text-2xl">Settings</h2><p className="text-sm text-parchment/60">Manage campaigns, backups, and Dungeon Master access below.</p></section> };
   return <div className="min-h-dvh bg-ink text-parchment">
     <div className="mx-auto flex min-h-dvh w-full max-w-3xl flex-col">
       <header className="sticky top-0 z-20 border-b border-white/10 bg-ink/95 px-5 pb-4 pt-[max(1.2rem,env(safe-area-inset-top))] backdrop-blur">
