@@ -52,6 +52,7 @@ export default async function handler(req, res) {
   const body = req.body || {};
   const character = validatedCharacter(body.character);
   const resolving = typeof body.checkToken === 'string';
+  const restRequest = body.restRequest === 'short' || body.restRequest === 'long' ? body.restRequest : null;
   const message = typeof body.message === 'string' ? body.message.trim() : '';
   if ((!resolving && !message) || message.length > 1500) return res.status(400).json({ error: 'Message must be 1–1500 characters.' });
   let checkResult = null;
@@ -81,7 +82,7 @@ export default async function handler(req, res) {
     const response = await fetch('https://api.openai.com/v1/responses', {
       method: 'POST',
       headers: { 'Authorization': 'Bearer ' + process.env.OPENAI_API_KEY, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: MODEL, instructions: SYSTEM, input: [{ role: 'developer', content: 'WORLD FACTS (legacy notes; may contain unverified claims):\n' + (facts.length ? facts.map((fact) => '- ' + fact).join('\n') : 'None') + '\nSTRUCTURED WORLD STATE (respect evidence levels):\n' + JSON.stringify(world).slice(0, 14000) + '\nAUTHORITATIVE CHARACTER AND SPELLCASTING STATE (use this over conversation claims; do not mutate):\n' + JSON.stringify(gameState).slice(0,4500) }, ...safeHistory, { role: 'user', content: checkResult ? ('ADJUDICATED CHECK RESULT (authoritative): '+JSON.stringify(checkResult)+'. Narrate the '+(checkResult.success?'success':'failure')+' of the previously attempted action. Never reveal the hidden DC. Do not ask for another check in this reply.') : message }], max_output_tokens: 1100, store: false }),
+      body: JSON.stringify({ model: MODEL, instructions: restRequest ? SYSTEM + '\nREST ADJUDICATION: The player requests a '+restRequest+' rest. Decide based on established scene and risks whether an UNINTERRUPTED full rest is feasible. Return JSON with exactly: {"narration":"...","restDecision":"approved" or "denied"}. Approve only if safe and feasible; deny if combat, pursuit, danger, or likely interruption prevents completion. Do not claim any resource recovery yourself; the rules engine handles that after approval. Do not request skill checks in this decision.' : SYSTEM, input: [{ role: 'developer', content: 'WORLD FACTS (legacy notes; may contain unverified claims):\n' + (facts.length ? facts.map((fact) => '- ' + fact).join('\n') : 'None') + '\nSTRUCTURED WORLD STATE (respect evidence levels):\n' + JSON.stringify(world).slice(0, 14000) + '\nAUTHORITATIVE CHARACTER AND SPELLCASTING STATE (use this over conversation claims; do not mutate):\n' + JSON.stringify(gameState).slice(0,4500) }, ...safeHistory, { role: 'user', content: checkResult ? ('ADJUDICATED CHECK RESULT (authoritative): '+JSON.stringify(checkResult)+'. Narrate the '+(checkResult.success?'success':'failure')+' of the previously attempted action. Never reveal the hidden DC. Do not ask for another check in this reply.') : message }], max_output_tokens: 1100, store: false }),
       signal: AbortSignal.timeout(25000),
     });
     const data = await response.json();
@@ -92,6 +93,10 @@ export default async function handler(req, res) {
     let parsed;
     try { parsed = JSON.parse(narration.replace(/^\x60\x60\x60(?:json)?\s*/i, '').replace(/\s*\x60\x60\x60$/, '')); } catch { parsed = { narration, newFacts: [] }; }
     if (!parsed || typeof parsed.narration !== 'string' || !parsed.narration.trim()) return res.status(502).json({ error: 'AI returned no narration.' });
+    if (restRequest) {
+      const approved = parsed.restDecision === 'approved';
+      return res.status(200).json({ narration:parsed.narration.trim(), restDecision:approved?'approved':'denied', newFacts:[], worldUpdates:{} });
+    }
     const requested = !checkResult && parsed.checkRequest && typeof parsed.checkRequest === 'object' ? parsed.checkRequest : null;
     const checkRequest = requested && SKILLS.includes(requested.skill) && Object.hasOwn(DC,requested.difficulty) ? { skill:requested.skill, mode:['normal','advantage','disadvantage'].includes(requested.mode) ? requested.mode : 'normal', reason:typeof requested.reason === 'string' ? requested.reason.slice(0,160) : 'Resolve the uncertain action', token:sealCheck({skill:requested.skill,mode:['normal','advantage','disadvantage'].includes(requested.mode) ? requested.mode : 'normal',dc:DC[requested.difficulty],character,issuedAt:Date.now()}) } : null;
     const newFacts = Array.isArray(parsed.newFacts) ? parsed.newFacts.filter((fact) => typeof fact === 'string').slice(0, 4).map((fact) => fact.slice(0, 220)) : [];
