@@ -40,3 +40,6 @@ export function describeCheck(result: CheckResult): string {
   const diceText = result.mode === 'normal' ? `${result.dice[0]}` : `${result.dice.join(' / ')} (${result.mode}: ${result.selected})`;
   return `Nighthawk · ${result.skill}: ${diceText} ${sign}${result.modifier} = ${result.total}. Outcome awaits DM adjudication.`;
 }
+
+/** Rogue Sneak Attack increases by 1d6 at odd Rogue levels. */
+export const rogueSneakAttackDice = (level: number): number => Math.max(1, Math.min(10, Math.ceil(level / 2)));
