@@ -154,6 +154,8 @@ export function App() {
   const [activeView, setActiveView] = useState<View>('adventure');
   const [fullHistory, setFullHistory] = useState(false);
   const [draft, setDraft] = useState('');
+  const [pendingAdventureSpell, setPendingAdventureSpell] = useState<{spell:string;ritual:boolean;intent:string}|null>(null);
+  const [adventureComponentsConfirmed,setAdventureComponentsConfirmed] = useState(false);
   const [notice, setNotice] = useState('');
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [campaign, setCampaign] = useState<Campaign | null>(null);
@@ -315,19 +317,51 @@ export function App() {
     finally { resolvingCheckRef.current = false; setSaving(false); }
   }
 
-  async function sendToDM() {
-    if (saving || !campaign || !draft.trim() || campaign.pendingCheck) return;
-    if (!accessCode) { setNotice('Enter your game access code first.'); return; }
+  function detectAdventureSpell(message:string): {spell:string;ritual:boolean;intent:string}|null {
+    const character=campaign?.character;
+    if (!character || (character.level??1)<3) return null;
+    const names=[...(character.cantrips??[]),...(character.preparedSpells??[])].sort((a,b)=>b.length-a.length);
+    const normalized=message.toLowerCase().replace(/[’']/g,"'");
+    const name=names.find(s=>{const key=s.toLowerCase().replace(/[’']/g,"'");return normalized.includes(key) && /\b(cast|casting|conjure|use|ritual)\b/.test(normalized);});
+    if(!name)return null;
+    return {spell:name,ritual:isRitualSpell(name)&&/\britual\b/.test(normalized),intent:message};
+  }
+  async function submitAdventure() {
+    if(pendingAdventureSpell || saving)return;
+    const found=detectAdventureSpell(draft);
+    if(found){setPendingAdventureSpell(found);setAdventureComponentsConfirmed(false);return;}
+    await sendToDM();
+  }
+  async function confirmAdventureSpell() {
+    if(!campaign || !pendingAdventureSpell || saving)return;
+    const action=pendingAdventureSpell;
     setSaving(true);
+    try {
+      const next=castNighthawkSpell(campaign,action.spell,action.ritual,adventureComponentsConfirmed,action.intent);
+      await localCampaignStorage.save(next);
+      setCampaign(next);setCampaigns(items=>items.map(item=>item.id===next.id?next:item));
+      setPendingAdventureSpell(null);setAdventureComponentsConfirmed(false);
+      setNotice('Spell cast and saved. Sending action to Dungeon Master…');
+      // The DM receives the updated authoritative state, not the stale pre-cast campaign.
+      await sendToDM(next,action.intent,true);
+    }catch(error){setNotice('Spell error: '+String(error));}
+    finally{setSaving(false);}
+  }
+  async function sendToDM(override?:Campaign, messageOverride?:string, alreadySaving=false) {
+    const current=override??campaign;
+    const message=messageOverride??draft;
+    if ((!alreadySaving && saving) || !current || !message.trim() || current.pendingCheck) return;
+    if (!accessCode) { setNotice('Enter your game access code first.'); return; }
+    if(!alreadySaving)setSaving(true);
     setNotice('The Dungeon Master is thinking…');
     try {
-      const history = campaign.journal.filter((entry) => entry.kind === 'player' || entry.kind === 'dm')
+      const history = current.journal.filter((entry) => entry.kind === 'player' || entry.kind === 'dm')
         .slice(-12).map((entry) => ({ role: entry.kind === 'player' ? 'user' : 'assistant', content: entry.text }));
       const response = await fetch('/api/dm', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-four-keeps-access': accessCode },
-        body: JSON.stringify({ message: draft, character:campaign.character ?? prototypeNighthawk, gameState:{ familiar:campaign.familiar ?? null, elapsedMinutes:campaign.elapsedMinutes ?? 0, concentration:campaign.concentration??null, spellEffects:(campaign.spellEffects??[]).slice(-12), recentEvents:campaign.journal.filter(e=>e.kind==='system').slice(-8).map(e=>e.text) }, history, worldFacts: campaign.worldFacts ?? [], world: campaign.world ?? emptyWorld() }) });
+        body: JSON.stringify({ message, character:current.character ?? prototypeNighthawk, gameState:{ familiar:current.familiar ?? null, elapsedMinutes:current.elapsedMinutes ?? 0, concentration:current.concentration??null, spellEffects:(current.spellEffects??[]).slice(-12), recentEvents:current.journal.filter(e=>e.kind==='system').slice(-8).map(e=>e.text) }, history, worldFacts: current.worldFacts ?? [], world: current.world ?? emptyWorld() }) });
       const result: { narration?: string; newFacts?: string[]; worldUpdates?: unknown; checkRequest?: { skill:string; mode:'normal'|'advantage'|'disadvantage'; reason:string; token:string } | null; error?: string } = await response.json();
       if (!response.ok || !result.narration) throw new Error(result.error || 'DM request failed');
-      const next = addExchange(campaign, draft, result.narration, new Date().toISOString(), result.newFacts ?? [], result.worldUpdates, result.checkRequest ?? undefined);
+      const next = addExchange(current, message, result.narration, new Date().toISOString(), result.newFacts ?? [], result.worldUpdates, result.checkRequest ?? undefined);
       await localCampaignStorage.save(next);
       setCampaign(next);
       setCampaigns((items) => items.map((item) => item.id === next.id ? next : item));
@@ -335,7 +369,7 @@ export function App() {
       setActiveView('adventure');
       setNotice('The DM replied. Conversation saved locally.');
     } catch (error) { setNotice('DM error: ' + String(error)); }
-    finally { setSaving(false); }
+    finally { if(!alreadySaving)setSaving(false); }
   }
 
   function exportCampaign() {
@@ -426,6 +460,7 @@ export function App() {
         {content[activeView]}
       </main>
       <div className="sticky bottom-0 z-20 border-t border-white/10 bg-ink/95 backdrop-blur">
+        {pendingAdventureSpell && <div className="mx-4 mt-3 rounded-xl border border-gold/50 bg-panel p-4 space-y-3" role="group" aria-label="Confirm spell cast"><p className="eyebrow">Confirm Adventure spell</p><h3 className="font-serif text-xl">{pendingAdventureSpell.spell}{pendingAdventureSpell.ritual?' · Ritual':''}</h3><p className="text-sm text-parchment/80">{pendingAdventureSpell.intent}</p><p className="text-xs text-parchment/70">{pendingAdventureSpell.ritual?'No spell slot spent.':campaign?.character?.cantrips?.includes(pendingAdventureSpell.spell)?'Cantrip · no spell slot spent.':'Consumes one Level 1 spell slot.'}</p>{pendingAdventureSpell.spell==='Find Familiar' && <label className="flex gap-2 text-xs"><input type="checkbox" checked={adventureComponentsConfirmed} onChange={e=>setAdventureComponentsConfirmed(e.target.checked)}/> I have and consume the required 10 gp material components (inventory is not yet tracked).</label>}<div className="flex gap-2"><button type="button" className="flex-1 rounded-lg border border-white/30 p-3" onClick={()=>setPendingAdventureSpell(null)}>Edit action</button><button type="button" disabled={saving || (pendingAdventureSpell.spell==='Find Familiar'&&!adventureComponentsConfirmed)} className="flex-1 rounded-lg bg-gold p-3 font-semibold text-ink disabled:opacity-40" onClick={()=>void confirmAdventureSpell()}>Cast and continue</button></div></div>}
         {campaign?.pendingCheck && <div className="mx-4 mt-3 rounded-xl border border-gold/40 bg-panel p-4 space-y-2" role="group" aria-label="Pending skill check">
           <p className="eyebrow">Dungeon Master requests a check</p>
           <p className="font-serif text-xl">{campaign.pendingCheck.skill} · {campaign.pendingCheck.mode}</p>
@@ -434,11 +469,11 @@ export function App() {
            {campaign.pendingCheck.dice && (() => { const dice = campaign.pendingCheck.dice; const used = dice.length === 1 ? dice[0] : campaign.pendingCheck.mode === 'advantage' ? Math.max(...dice) : Math.min(...dice); const modifier = skillModifier(campaign.character ?? prototypeNighthawk, campaign.pendingCheck.skill as Parameters<typeof skillModifier>[1]); return <div role="status" aria-live="polite" className="rounded-lg border border-gold/30 bg-ink/60 p-3"><p className="text-xs uppercase tracking-widest text-gold">Nighthawk · {campaign.pendingCheck.skill} check</p><p className="mt-2 text-xl font-semibold">{dice.length === 1 ? String(dice[0]) : dice.join(' / ')+' ('+campaign.pendingCheck.mode+': '+used+')'} <span className="text-parchment/70">{modifier >= 0 ? '+' : '−'}{Math.abs(modifier)} =</span> {used + modifier}</p><p className="mt-1 text-xs text-parchment/65">{saving ? 'Waiting for the Dungeon Master. Your roll is saved.' : 'Roll saved. Retry the DM response without rerolling.'}</p></div>; })()}
           <p className="text-xs text-parchment/60">The target number is hidden. Your roll is saved before adjudication.</p>
         </div>}
-        {activeView !== "settings" && <form className="flex items-end gap-2 px-4 py-3" onSubmit={(event) => { event.preventDefault(); void (dmMode ? sendToDM() : saveNote()); }}>
+        {activeView !== "settings" && <form className="flex items-end gap-2 px-4 py-3" onSubmit={(event) => { event.preventDefault(); void (dmMode ? submitAdventure() : saveNote()); }}>
           <button type="button" onClick={() => window.location.reload()} aria-label="Refresh Four Keeps" title="Refresh Four Keeps" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-white/20 bg-panel text-gold"><RefreshCw size={19}/></button>
           <label htmlFor="dm-input" className="sr-only">Message the Dungeon Master</label>
-          <textarea id="dm-input" value={draft} onChange={(event) => { setDraft(event.target.value); setNotice(''); }} rows={1} placeholder={campaign ? (dmMode ? 'What does Nighthawk do?' : 'Write a journal note…') : 'Create a campaign first'} disabled={!campaign || saving || !!campaign.pendingCheck} className="max-h-32 min-h-11 min-w-0 flex-1 resize-y rounded-xl border border-white/20 bg-panel px-3 py-3 text-base text-parchment placeholder:text-parchment/45 focus:border-gold focus:outline-none"/>
-          <button type="submit" disabled={!draft.trim() || !campaign || saving || !!campaign.pendingCheck} aria-label="Send message to Dungeon Master" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gold text-ink disabled:opacity-40"><Send size={19}/></button>
+          <textarea id="dm-input" value={draft} onChange={(event) => { setDraft(event.target.value); setNotice(''); }} rows={1} placeholder={campaign ? (dmMode ? 'What does Nighthawk do?' : 'Write a journal note…') : 'Create a campaign first'} disabled={!campaign || saving || !!campaign.pendingCheck || !!pendingAdventureSpell} className="max-h-32 min-h-11 min-w-0 flex-1 resize-y rounded-xl border border-white/20 bg-panel px-3 py-3 text-base text-parchment placeholder:text-parchment/45 focus:border-gold focus:outline-none"/>
+          <button type="submit" disabled={!draft.trim() || !campaign || saving || !!campaign.pendingCheck || !!pendingAdventureSpell} aria-label="Send message to Dungeon Master" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gold text-ink disabled:opacity-40"><Send size={19}/></button>
         </form>}
         {notice && <p role="status" className="px-5 pb-2 text-xs text-gold">{notice}</p>}
         <nav aria-label="Primary navigation" className="grid grid-cols-5 border-t border-white/10 pb-[env(safe-area-inset-bottom)]">
