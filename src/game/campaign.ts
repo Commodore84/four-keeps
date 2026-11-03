@@ -12,6 +12,7 @@ export interface Campaign {
   worldFacts?: string[];
   world?: WorldState;
   character?: CharacterStats;
+  preReconciliationScores?: CharacterStats['scores'];
   xp?: number;
   xpAwards?: { id: string; amount: number; reason: string }[];
   levelOneSnapshot?: { character: CharacterStats; xp: number; xpAwards: { id: string; amount: number; reason: string }[] };
@@ -84,4 +85,15 @@ export function levelUpArcaneTrickster(campaign: Campaign, hpGain: number, cantr
   if (spells.length !== 3 || new Set(spells).size !== 3 || spells.some(s => !tricksterSpells.includes(s as typeof tricksterSpells[number]))) throw new Error('Choose three different level 1 Wizard spells');
   const next = { ...character, level: 3, subclass: 'Arcane Trickster' as const, cantrips: ['Mage Hand',...cantrips], preparedSpells: [...spells], spellSlots: { level1: 2, usedLevel1: 0 }, maxHitPoints: (character.maxHitPoints ?? 10) + hpGain, currentHitPoints: Math.min((character.currentHitPoints ?? 10) + hpGain, (character.maxHitPoints ?? 10) + hpGain) };
   return { ...campaign, character: next, updatedAt: new Date().toISOString(), journal: [...campaign.journal, { id: crypto.randomUUID(), kind: 'system', text: 'Nighthawk reached Rogue Level 3: Arcane Trickster. Gained Steady Aim, Mage Hand Legerdemain, Sneak Attack 2d6, '+hpGain+' HP, cantrips '+next.cantrips.join(', ')+' and prepared spells '+spells.join(', ')+'.', createdAt: new Date().toISOString() }] };
+}
+
+/** Explicit, reversible correction of provisional playtest scores. Never automatic. */
+export function reconcileNighthawkScores(campaign: Campaign): Campaign {
+  if (!campaign.character || campaign.preReconciliationScores) throw new Error('Scores already reconciled or character missing');
+  const scores = { str: 8, dex: 17, con: 14, int: 16, wis: 10, cha: 8 };
+  return { ...campaign, preReconciliationScores: structuredClone(campaign.character.scores), character: { ...campaign.character, scores }, updatedAt: new Date().toISOString(), journal: [...campaign.journal, { id: crypto.randomUUID(), kind: 'system', text: 'Player confirmed reconciliation of provisional ability scores: STR 8, DEX 17, CON 14, INT 16, WIS 10, CHA 8.', createdAt: new Date().toISOString() }] };
+}
+export function undoNighthawkScoreReconciliation(campaign: Campaign): Campaign {
+  if (!campaign.character || !campaign.preReconciliationScores) throw new Error('No previous scores to restore');
+  return { ...campaign, character: { ...campaign.character, scores: structuredClone(campaign.preReconciliationScores) }, preReconciliationScores: undefined, updatedAt: new Date().toISOString(), journal: [...campaign.journal, { id: crypto.randomUUID(), kind: 'system', text: 'Restored prior playtest ability scores.', createdAt: new Date().toISOString() }] };
 }
