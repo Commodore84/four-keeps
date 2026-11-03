@@ -294,7 +294,7 @@ export function App() {
       const history = locked.journal.filter(entry => entry.kind === 'player' || entry.kind === 'dm').slice(-12)
         .map(entry => ({ role: entry.kind === 'player' ? 'user' : 'assistant', content: entry.text }));
       const response = await fetch('/api/dm', { method:'POST', headers:{ 'Content-Type':'application/json','x-four-keeps-access':accessCode },
-        body:JSON.stringify({ checkToken:pending.token, dice, character:locked.character ?? prototypeNighthawk, history, worldFacts:locked.worldFacts ?? [], world:locked.world ?? emptyWorld() }) });
+        body:JSON.stringify({ checkToken:pending.token, dice, character:locked.character ?? prototypeNighthawk, gameState:{ familiar:locked.familiar ?? null, elapsedMinutes:locked.elapsedMinutes ?? 0, recentEvents:locked.journal.filter(e=>e.kind==='system').slice(-8).map(e=>e.text) }, history, worldFacts:locked.worldFacts ?? [], world:locked.world ?? emptyWorld() }) });
       const result: { narration?:string; newFacts?:string[]; worldUpdates?:unknown; checkResult?:{skill:string;dice:number[];kept:number;modifier:number;total:number;success:boolean}; error?:string } = await response.json();
       if (!response.ok || !result.narration || !result.checkResult) throw new Error(result.error || 'Check resolution failed');
       const r = result.checkResult;
@@ -318,7 +318,7 @@ export function App() {
       const history = campaign.journal.filter((entry) => entry.kind === 'player' || entry.kind === 'dm')
         .slice(-12).map((entry) => ({ role: entry.kind === 'player' ? 'user' : 'assistant', content: entry.text }));
       const response = await fetch('/api/dm', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-four-keeps-access': accessCode },
-        body: JSON.stringify({ message: draft, character:campaign.character ?? prototypeNighthawk, history, worldFacts: campaign.worldFacts ?? [], world: campaign.world ?? emptyWorld() }) });
+        body: JSON.stringify({ message: draft, character:campaign.character ?? prototypeNighthawk, gameState:{ familiar:campaign.familiar ?? null, elapsedMinutes:campaign.elapsedMinutes ?? 0, recentEvents:campaign.journal.filter(e=>e.kind==='system').slice(-8).map(e=>e.text) }, history, worldFacts: campaign.worldFacts ?? [], world: campaign.world ?? emptyWorld() }) });
       const result: { narration?: string; newFacts?: string[]; worldUpdates?: unknown; checkRequest?: { skill:string; mode:'normal'|'advantage'|'disadvantage'; reason:string; token:string } | null; error?: string } = await response.json();
       if (!response.ok || !result.narration) throw new Error(result.error || 'DM request failed');
       const next = addExchange(campaign, draft, result.narration, new Date().toISOString(), result.newFacts ?? [], result.worldUpdates, result.checkRequest ?? undefined);
