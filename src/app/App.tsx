@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { createBackup, parseBackup } from '../game/backup';
-import { BookOpen, Compass, Map, Send, Settings, Shield, Swords, Users } from 'lucide-react';
+import { BookOpen, Compass, Map, RefreshCw, Send, Settings, Shield, Swords, Users } from 'lucide-react';
 import { addExchange, addNote, addRoll, newCampaign, type Campaign } from '../game/campaign';
 import { localCampaignStorage } from '../game/storage';
 import type { View } from '../game/types';
@@ -36,16 +36,23 @@ function Adventure({ campaign, fullHistory, onToggleHistory }: { campaign: Campa
     <div ref={endRef}/>
   </section>;
 }
-function Party({ campaign, onRoll, saving }: { campaign: Campaign | null; onRoll: (skill: Skill, mode: RollMode) => void; saving: boolean }) {
-  const [skill, setSkill] = useState<Skill>('Stealth');
+function Party({ campaign, onRoll, onSaveRoll, saving }: { campaign: Campaign | null; onRoll: (skill: Skill, mode: RollMode) => void; onSaveRoll: (ability: typeof abilities[number], mode: RollMode) => void; saving: boolean }) {
   const [mode, setMode] = useState<RollMode>('normal');
   const skills = Object.keys(skillAbility) as Skill[];
   const stats = campaign?.character ?? prototypeNighthawk;
-  const modifier = skillModifier(stats, skill);
-  const lastRoll = campaign?.journal.filter(entry => entry.kind === 'system' && entry.text.startsWith('Nighthawk rolled ')).at(-1);
+  const lastRoll = campaign?.journal.filter(entry => entry.kind === 'system' && (entry.text.startsWith('Nighthawk rolled ') || entry.text.startsWith('Nighthawk · '))).at(-1);
+  const signed = (value: number) => (value >= 0 ? '+' : '') + value;
   return <section className="space-y-4"><div className="flex items-center gap-3"><Shield className="text-gold"/><h2 className="font-serif text-2xl">The Party</h2></div>
-    <div className="rounded-xl border border-white/10 bg-panel p-5"><p className="font-semibold">Nighthawk</p><p className="mt-1 text-sm text-parchment/60">Wood Elf Rogue · Level {stats.level ?? 1} · Playtest character sheet</p><div className="mt-4 grid grid-cols-3 gap-2">{abilities.map(ability => <div key={ability} className="rounded-lg border border-white/15 p-3 text-center"><p className="text-xs uppercase text-gold">{ability}</p><p className="text-xl font-semibold">{stats.scores[ability]}</p><p className="text-sm text-parchment/70">{abilityModifier(stats.scores[ability]) >= 0 ? "+" : ""}{abilityModifier(stats.scores[ability])}</p></div>)}</div><div className="mt-4 grid grid-cols-2 gap-2 text-sm"><p>HP: {stats.currentHitPoints ?? 10} / {stats.maxHitPoints ?? 10}</p><p>Armor Class: {stats.armorClass ?? 14}</p><p>Speed: {stats.speed ?? 35} ft.</p><p>Proficiency: +{stats.proficiencyBonus}</p><p>Passive Perception: {passivePerception(stats)}</p></div><h3 className="mt-4 font-serif text-lg">Saving throws</h3><div className="mt-2 grid grid-cols-3 gap-2 text-sm">{abilities.map(a => <p key={a} className="rounded-lg border border-white/10 p-2 uppercase">{a}: {savingThrowModifier(stats,a) >= 0 ? "+" : ""}{savingThrowModifier(stats,a)}</p>)}</div><h3 className="mt-4 font-serif text-lg">Skills</h3><div className="mt-2 grid grid-cols-2 gap-2 text-xs">{skills.map(s => <p key={s} className="rounded-lg border border-white/10 p-2">{s} {skillModifier(stats,s) >= 0 ? "+" : ""}{skillModifier(stats,s)} {stats.expertiseSkills?.includes(s) ? "**" : stats.proficientSkills.includes(s) ? "*" : ""}</p>)}</div><p className="mt-3 text-xs text-parchment/60">Provisional character sheet saved with this campaign. Existing campaign statistics are preserved.</p></div>
-    <div className="rounded-xl border border-gold/30 bg-panel p-5 space-y-3"><h3 className="font-serif text-xl">Skill checks</h3><p className="text-sm text-parchment/70">Tap to roll real d20s. Results are saved to your campaign. The DM does not yet determine success or failure.</p><label className="block text-sm">Skill<select className="mt-1 block w-full rounded-lg border border-white/20 bg-ink p-3 text-base" value={skill} onChange={e => setSkill(e.target.value as Skill)}>{skills.map(s => <option key={s} value={s}>{s} ({skillModifier(stats,s) >= 0 ? '+' : ''}{skillModifier(stats,s)}{stats.expertiseSkills?.includes(s) ? ' **' : stats.proficientSkills.includes(s) ? ' *' : ''})</option>)}</select></label><label className="block text-sm">Roll mode<select className="mt-1 block w-full rounded-lg border border-white/20 bg-ink p-3 text-base" value={mode} onChange={e => setMode(e.target.value as RollMode)}><option value="normal">Normal</option><option value="advantage">Advantage (2d20, higher)</option><option value="disadvantage">Disadvantage (2d20, lower)</option></select></label><button type="button" disabled={!campaign || saving} onClick={() => onRoll(skill,mode)} className="w-full rounded-lg bg-gold px-4 py-3 font-semibold text-ink disabled:opacity-40">Roll {skill} ({modifier >= 0 ? '+' : ''}{modifier})</button>{lastRoll && <p role="status" className="rounded-lg border border-gold/20 p-3 text-sm">{lastRoll.text}</p>}</div>
+    <div className="rounded-xl border border-white/10 bg-panel p-5">
+      <p className="font-semibold">Nighthawk</p><p className="mt-1 text-sm text-parchment/60">Wood Elf Rogue · Level {stats.level ?? 1} · Playtest character sheet</p>
+      <div className="mt-4 grid grid-cols-3 gap-2">{abilities.map(ability => <div key={ability} className="rounded-lg border border-white/15 p-3 text-center"><p className="text-xs uppercase text-gold">{ability}</p><p className="text-xl font-semibold">{stats.scores[ability]}</p><p className="text-sm text-parchment/70">{signed(abilityModifier(stats.scores[ability]))}</p></div>)}</div>
+      <div className="mt-4 grid grid-cols-2 gap-2 text-sm"><p>HP: {stats.currentHitPoints ?? 10} / {stats.maxHitPoints ?? 10}</p><p>Armor Class: {stats.armorClass ?? 14}</p><p>Speed: {stats.speed ?? 35} ft.</p><p>Proficiency: +{stats.proficiencyBonus}</p><p>Passive Perception: {passivePerception(stats)}</p></div>
+      <div className="mt-5 rounded-lg border border-gold/30 p-3"><p className="mb-2 text-sm font-semibold">Roll mode</p><div className="grid grid-cols-3 gap-1 text-center text-xs text-parchment/75"><span>Disadvantage</span><span>Normal</span><span>Advantage</span></div><input aria-label="Roll mode" type="range" min={-1} max={1} step={1} value={mode === 'disadvantage' ? -1 : mode === 'advantage' ? 1 : 0} onChange={e => setMode(Number(e.target.value) === -1 ? 'disadvantage' : Number(e.target.value) === 1 ? 'advantage' : 'normal')} className="mt-2 w-full accent-gold"/><p className="mt-1 text-center text-xs text-gold">{mode === 'normal' ? 'Normal roll' : mode === 'advantage' ? 'Advantage: keep higher d20' : 'Disadvantage: keep lower d20'}</p></div>
+      <h3 className="mt-5 font-serif text-lg">Saving throws</h3><div className="mt-2 grid grid-cols-3 gap-2 text-sm">{abilities.map(a => <button type="button" key={a} disabled={!campaign || saving} onClick={() => onSaveRoll(a,mode)} className="rounded-lg border border-white/15 p-3 text-left uppercase active:border-gold disabled:opacity-40">{a}: {signed(savingThrowModifier(stats,a))}{a === 'dex' || a === 'int' ? ' *' : ''}</button>)}</div>
+      <h3 className="mt-5 font-serif text-lg">Skills</h3><div className="mt-2 grid grid-cols-2 gap-2 text-xs">{skills.map(s => <button type="button" key={s} disabled={!campaign || saving} onClick={() => onRoll(s,mode)} className="rounded-lg border border-white/15 p-3 text-left active:border-gold disabled:opacity-40">{s} {signed(skillModifier(stats,s))} {stats.expertiseSkills?.includes(s) ? '**' : stats.proficientSkills.includes(s) ? '*' : ''}</button>)}</div>
+      <p className="mt-3 text-xs text-parchment/60">Tap any skill or saving throw to roll using the selected mode. * Proficient · ** Expertise. Rolls are saved to the campaign; the DM determines outcomes.</p>
+      {lastRoll && <p role="status" className="mt-3 rounded-lg border border-gold/30 p-3 text-sm">{lastRoll.text}</p>}
+    </div>
     <div className="rounded-xl border border-dashed border-gold/30 p-5"><p className="font-semibold">Three companions await</p><p className="mt-2 text-sm text-parchment/60">Companion recruitment will arrive in a later milestone.</p></div>
   </section>;
 }
@@ -116,6 +123,24 @@ export function App() {
       setCampaigns(items => items.map(item => item.id === next.id ? next : item));
       setNotice('Dice rolled and result saved. No success or failure has been assigned.');
     } catch (error) { setNotice('Roll failed: ' + String(error)); }
+    finally { setSaving(false); }
+  }
+
+  async function saveSavingThrow(ability: typeof abilities[number], mode: RollMode) {
+    if (!campaign || saving) return;
+    setSaving(true);
+    try {
+      const count = mode === 'normal' ? 1 : 2;
+      const dice = Array.from({ length: count }, () => Math.floor(Math.random() * 20) + 1);
+      const selected = mode === 'advantage' ? Math.max(...dice) : mode === 'disadvantage' ? Math.min(...dice) : dice[0];
+      const modifier = savingThrowModifier(campaign.character ?? prototypeNighthawk, ability);
+      const result = 'Nighthawk · ' + ability.toUpperCase() + ' saving throw: ' + (dice.length === 1 ? String(selected) : dice.join(' / ') + ' (' + mode + ': ' + selected + ')') + ' ' + (modifier >= 0 ? '+' : '') + modifier + ' = ' + (selected + modifier) + '. Outcome awaits DM adjudication.';
+      const next = addRoll(campaign, result);
+      await localCampaignStorage.save(next);
+      setCampaign(next);
+      setCampaigns(items => items.map(item => item.id === next.id ? next : item));
+      setNotice('Saving throw rolled and saved.');
+    } catch (error) { setNotice('Saving throw failed: ' + String(error)); }
     finally { setSaving(false); }
   }
 
@@ -221,7 +246,7 @@ export function App() {
     finally { setSaving(false); if (importInput.current) importInput.current.value = ''; }
   }
 
-  const content = { adventure: <Adventure campaign={campaign} fullHistory={fullHistory} onToggleHistory={() => setFullHistory(value => !value)}/>, party: <Party campaign={campaign} saving={saving} onRoll={(skill,mode) => void saveSkillRoll(skill,mode)}/>, journal: <Journal campaign={campaign}/>, map: <WorldMap/>, settings: <section className="space-y-4"><h2 className="font-serif text-2xl">Settings</h2><p className="text-sm text-parchment/60">Manage campaigns, backups, and Dungeon Master access below.</p></section> };
+  const content = { adventure: <Adventure campaign={campaign} fullHistory={fullHistory} onToggleHistory={() => setFullHistory(value => !value)}/>, party: <Party campaign={campaign} saving={saving} onRoll={(skill,mode) => void saveSkillRoll(skill,mode)} onSaveRoll={(ability,mode) => void saveSavingThrow(ability,mode)}/>, journal: <Journal campaign={campaign}/>, map: <WorldMap/>, settings: <section className="space-y-4"><h2 className="font-serif text-2xl">Settings</h2><p className="text-sm text-parchment/60">Manage campaigns, backups, and Dungeon Master access below.</p></section> };
   return <div className="min-h-dvh bg-ink text-parchment">
     <div className="mx-auto flex min-h-dvh w-full max-w-3xl flex-col">
       <header className="sticky top-0 z-20 border-b border-white/10 bg-ink/95 px-5 pb-4 pt-[max(1.2rem,env(safe-area-inset-top))] backdrop-blur">
@@ -289,6 +314,7 @@ export function App() {
           <p className="text-xs text-parchment/60">The target number is hidden. Your roll is saved before adjudication.</p>
         </div>}
         {activeView !== "settings" && <form className="flex items-end gap-2 px-4 py-3" onSubmit={(event) => { event.preventDefault(); void (dmMode ? sendToDM() : saveNote()); }}>
+          <button type="button" onClick={() => window.location.reload()} aria-label="Refresh Four Keeps" title="Refresh Four Keeps" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-white/20 bg-panel text-gold"><RefreshCw size={19}/></button>
           <label htmlFor="dm-input" className="sr-only">Message the Dungeon Master</label>
           <textarea id="dm-input" value={draft} onChange={(event) => { setDraft(event.target.value); setNotice(''); }} rows={1} placeholder={campaign ? (dmMode ? 'What does Nighthawk do?' : 'Write a journal note…') : 'Create a campaign first'} disabled={!campaign || saving || !!campaign.pendingCheck} className="max-h-32 min-h-11 min-w-0 flex-1 resize-y rounded-xl border border-white/20 bg-panel px-3 py-3 text-base text-parchment placeholder:text-parchment/45 focus:border-gold focus:outline-none"/>
           <button type="submit" disabled={!draft.trim() || !campaign || saving || !!campaign.pendingCheck} aria-label="Send message to Dungeon Master" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gold text-ink disabled:opacity-40"><Send size={19}/></button>
