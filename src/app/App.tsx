@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { createBackup, parseBackup } from '../game/backup';
 import { BookOpen, Compass, Map, RefreshCw, Send, Settings, Shield, Swords, Users } from 'lucide-react';
-import { addExchange, addNote, addRoll, beginDuel, adjustEquipment, rollDuelInitiative, takeDuelTurnAction, moveDuelToken, moveTrainingDummy, resolveTrainingReaction, advanceDuelTestEnemyTurn, resolveDuelEnemyTurn, rollDuelAttack, concludeDuel, newCampaign, awardExperience, levelUpRogue, levelUpArcaneTrickster, tricksterCantrips, tricksterSpells, isRitualSpell, castNighthawkSpell, takeNighthawkRest, applyNighthawkDamage, minutesUntilLongRestEligible, advanceToLongRestEligibility, endNighthawkConcentration, spellRequiresConcentration, reconcileNighthawkScores, undoNighthawkScoreReconciliation, xpThresholds, type Campaign } from '../game/campaign';
+import { addExchange, addNote, addRoll, beginDuel, adjustEquipment, rollDuelInitiative, takeDuelTurnAction, moveDuelToken, moveTrainingDummy, resolveTrainingReaction, rollTrainingReaction, advanceDuelTestEnemyTurn, resolveDuelEnemyTurn, rollDuelAttack, concludeDuel, newCampaign, awardExperience, levelUpRogue, levelUpArcaneTrickster, tricksterCantrips, tricksterSpells, isRitualSpell, castNighthawkSpell, takeNighthawkRest, applyNighthawkDamage, minutesUntilLongRestEligible, advanceToLongRestEligibility, endNighthawkConcentration, spellRequiresConcentration, reconcileNighthawkScores, undoNighthawkScoreReconciliation, xpThresholds, type Campaign } from '../game/campaign';
 import { localCampaignStorage } from '../game/storage';
 import type { View } from '../game/types';
 import { emptyWorld } from '../game/world';
@@ -548,11 +548,11 @@ export function App() {
     try {const next=resolveDuelEnemyTurn(campaign);await localCampaignStorage.save(next);setCampaign(next);setCampaigns(items=>items.map(item=>item.id===next.id?next:item));setPendingCombatAction(null);setNotice(next.journal[next.journal.length-1].text);}
     catch(error){setNotice('Enemy turn: '+String(error));}finally{setSaving(false);}
   }
-  async function trainingReaction(action:'move'|'attack'|'decline'){
+  async function trainingReaction(action:'move'|'attack'|'decline'|'hit'|'damage'|'finish'){
     if(!campaign||saving)return;
     setSaving(true);
     try{
-      const next=action==='move'?moveTrainingDummy(campaign):resolveTrainingReaction(campaign,action);
+      const next=action==='move'?moveTrainingDummy(campaign):action==='attack'||action==='decline'?resolveTrainingReaction(campaign,action):rollTrainingReaction(campaign,action);
       await localCampaignStorage.save(next);setCampaign(next);setCampaigns(items=>items.map(item=>item.id===next.id?next:item));
       setNotice(next.journal[next.journal.length-1].text);
     }catch(error){setNotice('Reaction test: '+String(error));}finally{setSaving(false);}
@@ -722,8 +722,14 @@ export function App() {
           {campaign.combat.enemyName==='Training Dummy'&&<div className="grid grid-cols-7 gap-1" aria-label="Training dummy movement map">{Array.from({length:49},(_,i)=>{const x=i%7,y=Math.floor(i/7),p=campaign.combat!.playerPosition??{x:1,y:3},e=campaign.combat!.enemyPosition??{x:5,y:3};return <div key={i} className={`aspect-square rounded border flex items-center justify-center text-xs font-bold ${x===p.x&&y===p.y?'bg-gold text-ink border-gold':x===e.x&&y===e.y?'bg-red-900 text-white border-red-500':'bg-white/5 border-white/15'}`}>{x===p.x&&y===p.y?'N':x===e.x&&y===e.y?'E':''}</div>})}</div>}
           {campaign.combat.enemyName==='Training Dummy'&&<div className="rounded-lg border border-gold/40 p-3 space-y-2">
             <p className="font-semibold">Moving dummy · Reaction test</p>
-            {campaign.combat.opportunity?<><p className="text-sm">The dummy is leaving your 5-foot reach. You may spend your reaction to make a melee dagger attack before it leaves, or let it go. This attack does not consume your Action.</p>
-              <div className="grid grid-cols-2 gap-2"><button type="button" disabled={saving||(campaign.combat.daggersAvailable??2)<1} className="rounded-lg bg-gold text-ink p-3 font-semibold disabled:opacity-40" onClick={()=>void trainingReaction('attack')}>React: Dagger</button><button type="button" disabled={saving} className="rounded-lg border border-white/30 p-3" onClick={()=>void trainingReaction('decline')}>Let it move</button></div>
+            {campaign.combat.opportunity?<>{campaign.combat.reactionAttack?<div className="space-y-3 rounded-lg border border-gold/50 p-3">
+              <p className="font-semibold">Opportunity attack · Dagger</p>
+              <p className="text-sm">Your reaction is spent. The dummy stays within reach until this attack resolves.</p>
+              {campaign.combat.reactionAttack.d20!==undefined&&<p className="text-sm">Attack roll: d20 {campaign.combat.reactionAttack.d20} → total {campaign.combat.reactionAttack.total} vs AC 12 · {campaign.combat.reactionAttack.hit?'Hit':'Miss'}</p>}
+              {campaign.combat.reactionAttack.damage!==undefined&&<p className="text-sm">Damage: {campaign.combat.reactionAttack.damage} · Dummy HP: {campaign.combat.enemyHp}/{campaign.combat.enemyMaxHp}</p>}
+              {campaign.combat.reactionAttack.phase==='roll-to-hit'?<button type="button" disabled={saving} className="w-full rounded-lg bg-gold text-ink p-3 font-semibold" onClick={()=>void trainingReaction('hit')}>Roll to Hit (d20 + DEX + proficiency)</button>:campaign.combat.reactionAttack.phase==='roll-damage'?<button type="button" disabled={saving} className="w-full rounded-lg bg-gold text-ink p-3 font-semibold" onClick={()=>void trainingReaction('damage')}>Roll Damage (1d4 + DEX)</button>:<button type="button" disabled={saving} className="w-full rounded-lg bg-gold text-ink p-3 font-semibold" onClick={()=>void trainingReaction('finish')}>Finish reaction</button>}
+            </div>:<><p className="text-sm">The dummy is leaving your 5-foot reach. You may spend your reaction to make a melee dagger attack before it leaves, or let it go. This attack does not consume your Action.</p>
+              <div className="grid grid-cols-2 gap-2"><button type="button" disabled={saving||(campaign.combat.daggersAvailable??2)<1} className="rounded-lg bg-gold text-ink p-3 font-semibold disabled:opacity-40" onClick={()=>void trainingReaction('attack')}>React: Dagger</button><button type="button" disabled={saving} className="rounded-lg border border-white/30 p-3" onClick={()=>void trainingReaction('decline')}>Let it move</button></div></>}
             </>:<><p className="text-sm">Move the dummy one square. If it leaves your reach, combat pauses to offer an opportunity attack. Otherwise it approaches Nighthawk.</p><button type="button" disabled={saving} className="w-full rounded-lg border border-gold/60 p-3" onClick={()=>void trainingReaction('move')}>Move training dummy</button></>}
           </div>}
           <p className="text-sm">{campaign.combat.enemyName} makes a nonlethal training strike. Temporary stats: +4 to hit, 1d6 + 2 damage, against AC 14. Dodge imposes disadvantage.</p><button type="button" disabled={saving||!!campaign.combat.opportunity} className="w-full rounded-lg bg-gold p-3 font-semibold text-ink disabled:opacity-40" onClick={()=>void resolveEnemyTurn()}>Resolve enemy turn</button><button type="button" disabled={saving||!!campaign.combat.opportunity} className="w-full rounded-lg border border-gold/60 p-3 text-sm disabled:opacity-40" onClick={()=>void skipEnemyTurnForTest()}>Skip enemy turn (test only)</button></div>}</>}
