@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { createBackup, parseBackup } from '../game/backup';
 import { BookOpen, Compass, Map, RefreshCw, Send, Settings, Shield, Swords, Users } from 'lucide-react';
-import { addExchange, addNote, addRoll, beginDuel, rollDuelInitiative, takeDuelTurnAction, advanceDuelTestEnemyTurn, rollDuelAttack, newCampaign, awardExperience, levelUpRogue, levelUpArcaneTrickster, tricksterCantrips, tricksterSpells, isRitualSpell, castNighthawkSpell, takeNighthawkRest, applyNighthawkDamage, minutesUntilLongRestEligible, advanceToLongRestEligibility, endNighthawkConcentration, spellRequiresConcentration, reconcileNighthawkScores, undoNighthawkScoreReconciliation, xpThresholds, type Campaign } from '../game/campaign';
+import { addExchange, addNote, addRoll, beginDuel, rollDuelInitiative, takeDuelTurnAction, advanceDuelTestEnemyTurn, rollDuelAttack, concludeDuel, newCampaign, awardExperience, levelUpRogue, levelUpArcaneTrickster, tricksterCantrips, tricksterSpells, isRitualSpell, castNighthawkSpell, takeNighthawkRest, applyNighthawkDamage, minutesUntilLongRestEligible, advanceToLongRestEligibility, endNighthawkConcentration, spellRequiresConcentration, reconcileNighthawkScores, undoNighthawkScoreReconciliation, xpThresholds, type Campaign } from '../game/campaign';
 import { localCampaignStorage } from '../game/storage';
 import type { View } from '../game/types';
 import { emptyWorld } from '../game/world';
@@ -466,6 +466,20 @@ export function App() {
     try {const next=rollDuelAttack(campaign,kind);await localCampaignStorage.save(next);setCampaign(next);setCampaigns(items=>items.map(item=>item.id===next.id?next:item));setNotice(next.journal[next.journal.length-1].text);}
     catch(error){setNotice('Combat: '+String(error));}finally{setSaving(false);}
   }
+  async function finishDefeatedDuel() {
+    if(!campaign||saving||campaign.combat?.enemyHp!==0)return;
+    const opponent=campaign.combat.enemyName;
+    setSaving(true);
+    try {
+      const next=concludeDuel(campaign);
+      await localCampaignStorage.save(next);
+      setCampaign(next);setCampaigns(items=>items.map(item=>item.id===next.id?next:item));
+      setPendingCombatAction(null);
+      setNotice(opponent+' is unconscious, not dead. Combat ended; requesting the DM aftermath.');
+      setSaving(false);
+      await sendToDM(next,'The nonlethal sparring match is over. '+opponent+' was reduced to 0 HP and knocked unconscious, not killed. Narrate the immediate aftermath, how the bystanders respond, and how '+opponent+' eventually recovers. Do not restart combat or change mechanical HP.');
+    } catch(error){setNotice('Encounter conclusion failed: '+String(error));setSaving(false);}
+  }
   async function skipEnemyTurnForTest() {
     if(!campaign||saving)return;
     setSaving(true);
@@ -561,7 +575,7 @@ export function App() {
         {activeView==='adventure' && campaign?.combat && <div className="mt-4 space-y-3 rounded-xl border border-gold/50 bg-panel p-4" aria-label="Combat initiative tracker">
           <p className="eyebrow">Combat · Round {campaign.combat.round}</p>
           <h3 className="font-serif text-lg">Nighthawk vs {campaign.combat.enemyName}</h3>
-          {campaign.combat.status==='awaiting-initiative' ? <><p className="text-sm">The enemy's initiative has been rolled. Roll Nighthawk's d20 to establish turn order.</p><button type="button" disabled={saving} className="w-full rounded-lg bg-gold p-3 font-semibold text-ink disabled:opacity-40" onClick={()=>void rollInitiative()}>Roll initiative (d20 + DEX)</button></> : <><p className="font-semibold text-gold">{campaign.combat.order?.[campaign.combat.turnIndex??0]==='Nighthawk'?'Your turn — Nighthawk':'Enemy turn — '+campaign.combat.enemyName}</p><p className="text-sm">Initiative order</p><ol className="space-y-2">{campaign.combat.order?.map((name,i)=><li key={name} className="flex justify-between rounded-lg border border-white/20 p-3"><span>{i+1}. {name}</span><strong>{name==='Nighthawk'?campaign.combat?.playerInitiative:campaign.combat?.enemyInitiative}</strong></li>)}</ol>{campaign.combat.order?.[campaign.combat.turnIndex??0]==='Nighthawk' ? <div className="space-y-3">
+          {(campaign.combat.status==='completed'||campaign.combat.enemyHp===0) ? <div className="space-y-3 rounded-lg border border-gold/60 bg-gold/10 p-3"><p className="font-semibold text-gold">Victory — nonlethal sparring match</p><p className="text-sm">{campaign.combat.enemyName} is at 0 HP and unconscious, not dead. Combat is over; no further turns are needed.</p><button type="button" disabled={saving} className="w-full rounded-lg bg-gold p-3 font-semibold text-ink disabled:opacity-40" onClick={()=>void finishDefeatedDuel()}>Continue to aftermath</button></div> : campaign.combat.status==='awaiting-initiative' ? <><p className="text-sm">The enemy's initiative has been rolled. Roll Nighthawk's d20 to establish turn order.</p><button type="button" disabled={saving} className="w-full rounded-lg bg-gold p-3 font-semibold text-ink disabled:opacity-40" onClick={()=>void rollInitiative()}>Roll initiative (d20 + DEX)</button></> : <><p className="font-semibold text-gold">{campaign.combat.order?.[campaign.combat.turnIndex??0]==='Nighthawk'?'Your turn — Nighthawk':'Enemy turn — '+campaign.combat.enemyName}</p><p className="text-sm">Initiative order</p><ol className="space-y-2">{campaign.combat.order?.map((name,i)=><li key={name} className="flex justify-between rounded-lg border border-white/20 p-3"><span>{i+1}. {name}</span><strong>{name==='Nighthawk'?campaign.combat?.playerInitiative:campaign.combat?.enemyInitiative}</strong></li>)}</ol>{campaign.combat.order?.[campaign.combat.turnIndex??0]==='Nighthawk' ? <div className="space-y-3">
           <p className="text-sm font-semibold">Your turn · Movement: {campaign.combat.movementUsed??0}/35 ft · Action: {campaign.combat.actionUsed?'used':'available'}</p>
           {campaign.combat.attack && <div className="space-y-2 rounded-lg border border-gold/60 p-3">
             <p className="font-semibold">Nonlethal training attack · Bran HP: {campaign.combat.enemyHp??12}/{campaign.combat.enemyMaxHp??12}</p>
