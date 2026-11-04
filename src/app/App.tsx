@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { createBackup, parseBackup } from '../game/backup';
 import { BookOpen, Compass, Map, RefreshCw, Send, Settings, Shield, Swords, Users } from 'lucide-react';
-import { addExchange, addNote, addRoll, beginDuel, rollDuelInitiative, takeDuelTurnAction, moveDuelToken, advanceDuelTestEnemyTurn, resolveDuelEnemyTurn, rollDuelAttack, concludeDuel, newCampaign, awardExperience, levelUpRogue, levelUpArcaneTrickster, tricksterCantrips, tricksterSpells, isRitualSpell, castNighthawkSpell, takeNighthawkRest, applyNighthawkDamage, minutesUntilLongRestEligible, advanceToLongRestEligibility, endNighthawkConcentration, spellRequiresConcentration, reconcileNighthawkScores, undoNighthawkScoreReconciliation, xpThresholds, type Campaign } from '../game/campaign';
+import { addExchange, addNote, addRoll, beginDuel, adjustEquipment, rollDuelInitiative, takeDuelTurnAction, moveDuelToken, advanceDuelTestEnemyTurn, resolveDuelEnemyTurn, rollDuelAttack, concludeDuel, newCampaign, awardExperience, levelUpRogue, levelUpArcaneTrickster, tricksterCantrips, tricksterSpells, isRitualSpell, castNighthawkSpell, takeNighthawkRest, applyNighthawkDamage, minutesUntilLongRestEligible, advanceToLongRestEligibility, endNighthawkConcentration, spellRequiresConcentration, reconcileNighthawkScores, undoNighthawkScoreReconciliation, xpThresholds, type Campaign } from '../game/campaign';
 import { localCampaignStorage } from '../game/storage';
 import type { View } from '../game/types';
 import { emptyWorld } from '../game/world';
@@ -85,7 +85,7 @@ function Adventure({ campaign, fullHistory, onToggleHistory }: { campaign: Campa
     <div ref={endRef}/>
   </section>;
 }
-function Party({ campaign, onRoll, onSaveRoll, onAwardXP, onLevelUp, onLevelThree, onReconcile, onUndoReconcile, onRestore, onCastSpell, onEndConcentration, saving }: { campaign: Campaign | null; onRoll: (skill: Skill, mode: RollMode) => void; onSaveRoll: (ability: typeof abilities[number], mode: RollMode) => void; onAwardXP: (amount: number, reason: string) => void; onLevelUp: (hpGain: number) => void; onLevelThree: (hpGain: number, cantrips: string[], spells: string[]) => void; onReconcile: () => void; onUndoReconcile: () => void; onRestore: () => void; onCastSpell: (spell: string, ritual: boolean, components: boolean, target: string) => void; onEndConcentration: () => void; saving: boolean }) {
+function Party({ campaign, onRoll, onSaveRoll, onAwardXP, onLevelUp, onLevelThree, onReconcile, onUndoReconcile, onRestore, onCastSpell, onEndConcentration, onAdjustEquipment, saving }: { campaign: Campaign | null; onRoll: (skill: Skill, mode: RollMode) => void; onSaveRoll: (ability: typeof abilities[number], mode: RollMode) => void; onAwardXP: (amount: number, reason: string) => void; onLevelUp: (hpGain: number) => void; onLevelThree: (hpGain: number, cantrips: string[], spells: string[]) => void; onReconcile: () => void; onUndoReconcile: () => void; onRestore: () => void; onCastSpell: (spell: string, ritual: boolean, components: boolean, target: string) => void; onEndConcentration: () => void; onAdjustEquipment: (item:'daggers'|'arrows'|'caltrops'|'ballBearings',delta:number)=>void; saving: boolean }) {
   const [mode, setMode] = useState<RollMode>('normal');
   const [testXP, setTestXP] = useState('300');
   const [hpChoice, setHpChoice] = useState('7');
@@ -100,6 +100,12 @@ function Party({ campaign, onRoll, onSaveRoll, onAwardXP, onLevelUp, onLevelThre
   const lastRoll = campaign?.journal.filter(entry => entry.kind === 'system' && (entry.text.startsWith('Nighthawk rolled ') || entry.text.startsWith('Nighthawk · '))).at(-1);
   const signed = (value: number) => (value >= 0 ? '+' : '') + value;
   return <section className="space-y-4"><div className="flex items-center gap-3"><Shield className="text-gold"/><h2 className="font-serif text-2xl">Player Character</h2></div>
+    <div className="rounded-xl border border-gold/30 bg-panel p-4 space-y-3">
+      <h3 className="font-serif text-xl">Equipment</h3>
+      <p className="text-xs text-parchment/65">Quantities persist between encounters. Use +/− to reconcile equipment outside combat. Caltrops and ball bearings start at zero until added.</p>
+      {([['daggers','Daggers'],['arrows','Arrows'],['caltrops','Caltrops (bags)'],['ballBearings','Ball bearings (bags)']] as const).map(([key,label])=><div key={key} className="flex items-center justify-between gap-3 border-b border-white/10 pb-2"><span className="text-sm">{label}</span><div className="flex items-center gap-3"><button type="button" aria-label={'Remove '+label} disabled={saving||!!campaign?.combat||(campaign?.equipment?.[key]??(key==='daggers'?2:key==='arrows'?20:0))<=0} className="rounded border border-white/30 px-3 py-1 disabled:opacity-30" onClick={()=>onAdjustEquipment(key,-1)}>−</button><strong className="min-w-6 text-center tabular-nums">{campaign?.combat?(key==='daggers'?campaign.combat.daggersAvailable??campaign.equipment?.daggers??2:key==='arrows'?campaign.combat.arrowsRemaining??campaign.equipment?.arrows??20:campaign.equipment?.[key]??0):campaign?.equipment?.[key]??(key==='daggers'?2:key==='arrows'?20:0)}</strong><button type="button" aria-label={'Add '+label} disabled={saving||!!campaign?.combat} className="rounded border border-white/30 px-3 py-1 disabled:opacity-30" onClick={()=>onAdjustEquipment(key,1)}>+</button></div></div>)}
+      {!!campaign?.combat?.daggersThrown&&<p className="text-xs text-gold">{campaign.combat.daggersThrown} dagger(s) thrown, awaiting recovery.</p>}
+    </div>
     <div className="rounded-xl border border-white/10 bg-panel p-5">
       <p className="font-semibold">Nighthawk</p><p className="mt-1 text-sm text-parchment/60">Wood Elf Rogue · Level {stats.level ?? 1} · Playtest character sheet</p>
       <div className="mt-4 rounded-lg border border-gold/30 p-3"><p className="text-sm">Level {stats.level ?? 1} · {campaign?.xp ?? 0} XP / {xpThresholds[Math.min(stats.level ?? 1,19)]} XP to next level</p><div className="mt-2 h-2 rounded-full bg-ink"><div className="h-full rounded-full bg-gold" style={{ width: Math.min(100, ((campaign?.xp ?? 0) / (xpThresholds[Math.min(stats.level ?? 1,19)] || 1)) * 100) + "%" }}/></div>{(stats.level ?? 1) === 1 && (campaign?.xp ?? 0) >= 300 && <div className="mt-3 space-y-2"><p className="text-sm text-gold">Level 2 unlocked: Cunning Action, +HP</p><label className="block text-xs">HP increase<select className="mt-1 w-full rounded-lg bg-ink p-2 text-base" value={hpChoice} onChange={e => setHpChoice(e.target.value)}><option value="7">Fixed 5 + CON 2 = 7 HP</option>{Array.from({length:8},(_,i)=><option key={i} value={i+3}>Rolled {i+1} + CON 2 = {i+3} HP</option>)}</select></label><button type="button" disabled={saving} onClick={() => onLevelUp(Number(hpChoice))} className="rounded-lg bg-gold px-4 py-2 font-semibold text-ink">Confirm Level 2</button></div>}</div>
@@ -442,6 +448,12 @@ export function App() {
     finally { if(!alreadySaving)setSaving(false); }
   }
 
+  async function changeEquipment(item:'daggers'|'arrows'|'caltrops'|'ballBearings',delta:number){
+    if(!campaign||saving)return;
+    setSaving(true);
+    try{const next=adjustEquipment(campaign,item,delta);await localCampaignStorage.save(next);setCampaign(next);setCampaigns(items=>items.map(entry=>entry.id===next.id?next:entry));}
+    catch(error){setNotice('Equipment: '+String(error));}finally{setSaving(false);}
+  }
   async function startTrainingCombatTest() {
     if(!campaign||saving||campaign.combat||campaign.pendingAftermath)return;
     setSaving(true);
@@ -570,7 +582,7 @@ export function App() {
     finally { setSaving(false); if (importInput.current) importInput.current.value = ''; }
   }
 
-  const content = { adventure: <Adventure campaign={campaign} fullHistory={fullHistory} onToggleHistory={() => setFullHistory(value => !value)}/>, party: <Party campaign={campaign} saving={saving} onRoll={(skill,mode) => void saveSkillRoll(skill,mode)} onSaveRoll={(ability,mode) => void saveSavingThrow(ability,mode)} onAwardXP={(amount,reason) => void updateProgress('award',amount,reason)} onLevelUp={hp => void updateProgress('level',hp)} onLevelThree={(hp,cantrips,spells) => void updateProgress('level3',hp,'',cantrips,spells)} onReconcile={() => void updateProgress('reconcile')} onUndoReconcile={() => void updateProgress('undoReconcile')} onRestore={() => void updateProgress('restore')} onCastSpell={(spell,ritual,components,target)=>void castSpell(spell,ritual,components,target)} onEndConcentration={()=>void endConcentration()}/>, journal: <Journal campaign={campaign}/>, map: <WorldMap/>, settings: <section className="space-y-4"><h2 className="font-serif text-2xl">Settings</h2><p className="text-sm text-parchment/60">Manage campaigns, backups, and Dungeon Master access below.</p></section> };
+  const content = { adventure: <Adventure campaign={campaign} fullHistory={fullHistory} onToggleHistory={() => setFullHistory(value => !value)}/>, party: <Party campaign={campaign} saving={saving} onRoll={(skill,mode) => void saveSkillRoll(skill,mode)} onSaveRoll={(ability,mode) => void saveSavingThrow(ability,mode)} onAwardXP={(amount,reason) => void updateProgress('award',amount,reason)} onLevelUp={hp => void updateProgress('level',hp)} onLevelThree={(hp,cantrips,spells) => void updateProgress('level3',hp,'',cantrips,spells)} onReconcile={() => void updateProgress('reconcile')} onUndoReconcile={() => void updateProgress('undoReconcile')} onRestore={() => void updateProgress('restore')} onCastSpell={(spell,ritual,components,target)=>void castSpell(spell,ritual,components,target)} onEndConcentration={()=>void endConcentration()} onAdjustEquipment={(item,delta)=>void changeEquipment(item,delta)}/>, journal: <Journal campaign={campaign}/>, map: <WorldMap/>, settings: <section className="space-y-4"><h2 className="font-serif text-2xl">Settings</h2><p className="text-sm text-parchment/60">Manage campaigns, backups, and Dungeon Master access below.</p></section> };
   return <div className="min-h-dvh bg-ink text-parchment">
     <div className="mx-auto flex min-h-dvh w-full max-w-3xl flex-col">
       <header className="sticky top-0 z-20 border-b border-white/10 bg-ink/95 px-5 pb-4 pt-[max(1.2rem,env(safe-area-inset-top))] backdrop-blur">
