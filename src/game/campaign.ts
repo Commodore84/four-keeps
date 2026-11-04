@@ -223,14 +223,14 @@ export function rollDuelInitiative(campaign:Campaign):Campaign {
   const total=roll+modifier;
   const order=total>=combat.enemyInitiative?['Nighthawk',combat.enemyName]:[combat.enemyName,'Nighthawk'];
   const now=new Date().toISOString();
-  return {...campaign,combat:{...combat,status:'initiative-set',playerInitiative:total,order,turnIndex:0,reactionUsed:false,movementUsed:0,actionUsed:false,bonusActionUsed:false,enemyHp:12,enemyMaxHp:12,arrowsRemaining:campaign.equipment?.arrows??20,daggersAvailable:campaign.equipment?.daggers??2,daggersThrown:0,playerPosition:{x:1,y:3},enemyPosition:{x:5,y:3}},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:'Nighthawk initiative: d20 '+roll+' + DEX '+modifier+' = '+total+'. '+combat.enemyName+': '+combat.enemyInitiative+'. Turn order: '+order.join(' → ')+'.',createdAt:now}]};
+  return {...campaign,combat:{...combat,status:'initiative-set',playerInitiative:total,order,turnIndex:0,reactionUsed:false,movementUsed:0,actionUsed:false,bonusActionUsed:false,enemyHp:12,enemyMaxHp:12,arrowsRemaining:campaign.equipment?.arrows??20,daggersAvailable:campaign.equipment?.daggers??2,daggersThrown:0,playerPosition:{x:2,y:4},enemyPosition:{x:6,y:4}},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:'Nighthawk initiative: d20 '+roll+' + DEX '+modifier+' = '+total+'. '+combat.enemyName+': '+combat.enemyInitiative+'. Turn order: '+order.join(' → ')+'.',createdAt:now}]};
 }
 
 export function moveDuelToken(campaign:Campaign,x:number,y:number):Campaign {
  const combat=campaign.combat;
  if(!combat||combat.status!=='initiative-set'||combat.order?.[combat.turnIndex??0]!=='Nighthawk')throw Error('You can move only on your turn.');
  if(combat.steadyAim||combat.attack)throw Error('Movement is unavailable after Steady Aim or while resolving an attack.');
- if(!Number.isInteger(x)||!Number.isInteger(y)||x<0||x>6||y<0||y>6)throw Error('Destination is outside the map.');
+ if(!Number.isInteger(x)||!Number.isInteger(y)||x<0||x>8||y<0||y>8)throw Error('Destination is outside the map.');
  const from=combat.playerPosition??{x:1,y:3};
  const enemy=combat.enemyPosition??{x:5,y:3};
  if(x===enemy.x&&y===enemy.y)throw Error('That square is occupied by the opponent.');
@@ -320,12 +320,19 @@ export function resolveDuelEnemyTurn(campaign:Campaign):Campaign {
 export function moveTrainingDummy(campaign:Campaign):Campaign {
  const c=campaign.combat;
  if(!c||c.enemyName!=='Training Dummy'||c.status!=='initiative-set'||c.order?.[c.turnIndex??0]==='Nighthawk'||c.opportunity)throw Error('Dummy movement is unavailable.');
- const p=c.playerPosition??{x:1,y:3},e=c.enemyPosition??{x:5,y:3};
- const adjacent=Math.max(Math.abs(p.x-e.x),Math.abs(p.y-e.y))<=1;
- const step=(v:number)=>Math.sign(v);
- const target=adjacent?{x:e.x+step(e.x-p.x||1),y:e.y+step(e.y-p.y||0)}:{x:e.x+step(p.x-e.x),y:e.y+step(p.y-e.y)};
- const to={x:Math.max(0,Math.min(6,target.x)),y:Math.max(0,Math.min(6,target.y))};
- if(to.x===e.x&&to.y===e.y)throw Error('Dummy cannot move farther on this grid.');
+ const p=c.playerPosition??{x:2,y:4},e=c.enemyPosition??{x:6,y:4};
+ const distance=(a:{x:number;y:number},b:{x:number;y:number})=>Math.max(Math.abs(a.x-b.x),Math.abs(a.y-b.y));
+ const adjacent=distance(p,e)<=1;
+ // Patrol around Nighthawk, rather than marching east into the map boundary.
+ // Once adjacent, choose a square outside melee reach to trigger a reaction.
+ const candidates=[{x:e.x+1,y:e.y},{x:e.x,y:e.y+1},{x:e.x-1,y:e.y},{x:e.x,y:e.y-1},
+ {x:e.x+1,y:e.y+1},{x:e.x-1,y:e.y+1},{x:e.x-1,y:e.y-1},{x:e.x+1,y:e.y-1}]
+ .filter(q=>q.x>=0&&q.x<=8&&q.y>=0&&q.y<=8&&!(q.x===p.x&&q.y===p.y));
+ const options=adjacent?candidates.filter(q=>distance(q,p)>1):candidates;
+ if(!options.length)throw Error('No available square for dummy movement.');
+ // Prefer an orthogonal square; rotate the direction by round/position to avoid a straight-line march.
+ const index=(c.round+e.x*3+e.y*5)%options.length;
+ const to=options[index];
  const opportunity=adjacent&&!c.reactionUsed?{from:e,to}:undefined;
  const now=new Date().toISOString();
  return {...campaign,combat:{...c,enemyPosition:opportunity?e:to,opportunity},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:opportunity?'Training dummy starts leaving Nighthawk’s reach. Opportunity attack available before it moves.':'Training dummy moves one square toward Nighthawk.',createdAt:now}]};
