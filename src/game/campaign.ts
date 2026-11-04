@@ -23,7 +23,7 @@ export interface Campaign {
   xp?: number;
   xpAwards?: { id: string; amount: number; reason: string }[];
   levelOneSnapshot?: { character: CharacterStats; xp: number; xpAwards: { id: string; amount: number; reason: string }[] };
-  combat?: { status:'awaiting-initiative'|'initiative-set'|'completed'; enemyName:string; enemyInitiative:number; playerInitiative?:number; round:number; order?:string[]; turnIndex?:number; movementUsed?:number; actionUsed?:boolean; bonusActionUsed?:boolean; lastAction?:string; arrowsRemaining?:number; daggersAvailable?:number; daggersThrown?:number; attack?:{weapon?:'dagger'|'shortbow'; thrown?:boolean; disadvantage?:boolean; phase:'roll-to-hit'|'roll-damage'|'resolved'; d20?:number; firstD20?:number; total?:number; hit?:boolean; critical?:boolean; damage?:number; sneakAttackDamage?:number; advantage?:boolean; secondD20?:number}; steadyAim?:boolean; movementAllowance?:number; disengaged?:boolean; enemyHp?:number; enemyMaxHp?:number; outcome?:'nonlethal-victory'|'player-defeated'; enemyLastTurn?:string; trainingStartingHp?:number; playerPosition?:{x:number;y:number}; enemyPosition?:{x:number;y:number} };
+  combat?: { status:'awaiting-initiative'|'initiative-set'|'completed'; enemyName:string; enemyInitiative:number; playerInitiative?:number; round:number; order?:string[]; turnIndex?:number; movementUsed?:number; actionUsed?:boolean; bonusActionUsed?:boolean; lastAction?:string; arrowsRemaining?:number; daggersAvailable?:number; daggersThrown?:number; reactionUsed?:boolean; opportunity?:{from:{x:number;y:number};to:{x:number;y:number}}; attack?:{weapon?:'dagger'|'shortbow'; thrown?:boolean; disadvantage?:boolean; phase:'roll-to-hit'|'roll-damage'|'resolved'; d20?:number; firstD20?:number; total?:number; hit?:boolean; critical?:boolean; damage?:number; sneakAttackDamage?:number; advantage?:boolean; secondD20?:number}; steadyAim?:boolean; movementAllowance?:number; disengaged?:boolean; enemyHp?:number; enemyMaxHp?:number; outcome?:'nonlethal-victory'|'player-defeated'; enemyLastTurn?:string; trainingStartingHp?:number; playerPosition?:{x:number;y:number}; enemyPosition?:{x:number;y:number} };
   pendingAftermath?: { opponent: string; playerDefeated: boolean };
   pendingCheck?: { skill: string; mode: 'normal' | 'advantage' | 'disadvantage'; reason: string; token: string; dice?: number[] };
 }
@@ -223,7 +223,7 @@ export function rollDuelInitiative(campaign:Campaign):Campaign {
   const total=roll+modifier;
   const order=total>=combat.enemyInitiative?['Nighthawk',combat.enemyName]:[combat.enemyName,'Nighthawk'];
   const now=new Date().toISOString();
-  return {...campaign,combat:{...combat,status:'initiative-set',playerInitiative:total,order,turnIndex:0,movementUsed:0,actionUsed:false,bonusActionUsed:false,enemyHp:12,enemyMaxHp:12,arrowsRemaining:campaign.equipment?.arrows??20,daggersAvailable:campaign.equipment?.daggers??2,daggersThrown:0,playerPosition:{x:1,y:3},enemyPosition:{x:5,y:3}},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:'Nighthawk initiative: d20 '+roll+' + DEX '+modifier+' = '+total+'. '+combat.enemyName+': '+combat.enemyInitiative+'. Turn order: '+order.join(' → ')+'.',createdAt:now}]};
+  return {...campaign,combat:{...combat,status:'initiative-set',playerInitiative:total,order,turnIndex:0,reactionUsed:false,movementUsed:0,actionUsed:false,bonusActionUsed:false,enemyHp:12,enemyMaxHp:12,arrowsRemaining:campaign.equipment?.arrows??20,daggersAvailable:campaign.equipment?.daggers??2,daggersThrown:0,playerPosition:{x:1,y:3},enemyPosition:{x:5,y:3}},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:'Nighthawk initiative: d20 '+roll+' + DEX '+modifier+' = '+total+'. '+combat.enemyName+': '+combat.enemyInitiative+'. Turn order: '+order.join(' → ')+'.',createdAt:now}]};
 }
 
 export function moveDuelToken(campaign:Campaign,x:number,y:number):Campaign {
@@ -295,6 +295,7 @@ export function takeDuelTurnAction(campaign:Campaign, action:'move'|'attack'|'th
 export function resolveDuelEnemyTurn(campaign:Campaign):Campaign {
  const combat=campaign.combat;
  if(!combat||combat.status!=='initiative-set'||!combat.order||combat.order[combat.turnIndex??0]==='Nighthawk')throw Error('It is not the opponent\'s turn.');
+ if(combat.opportunity)throw Error('Resolve the opportunity attack before continuing.');
  const character=campaign.character??prototypeNighthawk;
  const die=(sides:number)=>crypto.getRandomValues(new Uint32Array(1))[0]%sides+1;
  const first=die(20);
@@ -311,14 +312,50 @@ export function resolveDuelEnemyTurn(campaign:Campaign):Campaign {
  const defeated=hit&&after===0;
  const detail=combat.enemyName+' training attack: '+(dodging?'disadvantage ('+first+', '+second+') → ':'d20 ')+attackRoll+' + 4 = '+total+' vs temporary AC '+ac+': '+(hit?'HIT':'MISS')+'.'+(hit?' Nonlethal damage: '+damage+'. Nighthawk HP: '+before+' → '+after+'/'+(character.maxHitPoints??10)+'.':'')+(defeated?' Nighthawk is knocked unconscious; sparring ends.':'');
  const nextRound=combat.order[0]==='Nighthawk'?combat.round+1:combat.round;
- const nextCombat={...combat,turnIndex:combat.order.indexOf('Nighthawk'),round:nextRound,movementUsed:0,actionUsed:false,bonusActionUsed:false,lastAction:undefined,attack:undefined,enemyLastTurn:detail,status:defeated?'completed' as const:combat.status,outcome:defeated?'player-defeated' as const:combat.outcome};
+ const nextCombat={...combat,turnIndex:combat.order.indexOf('Nighthawk'),round:nextRound,reactionUsed:false,movementUsed:0,actionUsed:false,bonusActionUsed:false,lastAction:undefined,attack:undefined,enemyLastTurn:detail,status:defeated?'completed' as const:combat.status,outcome:defeated?'player-defeated' as const:combat.outcome};
  const now=new Date().toISOString();
  return {...campaign,character:{...character,currentHitPoints:after},combat:nextCombat,updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:detail,createdAt:now}]};
+}
+
+export function moveTrainingDummy(campaign:Campaign):Campaign {
+ const c=campaign.combat;
+ if(!c||c.enemyName!=='Training Dummy'||c.status!=='initiative-set'||c.order?.[c.turnIndex??0]==='Nighthawk'||c.opportunity)throw Error('Dummy movement is unavailable.');
+ const p=c.playerPosition??{x:1,y:3},e=c.enemyPosition??{x:5,y:3};
+ const adjacent=Math.max(Math.abs(p.x-e.x),Math.abs(p.y-e.y))<=1;
+ const step=(v:number)=>Math.sign(v);
+ const target=adjacent?{x:e.x+step(e.x-p.x||1),y:e.y+step(e.y-p.y||0)}:{x:e.x+step(p.x-e.x),y:e.y+step(p.y-e.y)};
+ const to={x:Math.max(0,Math.min(6,target.x)),y:Math.max(0,Math.min(6,target.y))};
+ if(to.x===e.x&&to.y===e.y)throw Error('Dummy cannot move farther on this grid.');
+ const opportunity=adjacent&&!c.reactionUsed?{from:e,to}:undefined;
+ const now=new Date().toISOString();
+ return {...campaign,combat:{...c,enemyPosition:opportunity?e:to,opportunity},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:opportunity?'Training dummy starts leaving Nighthawk’s reach. Opportunity attack available before it moves.':'Training dummy moves one square toward Nighthawk.',createdAt:now}]};
+}
+
+export function resolveTrainingReaction(campaign:Campaign,choice:'attack'|'decline'):Campaign {
+ const c=campaign.combat;
+ if(!c||!c.opportunity||c.status!=='initiative-set'||c.reactionUsed)throw Error('No opportunity attack pending.');
+ const {to}=c.opportunity;
+ const next={...c,opportunity:undefined,enemyPosition:to,reactionUsed:choice==='attack'};
+ let detail='Nighthawk declines the opportunity attack. The dummy moves away.';
+ if(choice==='attack'){
+  if((c.daggersAvailable??2)<1)throw Error('No melee dagger available for the reaction.');
+  const character=campaign.character??prototypeNighthawk;
+  const roll=crypto.getRandomValues(new Uint32Array(1))[0]%20+1;
+  const bonus=abilityModifier(character.scores.dex)+character.proficiencyBonus;
+  const total=roll+bonus,hit=roll===20||(roll!==1&&total>=12);
+  const damage=hit?(crypto.getRandomValues(new Uint32Array(1))[0]%4+1)+(roll===20?(crypto.getRandomValues(new Uint32Array(1))[0]%4+1):0)+abilityModifier(character.scores.dex):0;
+  next.enemyHp=Math.max(0,(c.enemyHp??12)-Math.max(0,damage));
+  if(next.enemyHp===0){next.status='completed';next.outcome='nonlethal-victory';next.enemyPosition=c.opportunity.from;}
+  detail='Opportunity attack (reaction): dagger d20 '+roll+' + '+bonus+' = '+total+' vs AC 12: '+(hit?'HIT for '+damage+' damage':'MISS')+'. '+(next.enemyHp===0?'Dummy is defeated before moving.':'Dummy completes its movement.')+' Reaction spent until Nighthawk’s next turn.';
+ }
+ const now=new Date().toISOString();
+ return {...campaign,combat:next,updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:detail,createdAt:now}]};
 }
 
 export function advanceDuelTestEnemyTurn(campaign:Campaign):Campaign {
  const combat=campaign.combat;
  if(!combat||combat.status!=='initiative-set'||!combat.order||combat.order[combat.turnIndex??0]==='Nighthawk')throw Error('No enemy turn to advance.');
+ if(combat.opportunity)throw Error('Resolve the opportunity attack first.');
  const now=new Date().toISOString();
  const nextRound=combat.order[0]==='Nighthawk'?combat.round+1:combat.round;
  return {...campaign,combat:{...combat,turnIndex:combat.order.indexOf('Nighthawk'),round:nextRound,movementUsed:0,actionUsed:false,bonusActionUsed:false,lastAction:undefined,attack:undefined},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:'TEST ONLY: '+combat.enemyName+' turn skipped without an attack, damage, or other effect. Nighthawk can act again.',createdAt:now}]};
