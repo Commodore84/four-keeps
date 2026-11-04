@@ -350,6 +350,7 @@ export function App() {
     if(!campaign || !pendingRest || saving)return;
     if(!accessCode){setNotice('Enter your game access code first.');return;}
     const kind=pendingRest;
+    if(kind==='long' && campaign.lastLongRestCompletedAt!==undefined && (campaign.elapsedMinutes??0)-campaign.lastLongRestCompletedAt<1440){setNotice('Long Rest unavailable: 24 hours must pass since your previous completed Long Rest.');setPendingRest(null);return;}
     setSaving(true);
     setNotice('The Dungeon Master is evaluating the rest…');
     try {
