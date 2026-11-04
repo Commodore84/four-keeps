@@ -300,7 +300,7 @@ export function rollDuelAttack(campaign:Campaign,kind:'hit'|'damage'):Campaign {
 
 export function concludeDuel(campaign:Campaign):Campaign {
  const combat=campaign.combat;
- if(!combat||combat.enemyHp!==0)throw Error('The opponent has not been defeated.');
+ if(!combat||(combat.enemyHp!==0&&combat.outcome!=='player-defeated'))throw Error('The sparring match has not ended.');
  const now=new Date().toISOString();
- return {...campaign,combat:undefined,updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:combat.enemyName+' was reduced to 0 HP by Nighthawk\'s nonlethal training strike and is unconscious, not dead. The sparring encounter is finished. Resume normal adventure; the DM narrates the aftermath and NPC reactions. Do not restart this combat.',createdAt:now}]};
+ return {...campaign,combat:undefined,updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:combat.outcome==='player-defeated'?'Nighthawk was reduced to 0 HP by a nonlethal training strike and is unconscious. The sparring encounter is finished. Resume normal adventure and narrate aid and recovery, without restarting combat.':combat.enemyName+' was reduced to 0 HP by Nighthawk\'s nonlethal training strike and is unconscious, not dead. The sparring encounter is finished. Resume normal adventure; the DM narrates the aftermath and NPC reactions. Do not restart this combat.',createdAt:now}]};
 }
