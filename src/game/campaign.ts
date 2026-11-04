@@ -23,7 +23,7 @@ export interface Campaign {
   xp?: number;
   xpAwards?: { id: string; amount: number; reason: string }[];
   levelOneSnapshot?: { character: CharacterStats; xp: number; xpAwards: { id: string; amount: number; reason: string }[] };
-  combat?: { status:'awaiting-initiative'|'initiative-set'|'completed'; enemyName:string; enemyInitiative:number; playerInitiative?:number; round:number; order?:string[]; turnIndex?:number; movementUsed?:number; actionUsed?:boolean; bonusActionUsed?:boolean; lastAction?:string; arrowsRemaining?:number; daggersAvailable?:number; daggersThrown?:number; reactionUsed?:boolean; opportunity?:{from:{x:number;y:number};to:{x:number;y:number}}; attack?:{weapon?:'dagger'|'shortbow'; thrown?:boolean; disadvantage?:boolean; phase:'roll-to-hit'|'roll-damage'|'resolved'; d20?:number; firstD20?:number; total?:number; hit?:boolean; critical?:boolean; damage?:number; sneakAttackDamage?:number; advantage?:boolean; secondD20?:number}; steadyAim?:boolean; movementAllowance?:number; disengaged?:boolean; enemyHp?:number; enemyMaxHp?:number; outcome?:'nonlethal-victory'|'player-defeated'; enemyLastTurn?:string; trainingStartingHp?:number; playerPosition?:{x:number;y:number}; enemyPosition?:{x:number;y:number} };
+  combat?: { status:'awaiting-initiative'|'initiative-set'|'completed'; enemyName:string; enemyInitiative:number; playerInitiative?:number; round:number; order?:string[]; turnIndex?:number; movementUsed?:number; actionUsed?:boolean; bonusActionUsed?:boolean; lastAction?:string; arrowsRemaining?:number; daggersAvailable?:number; daggersThrown?:number; reactionUsed?:boolean; reactionAttack?:{phase:'roll-to-hit'|'roll-damage'|'resolved';d20?:number;total?:number;hit?:boolean;critical?:boolean;damage?:number}; opportunity?:{from:{x:number;y:number};to:{x:number;y:number}}; attack?:{weapon?:'dagger'|'shortbow'; thrown?:boolean; disadvantage?:boolean; phase:'roll-to-hit'|'roll-damage'|'resolved'; d20?:number; firstD20?:number; total?:number; hit?:boolean; critical?:boolean; damage?:number; sneakAttackDamage?:number; advantage?:boolean; secondD20?:number}; steadyAim?:boolean; movementAllowance?:number; disengaged?:boolean; enemyHp?:number; enemyMaxHp?:number; outcome?:'nonlethal-victory'|'player-defeated'; enemyLastTurn?:string; trainingStartingHp?:number; playerPosition?:{x:number;y:number}; enemyPosition?:{x:number;y:number} };
   pendingAftermath?: { opponent: string; playerDefeated: boolean };
   pendingCheck?: { skill: string; mode: 'normal' | 'advantage' | 'disadvantage'; reason: string; token: string; dice?: number[] };
 }
@@ -333,22 +333,41 @@ export function moveTrainingDummy(campaign:Campaign):Campaign {
 
 export function resolveTrainingReaction(campaign:Campaign,choice:'attack'|'decline'):Campaign {
  const c=campaign.combat;
- if(!c||!c.opportunity||c.status!=='initiative-set'||c.reactionUsed)throw Error('No opportunity attack pending.');
- const {to}=c.opportunity;
- const next={...c,opportunity:undefined,enemyPosition:to,reactionUsed:choice==='attack'};
- let detail='Nighthawk declines the opportunity attack. The dummy moves away.';
+ if(!c||!c.opportunity||c.status!=='initiative-set'||c.reactionUsed||c.reactionAttack)throw Error('No reaction choice pending.');
+ const now=new Date().toISOString();
  if(choice==='attack'){
   if((c.daggersAvailable??2)<1)throw Error('No melee dagger available for the reaction.');
-  const character=campaign.character??prototypeNighthawk;
-  const roll=crypto.getRandomValues(new Uint32Array(1))[0]%20+1;
-  const bonus=abilityModifier(character.scores.dex)+character.proficiencyBonus;
-  const total=roll+bonus,hit=roll===20||(roll!==1&&total>=12);
-  const damage=hit?(crypto.getRandomValues(new Uint32Array(1))[0]%4+1)+(roll===20?(crypto.getRandomValues(new Uint32Array(1))[0]%4+1):0)+abilityModifier(character.scores.dex):0;
-  next.enemyHp=Math.max(0,(c.enemyHp??12)-Math.max(0,damage));
-  if(next.enemyHp===0){next.status='completed';next.outcome='nonlethal-victory';next.enemyPosition=c.opportunity.from;}
-  detail='Opportunity attack (reaction): dagger d20 '+roll+' + '+bonus+' = '+total+' vs AC 12: '+(hit?'HIT for '+damage+' damage':'MISS')+'. '+(next.enemyHp===0?'Dummy is defeated before moving.':'Dummy completes its movement.')+' Reaction spent until Nighthawk’s next turn.';
+  return {...campaign,combat:{...c,reactionUsed:true,reactionAttack:{phase:'roll-to-hit'}},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:'Nighthawk spends a reaction on an opportunity attack. Roll to hit before the dummy moves.',createdAt:now}]};
  }
+ return {...campaign,combat:{...c,opportunity:undefined,enemyPosition:c.opportunity.to},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:'Nighthawk declines the opportunity attack. The dummy moves away.',createdAt:now}]};
+}
+
+export function rollTrainingReaction(campaign:Campaign,kind:'hit'|'damage'|'finish'):Campaign {
+ const c=campaign.combat,attack=c?.reactionAttack;
+ if(!c||!c.opportunity||!attack)throw Error('No reaction attack in progress.');
+ const character=campaign.character??prototypeNighthawk;
+ const die=(sides:number)=>crypto.getRandomValues(new Uint32Array(1))[0]%sides+1;
  const now=new Date().toISOString();
+ let next={...c,reactionAttack:{...attack}},detail='';
+ if(kind==='hit'){
+  if(attack.phase!=='roll-to-hit')throw Error('Attack roll already resolved.');
+  const d20=die(20),bonus=abilityModifier(character.scores.dex)+character.proficiencyBonus,total=d20+bonus;
+  const hit=d20===20||(d20!==1&&total>=12);
+  next.reactionAttack={phase:hit?'roll-damage':'resolved',d20,total,hit,critical:d20===20};
+  detail='Opportunity attack: d20 '+d20+' + '+bonus+' = '+total+' vs AC 12: '+(hit?'HIT. Roll dagger damage.':'MISS. The dummy can finish moving.');
+ }else if(kind==='damage'){
+  if(attack.phase!=='roll-damage')throw Error('Roll to hit first.');
+  const first=die(4),extra=attack.critical?die(4):0,damage=Math.max(0,first+extra+abilityModifier(character.scores.dex));
+  next.reactionAttack={...attack,phase:'resolved',damage};
+  next.enemyHp=Math.max(0,(c.enemyHp??12)-damage);
+  if(next.enemyHp===0){next.status='completed';next.outcome='nonlethal-victory';}
+  detail='Opportunity attack dagger damage: '+first+(extra?' + '+extra+' critical die':'')+' + '+abilityModifier(character.scores.dex)+' DEX = '+damage+'. Dummy HP: '+next.enemyHp+'/'+(c.enemyMaxHp??12)+'.';
+ }else{
+  if(attack.phase!=='resolved')throw Error('Finish rolling the reaction first.');
+  next.opportunity=undefined;next.reactionAttack=undefined;
+  if(c.status!=='completed')next.enemyPosition=c.opportunity.to;
+  detail=c.status==='completed'?'The dummy is defeated before leaving reach.':'Reaction resolved; the dummy completes its movement.';
+ }
  return {...campaign,combat:next,updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:detail,createdAt:now}]};
 }
 
