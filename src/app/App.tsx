@@ -454,7 +454,7 @@ export function App() {
     setPendingCombatAction(null);
     setSaving(true);
     try {
-      const next=takeDuelTurnAction(campaign,action);
+      const next=action==='end' && pendingCombatAction ? takeDuelTurnAction(takeDuelTurnAction(campaign,pendingCombatAction),'end') : takeDuelTurnAction(campaign,action);
       await localCampaignStorage.save(next);
       setCampaign(next);setCampaigns(items=>items.map(item=>item.id===next.id?next:item));
       setNotice(next.journal[next.journal.length-1].text);
@@ -558,20 +558,18 @@ export function App() {
           {campaign.combat.status==='awaiting-initiative' ? <><p className="text-sm">The enemy's initiative has been rolled. Roll Nighthawk's d20 to establish turn order.</p><button type="button" disabled={saving} className="w-full rounded-lg bg-gold p-3 font-semibold text-ink disabled:opacity-40" onClick={()=>void rollInitiative()}>Roll initiative (d20 + DEX)</button></> : <><p className="font-semibold text-gold">{campaign.combat.order?.[campaign.combat.turnIndex??0]==='Nighthawk'?'Your turn — Nighthawk':'Enemy turn — '+campaign.combat.enemyName}</p><p className="text-sm">Initiative order</p><ol className="space-y-2">{campaign.combat.order?.map((name,i)=><li key={name} className="flex justify-between rounded-lg border border-white/20 p-3"><span>{i+1}. {name}</span><strong>{name==='Nighthawk'?campaign.combat?.playerInitiative:campaign.combat?.enemyInitiative}</strong></li>)}</ol>{campaign.combat.order?.[campaign.combat.turnIndex??0]==='Nighthawk' ? <div className="space-y-3">
           <p className="text-sm font-semibold">Your turn · Movement: {campaign.combat.movementUsed??0}/35 ft · Action: {campaign.combat.actionUsed?'used':'available'}</p>
           {campaign.combat.lastAction && <p className="rounded-lg border border-gold/60 bg-gold/10 p-3 text-sm">Last action: <strong>{campaign.combat.lastAction}</strong> (confirmed)</p>}
-          {pendingCombatAction && <div className="space-y-2 rounded-lg border-2 border-gold bg-gold/10 p-3">
-            <p className="font-semibold">Selected: {({attack:'Declare Attack',dash:'Dash',disengage:'Disengage',dodge:'Dodge'} as const)[pendingCombatAction]}</p>
-            <p className="text-sm">This action has not been spent or saved. Confirm to use it, or undo to choose something else.</p>
-            <div className="grid grid-cols-2 gap-2">
+          {pendingCombatAction && <p className="rounded-lg border border-gold bg-gold/10 p-3 text-sm">Selected action: <strong>{({attack:'Declare Attack',dash:'Dash',disengage:'Disengage',dodge:'Dodge'} as const)[pendingCombatAction]}</strong>. Tap another action to change it. End Turn commits your selection.</p>}
+          <div className="grid grid-cols-2 gap-2">
               <button type="button" className="rounded-lg border border-white/40 p-3" onClick={()=>setPendingCombatAction(null)}>Undo selection</button>
               <button type="button" disabled={saving} className="rounded-lg bg-gold p-3 font-semibold text-ink" onClick={()=>void combatAction(pendingCombatAction)}>Confirm Action</button>
             </div>
           </div>}
           <div className="grid grid-cols-2 gap-2">
-            <button type="button" disabled={saving||!!pendingCombatAction||(campaign.combat.movementUsed??0)>=35} className="rounded-lg border border-gold/60 p-3 disabled:opacity-40" onClick={()=>void combatAction('move')}>Move 5 ft</button>
+            <button type="button" disabled={saving||(campaign.combat.movementUsed??0)>=35} className="rounded-lg border border-gold/60 p-3 disabled:opacity-40" onClick={()=>void combatAction('move')}>Move 5 ft</button>
             {(['attack','dash','disengage','dodge'] as const).map(action=><button key={action} type="button" disabled={saving||!!campaign.combat?.actionUsed} className={`rounded-lg border p-3 disabled:opacity-40 ${pendingCombatAction===action?'border-gold bg-gold/20 font-semibold':'border-white/30'}`} onClick={()=>setPendingCombatAction(action)}>{({attack:'Declare Attack',dash:'Dash',disengage:'Disengage',dodge:'Dodge'} as const)[action]}</button>)}
-            <button type="button" disabled={saving||!!pendingCombatAction} className="rounded-lg bg-gold p-3 font-semibold text-ink disabled:opacity-40" onClick={()=>void combatAction('end')}>End Turn</button>
+            <button type="button" disabled={saving} className="rounded-lg bg-gold p-3 font-semibold text-ink disabled:opacity-40" onClick={()=>void combatAction('end')}>End Turn</button>
           </div>
-          <p className="text-xs text-parchment/70">This stage tracks actions and movement only. Attack rolls, damage, and enemy decisions are not implemented yet.</p>
+          <p className="text-xs text-parchment/70">Tap an action to select it; End Turn commits it. Movement is saved as you move. Attack rolls, damage, and enemy decisions are not implemented yet.</p>
         </div> : <div className="space-y-3"><p className="text-sm">{campaign.combat.enemyName}'s turn is active. Automated enemy decisions and attacks are not implemented yet.</p><button type="button" disabled={saving} className="w-full rounded-lg border border-gold/60 p-3 font-semibold disabled:opacity-40" onClick={()=>void skipEnemyTurnForTest()}>Skip enemy turn (test only)</button><p className="text-xs text-parchment/70">Skips the enemy without damage or effects so you can continue testing Nighthawk's controls.</p></div>}</>}
         </div>}
       </main>
