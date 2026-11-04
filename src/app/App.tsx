@@ -507,7 +507,7 @@ export function App() {
         setCampaign(next);
         setCampaigns(items=>items.map(item=>item.id===next.id?next:item));
         setPendingCombatAction(null);
-        setNotice('Encounter training complete. The adventure story is unchanged.');
+        setNotice('Encounter training complete. HP fully restored; simulated thrown daggers recovered. The adventure story is unchanged.');
         setSaving(false);
         return;
       }
@@ -640,7 +640,7 @@ export function App() {
           <p className="eyebrow">Combat · Round {campaign.combat.round}</p>
           <h3 className="font-serif text-lg">Nighthawk vs {campaign.combat.enemyName}</h3>
           {(campaign.combat.status==='completed'||campaign.combat.enemyHp===0) ? <div className="space-y-3 rounded-lg border border-gold/60 bg-gold/10 p-3"><p className="font-semibold text-gold">{campaign.combat.outcome==='player-defeated'?'Nighthawk is unconscious — sparring ends':'Victory — nonlethal sparring match'}</p><p className="text-sm">{campaign.combat.outcome==='player-defeated'?'Nighthawk was reduced to 0 HP by a nonlethal training strike. Combat has ended.':campaign.combat.enemyName+' is at 0 HP and unconscious, not dead. Combat is over; no further turns are needed.'}</p><button type="button" disabled={saving} className="w-full rounded-lg bg-gold p-3 font-semibold text-ink disabled:opacity-40" onClick={()=>void finishDefeatedDuel()}>Continue to aftermath</button></div> : campaign.combat.status==='awaiting-initiative' ? <><p className="text-sm">The enemy's initiative has been rolled. Roll Nighthawk's d20 to establish turn order.</p><button type="button" disabled={saving} className="w-full rounded-lg bg-gold p-3 font-semibold text-ink disabled:opacity-40" onClick={()=>void rollInitiative()}>Roll initiative (d20 + DEX)</button></> : <><p className="font-semibold text-gold">{campaign.combat.order?.[campaign.combat.turnIndex??0]==='Nighthawk'?'Your turn — Nighthawk':'Enemy turn — '+campaign.combat.enemyName}</p>{campaign.combat.enemyLastTurn && <p className="rounded-lg border border-gold/40 p-3 text-sm">{campaign.combat.enemyLastTurn}</p>}<p className="text-sm">Initiative order</p><ol className="space-y-2">{campaign.combat.order?.map((name,i)=><li key={name} className="flex justify-between rounded-lg border border-white/20 p-3"><span>{i+1}. {name}</span><strong>{name==='Nighthawk'?campaign.combat?.playerInitiative:campaign.combat?.enemyInitiative}</strong></li>)}</ol>{campaign.combat.order?.[campaign.combat.turnIndex??0]==='Nighthawk' ? <div className="space-y-3">
-          <p className="text-sm font-semibold">Your turn · Arrows: {campaign.combat.arrowsRemaining??20} · Movement: {campaign.combat.movementUsed??0}/{campaign.combat.movementAllowance??35} ft · Action: {campaign.combat.actionUsed?'used':'available'}</p>
+          <p className="text-sm font-semibold">Your turn · Daggers: {campaign.combat.daggersAvailable??2} ({campaign.combat.daggersThrown??0} thrown) · Arrows: {campaign.combat.arrowsRemaining??20} · Movement: {campaign.combat.movementUsed??0}/{campaign.combat.movementAllowance??35} ft · Action: {campaign.combat.actionUsed?'used':'available'}</p>
           <div className="rounded-xl border border-white/20 p-2 space-y-2">
             <p className="text-xs text-parchment/70">Tactical grid · 5 ft per square · Tap a destination to preview movement. Diagonal movement costs 5 ft per square.</p>
             <div className="grid grid-cols-7 gap-1" role="grid" aria-label="Combat movement grid">
@@ -687,8 +687,8 @@ export function App() {
             {pendingCombatAction==='attack' ? <div className="space-y-2">
               <p className="text-parchment/80">Choose a weapon before confirming your attack.</p>
               {(()=>{const p=campaign.combat!.playerPosition??{x:1,y:3},e=campaign.combat!.enemyPosition??{x:5,y:3};const distance=5*Math.max(Math.abs(p.x-e.x),Math.abs(p.y-e.y));const choices=[
-                {id:'dagger' as const,label:'Dagger · Melee',detail:'1d4 · nonlethal option',eligible:distance<=5},
-                {id:'throw-dagger' as const,label:'Throw Dagger',detail:'1d4 · 20/60 ft'+(distance<=5||distance>20?' · disadvantage':''),eligible:distance<=60},
+                {id:'dagger' as const,label:'Dagger · Melee',detail:'1d4 · nonlethal option',eligible:distance<=5&&(campaign.combat!.daggersAvailable??2)>0},
+                {id:'throw-dagger' as const,label:'Throw Dagger',detail:'1d4 · 20/60 ft'+(distance<=5||distance>20?' · disadvantage':''),eligible:distance<=60&&(campaign.combat!.daggersAvailable??2)>0},
                 {id:'shortbow' as const,label:'Shortbow',detail:'1d6 · 80/320 ft · 1 arrow'+(distance<=5?' · disadvantage':''),eligible:distance<=320&&(campaign.combat!.arrowsRemaining??20)>0}
               ];return <><p className="text-xs text-parchment/70">Target: {distance} ft away. Only eligible attacks are available.</p><div className="grid grid-cols-2 gap-2">{choices.filter(c=>c.eligible).map(c=><button key={c.id} type="button" className={`rounded-lg border p-3 text-left ${selectedWeapon===c.id?'border-gold bg-gold/20':'border-white/30'}`} onClick={()=>setSelectedWeapon(c.id)}><strong>{c.label}</strong><span className="block text-xs">{c.detail}</span></button>)}</div>{!choices.some(c=>c.eligible)&&<p>No weapon is in range.</p>}</>;})()}
 
