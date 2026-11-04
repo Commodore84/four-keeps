@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { createBackup, parseBackup } from '../game/backup';
 import { BookOpen, Compass, Map, RefreshCw, Send, Settings, Shield, Swords, Users } from 'lucide-react';
-import { addExchange, addNote, addRoll, beginDuel, adjustEquipment, rollDuelInitiative, takeDuelTurnAction, moveDuelToken, advanceDuelTestEnemyTurn, resolveDuelEnemyTurn, rollDuelAttack, concludeDuel, newCampaign, awardExperience, levelUpRogue, levelUpArcaneTrickster, tricksterCantrips, tricksterSpells, isRitualSpell, castNighthawkSpell, takeNighthawkRest, applyNighthawkDamage, minutesUntilLongRestEligible, advanceToLongRestEligibility, endNighthawkConcentration, spellRequiresConcentration, reconcileNighthawkScores, undoNighthawkScoreReconciliation, xpThresholds, type Campaign } from '../game/campaign';
+import { addExchange, addNote, addRoll, beginDuel, adjustEquipment, rollDuelInitiative, takeDuelTurnAction, moveDuelToken, moveTrainingDummy, resolveTrainingReaction, advanceDuelTestEnemyTurn, resolveDuelEnemyTurn, rollDuelAttack, concludeDuel, newCampaign, awardExperience, levelUpRogue, levelUpArcaneTrickster, tricksterCantrips, tricksterSpells, isRitualSpell, castNighthawkSpell, takeNighthawkRest, applyNighthawkDamage, minutesUntilLongRestEligible, advanceToLongRestEligibility, endNighthawkConcentration, spellRequiresConcentration, reconcileNighthawkScores, undoNighthawkScoreReconciliation, xpThresholds, type Campaign } from '../game/campaign';
 import { localCampaignStorage } from '../game/storage';
 import type { View } from '../game/types';
 import { emptyWorld } from '../game/world';
@@ -548,6 +548,15 @@ export function App() {
     try {const next=resolveDuelEnemyTurn(campaign);await localCampaignStorage.save(next);setCampaign(next);setCampaigns(items=>items.map(item=>item.id===next.id?next:item));setPendingCombatAction(null);setNotice(next.journal[next.journal.length-1].text);}
     catch(error){setNotice('Enemy turn: '+String(error));}finally{setSaving(false);}
   }
+  async function trainingReaction(action:'move'|'attack'|'decline'){
+    if(!campaign||saving)return;
+    setSaving(true);
+    try{
+      const next=action==='move'?moveTrainingDummy(campaign):resolveTrainingReaction(campaign,action);
+      await localCampaignStorage.save(next);setCampaign(next);setCampaigns(items=>items.map(item=>item.id===next.id?next:item));
+      setNotice(next.journal[next.journal.length-1].text);
+    }catch(error){setNotice('Reaction test: '+String(error));}finally{setSaving(false);}
+  }
   async function skipEnemyTurnForTest() {
     if(!campaign||saving)return;
     setSaving(true);
@@ -709,7 +718,14 @@ export function App() {
             <div className="grid grid-cols-2 gap-2"><button type="button" disabled={saving} className="rounded-lg border border-white/40 p-2.5" onClick={()=>setPendingCombatAction(null)}>Cancel</button><button type="button" disabled={saving||(pendingCombatAction==='attack'&&!selectedWeapon)} className="rounded-lg bg-gold p-2.5 font-semibold text-ink disabled:opacity-40" onClick={()=>void combatAction(pendingCombatAction==='attack'?(selectedWeapon==='shortbow'?'shortbow':selectedWeapon==='throw-dagger'?'throw-dagger':'attack'):pendingCombatAction)}>Confirm</button></div>
           </div>}
           <p className="text-xs text-parchment/70">Select an action to see details. Nothing is spent until Confirm. Already confirmed actions cannot be undone. Opportunity attacks are not simulated yet.</p>
-        </div> : <div className="space-y-3"><p className="text-sm">{campaign.combat.enemyName} makes a nonlethal training strike. Temporary stats: +4 to hit, 1d6 + 2 damage, against AC 14. Dodge imposes disadvantage.</p><button type="button" disabled={saving} className="w-full rounded-lg bg-gold p-3 font-semibold text-ink disabled:opacity-40" onClick={()=>void resolveEnemyTurn()}>Resolve enemy turn</button><button type="button" disabled={saving} className="w-full rounded-lg border border-gold/60 p-3 text-sm disabled:opacity-40" onClick={()=>void skipEnemyTurnForTest()}>Skip enemy turn (test only)</button></div>}</>}
+        </div> : <div className="space-y-3">
+          {campaign.combat.enemyName==='Training Dummy'&&<div className="rounded-lg border border-gold/40 p-3 space-y-2">
+            <p className="font-semibold">Moving dummy · Reaction test</p>
+            {campaign.combat.opportunity?<><p className="text-sm">The dummy is leaving your 5-foot reach. You may spend your reaction to make a melee dagger attack before it leaves, or let it go. This attack does not consume your Action.</p>
+              <div className="grid grid-cols-2 gap-2"><button type="button" disabled={saving||(campaign.combat.daggersAvailable??2)<1} className="rounded-lg bg-gold text-ink p-3 font-semibold disabled:opacity-40" onClick={()=>void trainingReaction('attack')}>React: Dagger</button><button type="button" disabled={saving} className="rounded-lg border border-white/30 p-3" onClick={()=>void trainingReaction('decline')}>Let it move</button></div>
+            </>:<><p className="text-sm">Move the dummy one square. If it leaves your reach, combat pauses to offer an opportunity attack. Otherwise it approaches Nighthawk.</p><button type="button" disabled={saving} className="w-full rounded-lg border border-gold/60 p-3" onClick={()=>void trainingReaction('move')}>Move training dummy</button></>}
+          </div>}
+          <p className="text-sm">{campaign.combat.enemyName} makes a nonlethal training strike. Temporary stats: +4 to hit, 1d6 + 2 damage, against AC 14. Dodge imposes disadvantage.</p><button type="button" disabled={saving} className="w-full rounded-lg bg-gold p-3 font-semibold text-ink disabled:opacity-40" onClick={()=>void resolveEnemyTurn()} disabled={saving||!!campaign.combat.opportunity}>Resolve enemy turn</button><button type="button" disabled={saving} className="w-full rounded-lg border border-gold/60 p-3 text-sm disabled:opacity-40" onClick={()=>void skipEnemyTurnForTest()} disabled={saving||!!campaign.combat.opportunity}>Skip enemy turn (test only)</button></div>}</>}
         </div>}
         {activeView==='adventure' && campaign && !campaign.combat && !campaign.pendingAftermath && <div className="mx-4 my-4 rounded-xl border border-gold/40 bg-panel p-3 space-y-2"><p className="text-sm font-semibold text-gold">Encounter training</p><p className="text-xs text-parchment/70">Start a separate training simulation without needing an NPC to agree to another sparring match. This uses temporary opponent statistics.</p><button type="button" disabled={saving} className="w-full rounded-lg border border-gold/70 p-3 font-semibold disabled:opacity-40" onClick={()=>void startTrainingCombatTest()}>Start encounter training</button></div>}
       </main>
