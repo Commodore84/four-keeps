@@ -174,3 +174,12 @@ export function takeNighthawkRest(campaign: Campaign, kind: 'short'|'long', hitD
   const details=kind==='long'?'HP restored to maximum; spell slots restored; Hit Dice recovered.':'Spent '+hitDiceToSpend+' Hit Dice'+(rolls.length?' ('+rolls.join(', ')+')':'')+'; healed '+(nextHp-currentHp)+' HP. Spell slots unchanged.';
   return {...campaign,character:nextCharacter,hitDiceRemaining:remaining,elapsedMinutes:(campaign.elapsedMinutes??0)+minutes,lastLongRestCompletedAt:kind==='long'?(campaign.elapsedMinutes??0)+minutes:campaign.lastLongRestCompletedAt,updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:'Nighthawk completes a '+kind+' rest ('+minutes+' minutes). '+details,createdAt:now}]};
 }
+
+export function applyNighthawkDamage(campaign: Campaign, amount: number, source: string): Campaign {
+  if(!Number.isInteger(amount)||amount<1||amount>1000)throw new Error('Damage must be a positive whole number');
+  const character=campaign.character??prototypeNighthawk;
+  const before=character.currentHitPoints??character.maxHitPoints??10;
+  const after=Math.max(0,before-amount);
+  const now=new Date().toISOString();
+  return {...campaign,character:{...character,currentHitPoints:after},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:'Nighthawk takes '+amount+' damage ('+source+'). HP: '+before+' → '+after+'/'+(character.maxHitPoints??10)+'.',createdAt:now}]};
+}
