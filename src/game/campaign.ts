@@ -19,6 +19,7 @@ export interface Campaign {
   concentration?: { spell: string; target?: string; startedAt: string };
   spellEffects?: { id: string; spell: string; target?: string; status: 'awaiting-adjudication' | 'active'; createdAt: string }[];
   familiar?: { form: 'Owl'; summonedAt: string };
+  equipment?: {daggers:number;arrows:number;caltrops:number;ballBearings:number};
   xp?: number;
   xpAwards?: { id: string; amount: number; reason: string }[];
   levelOneSnapshot?: { character: CharacterStats; xp: number; xpAwards: { id: string; amount: number; reason: string }[] };
@@ -197,6 +198,14 @@ export function applyNighthawkDamage(campaign: Campaign, amount: number, source:
   return {...campaign,character:{...character,currentHitPoints:after},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:'Nighthawk takes '+amount+' damage ('+source+'). HP: '+before+' → '+after+'/'+(character.maxHitPoints??10)+'.',createdAt:now}]};
 }
 
+export function adjustEquipment(campaign:Campaign,item:'daggers'|'arrows'|'caltrops'|'ballBearings',delta:number):Campaign {
+ if(campaign.combat)throw Error('Change equipment outside combat.');
+ if(!Number.isInteger(delta)||Math.abs(delta)!==1)throw Error('Invalid quantity adjustment.');
+ const equipment=campaign.equipment??{daggers:2,arrows:20,caltrops:0,ballBearings:0};
+ const next=Math.max(0,equipment[item]+delta);
+ const now=new Date().toISOString();
+ return {...campaign,equipment:{...equipment,[item]:next},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:'Equipment adjusted: '+item+' '+equipment[item]+' → '+next+'.',createdAt:now}]};
+}
 export function beginDuel(campaign:Campaign, enemyName:string):Campaign {
   if(campaign.combat)return campaign;
   const clean=enemyName.trim().slice(0,60);
@@ -214,7 +223,7 @@ export function rollDuelInitiative(campaign:Campaign):Campaign {
   const total=roll+modifier;
   const order=total>=combat.enemyInitiative?['Nighthawk',combat.enemyName]:[combat.enemyName,'Nighthawk'];
   const now=new Date().toISOString();
-  return {...campaign,combat:{...combat,status:'initiative-set',playerInitiative:total,order,turnIndex:0,movementUsed:0,actionUsed:false,bonusActionUsed:false,enemyHp:12,enemyMaxHp:12,arrowsRemaining:20,daggersAvailable:2,daggersThrown:0,playerPosition:{x:1,y:3},enemyPosition:{x:5,y:3}},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:'Nighthawk initiative: d20 '+roll+' + DEX '+modifier+' = '+total+'. '+combat.enemyName+': '+combat.enemyInitiative+'. Turn order: '+order.join(' → ')+'.',createdAt:now}]};
+  return {...campaign,combat:{...combat,status:'initiative-set',playerInitiative:total,order,turnIndex:0,movementUsed:0,actionUsed:false,bonusActionUsed:false,enemyHp:12,enemyMaxHp:12,arrowsRemaining:campaign.equipment?.arrows??20,daggersAvailable:campaign.equipment?.daggers??2,daggersThrown:0,playerPosition:{x:1,y:3},enemyPosition:{x:5,y:3}},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:'Nighthawk initiative: d20 '+roll+' + DEX '+modifier+' = '+total+'. '+combat.enemyName+': '+combat.enemyInitiative+'. Turn order: '+order.join(' → ')+'.',createdAt:now}]};
 }
 
 export function moveDuelToken(campaign:Campaign,x:number,y:number):Campaign {
@@ -340,7 +349,7 @@ export function rollDuelAttack(campaign:Campaign,kind:'hit'|'damage'):Campaign {
   description=(next.attack.weapon==='shortbow'?'Shortbow piercing damage: ':next.attack.thrown?'Thrown dagger piercing damage: ':'Nonlethal dagger damage: ')+first+(second?' + '+second+' (critical)':'')+' + '+modifier+' DEX'+(sneakDice?' + Sneak Attack '+sneakRolls.join('+')+' = '+sneakDamage:'')+' = '+damage+'. '+combat.enemyName+' HP: '+next.enemyHp+'/'+(next.enemyMaxHp??12)+(next.enemyHp===0?' '+combat.enemyName+' falls unconscious from the nonlethal strike. Combat is over.':'')+'.';
  }
  const now=new Date().toISOString();
- return {...campaign,combat:next,updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:description,createdAt:now}]};
+ return {...campaign,equipment:{daggers:next.daggersAvailable??campaign.equipment?.daggers??2,arrows:next.arrowsRemaining??campaign.equipment?.arrows??20,caltrops:campaign.equipment?.caltrops??0,ballBearings:campaign.equipment?.ballBearings??0},combat:next,updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:description,createdAt:now}]};
 }
 
 export function concludeDuel(campaign:Campaign):Campaign {
@@ -350,7 +359,7 @@ export function concludeDuel(campaign:Campaign):Campaign {
  if(combat.enemyName==='Training Dummy'){
   const character=campaign.character??prototypeNighthawk;
   const restoredHp=character.maxHitPoints??combat.trainingStartingHp??10;
-  return {...campaign,character:{...character,currentHitPoints:restoredHp},combat:undefined,pendingAftermath:undefined,updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:'Training simulation ended; Nighthawk HP restored to '+restoredHp+'. All simulated thrown daggers recovered.',createdAt:now}]};
+  return {...campaign,character:{...character,currentHitPoints:restoredHp},equipment:{daggers:(campaign.equipment?.daggers??combat.daggersAvailable??2)+(combat.daggersThrown??0),arrows:campaign.equipment?.arrows??combat.arrowsRemaining??20,caltrops:campaign.equipment?.caltrops??0,ballBearings:campaign.equipment?.ballBearings??0},combat:undefined,pendingAftermath:undefined,updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:'Training simulation ended; Nighthawk HP restored to '+restoredHp+'. All simulated thrown daggers recovered.',createdAt:now}]};
  }
  return {...campaign,combat:undefined,pendingAftermath:{opponent:combat.enemyName,playerDefeated:combat.outcome==='player-defeated'},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:combat.outcome==='player-defeated'?'Nighthawk was reduced to 0 HP by a nonlethal training strike and is unconscious. The sparring encounter is finished. Resume normal adventure and narrate aid and recovery, without restarting combat.':combat.enemyName+' was reduced to 0 HP by Nighthawk\'s nonlethal training strike and is unconscious, not dead. The sparring encounter is finished. Resume normal adventure; the DM narrates the aftermath and NPC reactions. Do not restart this combat.',createdAt:now}]};
 }
