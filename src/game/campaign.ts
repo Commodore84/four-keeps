@@ -238,7 +238,7 @@ export function takeDuelTurnAction(campaign:Campaign, action:'move'|'attack'|'da
    if(action==='dash'){next.lastAction='Dash';description='Nighthawk Dashes, gaining another '+speed+' feet of movement this turn.';}
    if(action==='disengage'){next.lastAction='Disengage';description='Nighthawk takes the Disengage action.';}
    if(action==='dodge'){next.lastAction='Dodge';description='Nighthawk takes the Dodge action.';}
-   if(action==='attack'){next.lastAction='Attack';next.attack={phase:'roll-to-hit'};description='Nighthawk prepares a nonlethal training strike against '+combat.enemyName+'. Roll to hit next.';}
+   if(action==='attack'){next.lastAction='Attack';next.attack={phase:'roll-to-hit'};description='Nighthawk draws a dagger for a nonlethal melee strike against '+combat.enemyName+'. Roll to hit next.';}
  }
  const now=new Date().toISOString();
  return {...campaign,combat:next,updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:description,createdAt:now}]};
@@ -284,16 +284,19 @@ export function rollDuelAttack(campaign:Campaign,kind:'hit'|'damage'):Campaign {
  let description='';
  if(kind==='hit'){
   if(next.attack.phase!=='roll-to-hit')throw Error('Attack roll already made.');
-  const d20=die(20),total=d20+5,critical=d20===20,hit=critical||(d20!==1&&total>=12);
+  const character=campaign.character??prototypeNighthawk;
+  const attackBonus=abilityModifier(character.scores.dex)+character.proficiencyBonus;
+  const d20=die(20),total=d20+attackBonus,critical=d20===20,hit=critical||(d20!==1&&total>=12);
   next.attack={phase:hit?'roll-damage':'resolved',d20,total,critical,hit};
-  description='Training strike: d20 '+d20+' + 5 = '+total+' vs training AC 12: '+(hit?'HIT':'MISS')+'.'+(critical?' Critical hit.':'');
+  description='Dagger (nonlethal melee): d20 '+d20+' + '+attackBonus+' = '+total+' vs training AC 12: '+(hit?'HIT':'MISS')+'.'+(critical?' Critical hit.':'');
  }else{
   if(next.attack.phase!=='roll-damage')throw Error('Roll to hit first.');
-  const first=die(6),second=next.attack.critical?die(6):0,damage=first+second+3;
+  const modifier=abilityModifier((campaign.character??prototypeNighthawk).scores.dex);
+  const first=die(4),second=next.attack.critical?die(4):0,damage=Math.max(0,first+second+modifier);
   next.attack={...next.attack,phase:'resolved',damage};
   next.enemyHp=Math.max(0,(next.enemyHp??12)-damage);
   if(next.enemyHp===0){next.status='completed';next.outcome='nonlethal-victory';}
-  description='Nonlethal training damage: '+first+(second?' + '+second+' (critical)':'')+' + 3 = '+damage+'. '+combat.enemyName+' HP: '+next.enemyHp+'/'+(next.enemyMaxHp??12)+(next.enemyHp===0?' '+combat.enemyName+' falls unconscious from the nonlethal strike. Combat is over.':'')+'.';
+  description='Nonlethal dagger damage: '+first+(second?' + '+second+' (critical)':'')+' + '+modifier+' DEX = '+damage+'. '+combat.enemyName+' HP: '+next.enemyHp+'/'+(next.enemyMaxHp??12)+(next.enemyHp===0?' '+combat.enemyName+' falls unconscious from the nonlethal strike. Combat is over.':'')+'.';
  }
  const now=new Date().toISOString();
  return {...campaign,combat:next,updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:description,createdAt:now}]};
