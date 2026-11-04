@@ -461,7 +461,7 @@ export function App() {
     try {const next=rollDuelInitiative(campaign);await localCampaignStorage.save(next);setCampaign(next);setCampaigns(items=>items.map(item=>item.id===next.id?next:item));setNotice('Initiative rolled and turn order saved.');}
     catch(error){setNotice('Initiative error: '+String(error));}finally{setSaving(false);}
   }
-  const [pendingCombatAction,setPendingCombatAction]=useState<'attack'|'dash'|'disengage'|'dodge'|'move'|'steady-aim'|'cunning-dash'|'cunning-disengage'|'end'|null>(null);
+  const [pendingCombatAction,setPendingCombatAction]=useState<'attack'|'dodge'|'move'|'steady-aim'|'cunning-dash'|'cunning-disengage'|'end'|null>(null);
   async function combatAction(action:'move'|'attack'|'dash'|'disengage'|'dodge'|'steady-aim'|'cunning-dash'|'cunning-disengage'|'end') {
     if(!campaign||saving)return;
     setSaving(true);
