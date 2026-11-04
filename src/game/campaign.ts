@@ -241,3 +241,11 @@ export function takeDuelTurnAction(campaign:Campaign, action:'move'|'attack'|'da
  const now=new Date().toISOString();
  return {...campaign,combat:next,updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:description,createdAt:now}]};
 }
+
+export function advanceDuelTestEnemyTurn(campaign:Campaign):Campaign {
+ const combat=campaign.combat;
+ if(!combat||combat.status!=='initiative-set'||!combat.order||combat.order[combat.turnIndex??0]==='Nighthawk')throw Error('No enemy turn to advance.');
+ const now=new Date().toISOString();
+ const nextRound=combat.order[0]==='Nighthawk'?combat.round+1:combat.round;
+ return {...campaign,combat:{...combat,turnIndex:combat.order.indexOf('Nighthawk'),round:nextRound,movementUsed:0,actionUsed:false,bonusActionUsed:false,lastAction:undefined},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:'TEST ONLY: '+combat.enemyName+' turn skipped without an attack, damage, or other effect. Nighthawk can act again.',createdAt:now}]};
+}
