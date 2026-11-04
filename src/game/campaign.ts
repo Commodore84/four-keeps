@@ -22,6 +22,7 @@ export interface Campaign {
   xp?: number;
   xpAwards?: { id: string; amount: number; reason: string }[];
   levelOneSnapshot?: { character: CharacterStats; xp: number; xpAwards: { id: string; amount: number; reason: string }[] };
+  combat?: { status:'awaiting-initiative'|'initiative-set'; enemyName:string; enemyInitiative:number; playerInitiative?:number; round:number; order?:string[] };
   pendingCheck?: { skill: string; mode: 'normal' | 'advantage' | 'disadvantage'; reason: string; token: string; dice?: number[] };
 }
 export function newCampaign(title: string, id: string = crypto.randomUUID(), now: string = new Date().toISOString()): Campaign {
@@ -193,4 +194,24 @@ export function applyNighthawkDamage(campaign: Campaign, amount: number, source:
   const after=Math.max(0,before-amount);
   const now=new Date().toISOString();
   return {...campaign,character:{...character,currentHitPoints:after},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:'Nighthawk takes '+amount+' damage ('+source+'). HP: '+before+' → '+after+'/'+(character.maxHitPoints??10)+'.',createdAt:now}]};
+}
+
+export function beginDuel(campaign:Campaign, enemyName:string):Campaign {
+  if(campaign.combat)return campaign;
+  const clean=enemyName.trim().slice(0,60);
+  if(!clean)throw Error('Encounter requires an opponent');
+  const enemyRoll=crypto.getRandomValues(new Uint32Array(1))[0]%20+1;
+  const now=new Date().toISOString();
+  return {...campaign,combat:{status:'awaiting-initiative',enemyName:clean,enemyInitiative:enemyRoll+1,round:1},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:'Combat begins: Nighthawk vs '+clean+'. Enemy initiative rolled privately. Nighthawk must roll initiative.',createdAt:now}]};
+}
+export function rollDuelInitiative(campaign:Campaign):Campaign {
+  const combat=campaign.combat;
+  if(!combat||combat.status!=='awaiting-initiative')throw Error('No initiative roll pending');
+  const dex=(campaign.character??prototypeNighthawk).scores.dex;
+  const modifier=Math.floor((dex-10)/2);
+  const roll=crypto.getRandomValues(new Uint32Array(1))[0]%20+1;
+  const total=roll+modifier;
+  const order=total>=combat.enemyInitiative?['Nighthawk',combat.enemyName]:[combat.enemyName,'Nighthawk'];
+  const now=new Date().toISOString();
+  return {...campaign,combat:{...combat,status:'initiative-set',playerInitiative:total,order},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:'Nighthawk initiative: d20 '+roll+' + DEX '+modifier+' = '+total+'. '+combat.enemyName+': '+combat.enemyInitiative+'. Turn order: '+order.join(' → ')+'.',createdAt:now}]};
 }
