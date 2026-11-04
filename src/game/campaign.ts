@@ -22,7 +22,7 @@ export interface Campaign {
   xp?: number;
   xpAwards?: { id: string; amount: number; reason: string }[];
   levelOneSnapshot?: { character: CharacterStats; xp: number; xpAwards: { id: string; amount: number; reason: string }[] };
-  combat?: { status:'awaiting-initiative'|'initiative-set'; enemyName:string; enemyInitiative:number; playerInitiative?:number; round:number; order?:string[]; turnIndex?:number; movementUsed?:number; actionUsed?:boolean; bonusActionUsed?:boolean; lastAction?:string; attack?:{phase:'roll-to-hit'|'roll-damage'|'resolved'; d20?:number; total?:number; hit?:boolean; critical?:boolean; damage?:number}; enemyHp?:number; enemyMaxHp?:number };
+  combat?: { status:'awaiting-initiative'|'initiative-set'|'completed'; enemyName:string; enemyInitiative:number; playerInitiative?:number; round:number; order?:string[]; turnIndex?:number; movementUsed?:number; actionUsed?:boolean; bonusActionUsed?:boolean; lastAction?:string; attack?:{phase:'roll-to-hit'|'roll-damage'|'resolved'; d20?:number; total?:number; hit?:boolean; critical?:boolean; damage?:number}; enemyHp?:number; enemyMaxHp?:number; outcome?:'nonlethal-victory' };
   pendingCheck?: { skill: string; mode: 'normal' | 'advantage' | 'disadvantage'; reason: string; token: string; dice?: number[] };
 }
 export function newCampaign(title: string, id: string = crypto.randomUUID(), now: string = new Date().toISOString()): Campaign {
@@ -267,8 +267,16 @@ export function rollDuelAttack(campaign:Campaign,kind:'hit'|'damage'):Campaign {
   const first=die(6),second=next.attack.critical?die(6):0,damage=first+second+3;
   next.attack={...next.attack,phase:'resolved',damage};
   next.enemyHp=Math.max(0,(next.enemyHp??12)-damage);
-  description='Nonlethal training damage: '+first+(second?' + '+second+' (critical)':'')+' + 3 = '+damage+'. '+combat.enemyName+' HP: '+next.enemyHp+'/'+(next.enemyMaxHp??12)+'.';
+  if(next.enemyHp===0){next.status='completed';next.outcome='nonlethal-victory';}
+  description='Nonlethal training damage: '+first+(second?' + '+second+' (critical)':'')+' + 3 = '+damage+'. '+combat.enemyName+' HP: '+next.enemyHp+'/'+(next.enemyMaxHp??12)+(next.enemyHp===0?' '+combat.enemyName+' falls unconscious from the nonlethal strike. Combat is over.':'')+'.';
  }
  const now=new Date().toISOString();
  return {...campaign,combat:next,updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:description,createdAt:now}]};
+}
+
+export function concludeDuel(campaign:Campaign):Campaign {
+ const combat=campaign.combat;
+ if(!combat||combat.enemyHp!==0)throw Error('The opponent has not been defeated.');
+ const now=new Date().toISOString();
+ return {...campaign,combat:undefined,updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:combat.enemyName+' was reduced to 0 HP by Nighthawk\'s nonlethal training strike and is unconscious, not dead. The sparring encounter is finished. Resume normal adventure; the DM narrates the aftermath and NPC reactions. Do not restart this combat.',createdAt:now}]};
 }
