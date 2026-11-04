@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { createBackup, parseBackup } from '../game/backup';
 import { BookOpen, Compass, Map, RefreshCw, Send, Settings, Shield, Swords, Users } from 'lucide-react';
-import { addExchange, addNote, addRoll, newCampaign, awardExperience, levelUpRogue, levelUpArcaneTrickster, tricksterCantrips, tricksterSpells, isRitualSpell, castNighthawkSpell, takeNighthawkRest, applyNighthawkDamage, minutesUntilLongRestEligible, advanceToLongRestEligibility, endNighthawkConcentration, spellRequiresConcentration, reconcileNighthawkScores, undoNighthawkScoreReconciliation, xpThresholds, type Campaign } from '../game/campaign';
+import { addExchange, addNote, addRoll, beginDuel, rollDuelInitiative, newCampaign, awardExperience, levelUpRogue, levelUpArcaneTrickster, tricksterCantrips, tricksterSpells, isRitualSpell, castNighthawkSpell, takeNighthawkRest, applyNighthawkDamage, minutesUntilLongRestEligible, advanceToLongRestEligibility, endNighthawkConcentration, spellRequiresConcentration, reconcileNighthawkScores, undoNighthawkScoreReconciliation, xpThresholds, type Campaign } from '../game/campaign';
 import { localCampaignStorage } from '../game/storage';
 import type { View } from '../game/types';
 import { emptyWorld } from '../game/world';
@@ -345,6 +345,7 @@ export function App() {
   }
   async function submitAdventure() {
     if(pendingAdventureSpell || pendingRest || pendingTestDamage!==null || saving)return;
+    if(campaign?.combat){setNotice('Combat is active. Complete initiative before continuing with combat actions.');return;}
     const testDamage=/^\s*(?:test damage|damage test)\s+(\d+)\s*$/i.exec(draft);
     if(testDamage){const amount=Number(testDamage[1]);if(amount>=1&&amount<=100){setPendingTestDamage(amount);return;}}
     const lower=draft.toLowerCase();
@@ -425,20 +426,27 @@ export function App() {
       const history = current.journal.filter((entry) => entry.kind === 'player' || entry.kind === 'dm')
         .slice(-12).map((entry) => ({ role: entry.kind === 'player' ? 'user' : 'assistant', content: entry.text }));
       const response = await fetch('/api/dm', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-four-keeps-access': accessCode },
-        body: JSON.stringify({ message, character:current.character ?? prototypeNighthawk, gameState:{ familiar:current.familiar ?? null, elapsedMinutes:current.elapsedMinutes ?? 0, concentration:current.concentration??null, spellEffects:(current.spellEffects??[]).slice(-12), recentEvents:current.journal.filter(e=>e.kind==='system').slice(-8).map(e=>e.text) }, history, worldFacts: current.worldFacts ?? [], world: current.world ?? emptyWorld() }) });
-      const result: { narration?: string; newFacts?: string[]; worldUpdates?: unknown; checkRequest?: { skill:string; mode:'normal'|'advantage'|'disadvantage'; reason:string; token:string } | null; error?: string } = await response.json();
+        body: JSON.stringify({ message, character:current.character ?? prototypeNighthawk, gameState:{ combat:current.combat??null, familiar:current.familiar ?? null, elapsedMinutes:current.elapsedMinutes ?? 0, concentration:current.concentration??null, spellEffects:(current.spellEffects??[]).slice(-12), recentEvents:current.journal.filter(e=>e.kind==='system').slice(-8).map(e=>e.text) }, history, worldFacts: current.worldFacts ?? [], world: current.world ?? emptyWorld() }) });
+      const result: { narration?: string; newFacts?: string[]; worldUpdates?: unknown; checkRequest?: { skill:string; mode:'normal'|'advantage'|'disadvantage'; reason:string; token:string } | null; combatStart?:{enemyName:string}|null; error?: string } = await response.json();
       if (!response.ok || !result.narration) throw new Error(result.error || 'DM request failed');
-      const next = addExchange(current, message, result.narration, new Date().toISOString(), result.newFacts ?? [], result.worldUpdates, result.checkRequest ?? undefined);
+      const narrated = addExchange(current, message, result.narration, new Date().toISOString(), result.newFacts ?? [], result.worldUpdates, result.checkRequest ?? undefined);
+      const next = result.combatStart && !current.combat ? beginDuel(narrated,result.combatStart.enemyName) : narrated;
       await localCampaignStorage.save(next);
       setCampaign(next);
       setCampaigns((items) => items.map((item) => item.id === next.id ? next : item));
       setDraft('');
       setActiveView('adventure');
-      setNotice('The DM replied. Conversation saved locally.');
+      setNotice(result.combatStart?'Combat started. Tap Roll initiative.':'The DM replied. Conversation saved locally.');
     } catch (error) { setNotice('DM error: ' + String(error)); }
     finally { if(!alreadySaving)setSaving(false); }
   }
 
+  async function rollInitiative() {
+    if(!campaign||saving)return;
+    setSaving(true);
+    try {const next=rollDuelInitiative(campaign);await localCampaignStorage.save(next);setCampaign(next);setCampaigns(items=>items.map(item=>item.id===next.id?next:item));setNotice('Initiative rolled and turn order saved.');}
+    catch(error){setNotice('Initiative error: '+String(error));}finally{setSaving(false);}
+  }
   function exportCampaign() {
     if (!campaign) return;
     const blob = new Blob([JSON.stringify(createBackup(campaign), null, 2)], { type: 'application/json' });
@@ -561,6 +569,11 @@ export function App() {
           <p className="text-xs text-parchment/60">Changes are saved when you finish the rest. You may spend zero Hit Dice.</p>
         </div>}
         {pendingAdventureSpell && <div className="mx-4 mt-3 rounded-xl border border-gold/50 bg-panel p-4 space-y-3" role="group" aria-label="Confirm spell cast"><p className="eyebrow">Confirm Adventure spell</p><h3 className="font-serif text-xl">{pendingAdventureSpell.spell}{pendingAdventureSpell.ritual?' · Ritual':''}</h3><p className="text-sm text-parchment/80">{pendingAdventureSpell.intent}</p><p className="text-xs text-parchment/70">{pendingAdventureSpell.ritual?'No spell slot spent.':campaign?.character?.cantrips?.includes(pendingAdventureSpell.spell)?'Cantrip · no spell slot spent.':'Consumes one Level 1 spell slot.'}</p>{pendingAdventureSpell.spell==='Find Familiar' && <label className="flex gap-2 text-xs"><input type="checkbox" checked={adventureComponentsConfirmed} onChange={e=>setAdventureComponentsConfirmed(e.target.checked)}/> I have and consume the required 10 gp material components (inventory is not yet tracked).</label>}<div className="flex gap-2"><button type="button" className="flex-1 rounded-lg border border-white/30 p-3" onClick={()=>setPendingAdventureSpell(null)}>Edit action</button><button type="button" disabled={saving || (pendingAdventureSpell.spell==='Find Familiar'&&!adventureComponentsConfirmed)} className="flex-1 rounded-lg bg-gold p-3 font-semibold text-ink disabled:opacity-40" onClick={()=>void confirmAdventureSpell()}>Cast and continue</button></div></div>}
+        {campaign?.combat && <div className="mx-4 mt-3 space-y-3 rounded-xl border border-gold/50 bg-panel p-4" aria-label="Combat initiative tracker">
+          <p className="eyebrow">Combat · Round {campaign.combat.round}</p>
+          <h3 className="font-serif text-xl">Nighthawk vs {campaign.combat.enemyName}</h3>
+          {campaign.combat.status==='awaiting-initiative' ? <><p className="text-sm">The enemy's initiative has been rolled. Roll Nighthawk's d20 to establish turn order.</p><button type="button" disabled={saving} className="w-full rounded-lg bg-gold p-3 font-semibold text-ink disabled:opacity-40" onClick={()=>void rollInitiative()}>Roll initiative (d20 + DEX)</button></> : <><p className="text-sm">Initiative order</p><ol className="space-y-2">{campaign.combat.order?.map((name,i)=><li key={name} className="flex justify-between rounded-lg border border-white/20 p-3"><span>{i+1}. {name}</span><strong>{name==='Nighthawk'?campaign.combat?.playerInitiative:campaign.combat?.enemyInitiative}</strong></li>)}</ol><p className="text-xs text-parchment/70">Initiative confirmed. Movement, actions and enemy turns are the next combat milestone.</p></>}
+        </div>}
         {campaign?.pendingCheck && <div className="mx-4 mt-3 rounded-xl border border-gold/40 bg-panel p-4 space-y-2" role="group" aria-label="Pending skill check">
           <p className="eyebrow">Dungeon Master requests a check</p>
           <p className="font-serif text-xl">{campaign.pendingCheck.skill} · {campaign.pendingCheck.mode}</p>
