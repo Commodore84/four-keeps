@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { createBackup, parseBackup } from '../game/backup';
 import { BookOpen, Compass, Map, RefreshCw, Send, Settings, Shield, Swords, Users } from 'lucide-react';
-import { addExchange, addNote, addRoll, beginDuel, rollDuelInitiative, takeDuelTurnAction, newCampaign, awardExperience, levelUpRogue, levelUpArcaneTrickster, tricksterCantrips, tricksterSpells, isRitualSpell, castNighthawkSpell, takeNighthawkRest, applyNighthawkDamage, minutesUntilLongRestEligible, advanceToLongRestEligibility, endNighthawkConcentration, spellRequiresConcentration, reconcileNighthawkScores, undoNighthawkScoreReconciliation, xpThresholds, type Campaign } from '../game/campaign';
+import { addExchange, addNote, addRoll, beginDuel, rollDuelInitiative, takeDuelTurnAction, advanceDuelTestEnemyTurn, newCampaign, awardExperience, levelUpRogue, levelUpArcaneTrickster, tricksterCantrips, tricksterSpells, isRitualSpell, castNighthawkSpell, takeNighthawkRest, applyNighthawkDamage, minutesUntilLongRestEligible, advanceToLongRestEligibility, endNighthawkConcentration, spellRequiresConcentration, reconcileNighthawkScores, undoNighthawkScoreReconciliation, xpThresholds, type Campaign } from '../game/campaign';
 import { localCampaignStorage } from '../game/storage';
 import type { View } from '../game/types';
 import { emptyWorld } from '../game/world';
@@ -460,6 +460,12 @@ export function App() {
       setNotice(next.journal[next.journal.length-1].text);
     } catch(error){setNotice('Combat: '+String(error));} finally{setSaving(false);}
   }
+  async function skipEnemyTurnForTest() {
+    if(!campaign||saving)return;
+    setSaving(true);
+    try {const next=advanceDuelTestEnemyTurn(campaign);await localCampaignStorage.save(next);setCampaign(next);setCampaigns(items=>items.map(item=>item.id===next.id?next:item));setPendingCombatAction(null);setNotice("Test-only: enemy turn skipped. Nighthawk may act.");}
+    catch(error){setNotice('Combat: '+String(error));}finally{setSaving(false);}
+  }
   function exportCampaign() {
     if (!campaign) return;
     const blob = new Blob([JSON.stringify(createBackup(campaign), null, 2)], { type: 'application/json' });
@@ -549,7 +555,7 @@ export function App() {
         {activeView==='adventure' && campaign?.combat && <div className="mt-4 space-y-3 rounded-xl border border-gold/50 bg-panel p-4" aria-label="Combat initiative tracker">
           <p className="eyebrow">Combat · Round {campaign.combat.round}</p>
           <h3 className="font-serif text-lg">Nighthawk vs {campaign.combat.enemyName}</h3>
-          {campaign.combat.status==='awaiting-initiative' ? <><p className="text-sm">The enemy's initiative has been rolled. Roll Nighthawk's d20 to establish turn order.</p><button type="button" disabled={saving} className="w-full rounded-lg bg-gold p-3 font-semibold text-ink disabled:opacity-40" onClick={()=>void rollInitiative()}>Roll initiative (d20 + DEX)</button></> : <><p className="font-semibold text-gold">{campaign.combat.order?.[0]==='Nighthawk'?'Your turn — Nighthawk acts first':'Bran acts first — enemy turn pending'}</p><p className="text-sm">Initiative order</p><ol className="space-y-2">{campaign.combat.order?.map((name,i)=><li key={name} className="flex justify-between rounded-lg border border-white/20 p-3"><span>{i+1}. {name}</span><strong>{name==='Nighthawk'?campaign.combat?.playerInitiative:campaign.combat?.enemyInitiative}</strong></li>)}</ol>{campaign.combat.order?.[campaign.combat.turnIndex??0]==='Nighthawk' ? <div className="space-y-3">
+          {campaign.combat.status==='awaiting-initiative' ? <><p className="text-sm">The enemy's initiative has been rolled. Roll Nighthawk's d20 to establish turn order.</p><button type="button" disabled={saving} className="w-full rounded-lg bg-gold p-3 font-semibold text-ink disabled:opacity-40" onClick={()=>void rollInitiative()}>Roll initiative (d20 + DEX)</button></> : <><p className="font-semibold text-gold">{campaign.combat.order?.[campaign.combat.turnIndex??0]==='Nighthawk'?'Your turn — Nighthawk':'Enemy turn — '+campaign.combat.enemyName}</p><p className="text-sm">Initiative order</p><ol className="space-y-2">{campaign.combat.order?.map((name,i)=><li key={name} className="flex justify-between rounded-lg border border-white/20 p-3"><span>{i+1}. {name}</span><strong>{name==='Nighthawk'?campaign.combat?.playerInitiative:campaign.combat?.enemyInitiative}</strong></li>)}</ol>{campaign.combat.order?.[campaign.combat.turnIndex??0]==='Nighthawk' ? <div className="space-y-3">
           <p className="text-sm font-semibold">Your turn · Movement: {campaign.combat.movementUsed??0}/35 ft · Action: {campaign.combat.actionUsed?'used':'available'}</p>
           {campaign.combat.lastAction && <p className="rounded-lg border border-gold/60 bg-gold/10 p-3 text-sm">Last action: <strong>{campaign.combat.lastAction}</strong> (confirmed)</p>}
           {pendingCombatAction && <div className="space-y-2 rounded-lg border-2 border-gold bg-gold/10 p-3">
@@ -566,7 +572,7 @@ export function App() {
             <button type="button" disabled={saving||!!pendingCombatAction} className="rounded-lg bg-gold p-3 font-semibold text-ink disabled:opacity-40" onClick={()=>void combatAction('end')}>End Turn</button>
           </div>
           <p className="text-xs text-parchment/70">This stage tracks actions and movement only. Attack rolls, damage, and enemy decisions are not implemented yet.</p>
-        </div> : <p className="text-sm">Bran Holt's turn is next. Automated enemy turns are not enabled yet.</p>}</>}
+        </div> : <div className="space-y-3"><p className="text-sm">{campaign.combat.enemyName}'s turn is active. Automated enemy decisions and attacks are not implemented yet.</p><button type="button" disabled={saving} className="w-full rounded-lg border border-gold/60 p-3 font-semibold disabled:opacity-40" onClick={()=>void skipEnemyTurnForTest()}>Skip enemy turn (test only)</button><p className="text-xs text-parchment/70">Skips the enemy without damage or effects so you can continue testing Nighthawk's controls.</p></div>}</>}
         </div>}
       </main>
       <div className="sticky bottom-0 z-20 border-t border-white/10 bg-ink/95 backdrop-blur">
