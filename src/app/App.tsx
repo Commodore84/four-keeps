@@ -467,17 +467,18 @@ export function App() {
     catch(error){setNotice('Combat: '+String(error));}finally{setSaving(false);}
   }
   async function finishDefeatedDuel() {
-    if(!campaign||saving||campaign.combat?.enemyHp!==0)return;
+    if(!campaign||saving||(campaign.combat?.enemyHp!==0&&campaign.combat?.outcome!=='player-defeated'))return;
     const opponent=campaign.combat.enemyName;
+    const playerDefeated=campaign.combat.outcome==='player-defeated';
     setSaving(true);
     try {
       const next=concludeDuel(campaign);
       await localCampaignStorage.save(next);
       setCampaign(next);setCampaigns(items=>items.map(item=>item.id===next.id?next:item));
       setPendingCombatAction(null);
-      setNotice(opponent+' is unconscious, not dead. Combat ended; requesting the DM aftermath.');
+      setNotice('Combat ended; requesting the DM aftermath.');
       setSaving(false);
-      await sendToDM(next,'The nonlethal sparring match is over. '+opponent+' was reduced to 0 HP and knocked unconscious, not killed. Narrate the immediate aftermath, how the bystanders respond, and how '+opponent+' eventually recovers. Do not restart combat or change mechanical HP.');
+      await sendToDM(next,playerDefeated?'The sparring match is over. Nighthawk was reduced to 0 HP by a nonlethal strike and is unconscious, not dead. Narrate the aftermath and how Bran or bystanders help Nighthawk recover; do not restart combat or silently change HP.':'The nonlethal sparring match is over. '+opponent+' was reduced to 0 HP and knocked unconscious, not killed. Narrate the immediate aftermath, how the bystanders respond, and how '+opponent+' eventually recovers. Do not restart combat or change mechanical HP.');
     } catch(error){setNotice('Encounter conclusion failed: '+String(error));setSaving(false);}
   }
   async function resolveEnemyTurn() {
