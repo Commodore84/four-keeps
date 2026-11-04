@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { createBackup, parseBackup } from '../game/backup';
 import { BookOpen, Compass, Map, RefreshCw, Send, Settings, Shield, Swords, Users } from 'lucide-react';
-import { addExchange, addNote, addRoll, newCampaign, awardExperience, levelUpRogue, levelUpArcaneTrickster, tricksterCantrips, tricksterSpells, isRitualSpell, castNighthawkSpell, takeNighthawkRest, applyNighthawkDamage, longRestRestriction, endNighthawkConcentration, spellRequiresConcentration, reconcileNighthawkScores, undoNighthawkScoreReconciliation, xpThresholds, type Campaign } from '../game/campaign';
+import { addExchange, addNote, addRoll, newCampaign, awardExperience, levelUpRogue, levelUpArcaneTrickster, tricksterCantrips, tricksterSpells, isRitualSpell, castNighthawkSpell, takeNighthawkRest, applyNighthawkDamage, minutesUntilLongRestEligible, advanceToLongRestEligibility, endNighthawkConcentration, spellRequiresConcentration, reconcileNighthawkScores, undoNighthawkScoreReconciliation, xpThresholds, type Campaign } from '../game/campaign';
 import { localCampaignStorage } from '../game/storage';
 import type { View } from '../game/types';
 import { emptyWorld } from '../game/world';
@@ -171,6 +171,7 @@ export function App() {
   const [restRolls,setRestRolls] = useState<number[]>([]);
   const [restApproved,setRestApproved] = useState(false);
   const [restNarration,setRestNarration] = useState('');
+  const [restWaitMinutes,setRestWaitMinutes] = useState(0);
   const [pendingTestDamage,setPendingTestDamage] = useState<number|null>(null);
   const [notice, setNotice] = useState('');
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
@@ -364,14 +365,14 @@ export function App() {
   async function requestRestApproval(kind:'short'|'long') {
     if(!campaign || saving)return;
     if(!accessCode){setNotice('Enter your game access code first.');setPendingRest(null);return;}
-    if(kind==='long'){const restriction=longRestRestriction(campaign);if(restriction){setNotice(restriction);setPendingRest(null);return;}}
+    const waitMinutes=kind==='long'?minutesUntilLongRestEligible(campaign):0;
     setSaving(true);setNotice('The Dungeon Master is evaluating your rest request…');
     try {
       const history=campaign.journal.filter(e=>e.kind==='player'||e.kind==='dm').slice(-12).map(e=>({role:e.kind==='player'?'user':'assistant',content:e.text}));
-      const response=await fetch('/api/dm',{method:'POST',headers:{'Content-Type':'application/json','x-four-keeps-access':accessCode},body:JSON.stringify({message:draft,restRequest:kind,character:campaign.character??prototypeNighthawk,gameState:{familiar:campaign.familiar??null,elapsedMinutes:campaign.elapsedMinutes??0,recentEvents:campaign.journal.filter(e=>e.kind==='system').slice(-8).map(e=>e.text)},history,worldFacts:campaign.worldFacts??[],world:campaign.world??emptyWorld()})});
+      const response=await fetch('/api/dm',{method:'POST',headers:{'Content-Type':'application/json','x-four-keeps-access':accessCode},body:JSON.stringify({message:draft,restRequest:kind,restWaitMinutes:waitMinutes,character:campaign.character??prototypeNighthawk,gameState:{familiar:campaign.familiar??null,elapsedMinutes:campaign.elapsedMinutes??0,recentEvents:campaign.journal.filter(e=>e.kind==='system').slice(-8).map(e=>e.text)},history,worldFacts:campaign.worldFacts??[],world:campaign.world??emptyWorld()})});
       const result:{narration?:string;restDecision?:'approved'|'denied';error?:string}=await response.json();
       if(!response.ok||!result.narration||!['approved','denied'].includes(result.restDecision??''))throw new Error(result.error??'Rest adjudication failed');
-      if(result.restDecision==='approved'){setRestNarration(result.narration);setRestApproved(true);setNotice('Rest approved. Choose your recovery options below.');return;}
+      if(result.restDecision==='approved'){setRestWaitMinutes(waitMinutes);setRestNarration(result.narration);setRestApproved(true);setNotice('Rest approved. Choose your recovery options below.');return;}
       const next=addExchange(campaign,draft,result.narration,new Date().toISOString());
       await localCampaignStorage.save(next);setCampaign(next);setCampaigns(items=>items.map(item=>item.id===next.id?next:item));
       setPendingRest(null);setDraft('');setNotice('The DM denied or interrupted the rest. No resources changed.');
@@ -389,10 +390,11 @@ export function App() {
     
     setSaving(true);
     try {
-      const base=takeNighthawkRest(campaign,pendingRest,pendingRest==='short'?restRolls.length:0,restRolls);
+      const eligible=pendingRest==='long'?advanceToLongRestEligibility(campaign,restWaitMinutes):campaign;
+      const base=takeNighthawkRest(eligible,pendingRest,pendingRest==='short'?restRolls.length:0,restRolls);
       const next=addExchange(base,draft,restNarration,new Date().toISOString());
       await localCampaignStorage.save(next);setCampaign(next);setCampaigns(items=>items.map(item=>item.id===next.id?next:item));
-      setPendingRest(null);setRestApproved(false);setRestRolls([]);setRestNarration('');setDraft('');
+      setPendingRest(null);setRestApproved(false);setRestRolls([]);setRestNarration('');setRestWaitMinutes(0);setDraft('');
       setNotice('Rest completed and saved.');
     }catch(error){setNotice('Rest error: '+String(error));}
     finally{setSaving(false);}
@@ -529,6 +531,7 @@ export function App() {
         {pendingRest && restApproved && <div className="mx-4 mt-3 space-y-3 rounded-xl border border-gold/50 bg-panel p-4">
           <p className="eyebrow">DM-approved rest · Recovery options</p>
           <p className="text-sm text-parchment/80">{restNarration}</p>
+          {pendingRest==='long' && restWaitMinutes>0 && <p className="rounded-lg border border-gold/30 p-3 text-sm">The DM approved waiting {Math.floor(restWaitMinutes/60)}h {restWaitMinutes%60}m until eligible, followed by the 8-hour Long Rest. Total time advanced on completion: {Math.floor((restWaitMinutes+480)/60)}h {(restWaitMinutes+480)%60}m.</p>}
           <h3 className="font-serif text-xl">{pendingRest==='long'?'Long Rest · 8 hours':'Short Rest · 1 hour'}</h3>
           {pendingRest==='short' ? (() => {
             const character=campaign?.character??prototypeNighthawk;
