@@ -22,7 +22,7 @@ export interface Campaign {
   xp?: number;
   xpAwards?: { id: string; amount: number; reason: string }[];
   levelOneSnapshot?: { character: CharacterStats; xp: number; xpAwards: { id: string; amount: number; reason: string }[] };
-  combat?: { status:'awaiting-initiative'|'initiative-set'|'completed'; enemyName:string; enemyInitiative:number; playerInitiative?:number; round:number; order?:string[]; turnIndex?:number; movementUsed?:number; actionUsed?:boolean; bonusActionUsed?:boolean; lastAction?:string; attack?:{phase:'roll-to-hit'|'roll-damage'|'resolved'; d20?:number; total?:number; hit?:boolean; critical?:boolean; damage?:number; sneakAttackDamage?:number; advantage?:boolean; secondD20?:number}; steadyAim?:boolean; enemyHp?:number; enemyMaxHp?:number; outcome?:'nonlethal-victory'|'player-defeated'; enemyLastTurn?:string; trainingStartingHp?:number };
+  combat?: { status:'awaiting-initiative'|'initiative-set'|'completed'; enemyName:string; enemyInitiative:number; playerInitiative?:number; round:number; order?:string[]; turnIndex?:number; movementUsed?:number; actionUsed?:boolean; bonusActionUsed?:boolean; lastAction?:string; attack?:{phase:'roll-to-hit'|'roll-damage'|'resolved'; d20?:number; total?:number; hit?:boolean; critical?:boolean; damage?:number; sneakAttackDamage?:number; advantage?:boolean; secondD20?:number}; steadyAim?:boolean; movementAllowance?:number; disengaged?:boolean; enemyHp?:number; enemyMaxHp?:number; outcome?:'nonlethal-victory'|'player-defeated'; enemyLastTurn?:string; trainingStartingHp?:number };
   pendingAftermath?: { opponent: string; playerDefeated: boolean };
   pendingCheck?: { skill: string; mode: 'normal' | 'advantage' | 'disadvantage'; reason: string; token: string; dice?: number[] };
 }
@@ -217,30 +217,36 @@ export function rollDuelInitiative(campaign:Campaign):Campaign {
   return {...campaign,combat:{...combat,status:'initiative-set',playerInitiative:total,order,turnIndex:0,movementUsed:0,actionUsed:false,bonusActionUsed:false,enemyHp:12,enemyMaxHp:12},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:'Nighthawk initiative: d20 '+roll+' + DEX '+modifier+' = '+total+'. '+combat.enemyName+': '+combat.enemyInitiative+'. Turn order: '+order.join(' → ')+'.',createdAt:now}]};
 }
 
-export function takeDuelTurnAction(campaign:Campaign, action:'move'|'attack'|'dash'|'disengage'|'dodge'|'steady-aim'|'end'):Campaign {
+export function takeDuelTurnAction(campaign:Campaign, action:'move'|'attack'|'dash'|'disengage'|'dodge'|'steady-aim'|'cunning-dash'|'cunning-disengage'|'end'):Campaign {
  const combat=campaign.combat;
  if(!combat||combat.status!=='initiative-set'||!combat.order)throw Error('Initiative must be completed first.');
  const current=combat.order[combat.turnIndex??0];
  if(current!=='Nighthawk')throw Error('It is not Nighthawk\'s turn.');
  const next={...combat};let description='';
  const speed=35;
- if(action==='steady-aim'){
+ if(action==='cunning-dash'||action==='cunning-disengage'){
+   if(next.bonusActionUsed)throw Error('Bonus action already used this turn.');
+   next.bonusActionUsed=true;
+   if(action==='cunning-dash'){next.movementAllowance=(next.movementAllowance??speed)+speed;description='Nighthawk uses Cunning Action: Dash as a bonus action. Movement allowance: '+next.movementAllowance+' feet.';}
+   else{next.disengaged=true;description='Nighthawk uses Cunning Action: Disengage as a bonus action. Opportunity attacks are avoided for the rest of this turn.';}
+ }else if(action==='steady-aim'){
    if(next.bonusActionUsed||next.actionUsed||next.attack||next.movementUsed)throw Error('Steady Aim requires no movement and an available bonus action.');
    next.bonusActionUsed=true;next.steadyAim=true;description='Nighthawk uses Steady Aim. The next attack this turn has advantage; movement is unavailable this turn.';
  }else if(action==='move'){
    if(next.steadyAim)throw Error('Steady Aim prevents movement this turn.');
-   if((next.movementUsed??0)>=speed)throw Error('No movement remaining.');
-   next.movementUsed=Math.min(speed,(next.movementUsed??0)+5);
-   description='Nighthawk moves 5 feet ('+next.movementUsed+'/'+speed+' feet).';
+   const allowance=next.movementAllowance??speed;
+   if((next.movementUsed??0)>=allowance)throw Error('No movement remaining.');
+   next.movementUsed=Math.min(allowance,(next.movementUsed??0)+5);
+   description='Nighthawk moves 5 feet ('+next.movementUsed+'/'+allowance+' feet).';
  }else if(action==='end'){
    if(next.attack && next.attack.phase!=='resolved')throw Error('Resolve the attack before ending the turn.');
-   next.turnIndex=1;next.movementUsed=0;next.actionUsed=false;next.bonusActionUsed=false;next.attack=undefined;next.steadyAim=false;
+   next.turnIndex=1;next.movementUsed=0;next.actionUsed=false;next.bonusActionUsed=false;next.attack=undefined;next.steadyAim=false;next.movementAllowance=speed;next.disengaged=false;
    description='Nighthawk ends their turn. '+combat.enemyName+' is next.';
  }else {
    if(next.actionUsed)throw Error('Action already used this turn.');
    next.actionUsed=true;
-   if(action==='dash'){next.lastAction='Dash';description='Nighthawk Dashes, gaining another '+speed+' feet of movement this turn.';}
-   if(action==='disengage'){next.lastAction='Disengage';description='Nighthawk takes the Disengage action.';}
+   if(action==='dash'){next.lastAction='Dash';next.movementAllowance=(next.movementAllowance??speed)+speed;description='Nighthawk Dashes, gaining another '+speed+' feet of movement this turn.';}
+   if(action==='disengage'){next.lastAction='Disengage';next.disengaged=true;description='Nighthawk takes the Disengage action.';}
    if(action==='dodge'){next.lastAction='Dodge';description='Nighthawk takes the Dodge action.';}
    if(action==='attack'){next.lastAction='Attack';next.attack={phase:'roll-to-hit'};description='Nighthawk draws a dagger for a nonlethal melee strike against '+combat.enemyName+'. Roll to hit next.';}
  }
