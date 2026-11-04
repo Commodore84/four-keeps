@@ -719,6 +719,7 @@ export function App() {
           </div>}
           <p className="text-xs text-parchment/70">Select an action to see details. Nothing is spent until Confirm. Already confirmed actions cannot be undone. Opportunity attacks are not simulated yet.</p>
         </div> : <div className="space-y-3">
+          {campaign.combat.enemyName==='Training Dummy'&&<div className="grid grid-cols-7 gap-1" aria-label="Training dummy movement map">{Array.from({length:49},(_,i)=>{const x=i%7,y=Math.floor(i/7),p=campaign.combat!.playerPosition??{x:1,y:3},e=campaign.combat!.enemyPosition??{x:5,y:3};return <div key={i} className={`aspect-square rounded border flex items-center justify-center text-xs font-bold ${x===p.x&&y===p.y?'bg-gold text-ink border-gold':x===e.x&&y===e.y?'bg-red-900 text-white border-red-500':'bg-white/5 border-white/15'}`}>{x===p.x&&y===p.y?'N':x===e.x&&y===e.y?'E':''}</div>})}</div>}
           {campaign.combat.enemyName==='Training Dummy'&&<div className="rounded-lg border border-gold/40 p-3 space-y-2">
             <p className="font-semibold">Moving dummy · Reaction test</p>
             {campaign.combat.opportunity?<><p className="text-sm">The dummy is leaving your 5-foot reach. You may spend your reaction to make a melee dagger attack before it leaves, or let it go. This attack does not consume your Action.</p>
