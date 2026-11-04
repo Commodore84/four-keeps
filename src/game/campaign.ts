@@ -247,7 +247,7 @@ export function takeDuelTurnAction(campaign:Campaign, action:'move'|'attack'|'da
    if(action==='cunning-dash'){next.movementAllowance=(next.movementAllowance??speed)+speed;description='Nighthawk uses Cunning Action: Dash as a bonus action. Movement allowance: '+next.movementAllowance+' feet.';}
    else{next.disengaged=true;description='Nighthawk uses Cunning Action: Disengage as a bonus action. Opportunity attacks are avoided for the rest of this turn.';}
  }else if(action==='steady-aim'){
-   if(next.bonusActionUsed||next.actionUsed||next.attack||next.movementUsed)throw Error('Steady Aim requires no movement and an available bonus action.');
+   if(next.bonusActionUsed||next.movementUsed)throw Error('Steady Aim requires no movement this turn and an available bonus action.');
    next.bonusActionUsed=true;next.steadyAim=true;description='Nighthawk uses Steady Aim. The next attack this turn has advantage; movement is unavailable this turn.';
  }else if(action==='move'){
    if(next.steadyAim)throw Error('Steady Aim prevents movement this turn.');
