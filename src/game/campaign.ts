@@ -1,4 +1,4 @@
-import { prototypeNighthawk, type CharacterStats } from './checks';
+import { prototypeNighthawk, abilityModifier, type CharacterStats } from './checks';
 import { emptyWorld, mergeWorld, normalizeWorld, type WorldState } from './world';
 export interface JournalEntry { id: string; text: string; createdAt: string; kind: 'note' | 'system' | 'player' | 'dm' }
 export interface Campaign {
