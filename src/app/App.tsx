@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { createBackup, parseBackup } from '../game/backup';
 import { BookOpen, Compass, Map, RefreshCw, Send, Settings, Shield, Swords, Users } from 'lucide-react';
-import { addExchange, addNote, addRoll, beginDuel, rollDuelInitiative, newCampaign, awardExperience, levelUpRogue, levelUpArcaneTrickster, tricksterCantrips, tricksterSpells, isRitualSpell, castNighthawkSpell, takeNighthawkRest, applyNighthawkDamage, minutesUntilLongRestEligible, advanceToLongRestEligibility, endNighthawkConcentration, spellRequiresConcentration, reconcileNighthawkScores, undoNighthawkScoreReconciliation, xpThresholds, type Campaign } from '../game/campaign';
+import { addExchange, addNote, addRoll, beginDuel, rollDuelInitiative, takeDuelTurnAction, newCampaign, awardExperience, levelUpRogue, levelUpArcaneTrickster, tricksterCantrips, tricksterSpells, isRitualSpell, castNighthawkSpell, takeNighthawkRest, applyNighthawkDamage, minutesUntilLongRestEligible, advanceToLongRestEligibility, endNighthawkConcentration, spellRequiresConcentration, reconcileNighthawkScores, undoNighthawkScoreReconciliation, xpThresholds, type Campaign } from '../game/campaign';
 import { localCampaignStorage } from '../game/storage';
 import type { View } from '../game/types';
 import { emptyWorld } from '../game/world';
@@ -346,7 +346,7 @@ export function App() {
   async function submitAdventure() {
     if(pendingAdventureSpell || pendingRest || pendingTestDamage!==null || saving)return;
     if(campaign?.combat?.status==='awaiting-initiative'){setNotice('Roll initiative using the highlighted button before taking your turn.');return;}
-    if(campaign?.combat?.status==='initiative-set'){setNotice('Combat actions are not enabled yet. Initiative is saved; the next milestone adds turn actions.');return;}
+    if(campaign?.combat?.status==='initiative-set'){setNotice('Use the inline combat action buttons to take your turn.');return;}
     const testDamage=/^\s*(?:test damage|damage test)\s+(\d+)\s*$/i.exec(draft);
     if(testDamage){const amount=Number(testDamage[1]);if(amount>=1&&amount<=100){setPendingTestDamage(amount);return;}}
     const lower=draft.toLowerCase();
@@ -448,6 +448,16 @@ export function App() {
     try {const next=rollDuelInitiative(campaign);await localCampaignStorage.save(next);setCampaign(next);setCampaigns(items=>items.map(item=>item.id===next.id?next:item));setNotice('Initiative rolled and turn order saved.');}
     catch(error){setNotice('Initiative error: '+String(error));}finally{setSaving(false);}
   }
+  async function combatAction(action:'move'|'attack'|'dash'|'disengage'|'dodge'|'end') {
+    if(!campaign||saving)return;
+    setSaving(true);
+    try {
+      const next=takeDuelTurnAction(campaign,action);
+      await localCampaignStorage.save(next);
+      setCampaign(next);setCampaigns(items=>items.map(item=>item.id===next.id?next:item));
+      setNotice(next.journal[next.journal.length-1].text);
+    } catch(error){setNotice('Combat: '+String(error));} finally{setSaving(false);}
+  }
   function exportCampaign() {
     if (!campaign) return;
     const blob = new Blob([JSON.stringify(createBackup(campaign), null, 2)], { type: 'application/json' });
@@ -537,7 +547,18 @@ export function App() {
         {activeView==='adventure' && campaign?.combat && <div className="mt-4 space-y-3 rounded-xl border border-gold/50 bg-panel p-4" aria-label="Combat initiative tracker">
           <p className="eyebrow">Combat · Round {campaign.combat.round}</p>
           <h3 className="font-serif text-lg">Nighthawk vs {campaign.combat.enemyName}</h3>
-          {campaign.combat.status==='awaiting-initiative' ? <><p className="text-sm">The enemy's initiative has been rolled. Roll Nighthawk's d20 to establish turn order.</p><button type="button" disabled={saving} className="w-full rounded-lg bg-gold p-3 font-semibold text-ink disabled:opacity-40" onClick={()=>void rollInitiative()}>Roll initiative (d20 + DEX)</button></> : <><p className="font-semibold text-gold">{campaign.combat.order?.[0]==='Nighthawk'?'Your turn — Nighthawk acts first':'Bran acts first — enemy turn pending'}</p><p className="text-sm">Initiative order</p><ol className="space-y-2">{campaign.combat.order?.map((name,i)=><li key={name} className="flex justify-between rounded-lg border border-white/20 p-3"><span>{i+1}. {name}</span><strong>{name==='Nighthawk'?campaign.combat?.playerInitiative:campaign.combat?.enemyInitiative}</strong></li>)}</ol><p className="text-sm text-parchment/80">Initiative is complete and saved. This prototype cannot resolve combat turns yet; attacks, movement and End Turn are the next features to build. No further input is needed for this test.</p></>}
+          {campaign.combat.status==='awaiting-initiative' ? <><p className="text-sm">The enemy's initiative has been rolled. Roll Nighthawk's d20 to establish turn order.</p><button type="button" disabled={saving} className="w-full rounded-lg bg-gold p-3 font-semibold text-ink disabled:opacity-40" onClick={()=>void rollInitiative()}>Roll initiative (d20 + DEX)</button></> : <><p className="font-semibold text-gold">{campaign.combat.order?.[0]==='Nighthawk'?'Your turn — Nighthawk acts first':'Bran acts first — enemy turn pending'}</p><p className="text-sm">Initiative order</p><ol className="space-y-2">{campaign.combat.order?.map((name,i)=><li key={name} className="flex justify-between rounded-lg border border-white/20 p-3"><span>{i+1}. {name}</span><strong>{name==='Nighthawk'?campaign.combat?.playerInitiative:campaign.combat?.enemyInitiative}</strong></li>)}</ol>{campaign.combat.order?.[campaign.combat.turnIndex??0]==='Nighthawk' ? <div className="space-y-3">
+          <p className="text-sm font-semibold">Your turn · Movement: {campaign.combat.movementUsed??0}/35 ft · Action: {campaign.combat.actionUsed?'used':'available'}</p>
+          <div className="grid grid-cols-2 gap-2">
+            <button type="button" disabled={saving||(campaign.combat.movementUsed??0)>=35} className="rounded-lg border border-gold/60 p-3 disabled:opacity-40" onClick={()=>void combatAction('move')}>Move 5 ft</button>
+            <button type="button" disabled={saving||!!campaign.combat.actionUsed} className="rounded-lg border border-gold/60 p-3 disabled:opacity-40" onClick={()=>void combatAction('attack')}>Declare Attack</button>
+            <button type="button" disabled={saving||!!campaign.combat.actionUsed} className="rounded-lg border border-white/30 p-3 disabled:opacity-40" onClick={()=>void combatAction('dash')}>Dash</button>
+            <button type="button" disabled={saving||!!campaign.combat.actionUsed} className="rounded-lg border border-white/30 p-3 disabled:opacity-40" onClick={()=>void combatAction('disengage')}>Disengage</button>
+            <button type="button" disabled={saving||!!campaign.combat.actionUsed} className="rounded-lg border border-white/30 p-3 disabled:opacity-40" onClick={()=>void combatAction('dodge')}>Dodge</button>
+            <button type="button" disabled={saving} className="rounded-lg bg-gold p-3 font-semibold text-ink disabled:opacity-40" onClick={()=>void combatAction('end')}>End Turn</button>
+          </div>
+          <p className="text-xs text-parchment/70">This stage tracks actions and movement only. Attack rolls, damage, and enemy decisions are not implemented yet.</p>
+        </div> : <p className="text-sm">Bran Holt's turn is next. Automated enemy turns are not enabled yet.</p>}</>}
         </div>}
       </main>
       <div className="sticky bottom-0 z-20 border-t border-white/10 bg-ink/95 backdrop-blur">
