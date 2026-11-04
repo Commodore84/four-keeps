@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { createBackup, parseBackup } from '../game/backup';
 import { BookOpen, Compass, Map, RefreshCw, Send, Settings, Shield, Swords, Users } from 'lucide-react';
-import { addExchange, addNote, addRoll, newCampaign, awardExperience, levelUpRogue, levelUpArcaneTrickster, tricksterCantrips, tricksterSpells, isRitualSpell, castNighthawkSpell, takeNighthawkRest, endNighthawkConcentration, spellRequiresConcentration, reconcileNighthawkScores, undoNighthawkScoreReconciliation, xpThresholds, type Campaign } from '../game/campaign';
+import { addExchange, addNote, addRoll, newCampaign, awardExperience, levelUpRogue, levelUpArcaneTrickster, tricksterCantrips, tricksterSpells, isRitualSpell, castNighthawkSpell, takeNighthawkRest, longRestRestriction, endNighthawkConcentration, spellRequiresConcentration, reconcileNighthawkScores, undoNighthawkScoreReconciliation, xpThresholds, type Campaign } from '../game/campaign';
 import { localCampaignStorage } from '../game/storage';
 import type { View } from '../game/types';
 import { emptyWorld } from '../game/world';
@@ -350,7 +350,7 @@ export function App() {
     if(!campaign || !pendingRest || saving)return;
     if(!accessCode){setNotice('Enter your game access code first.');return;}
     const kind=pendingRest;
-    if(kind==='long' && campaign.lastLongRestCompletedAt!==undefined && (campaign.elapsedMinutes??0)-campaign.lastLongRestCompletedAt<1440){setNotice('Long Rest unavailable: 24 hours must pass since your previous completed Long Rest.');setPendingRest(null);return;}
+    if(kind==='long'){const restriction=longRestRestriction(campaign);if(restriction){setNotice(restriction);setPendingRest(null);return;}}
     setSaving(true);
     setNotice('The Dungeon Master is evaluating the rest…');
     try {
