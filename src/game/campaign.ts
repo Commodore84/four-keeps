@@ -415,6 +415,19 @@ export function rollDuelAttack(campaign:Campaign,kind:'hit'|'damage'):Campaign {
  return {...campaign,equipment:{daggers:next.daggersAvailable??campaign.equipment?.daggers??2,arrows:next.arrowsRemaining??campaign.equipment?.arrows??20,caltrops:campaign.equipment?.caltrops??0,ballBearings:campaign.equipment?.ballBearings??0},combat:next,updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:description,createdAt:now}]};
 }
 
+export function quitTrainingEncounter(campaign:Campaign):Campaign {
+ const combat=campaign.combat;
+ if(!combat||combat.enemyName!=='Training Dummy')throw Error('Only encounter training can be reset this way.');
+ const character=campaign.character??prototypeNighthawk;
+ const maxHp=character.maxHitPoints??24;
+ const now=new Date().toISOString();
+ const equipment=campaign.equipment??{daggers:2,arrows:20,caltrops:0,ballBearings:0};
+ return {...campaign,character:{...character,currentHitPoints:maxHp},
+  equipment:{...equipment,daggers:(combat.daggersAvailable??equipment.daggers)+(combat.daggersThrown??0),arrows:combat.arrowsRemaining??equipment.arrows},
+  combat:undefined,pendingAftermath:undefined,updatedAt:now,
+  journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:'Encounter training reset. Nighthawk restored to '+maxHp+'/'+maxHp+' HP; dummy reset. Thrown daggers recovered. Start a new encounter when ready.',createdAt:now}]};
+}
+
 export function concludeDuel(campaign:Campaign):Campaign {
  const combat=campaign.combat;
  if(!combat||(combat.enemyHp!==0&&combat.outcome!=='player-defeated'))throw Error('The sparring match has not ended.');
