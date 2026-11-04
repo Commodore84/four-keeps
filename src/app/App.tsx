@@ -431,7 +431,7 @@ export function App() {
       const result: { narration?: string; newFacts?: string[]; worldUpdates?: unknown; checkRequest?: { skill:string; mode:'normal'|'advantage'|'disadvantage'; reason:string; token:string } | null; combatStart?:{enemyName:string}|null; error?: string } = await response.json();
       if (!response.ok || !result.narration) throw new Error(result.error || 'DM request failed');
       const narrated = addExchange(current, message, result.narration, new Date().toISOString(), result.newFacts ?? [], result.worldUpdates, result.checkRequest ?? undefined);
-      const next = result.combatStart && !current.combat ? beginDuel(narrated,result.combatStart.enemyName) : narrated;
+      const next = result.combatStart && !current.combat && !current.pendingAftermath ? beginDuel(narrated,result.combatStart.enemyName) : current.pendingAftermath ? {...narrated,pendingAftermath:undefined} : narrated;
       await localCampaignStorage.save(next);
       setCampaign(next);
       setCampaigns((items) => items.map((item) => item.id === next.id ? next : item));
@@ -477,9 +477,18 @@ export function App() {
       setCampaign(next);setCampaigns(items=>items.map(item=>item.id===next.id?next:item));
       setPendingCombatAction(null);
       setNotice('Combat ended; requesting the DM aftermath.');
-      setSaving(false);
       await sendToDM(next,playerDefeated?'The sparring match is over. Nighthawk was reduced to 0 HP by a nonlethal strike and is unconscious, not dead. Narrate the aftermath and how Bran or bystanders help Nighthawk recover; do not restart combat or silently change HP.':'The nonlethal sparring match is over. '+opponent+' was reduced to 0 HP and knocked unconscious, not killed. Narrate the immediate aftermath, how the bystanders respond, and how '+opponent+' eventually recovers. Do not restart combat or change mechanical HP.');
     } catch(error){setNotice('Encounter conclusion failed: '+String(error));setSaving(false);}
+  }
+  async function retryCombatAftermath() {
+    if(!campaign?.pendingAftermath||saving)return;
+    const {opponent,playerDefeated}=campaign.pendingAftermath;
+    setSaving(true);
+    try {
+      await sendToDM(campaign,playerDefeated
+        ? 'The completed nonlethal sparring match ended with Nighthawk unconscious at 0 HP. Narrate only the aftermath and aid; do not restart the fight or change HP.'
+        : 'The completed nonlethal sparring match ended with '+opponent+' unconscious at 0 HP. Narrate only the aftermath, witnesses, and eventual recovery. Do not restart the fight or change HP.',true);
+    } finally {setSaving(false);}
   }
   async function resolveEnemyTurn() {
     if(!campaign||saving)return;
@@ -587,6 +596,7 @@ export function App() {
            {campaign.pendingCheck.dice && (() => { const dice = campaign.pendingCheck.dice; const used = dice.length === 1 ? dice[0] : campaign.pendingCheck.mode === 'advantage' ? Math.max(...dice) : Math.min(...dice); const modifier = skillModifier(campaign.character ?? prototypeNighthawk, campaign.pendingCheck.skill as Parameters<typeof skillModifier>[1]); return <div role="status" aria-live="polite" className="rounded-lg border border-gold/30 bg-ink/60 p-3"><p className="text-xs uppercase tracking-widest text-gold">Nighthawk · {campaign.pendingCheck.skill} check</p><p className="mt-2 text-xl font-semibold">{dice.length === 1 ? String(dice[0]) : dice.join(' / ')+' ('+campaign.pendingCheck.mode+': '+used+')'} <span className="text-parchment/70">{modifier >= 0 ? '+' : '−'}{Math.abs(modifier)} =</span> {used + modifier}</p><p className="mt-1 text-xs text-parchment/65">{saving ? 'Waiting for the Dungeon Master. Your roll is saved.' : 'Roll saved. Retry the DM response without rerolling.'}</p></div>; })()}
           <p className="text-xs text-parchment/60">The target number is hidden. Your roll is saved before adjudication.</p>
         </div>}
+        {activeView==='adventure' && campaign?.pendingAftermath && !campaign.combat && <div className="mt-4 space-y-3 rounded-xl border border-gold/50 bg-panel p-4" role="status"><p className="eyebrow">Combat concluded · aftermath pending</p><p className="text-sm">{campaign.pendingAftermath.playerDefeated?'Nighthawk':' '+campaign.pendingAftermath.opponent} was knocked unconscious in the nonlethal sparring match. The result is saved; the DM narration can be retried without repeating combat.</p><button type="button" disabled={saving} className="w-full rounded-lg bg-gold p-3 font-semibold text-ink disabled:opacity-40" onClick={()=>void retryCombatAftermath()}>{saving?'Contacting DM…':'Continue aftermath'}</button></div>}
         {activeView==='adventure' && campaign?.combat && <div className="mt-4 space-y-3 rounded-xl border border-gold/50 bg-panel p-4" aria-label="Combat initiative tracker">
           <p className="eyebrow">Combat · Round {campaign.combat.round}</p>
           <h3 className="font-serif text-lg">Nighthawk vs {campaign.combat.enemyName}</h3>
