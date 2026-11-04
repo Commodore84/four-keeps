@@ -22,7 +22,7 @@ export interface Campaign {
   xp?: number;
   xpAwards?: { id: string; amount: number; reason: string }[];
   levelOneSnapshot?: { character: CharacterStats; xp: number; xpAwards: { id: string; amount: number; reason: string }[] };
-  combat?: { status:'awaiting-initiative'|'initiative-set'|'completed'; enemyName:string; enemyInitiative:number; playerInitiative?:number; round:number; order?:string[]; turnIndex?:number; movementUsed?:number; actionUsed?:boolean; bonusActionUsed?:boolean; lastAction?:string; arrowsRemaining?:number; attack?:{weapon?:'dagger'|'shortbow'; thrown?:boolean; disadvantage?:boolean; phase:'roll-to-hit'|'roll-damage'|'resolved'; d20?:number; firstD20?:number; total?:number; hit?:boolean; critical?:boolean; damage?:number; sneakAttackDamage?:number; advantage?:boolean; secondD20?:number}; steadyAim?:boolean; movementAllowance?:number; disengaged?:boolean; enemyHp?:number; enemyMaxHp?:number; outcome?:'nonlethal-victory'|'player-defeated'; enemyLastTurn?:string; trainingStartingHp?:number; playerPosition?:{x:number;y:number}; enemyPosition?:{x:number;y:number} };
+  combat?: { status:'awaiting-initiative'|'initiative-set'|'completed'; enemyName:string; enemyInitiative:number; playerInitiative?:number; round:number; order?:string[]; turnIndex?:number; movementUsed?:number; actionUsed?:boolean; bonusActionUsed?:boolean; lastAction?:string; arrowsRemaining?:number; daggersAvailable?:number; daggersThrown?:number; attack?:{weapon?:'dagger'|'shortbow'; thrown?:boolean; disadvantage?:boolean; phase:'roll-to-hit'|'roll-damage'|'resolved'; d20?:number; firstD20?:number; total?:number; hit?:boolean; critical?:boolean; damage?:number; sneakAttackDamage?:number; advantage?:boolean; secondD20?:number}; steadyAim?:boolean; movementAllowance?:number; disengaged?:boolean; enemyHp?:number; enemyMaxHp?:number; outcome?:'nonlethal-victory'|'player-defeated'; enemyLastTurn?:string; trainingStartingHp?:number; playerPosition?:{x:number;y:number}; enemyPosition?:{x:number;y:number} };
   pendingAftermath?: { opponent: string; playerDefeated: boolean };
   pendingCheck?: { skill: string; mode: 'normal' | 'advantage' | 'disadvantage'; reason: string; token: string; dice?: number[] };
 }
@@ -203,7 +203,7 @@ export function beginDuel(campaign:Campaign, enemyName:string):Campaign {
   if(!clean)throw Error('Encounter requires an opponent');
   const enemyRoll=crypto.getRandomValues(new Uint32Array(1))[0]%20+1;
   const now=new Date().toISOString();
-  return {...campaign,combat:{status:'awaiting-initiative',enemyName:clean,enemyInitiative:enemyRoll+1,round:1,...(clean==='Training Dummy'?{trainingStartingHp:(campaign.character??prototypeNighthawk).currentHitPoints??(campaign.character??prototypeNighthawk).maxHitPoints??10}:{})},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:'Combat begins: Nighthawk vs '+clean+'. Enemy initiative rolled privately. Nighthawk must roll initiative.',createdAt:now}]};
+  return {...campaign,combat:{status:'awaiting-initiative',enemyName:clean,enemyInitiative:enemyRoll+1,round:1,...(clean==='Training Dummy'?{trainingStartingHp:(campaign.character??prototypeNighthawk).maxHitPoints??10}:{})},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:'Combat begins: Nighthawk vs '+clean+'. Enemy initiative rolled privately. Nighthawk must roll initiative.',createdAt:now}]};
 }
 export function rollDuelInitiative(campaign:Campaign):Campaign {
   const combat=campaign.combat;
@@ -214,7 +214,7 @@ export function rollDuelInitiative(campaign:Campaign):Campaign {
   const total=roll+modifier;
   const order=total>=combat.enemyInitiative?['Nighthawk',combat.enemyName]:[combat.enemyName,'Nighthawk'];
   const now=new Date().toISOString();
-  return {...campaign,combat:{...combat,status:'initiative-set',playerInitiative:total,order,turnIndex:0,movementUsed:0,actionUsed:false,bonusActionUsed:false,enemyHp:12,enemyMaxHp:12,arrowsRemaining:20,playerPosition:{x:1,y:3},enemyPosition:{x:5,y:3}},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:'Nighthawk initiative: d20 '+roll+' + DEX '+modifier+' = '+total+'. '+combat.enemyName+': '+combat.enemyInitiative+'. Turn order: '+order.join(' → ')+'.',createdAt:now}]};
+  return {...campaign,combat:{...combat,status:'initiative-set',playerInitiative:total,order,turnIndex:0,movementUsed:0,actionUsed:false,bonusActionUsed:false,enemyHp:12,enemyMaxHp:12,arrowsRemaining:20,daggersAvailable:2,daggersThrown:0,playerPosition:{x:1,y:3},enemyPosition:{x:5,y:3}},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:'Nighthawk initiative: d20 '+roll+' + DEX '+modifier+' = '+total+'. '+combat.enemyName+': '+combat.enemyInitiative+'. Turn order: '+order.join(' → ')+'.',createdAt:now}]};
 }
 
 export function moveDuelToken(campaign:Campaign,x:number,y:number):Campaign {
@@ -271,6 +271,7 @@ export function takeDuelTurnAction(campaign:Campaign, action:'move'|'attack'|'th
     const thrown=action==='throw-dagger',bow=action==='shortbow';
     if(action==='attack'&&distance>5)throw Error('Dagger melee requires an adjacent enemy.');
     if(thrown&&distance>60)throw Error('Thrown dagger is out of range (60 ft maximum).');
+    if((thrown||action==='attack')&&(next.daggersAvailable??2)<1)throw Error('No dagger available. Recover a thrown dagger after the encounter.');
     if(bow&&distance>320)throw Error('Shortbow is out of range (320 ft maximum).');
     if(bow&&(next.arrowsRemaining??20)<1)throw Error('No arrows remaining.');
     next.lastAction=bow?'Shortbow':thrown?'Thrown Dagger':'Dagger';
@@ -327,6 +328,7 @@ export function rollDuelAttack(campaign:Campaign,kind:'hit'|'damage'):Campaign {
   const advantage=!!combat.steadyAim&&!next.attack.disadvantage;const disadvantage=!!next.attack.disadvantage&&!combat.steadyAim;const firstD20=die(20),secondD20=(advantage||disadvantage)?die(20):undefined,d20=secondD20===undefined?firstD20:advantage?Math.max(firstD20,secondD20):Math.min(firstD20,secondD20),total=d20+attackBonus,critical=d20===20,hit=critical||(d20!==1&&total>=12);
   next.attack={phase:hit?'roll-damage':'resolved',d20,firstD20,total,critical,hit,advantage,disadvantage,weapon:next.attack.weapon,thrown:next.attack.thrown,secondD20};
   if(next.attack.weapon==='shortbow')next.arrowsRemaining=(next.arrowsRemaining??20)-1;
+  if(next.attack.thrown){next.daggersAvailable=(next.daggersAvailable??2)-1;next.daggersThrown=(next.daggersThrown??0)+1;}
   description=(next.attack.weapon==='shortbow'?'Shortbow (ranged)':next.attack.thrown?'Thrown dagger (ranged)':'Dagger (nonlethal melee)')+': '+(secondD20===undefined?'':(advantage?'advantage ':'disadvantage ')+firstD20+'/'+secondD20+' → ')+'d20 '+d20+' + '+attackBonus+' = '+total+' vs training AC 12: '+(hit?'HIT':'MISS')+'.'+(critical?' Critical hit.':'');
  }else{
   if(next.attack.phase!=='roll-damage')throw Error('Roll to hit first.');
@@ -347,8 +349,8 @@ export function concludeDuel(campaign:Campaign):Campaign {
  const now=new Date().toISOString();
  if(combat.enemyName==='Training Dummy'){
   const character=campaign.character??prototypeNighthawk;
-  const restoredHp=combat.trainingStartingHp??character.maxHitPoints??10;
-  return {...campaign,character:{...character,currentHitPoints:restoredHp},combat:undefined,pendingAftermath:undefined,updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:'Training simulation ended; Nighthawk HP restored to '+restoredHp+'.',createdAt:now}]};
+  const restoredHp=character.maxHitPoints??combat.trainingStartingHp??10;
+  return {...campaign,character:{...character,currentHitPoints:restoredHp},combat:undefined,pendingAftermath:undefined,updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:'Training simulation ended; Nighthawk HP restored to '+restoredHp+'. All simulated thrown daggers recovered.',createdAt:now}]};
  }
  return {...campaign,combat:undefined,pendingAftermath:{opponent:combat.enemyName,playerDefeated:combat.outcome==='player-defeated'},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:combat.outcome==='player-defeated'?'Nighthawk was reduced to 0 HP by a nonlethal training strike and is unconscious. The sparring encounter is finished. Resume normal adventure and narrate aid and recovery, without restarting combat.':combat.enemyName+' was reduced to 0 HP by Nighthawk\'s nonlethal training strike and is unconscious, not dead. The sparring encounter is finished. Resume normal adventure; the DM narrates the aftermath and NPC reactions. Do not restart this combat.',createdAt:now}]};
 }
