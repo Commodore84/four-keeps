@@ -136,8 +136,19 @@ export function castNighthawkSpell(campaign: Campaign, spell: string, ritual: bo
   return { ...campaign, character: { ...character, spellSlots: nextSlots }, elapsedMinutes: (campaign.elapsedMinutes ?? 0) + minutes, familiar: spell==='Find Familiar' ? { form:'Owl', summonedAt:now } : campaign.familiar, concentration:concentrating?{spell,target:cleanTarget||undefined,startedAt:now}:campaign.concentration, spellEffects:spell==='Find Familiar'?(campaign.spellEffects??[]):[...(campaign.spellEffects??[]).filter(e=>!prior || !concentrating || e.spell!==prior.spell),effect].slice(-30), updatedAt:now, journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:message,createdAt:now}] };
 }
 
+export function longRestRestriction(campaign: Campaign): string | null {
+  const elapsed=campaign.elapsedMinutes??0;
+  if(campaign.lastLongRestCompletedAt!==undefined) {
+    const remaining=1440-(elapsed-campaign.lastLongRestCompletedAt);
+    return remaining>0?'Another Long Rest is unavailable for '+Math.ceil(remaining/60)+' more in-game hours.':null;
+  }
+  // Legacy saves from before long-rest timestamps: avoid granting another immediate rest.
+  // Without a recorded completion time, require a fresh 24-hour period after migration.
+  const previous=campaign.journal.some(e=>e.kind==='system' && /completes a long rest/i.test(e.text));
+  return previous?'A previous Long Rest was recorded before time tracking was enabled. Another Long Rest is unavailable until the campaign clock has advanced 24 hours after migration.':null;
+}
 export function takeNighthawkRest(campaign: Campaign, kind: 'short'|'long', hitDiceToSpend = 0): Campaign {
-  if(kind==='long' && campaign.lastLongRestCompletedAt !== undefined && (campaign.elapsedMinutes??0)-campaign.lastLongRestCompletedAt < 1440) throw new Error('You cannot benefit from another Long Rest until 24 hours have passed since the last one.');
+  if(kind==='long') {const restriction=longRestRestriction(campaign);if(restriction)throw new Error(restriction);}
   const character=campaign.character ?? prototypeNighthawk;
   const level=character.level??1;
   const maxHp=character.maxHitPoints??10;
