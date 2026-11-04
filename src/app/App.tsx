@@ -450,7 +450,7 @@ export function App() {
       await localCampaignStorage.save(next);
       setCampaign(next);
       setCampaigns(items=>items.map(item=>item.id===next.id?next:item));
-      setNotice('Training simulation started. Roll initiative to test dagger mechanics.');
+      setNotice('Encounter training started. Roll initiative to test combat mechanics.');
     }catch(error){setNotice('Training combat: '+String(error));}
     finally{setSaving(false);}
   }
@@ -506,7 +506,7 @@ export function App() {
         setCampaign(next);
         setCampaigns(items=>items.map(item=>item.id===next.id?next:item));
         setPendingCombatAction(null);
-        setNotice('Dagger training simulation complete. The adventure story is unchanged.');
+        setNotice('Encounter training complete. The adventure story is unchanged.');
         setSaving(false);
         return;
       }
@@ -689,7 +689,7 @@ export function App() {
           <p className="text-xs text-parchment/70">Select an action to see details. Nothing is spent until Confirm. Already confirmed actions cannot be undone. Opportunity attacks are not simulated yet.</p>
         </div> : <div className="space-y-3"><p className="text-sm">{campaign.combat.enemyName} makes a nonlethal training strike. Temporary stats: +4 to hit, 1d6 + 2 damage, against AC 14. Dodge imposes disadvantage.</p><button type="button" disabled={saving} className="w-full rounded-lg bg-gold p-3 font-semibold text-ink disabled:opacity-40" onClick={()=>void resolveEnemyTurn()}>Resolve enemy turn</button><button type="button" disabled={saving} className="w-full rounded-lg border border-gold/60 p-3 text-sm disabled:opacity-40" onClick={()=>void skipEnemyTurnForTest()}>Skip enemy turn (test only)</button></div>}</>}
         </div>}
-        {activeView==='adventure' && campaign && !campaign.combat && !campaign.pendingAftermath && <div className="mx-4 my-4 rounded-xl border border-gold/40 bg-panel p-3 space-y-2"><p className="text-sm font-semibold text-gold">Combat mechanics test</p><p className="text-xs text-parchment/70">Start a separate training simulation without needing an NPC to agree to another sparring match. This uses temporary opponent statistics.</p><button type="button" disabled={saving} className="w-full rounded-lg border border-gold/70 p-3 font-semibold disabled:opacity-40" onClick={()=>void startTrainingCombatTest()}>Start dagger training test</button></div>}
+        {activeView==='adventure' && campaign && !campaign.combat && !campaign.pendingAftermath && <div className="mx-4 my-4 rounded-xl border border-gold/40 bg-panel p-3 space-y-2"><p className="text-sm font-semibold text-gold">Encounter training</p><p className="text-xs text-parchment/70">Start a separate training simulation without needing an NPC to agree to another sparring match. This uses temporary opponent statistics.</p><button type="button" disabled={saving} className="w-full rounded-lg border border-gold/70 p-3 font-semibold disabled:opacity-40" onClick={()=>void startTrainingCombatTest()}>Start encounter training</button></div>}
       </main>
       <div className="sticky bottom-0 z-20 border-t border-white/10 bg-ink/95 backdrop-blur">
         {pendingTestDamage!==null && <div className="mx-4 mt-3 space-y-3 rounded-xl border border-gold/50 bg-panel p-4"><p className="eyebrow">Damage mechanics test</p><h3 className="font-serif text-xl">Apply {pendingTestDamage} test damage?</h3><p className="text-sm">This is a controlled test, not a DM-adjudicated injury. HP will decrease and the change will be saved in the Journal.</p><p className="text-sm">HP: {campaign?.character?.currentHitPoints??campaign?.character?.maxHitPoints??10} → {Math.max(0,(campaign?.character?.currentHitPoints??campaign?.character?.maxHitPoints??10)-pendingTestDamage)} / {campaign?.character?.maxHitPoints??10}</p><div className="flex gap-2"><button type="button" className="flex-1 rounded-lg border border-white/30 p-3" onClick={()=>setPendingTestDamage(null)}>Cancel</button><button type="button" disabled={saving} className="flex-1 rounded-lg bg-gold p-3 font-semibold text-ink" onClick={()=>void confirmTestDamage()}>Apply test damage</button></div></div>}
