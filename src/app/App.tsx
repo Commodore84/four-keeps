@@ -485,7 +485,20 @@ export function App() {
     const playerDefeated=campaign.combat.outcome==='player-defeated';
     setSaving(true);
     try {
-      const next=concludeDuel(campaign);
+      const concluded=concludeDuel(campaign);
+      // Training Dummy is a mechanics-only sandbox, not a character in the story.
+      // Never send its knockout to the narrative DM or leave an aftermath request.
+      if(opponent==='Training Dummy'){
+        const next={...concluded,pendingAftermath:undefined};
+        await localCampaignStorage.save(next);
+        setCampaign(next);
+        setCampaigns(items=>items.map(item=>item.id===next.id?next:item));
+        setPendingCombatAction(null);
+        setNotice('Dagger training simulation complete. The adventure story is unchanged.');
+        setSaving(false);
+        return;
+      }
+      const next=concluded;
       await localCampaignStorage.save(next);
       setCampaign(next);setCampaigns(items=>items.map(item=>item.id===next.id?next:item));
       setPendingCombatAction(null);
