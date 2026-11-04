@@ -528,9 +528,9 @@ export function App() {
       </main>
       <div className="sticky bottom-0 z-20 border-t border-white/10 bg-ink/95 backdrop-blur">
         {pendingTestDamage!==null && <div className="mx-4 mt-3 space-y-3 rounded-xl border border-gold/50 bg-panel p-4"><p className="eyebrow">Damage mechanics test</p><h3 className="font-serif text-xl">Apply {pendingTestDamage} test damage?</h3><p className="text-sm">This is a controlled test, not a DM-adjudicated injury. HP will decrease and the change will be saved in the Journal.</p><p className="text-sm">HP: {campaign?.character?.currentHitPoints??campaign?.character?.maxHitPoints??10} → {Math.max(0,(campaign?.character?.currentHitPoints??campaign?.character?.maxHitPoints??10)-pendingTestDamage)} / {campaign?.character?.maxHitPoints??10}</p><div className="flex gap-2"><button type="button" className="flex-1 rounded-lg border border-white/30 p-3" onClick={()=>setPendingTestDamage(null)}>Cancel</button><button type="button" disabled={saving} className="flex-1 rounded-lg bg-gold p-3 font-semibold text-ink" onClick={()=>void confirmTestDamage()}>Apply test damage</button></div></div>}
-        {pendingRest && restApproved && <div className="mx-4 mt-3 space-y-3 rounded-xl border border-gold/50 bg-panel p-4">
+        {pendingRest && restApproved && <div role="dialog" aria-label="Rest recovery options" className="mx-4 mt-3 max-h-[65dvh] overflow-y-auto overscroll-contain touch-pan-y space-y-3 rounded-xl border border-gold/50 bg-panel p-4 [-webkit-overflow-scrolling:touch]">
           <p className="eyebrow">DM-approved rest · Recovery options</p>
-          <p className="text-sm text-parchment/80">{restNarration}</p>
+          <details className="rounded-lg border border-white/15 p-2 text-sm text-parchment/80"><summary className="cursor-pointer font-semibold">DM narration (tap to expand)</summary><p className="mt-2 whitespace-pre-wrap">{restNarration}</p></details>
           {pendingRest==='long' && restWaitMinutes>0 && <p className="rounded-lg border border-gold/30 p-3 text-sm">The DM approved waiting {Math.floor(restWaitMinutes/60)}h {restWaitMinutes%60}m until eligible, followed by the 8-hour Long Rest. Total time advanced on completion: {Math.floor((restWaitMinutes+480)/60)}h {(restWaitMinutes+480)%60}m.</p>}
           <h3 className="font-serif text-xl">{pendingRest==='long'?'Long Rest · 8 hours':'Short Rest · 1 hour'}</h3>
           {pendingRest==='short' ? (() => {
@@ -554,7 +554,7 @@ export function App() {
               {restRolls.length>=available && previewHp<maxHp && <p className="text-xs text-parchment/70">No Hit Dice remain to spend.</p>}
             </div>;
           })() : <p className="text-sm">Restore all HP and expended spell slots, and recover Hit Dice.</p>}
-          <div className="flex gap-2">
+          <div className="sticky bottom-0 z-10 flex gap-2 border-t border-white/15 bg-panel py-3">
             <button type="button" className="flex-1 rounded-lg border border-white/30 p-3" onClick={()=>{setPendingRest(null);setRestApproved(false);setRestRolls([]);setRestNarration('')}}>Cancel</button>
             <button type="button" disabled={saving} className="flex-1 rounded-lg bg-gold p-3 font-semibold text-ink disabled:opacity-40" onClick={()=>void confirmRest()}>{pendingRest==='short'?'Finish Short Rest':'Finish Long Rest'}</button>
           </div>
