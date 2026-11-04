@@ -136,22 +136,33 @@ export function castNighthawkSpell(campaign: Campaign, spell: string, ritual: bo
   return { ...campaign, character: { ...character, spellSlots: nextSlots }, elapsedMinutes: (campaign.elapsedMinutes ?? 0) + minutes, familiar: spell==='Find Familiar' ? { form:'Owl', summonedAt:now } : campaign.familiar, concentration:concentrating?{spell,target:cleanTarget||undefined,startedAt:now}:campaign.concentration, spellEffects:spell==='Find Familiar'?(campaign.spellEffects??[]):[...(campaign.spellEffects??[]).filter(e=>!prior || !concentrating || e.spell!==prior.spell),effect].slice(-30), updatedAt:now, journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:message,createdAt:now}] };
 }
 
-export function longRestRestriction(campaign: Campaign): string | null {
+export function minutesUntilLongRestEligible(campaign: Campaign): number {
   const elapsed=campaign.elapsedMinutes??0;
-  if(campaign.lastLongRestCompletedAt!==undefined) {
-    const remaining=1440-(elapsed-campaign.lastLongRestCompletedAt);
-    return remaining>0?'Another Long Rest is unavailable for '+Math.ceil(remaining/60)+' more in-game hours.':null;
-  }
-  // Legacy campaigns lack an exact completion clock. Infer it from the most recent
-  // rest entry and the campaign clock; subsequent actions can only make this conservative.
+  if(campaign.lastLongRestCompletedAt!==undefined) return Math.max(0,1440-(elapsed-campaign.lastLongRestCompletedAt));
   const last=[...campaign.journal].reverse().find(e=>e.kind==='system' && /completes a long rest/i.test(e.text));
-  if(last) {
-    const later=campaign.journal.slice(campaign.journal.indexOf(last)+1);
-    const knownMinutes=later.reduce((sum,e)=>{const match=e.kind==='system'?e.text.match(/completes a (?:short|long) rest \((\d+) minutes\)/i):null;return sum+(match?Number(match[1]):0);},0);
-    const remaining=1440-knownMinutes;
-    return remaining>0?'A recent Long Rest was found in this older save. Wait at least '+Math.ceil(remaining/60)+' more in-game hours before another.':null;
-  }
-  return null;
+  if(!last)return 0;
+  const later=campaign.journal.slice(campaign.journal.indexOf(last)+1);
+  const knownMinutes=later.reduce((sum,e)=>{
+    if(e.kind!=='system')return sum;
+    const rest=e.text.match(/completes a (?:short|long) rest \\((\\d+) minutes\\)/i);
+    const wait=e.text.match(/waits (\\d+) minutes for Long Rest eligibility/i);
+    return sum+(rest?Number(rest[1]):wait?Number(wait[1]):0);
+  },0);
+  return Math.max(0,1440-knownMinutes);
+}
+export function longRestRestriction(campaign: Campaign): string | null {
+  const minutes=minutesUntilLongRestEligible(campaign);
+  return minutes>0?'Long Rest recovery is available in '+Math.ceil(minutes/60)+' in-game hours. The DM can adjudicate waiting until then.':null;
+}
+export function advanceToLongRestEligibility(campaign: Campaign, minutes: number): Campaign {
+  const required=minutesUntilLongRestEligible(campaign);
+  if(!Number.isInteger(minutes)||minutes!==required||minutes<0)throw new Error('Invalid Long Rest waiting period');
+  if(minutes===0)return campaign;
+  const now=new Date().toISOString();
+  return {...campaign,elapsedMinutes:(campaign.elapsedMinutes??0)+minutes,
+    lastLongRestCompletedAt:campaign.lastLongRestCompletedAt??(campaign.elapsedMinutes??0)+minutes-1440,
+    updatedAt:now,
+    journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:'Nighthawk waits '+minutes+' minutes for Long Rest eligibility (DM approved uninterrupted waiting).',createdAt:now}]};
 }
 export function takeNighthawkRest(campaign: Campaign, kind: 'short'|'long', hitDiceToSpend = 0, hitDieRolls: number[] = []): Campaign {
   if(kind==='long') {const restriction=longRestRestriction(campaign);if(restriction)throw new Error(restriction);}
