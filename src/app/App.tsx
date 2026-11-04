@@ -168,7 +168,6 @@ export function App() {
   const [pendingAdventureSpell, setPendingAdventureSpell] = useState<{spell:string;ritual:boolean;intent:string}|null>(null);
   const [adventureComponentsConfirmed,setAdventureComponentsConfirmed] = useState(false);
   const [pendingRest,setPendingRest] = useState<'short'|'long'|null>(null);
-  const [restDice,setRestDice] = useState(0);
   const [restRolls,setRestRolls] = useState<number[]>([]);
   const [restApproved,setRestApproved] = useState(false);
   const [restNarration,setRestNarration] = useState('');
@@ -354,7 +353,7 @@ export function App() {
     const longTime=/\b(eight hours|8 hours|overnight|until morning|through the night|long rest|sleep for the night)\b/.test(lower);
     if(explicit || natural && (shortTime || longTime)) {
       const kind=explicit?explicit[1].startsWith('long')?'long':'short':longTime?'long':'short';
-      setPendingRest(kind);setRestDice(0);setRestRolls([]);setRestApproved(false);setRestNarration('');
+      setPendingRest(kind);setRestRolls([]);setRestApproved(false);setRestNarration('');
       await requestRestApproval(kind);
       return;
     }
