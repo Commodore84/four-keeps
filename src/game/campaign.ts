@@ -142,10 +142,7 @@ export function longRestRestriction(campaign: Campaign): string | null {
     const remaining=1440-(elapsed-campaign.lastLongRestCompletedAt);
     return remaining>0?'Another Long Rest is unavailable for '+Math.ceil(remaining/60)+' more in-game hours.':null;
   }
-  // Legacy saves from before long-rest timestamps: avoid granting another immediate rest.
-  // Without a recorded completion time, require a fresh 24-hour period after migration.
-  const previous=campaign.journal.some(e=>e.kind==='system' && /completes a long rest/i.test(e.text));
-  return previous?'A previous Long Rest was recorded before time tracking was enabled. Another Long Rest is unavailable until the campaign clock has advanced 24 hours after migration.':null;
+  // Legacy campaigns lack an exact completion clock. Infer it from the most recent\n  // rest entry and the campaign clock; subsequent actions can only make this conservative.\n  const last=[...campaign.journal].reverse().find(e=>e.kind==='system' && /completes a long rest/i.test(e.text));\n  if(last) {\n    const later=campaign.journal.slice(campaign.journal.indexOf(last)+1);\n    const knownMinutes=later.reduce((sum,e)=>{const match=e.kind==='system'?e.text.match(/completes a (?:short|long) rest \\((\\d+) minutes\\)/i):null;return sum+(match?Number(match[1]):0);},0);\n    const remaining=1440-knownMinutes;\n    return remaining>0?'A recent Long Rest was found in this older save. Wait at least '+Math.ceil(remaining/60)+' more in-game hours before another.':null;\n  }
 }
 export function takeNighthawkRest(campaign: Campaign, kind: 'short'|'long', hitDiceToSpend = 0): Campaign {
   if(kind==='long') {const restriction=longRestRestriction(campaign);if(restriction)throw new Error(restriction);}
