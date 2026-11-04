@@ -387,10 +387,10 @@ export function App() {
   }
   async function confirmRest() {
     if(!campaign||!pendingRest||!restApproved||saving)return;
-    if(pendingRest==='short'&&restRolls.length!==restDice){setNotice('Roll each selected Hit Die before completing the rest.');return;}
+    
     setSaving(true);
     try {
-      const base=takeNighthawkRest(campaign,pendingRest,pendingRest==='short'?restDice:0,restRolls);
+      const base=takeNighthawkRest(campaign,pendingRest,pendingRest==='short'?restRolls.length:0,restRolls);
       const next=addExchange(base,draft,restNarration,new Date().toISOString());
       await localCampaignStorage.save(next);setCampaign(next);setCampaigns(items=>items.map(item=>item.id===next.id?next:item));
       setPendingRest(null);setRestApproved(false);setRestRolls([]);setRestNarration('');setDraft('');
@@ -527,7 +527,37 @@ export function App() {
       </main>
       <div className="sticky bottom-0 z-20 border-t border-white/10 bg-ink/95 backdrop-blur">
         {pendingTestDamage!==null && <div className="mx-4 mt-3 space-y-3 rounded-xl border border-gold/50 bg-panel p-4"><p className="eyebrow">Damage mechanics test</p><h3 className="font-serif text-xl">Apply {pendingTestDamage} test damage?</h3><p className="text-sm">This is a controlled test, not a DM-adjudicated injury. HP will decrease and the change will be saved in the Journal.</p><p className="text-sm">HP: {campaign?.character?.currentHitPoints??campaign?.character?.maxHitPoints??10} → {Math.max(0,(campaign?.character?.currentHitPoints??campaign?.character?.maxHitPoints??10)-pendingTestDamage)} / {campaign?.character?.maxHitPoints??10}</p><div className="flex gap-2"><button type="button" className="flex-1 rounded-lg border border-white/30 p-3" onClick={()=>setPendingTestDamage(null)}>Cancel</button><button type="button" disabled={saving} className="flex-1 rounded-lg bg-gold p-3 font-semibold text-ink" onClick={()=>void confirmTestDamage()}>Apply test damage</button></div></div>}
-        {pendingRest && restApproved && <div className="mx-4 mt-3 space-y-3 rounded-xl border border-gold/50 bg-panel p-4"><p className="eyebrow">DM-approved rest · Recovery options</p><p className="text-sm text-parchment/80">{restNarration}</p><h3 className="font-serif text-xl">{pendingRest==='long'?'Long Rest · 8 hours':'Short Rest · 1 hour'}</h3><p className="text-sm">{pendingRest==='long'?'Restore all HP and expended spell slots. Recover up to half your Hit Dice (minimum one).':'Spend Hit Dice to recover HP. Spell slots do not recover.'}</p><p className="text-xs">HP: {campaign?.character?.currentHitPoints??10}/{campaign?.character?.maxHitPoints??10} · Hit Dice available: {campaign?.hitDiceRemaining??campaign?.character?.level??1} · Level 1 slots remaining: {(campaign?.character?.spellSlots?.level1??0)-(campaign?.character?.spellSlots?.usedLevel1??0)}</p>{pendingRest==='short' && <label className="block text-sm">Hit Dice to roll (d8 + CON each)<select className="mt-2 w-full rounded-lg border border-white/20 bg-ink p-2" value={restDice} onChange={e=>{setRestDice(Number(e.target.value));setRestRolls([])}}>{Array.from({length:(campaign?.hitDiceRemaining??campaign?.character?.level??1)+1},(_,i)=><option key={i} value={i}>{i}</option>)}</select></label>}{pendingRest==='short' && restApproved && restRolls.length<restDice && <button type="button" className="w-full rounded-lg border border-gold/60 p-3 text-gold" onClick={()=>setRestRolls(v=>[...v,crypto.getRandomValues(new Uint32Array(1))[0]%8+1])}>Roll Hit Die {restRolls.length+1} of {restDice} (d8)</button>}{pendingRest==='short' && restRolls.length>0 && <p className="text-sm">Your rolls: {restRolls.join(', ')} · CON {abilityModifier((campaign?.character??prototypeNighthawk).scores.con)>=0?'+':''}{abilityModifier((campaign?.character??prototypeNighthawk).scores.con)} per die</p>}<div className="flex gap-2"><button type="button" className="flex-1 rounded-lg border border-white/30 p-3" onClick={()=>{setPendingRest(null);setRestApproved(false);setRestRolls([])}}>Cancel</button><button type="button" disabled={saving} className="flex-1 rounded-lg bg-gold p-3 font-semibold text-ink disabled:opacity-40" onClick={()=>void confirmRest()}>Complete rest</button></div><p className="text-xs text-parchment/60">The DM approved this rest. Choose recovery options, then apply them.</p></div>}
+        {pendingRest && restApproved && <div className="mx-4 mt-3 space-y-3 rounded-xl border border-gold/50 bg-panel p-4">
+          <p className="eyebrow">DM-approved rest · Recovery options</p>
+          <p className="text-sm text-parchment/80">{restNarration}</p>
+          <h3 className="font-serif text-xl">{pendingRest==='long'?'Long Rest · 8 hours':'Short Rest · 1 hour'}</h3>
+          {pendingRest==='short' ? (() => {
+            const character=campaign?.character??prototypeNighthawk;
+            const maxHp=character.maxHitPoints??10;
+            const startingHp=character.currentHitPoints??maxHp;
+            const con=abilityModifier(character.scores.con);
+            const healed=restRolls.reduce((total,die)=>total+Math.max(0,die+con),0);
+            const previewHp=Math.min(maxHp,startingHp+healed);
+            const available=campaign?.hitDiceRemaining??character.level??1;
+            return <div className="space-y-3">
+              <p className="text-sm">Roll one Hit Die at a time. Stop whenever you're satisfied with your HP recovery.</p>
+              <div className="rounded-lg border border-white/20 p-3 space-y-2">
+                <div className="flex justify-between gap-2 text-sm"><span>HP after healing</span><strong className="tabular-nums">{previewHp}/{maxHp}</strong></div>
+                <div className="h-2 rounded-full bg-ink"><div className="h-full rounded-full bg-gold" style={{width:(100*previewHp/Math.max(1,maxHp))+'%'}}/></div>
+                <div className="flex justify-between gap-2 text-xs"><span>Hit Dice spent: {restRolls.length}</span><span>Remaining: {available-restRolls.length}/{character.level??1}</span></div>
+              </div>
+              {restRolls.length>0 && <div className="space-y-1 text-sm">{restRolls.map((die,i)=><p key={i}>Die {i+1}: {die} + {con} CON = {Math.max(0,die+con)} HP</p>)}<p className="font-semibold">Total healing applied: {previewHp-startingHp} HP</p></div>}
+              <button type="button" disabled={saving||restRolls.length>=available||previewHp>=maxHp} className="w-full rounded-lg border border-gold/60 p-3 text-gold disabled:opacity-40" onClick={()=>setRestRolls(v=>[...v,crypto.getRandomValues(new Uint32Array(1))[0]%8+1])}>Roll one Hit Die (d8 + {con} CON)</button>
+              {previewHp>=maxHp && <p className="text-xs text-parchment/70">HP is full. You can finish the rest now.</p>}
+              {restRolls.length>=available && previewHp<maxHp && <p className="text-xs text-parchment/70">No Hit Dice remain to spend.</p>}
+            </div>;
+          })() : <p className="text-sm">Restore all HP and expended spell slots, and recover Hit Dice.</p>}
+          <div className="flex gap-2">
+            <button type="button" className="flex-1 rounded-lg border border-white/30 p-3" onClick={()=>{setPendingRest(null);setRestApproved(false);setRestRolls([]);setRestNarration('')}}>Cancel</button>
+            <button type="button" disabled={saving} className="flex-1 rounded-lg bg-gold p-3 font-semibold text-ink disabled:opacity-40" onClick={()=>void confirmRest()}>{pendingRest==='short'?'Finish Short Rest':'Finish Long Rest'}</button>
+          </div>
+          <p className="text-xs text-parchment/60">Changes are saved when you finish the rest. You may spend zero Hit Dice.</p>
+        </div>}
         {pendingAdventureSpell && <div className="mx-4 mt-3 rounded-xl border border-gold/50 bg-panel p-4 space-y-3" role="group" aria-label="Confirm spell cast"><p className="eyebrow">Confirm Adventure spell</p><h3 className="font-serif text-xl">{pendingAdventureSpell.spell}{pendingAdventureSpell.ritual?' · Ritual':''}</h3><p className="text-sm text-parchment/80">{pendingAdventureSpell.intent}</p><p className="text-xs text-parchment/70">{pendingAdventureSpell.ritual?'No spell slot spent.':campaign?.character?.cantrips?.includes(pendingAdventureSpell.spell)?'Cantrip · no spell slot spent.':'Consumes one Level 1 spell slot.'}</p>{pendingAdventureSpell.spell==='Find Familiar' && <label className="flex gap-2 text-xs"><input type="checkbox" checked={adventureComponentsConfirmed} onChange={e=>setAdventureComponentsConfirmed(e.target.checked)}/> I have and consume the required 10 gp material components (inventory is not yet tracked).</label>}<div className="flex gap-2"><button type="button" className="flex-1 rounded-lg border border-white/30 p-3" onClick={()=>setPendingAdventureSpell(null)}>Edit action</button><button type="button" disabled={saving || (pendingAdventureSpell.spell==='Find Familiar'&&!adventureComponentsConfirmed)} className="flex-1 rounded-lg bg-gold p-3 font-semibold text-ink disabled:opacity-40" onClick={()=>void confirmAdventureSpell()}>Cast and continue</button></div></div>}
         {campaign?.pendingCheck && <div className="mx-4 mt-3 rounded-xl border border-gold/40 bg-panel p-4 space-y-2" role="group" aria-label="Pending skill check">
           <p className="eyebrow">Dungeon Master requests a check</p>
