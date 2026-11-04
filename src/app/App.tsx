@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { createBackup, parseBackup } from '../game/backup';
 import { BookOpen, Compass, Map, RefreshCw, Send, Settings, Shield, Swords, Users } from 'lucide-react';
-import { addExchange, addNote, addRoll, beginDuel, rollDuelInitiative, takeDuelTurnAction, advanceDuelTestEnemyTurn, resolveDuelEnemyTurn, rollDuelAttack, concludeDuel, newCampaign, awardExperience, levelUpRogue, levelUpArcaneTrickster, tricksterCantrips, tricksterSpells, isRitualSpell, castNighthawkSpell, takeNighthawkRest, applyNighthawkDamage, minutesUntilLongRestEligible, advanceToLongRestEligibility, endNighthawkConcentration, spellRequiresConcentration, reconcileNighthawkScores, undoNighthawkScoreReconciliation, xpThresholds, type Campaign } from '../game/campaign';
+import { addExchange, addNote, addRoll, beginDuel, rollDuelInitiative, takeDuelTurnAction, moveDuelToken, advanceDuelTestEnemyTurn, resolveDuelEnemyTurn, rollDuelAttack, concludeDuel, newCampaign, awardExperience, levelUpRogue, levelUpArcaneTrickster, tricksterCantrips, tricksterSpells, isRitualSpell, castNighthawkSpell, takeNighthawkRest, applyNighthawkDamage, minutesUntilLongRestEligible, advanceToLongRestEligibility, endNighthawkConcentration, spellRequiresConcentration, reconcileNighthawkScores, undoNighthawkScoreReconciliation, xpThresholds, type Campaign } from '../game/campaign';
 import { localCampaignStorage } from '../game/storage';
 import type { View } from '../game/types';
 import { emptyWorld } from '../game/world';
@@ -461,7 +461,9 @@ export function App() {
     try {const next=rollDuelInitiative(campaign);await localCampaignStorage.save(next);setCampaign(next);setCampaigns(items=>items.map(item=>item.id===next.id?next:item));setNotice('Initiative rolled and turn order saved.');}
     catch(error){setNotice('Initiative error: '+String(error));}finally{setSaving(false);}
   }
-  const [pendingCombatAction,setPendingCombatAction]=useState<'attack'|'dodge'|'move'|'steady-aim'|'cunning-dash'|'cunning-disengage'|'end'|null>(null);
+  const [gridSelected,setGridSelected]=useState(false);
+  const [gridDestination,setGridDestination]=useState<{x:number;y:number}|null>(null);
+  const [pendingCombatAction,setPendingCombatAction]=useState<'attack'|'dodge'|'steady-aim'|'cunning-dash'|'cunning-disengage'|'end'|null>(null);
   async function combatAction(action:'move'|'attack'|'dash'|'disengage'|'dodge'|'steady-aim'|'cunning-dash'|'cunning-disengage'|'end') {
     if(!campaign||saving)return;
     setSaving(true);
@@ -472,6 +474,17 @@ export function App() {
       setPendingCombatAction(null);
       setNotice(next.journal[next.journal.length-1].text);
     } catch(error){setNotice('Combat: '+String(error));} finally{setSaving(false);}
+  }
+  async function confirmGridMove(){
+    if(!campaign||!gridDestination||saving)return;
+    setSaving(true);
+    try{
+      const next=moveDuelToken(campaign,gridDestination.x,gridDestination.y);
+      await localCampaignStorage.save(next);
+      setCampaign(next);setCampaigns(items=>items.map(item=>item.id===next.id?next:item));
+      setNotice(next.journal[next.journal.length-1].text);
+      setGridDestination(null);setGridSelected(false);
+    }catch(error){setNotice('Movement: '+String(error));}finally{setSaving(false);}
   }
   async function rollCombatAttack(kind:'hit'|'damage') {
     if(!campaign||saving)return;
@@ -628,6 +641,22 @@ export function App() {
           <h3 className="font-serif text-lg">Nighthawk vs {campaign.combat.enemyName}</h3>
           {(campaign.combat.status==='completed'||campaign.combat.enemyHp===0) ? <div className="space-y-3 rounded-lg border border-gold/60 bg-gold/10 p-3"><p className="font-semibold text-gold">{campaign.combat.outcome==='player-defeated'?'Nighthawk is unconscious — sparring ends':'Victory — nonlethal sparring match'}</p><p className="text-sm">{campaign.combat.outcome==='player-defeated'?'Nighthawk was reduced to 0 HP by a nonlethal training strike. Combat has ended.':campaign.combat.enemyName+' is at 0 HP and unconscious, not dead. Combat is over; no further turns are needed.'}</p><button type="button" disabled={saving} className="w-full rounded-lg bg-gold p-3 font-semibold text-ink disabled:opacity-40" onClick={()=>void finishDefeatedDuel()}>Continue to aftermath</button></div> : campaign.combat.status==='awaiting-initiative' ? <><p className="text-sm">The enemy's initiative has been rolled. Roll Nighthawk's d20 to establish turn order.</p><button type="button" disabled={saving} className="w-full rounded-lg bg-gold p-3 font-semibold text-ink disabled:opacity-40" onClick={()=>void rollInitiative()}>Roll initiative (d20 + DEX)</button></> : <><p className="font-semibold text-gold">{campaign.combat.order?.[campaign.combat.turnIndex??0]==='Nighthawk'?'Your turn — Nighthawk':'Enemy turn — '+campaign.combat.enemyName}</p>{campaign.combat.enemyLastTurn && <p className="rounded-lg border border-gold/40 p-3 text-sm">{campaign.combat.enemyLastTurn}</p>}<p className="text-sm">Initiative order</p><ol className="space-y-2">{campaign.combat.order?.map((name,i)=><li key={name} className="flex justify-between rounded-lg border border-white/20 p-3"><span>{i+1}. {name}</span><strong>{name==='Nighthawk'?campaign.combat?.playerInitiative:campaign.combat?.enemyInitiative}</strong></li>)}</ol>{campaign.combat.order?.[campaign.combat.turnIndex??0]==='Nighthawk' ? <div className="space-y-3">
           <p className="text-sm font-semibold">Your turn · Movement: {campaign.combat.movementUsed??0}/{campaign.combat.movementAllowance??35} ft · Action: {campaign.combat.actionUsed?'used':'available'}</p>
+          <div className="rounded-xl border border-white/20 p-2 space-y-2">
+            <p className="text-xs text-parchment/70">Tactical grid · 5 ft per square · Tap Nighthawk, then a destination. Diagonal movement costs 5 ft per square.</p>
+            <div className="grid grid-cols-7 gap-1" role="grid" aria-label="Combat movement grid">
+              {Array.from({length:49},(_,i)=>{
+                const x=i%7,y=Math.floor(i/7),p=campaign.combat!.playerPosition??{x:1,y:3},e=campaign.combat!.enemyPosition??{x:5,y:3};
+                const own=x===p.x&&y===p.y,enemy=x===e.x&&y===e.y;
+                const cost=5*Math.max(Math.abs(x-p.x),Math.abs(y-p.y));
+                const remaining=(campaign.combat!.movementAllowance??35)-(campaign.combat!.movementUsed??0);
+                const reachable=cost>0&&cost<=remaining&&!enemy&&!campaign.combat!.steadyAim&&!campaign.combat!.attack;
+                const chosen=gridDestination?.x===x&&gridDestination?.y===y;
+                return <button key={i} type="button" role="gridcell" aria-label={own?'Nighthawk':enemy?campaign.combat!.enemyName:`Square ${x+1}, ${y+1}; ${cost} feet`} disabled={saving||enemy||(!own&&(!gridSelected||!reachable))} onClick={()=>{if(own){setGridSelected(v=>!v);setGridDestination(null);}else if(reachable){setGridDestination({x,y});}}} className={`aspect-square rounded border text-xs font-bold min-w-0 ${own?'bg-gold text-ink border-gold':enemy?'bg-red-900/70 text-white border-red-500':chosen?'bg-gold/50 border-gold':gridSelected&&reachable?'bg-emerald-900/40 border-emerald-500/70':'bg-white/5 border-white/15'}`}>{own?'N':enemy?'E':chosen?'✓':''}</button>;
+              })}
+            </div>
+            {gridDestination&&(()=>{const p=campaign.combat!.playerPosition??{x:1,y:3};const cost=5*Math.max(Math.abs(gridDestination.x-p.x),Math.abs(gridDestination.y-p.y));const remaining=(campaign.combat!.movementAllowance??35)-(campaign.combat!.movementUsed??0);return <div className="flex items-center justify-between gap-2 text-sm"><span>Move {cost} ft · {remaining-cost} ft left</span><div className="flex gap-2"><button type="button" className="rounded border border-white/40 px-3 py-2" onClick={()=>setGridDestination(null)}>Cancel</button><button type="button" disabled={saving} className="rounded bg-gold text-ink px-3 py-2 font-semibold" onClick={()=>void confirmGridMove()}>Confirm</button></div></div>;})()}
+            {!gridSelected&&!gridDestination&&<p className="text-xs text-parchment/60">N = Nighthawk · E = enemy</p>}
+          </div>
           {campaign.combat.steadyAim && <p className="rounded-lg border border-gold/60 bg-gold/10 p-3 text-sm">Steady Aim active: advantage on your next dagger attack, qualifying for 2d6 Sneak Attack on a hit. You cannot move this turn.</p>}
           {campaign.combat.attack && <div className="space-y-2 rounded-lg border border-gold/60 p-3">
             <p className="font-semibold">Nonlethal dagger attack · Opponent HP: {campaign.combat.enemyHp??12}/{campaign.combat.enemyMaxHp??12}</p>
@@ -642,7 +671,6 @@ export function App() {
           <div className="grid grid-cols-2 gap-2">
             {([
               ['attack','Attack',!campaign.combat.actionUsed&&!campaign.combat.attack],
-              ['move','Move 5 ft',!campaign.combat.steadyAim&&!campaign.combat.attack&&(campaign.combat.movementUsed??0)<(campaign.combat.movementAllowance??35)],
               ['steady-aim','Steady Aim',!campaign.combat.bonusActionUsed&&!campaign.combat.actionUsed&&!campaign.combat.attack&&!campaign.combat.movementUsed],
               ['cunning-disengage','Disengage',!campaign.combat.bonusActionUsed],
               ['cunning-dash','Dash',!campaign.combat.bonusActionUsed],
@@ -651,8 +679,8 @@ export function App() {
             ] as const).map(([action,label,available])=><button key={action} type="button" disabled={saving||!available} title={action==='steady-aim'?'Bonus action: advantage on your next attack this turn; no movement this turn.':action==='cunning-dash'?'Bonus action: gain movement equal to your speed.':action==='cunning-disengage'?'Bonus action: avoid opportunity attacks for the rest of the turn.':undefined} className={`rounded-lg border p-2.5 text-sm min-h-11 disabled:opacity-40 ${pendingCombatAction===action?'border-gold bg-gold/20 font-semibold':'border-white/30'}`} onClick={()=>setPendingCombatAction(action)}>{label}</button>)}
           </div>
           {pendingCombatAction && <div className="rounded-lg border border-gold bg-gold/10 p-3 text-sm space-y-2" role="region" aria-label="Confirm combat action">
-            <p className="font-semibold">{({attack:'Attack',move:'Move 5 ft','steady-aim':'Steady Aim','cunning-dash':'Dash','cunning-disengage':'Disengage',dodge:'Dodge',end:'End Turn'} as const)[pendingCombatAction]}</p>
-            <p className="text-parchment/80">{({attack:'Action · Prepare a nonlethal dagger attack against the opponent. Roll to hit after confirming.',move:'Movement · Move 5 feet using your remaining allowance.','steady-aim':'Bonus action · Advantage on your next attack this turn. Your speed becomes 0 until the turn ends. Sneak Attack applies only if its requirements are met.','cunning-dash':'Cunning Action (bonus action) · Gain additional movement equal to your speed this turn.','cunning-disengage':'Cunning Action (bonus action) · Your movement does not provoke opportunity attacks for the rest of this turn.',dodge:'Action · Attacks against you have disadvantage while you can see the attacker.',end:'End your turn and pass initiative to the opponent.'} as const)[pendingCombatAction]}</p>
+            <p className="font-semibold">{({attack:'Attack','steady-aim':'Steady Aim','cunning-dash':'Dash','cunning-disengage':'Disengage',dodge:'Dodge',end:'End Turn'} as const)[pendingCombatAction]}</p>
+            <p className="text-parchment/80">{({attack:'Action · Prepare a nonlethal dagger attack against the opponent. Roll to hit after confirming.','steady-aim':'Bonus action · Advantage on your next attack this turn. Your speed becomes 0 until the turn ends. Sneak Attack applies only if its requirements are met.','cunning-dash':'Cunning Action (bonus action) · Gain additional movement equal to your speed this turn.','cunning-disengage':'Cunning Action (bonus action) · Your movement does not provoke opportunity attacks for the rest of this turn.',dodge:'Action · Attacks against you have disadvantage while you can see the attacker.',end:'End your turn and pass initiative to the opponent.'} as const)[pendingCombatAction]}</p>
             <div className="grid grid-cols-2 gap-2"><button type="button" disabled={saving} className="rounded-lg border border-white/40 p-2.5" onClick={()=>setPendingCombatAction(null)}>Cancel</button><button type="button" disabled={saving} className="rounded-lg bg-gold p-2.5 font-semibold text-ink" onClick={()=>void combatAction(pendingCombatAction)}>Confirm</button></div>
           </div>}
           <p className="text-xs text-parchment/70">Select an action to see details. Nothing is spent until Confirm. Already confirmed actions cannot be undone. Opportunity attacks are not simulated yet.</p>
