@@ -461,15 +461,15 @@ export function App() {
     try {const next=rollDuelInitiative(campaign);await localCampaignStorage.save(next);setCampaign(next);setCampaigns(items=>items.map(item=>item.id===next.id?next:item));setNotice('Initiative rolled and turn order saved.');}
     catch(error){setNotice('Initiative error: '+String(error));}finally{setSaving(false);}
   }
-  const [pendingCombatAction,setPendingCombatAction]=useState<'attack'|'dash'|'disengage'|'dodge'|null>(null);
+  const [pendingCombatAction,setPendingCombatAction]=useState<'attack'|'dash'|'disengage'|'dodge'|'move'|'steady-aim'|'cunning-dash'|'cunning-disengage'|'end'|null>(null);
   async function combatAction(action:'move'|'attack'|'dash'|'disengage'|'dodge'|'steady-aim'|'cunning-dash'|'cunning-disengage'|'end') {
     if(!campaign||saving)return;
-    setPendingCombatAction(null);
     setSaving(true);
     try {
-      const next=action==='end' && pendingCombatAction ? pendingCombatAction==='attack' ? takeDuelTurnAction(campaign,'attack') : takeDuelTurnAction(takeDuelTurnAction(campaign,pendingCombatAction),'end') : takeDuelTurnAction(campaign,action);
+      const next=takeDuelTurnAction(campaign,action);
       await localCampaignStorage.save(next);
       setCampaign(next);setCampaigns(items=>items.map(item=>item.id===next.id?next:item));
+      setPendingCombatAction(null);
       setNotice(next.journal[next.journal.length-1].text);
     } catch(error){setNotice('Combat: '+String(error));} finally{setSaving(false);}
   }
@@ -639,16 +639,23 @@ export function App() {
             {campaign.combat.attack.phase==='resolved' && <button type="button" disabled={saving} className="w-full rounded-lg bg-gold p-3 font-semibold text-ink" onClick={()=>void combatAction('end')}>Finish turn</button>}
           </div>}
           {campaign.combat.lastAction && <p className="rounded-lg border border-gold/60 bg-gold/10 p-3 text-sm">Last action: <strong>{campaign.combat.lastAction}</strong> (confirmed)</p>}
-          {pendingCombatAction && <div className="rounded-lg border border-gold bg-gold/10 p-3 text-sm"><p className="font-semibold">{({attack:'Attack',dash:'Dash',disengage:'Disengage',dodge:'Dodge'} as const)[pendingCombatAction]}</p><p className="mt-1 text-parchment/80">{({attack:'Nighthawk prepares a nonlethal melee dagger strike. DEX and proficiency determine the roll.',dash:'Nighthawk gains additional movement equal to their speed for this turn.',disengage:'Nighthawk avoids provoking opportunity attacks for the rest of this turn.',dodge:'Nighthawk focuses on defense. Attacks against them have disadvantage while they can see the attacker, until their next turn begins.'} as const)[pendingCombatAction]}</p></div>}
           <div className="grid grid-cols-2 gap-2">
-            <button type="button" disabled={saving||!!campaign.combat.bonusActionUsed} className="rounded-lg border border-gold/60 p-3 disabled:opacity-40" onClick={()=>void combatAction('cunning-dash')}>Cunning Action: Dash</button>
-            <button type="button" disabled={saving||!!campaign.combat.bonusActionUsed} className="rounded-lg border border-gold/60 p-3 disabled:opacity-40" onClick={()=>void combatAction('cunning-disengage')}>Cunning Action: Disengage</button>
-            <button type="button" disabled={saving||!!campaign.combat.bonusActionUsed||!!campaign.combat.actionUsed||!!campaign.combat.attack||!!campaign.combat.movementUsed} className="col-span-2 rounded-lg border border-gold/60 p-3 disabled:opacity-40" onClick={()=>void combatAction('steady-aim')}>Steady Aim (bonus action · advantage + Sneak Attack)</button>
-            <button type="button" disabled={saving||!!campaign.combat.steadyAim||!!campaign.combat.attack||(campaign.combat.movementUsed??0)>=(campaign.combat.movementAllowance??35)} className="rounded-lg border border-gold/60 p-3 disabled:opacity-40" onClick={()=>void combatAction('move')}>Move 5 ft</button>
-            {(['attack','dash','disengage','dodge'] as const).map(action=><button key={action} type="button" disabled={saving||!!campaign.combat?.actionUsed||!!campaign.combat?.attack} className={`rounded-lg border p-3 disabled:opacity-40 ${pendingCombatAction===action?'border-gold bg-gold/20 font-semibold':'border-white/30'}`} onClick={()=>setPendingCombatAction(action)}>{({attack:'Declare Attack',dash:'Dash',disengage:'Disengage',dodge:'Dodge'} as const)[action]}</button>)}
-            <button type="button" disabled={saving||!!campaign.combat.attack} className="rounded-lg bg-gold p-3 font-semibold text-ink disabled:opacity-40" onClick={()=>void combatAction('end')}>End Turn</button>
+            {([
+              ['attack','Attack',!campaign.combat.actionUsed&&!campaign.combat.attack],
+              ['move','Move 5 ft',!campaign.combat.steadyAim&&!campaign.combat.attack&&(campaign.combat.movementUsed??0)<(campaign.combat.movementAllowance??35)],
+              ['steady-aim','Steady Aim',!campaign.combat.bonusActionUsed&&!campaign.combat.actionUsed&&!campaign.combat.attack&&!campaign.combat.movementUsed],
+              ['cunning-disengage','Disengage',!campaign.combat.bonusActionUsed],
+              ['cunning-dash','Dash',!campaign.combat.bonusActionUsed],
+              ['dodge','Dodge',!campaign.combat.actionUsed&&!campaign.combat.attack],
+              ['end','End Turn',!campaign.combat.attack||campaign.combat.attack.phase==='resolved']
+            ] as const).map(([action,label,available])=><button key={action} type="button" disabled={saving||!available} title={action==='steady-aim'?'Bonus action: advantage on your next attack this turn; no movement this turn.':action==='cunning-dash'?'Bonus action: gain movement equal to your speed.':action==='cunning-disengage'?'Bonus action: avoid opportunity attacks for the rest of the turn.':undefined} className={`rounded-lg border p-2.5 text-sm min-h-11 disabled:opacity-40 ${pendingCombatAction===action?'border-gold bg-gold/20 font-semibold':'border-white/30'}`} onClick={()=>setPendingCombatAction(action)}>{label}</button>)}
           </div>
-          <p className="text-xs text-parchment/70">Tap another action to change your selection. End Turn commits it; for Attack, roll to hit and damage before finishing. Movement saves immediately. Opportunity attacks are not simulated yet.</p>
+          {pendingCombatAction && <div className="rounded-lg border border-gold bg-gold/10 p-3 text-sm space-y-2" role="region" aria-label="Confirm combat action">
+            <p className="font-semibold">{({attack:'Attack',move:'Move 5 ft','steady-aim':'Steady Aim','cunning-dash':'Dash','cunning-disengage':'Disengage',dodge:'Dodge',end:'End Turn'} as const)[pendingCombatAction]}</p>
+            <p className="text-parchment/80">{({attack:'Action · Prepare a nonlethal dagger attack against the opponent. Roll to hit after confirming.',move:'Movement · Move 5 feet using your remaining allowance.','steady-aim':'Bonus action · Advantage on your next attack this turn. Your speed becomes 0 until the turn ends. Sneak Attack applies only if its requirements are met.','cunning-dash':'Cunning Action (bonus action) · Gain additional movement equal to your speed this turn.','cunning-disengage':'Cunning Action (bonus action) · Your movement does not provoke opportunity attacks for the rest of this turn.',dodge:'Action · Attacks against you have disadvantage while you can see the attacker.',end:'End your turn and pass initiative to the opponent.'} as const)[pendingCombatAction]}</p>
+            <div className="grid grid-cols-2 gap-2"><button type="button" disabled={saving} className="rounded-lg border border-white/40 p-2.5" onClick={()=>setPendingCombatAction(null)}>Cancel</button><button type="button" disabled={saving} className="rounded-lg bg-gold p-2.5 font-semibold text-ink" onClick={()=>void combatAction(pendingCombatAction)}>Confirm</button></div>
+          </div>}
+          <p className="text-xs text-parchment/70">Select an action to see details. Nothing is spent until Confirm. Already confirmed actions cannot be undone. Opportunity attacks are not simulated yet.</p>
         </div> : <div className="space-y-3"><p className="text-sm">{campaign.combat.enemyName} makes a nonlethal training strike. Temporary stats: +4 to hit, 1d6 + 2 damage, against AC 14. Dodge imposes disadvantage.</p><button type="button" disabled={saving} className="w-full rounded-lg bg-gold p-3 font-semibold text-ink disabled:opacity-40" onClick={()=>void resolveEnemyTurn()}>Resolve enemy turn</button><button type="button" disabled={saving} className="w-full rounded-lg border border-gold/60 p-3 text-sm disabled:opacity-40" onClick={()=>void skipEnemyTurnForTest()}>Skip enemy turn (test only)</button></div>}</>}
         </div>}
         {activeView==='adventure' && campaign && !campaign.combat && !campaign.pendingAftermath && <div className="mx-4 my-4 rounded-xl border border-gold/40 bg-panel p-3 space-y-2"><p className="text-sm font-semibold text-gold">Combat mechanics test</p><p className="text-xs text-parchment/70">Start a separate training simulation without needing an NPC to agree to another sparring match. This uses temporary opponent statistics.</p><button type="button" disabled={saving} className="w-full rounded-lg border border-gold/70 p-3 font-semibold disabled:opacity-40" onClick={()=>void startTrainingCombatTest()}>Start dagger training test</button></div>}
