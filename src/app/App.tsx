@@ -657,7 +657,7 @@ export function App() {
             {gridDestination&&(()=>{const p=campaign.combat!.playerPosition??{x:1,y:3};const cost=5*Math.max(Math.abs(gridDestination.x-p.x),Math.abs(gridDestination.y-p.y));const remaining=(campaign.combat!.movementAllowance??35)-(campaign.combat!.movementUsed??0);return <div className="flex items-center justify-between gap-2 text-sm"><span>Move {cost} ft · {remaining-cost} ft left</span><div className="flex gap-2"><button type="button" className="rounded border border-white/40 px-3 py-2" onClick={()=>setGridDestination(null)}>Cancel</button><button type="button" disabled={saving} className="rounded bg-gold text-ink px-3 py-2 font-semibold" onClick={()=>void confirmGridMove()}>Confirm</button></div></div>;})()}
             {!gridSelected&&!gridDestination&&<p className="text-xs text-parchment/60">N = Nighthawk · E = enemy</p>}
           </div>
-          {campaign.combat.steadyAim && <p className="rounded-lg border border-gold/60 bg-gold/10 p-3 text-sm">Steady Aim active: advantage on your next dagger attack, qualifying for 2d6 Sneak Attack on a hit. You cannot move this turn.</p>}
+          {campaign.combat.steadyAim && <p className="rounded-lg border border-gold/60 bg-gold/10 p-3 text-sm">Steady Aim active: roll two d20s on your next attack this turn and use the higher result. Sneak Attack applies on a qualifying hit. You cannot move this turn.</p>}
           {campaign.combat.attack && <div className="space-y-2 rounded-lg border border-gold/60 p-3">
             <p className="font-semibold">Nonlethal dagger attack · Opponent HP: {campaign.combat.enemyHp??12}/{campaign.combat.enemyMaxHp??12}</p>
             <p className="text-sm">Dagger (finesse, melee): +{(abilityModifier((campaign.character??prototypeNighthawk).scores.dex)+(campaign.character??prototypeNighthawk).proficiencyBonus)} to hit (DEX + proficiency) vs temporary opponent AC 12; 1d4 + {abilityModifier((campaign.character??prototypeNighthawk).scores.dex)} piercing. Melee attacks can be nonlethal; shortbow attacks cannot.</p>
@@ -671,7 +671,7 @@ export function App() {
           <div className="grid grid-cols-2 gap-2">
             {([
               ['attack','Attack',!campaign.combat.actionUsed&&!campaign.combat.attack],
-              ['steady-aim','Steady Aim',!campaign.combat.bonusActionUsed&&!campaign.combat.actionUsed&&!campaign.combat.attack&&!campaign.combat.movementUsed],
+              ['steady-aim','Steady Aim',!campaign.combat.bonusActionUsed&&!campaign.combat.movementUsed],
               ['cunning-disengage','Disengage',!campaign.combat.bonusActionUsed],
               ['cunning-dash','Dash',!campaign.combat.bonusActionUsed],
               ['dodge','Dodge',!campaign.combat.actionUsed&&!campaign.combat.attack],
