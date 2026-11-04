@@ -346,8 +346,8 @@ export function App() {
     if(pendingAdventureSpell || pendingRest || saving)return;
     const lower=draft.toLowerCase();
     const explicit=/\b(short rest|long rest)\b/.exec(lower);
-    const natural=/\b(rest|sleep|nap|bed down|turn in for the night)\b/.test(lower) && /\b(want|would like|try|take|start|begin|settle|sleep|rest|nap|bed|turn)\b/.test(lower);
-    const shortTime=/\b(an? hour|one hour|60 minutes|short rest|nap)\b/.test(lower);
+    const natural=/\b(rest|resting|rests|sleep|sleeping|nap|napping|bed down|turn in for the night|take a break|lie down|lay down)\b/.test(lower) && /\b(want|would like|i'd like|try|take|start|begin|settle|spend|sleep|rest|resting|nap|bed|turn|lie|lay)\b/.test(lower);
+    const shortTime=/\b(an? hour|one hour|60 minutes|short rest|nap|brief break)\b/.test(lower);
     const longTime=/\b(eight hours|8 hours|overnight|until morning|through the night|long rest|sleep for the night)\b/.test(lower);
     if(explicit || natural && (shortTime || longTime)) {
       const kind=explicit?explicit[1].startsWith('long')?'long':'short':longTime?'long':'short';
