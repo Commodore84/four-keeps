@@ -568,7 +568,7 @@ export function App() {
           </div>}
           <div className="grid grid-cols-2 gap-2">
             <button type="button" disabled={saving||!!pendingCombatAction||(campaign.combat.movementUsed??0)>=35} className="rounded-lg border border-gold/60 p-3 disabled:opacity-40" onClick={()=>void combatAction('move')}>Move 5 ft</button>
-            {(['attack','dash','disengage','dodge'] as const).map(action=><button key={action} type="button" disabled={saving||!!campaign.combat.actionUsed} className={`rounded-lg border p-3 disabled:opacity-40 ${pendingCombatAction===action?'border-gold bg-gold/20 font-semibold':'border-white/30'}`} onClick={()=>setPendingCombatAction(action)}>{({attack:'Declare Attack',dash:'Dash',disengage:'Disengage',dodge:'Dodge'} as const)[action]}</button>)}
+            {(['attack','dash','disengage','dodge'] as const).map(action=><button key={action} type="button" disabled={saving||!!campaign.combat?.actionUsed} className={`rounded-lg border p-3 disabled:opacity-40 ${pendingCombatAction===action?'border-gold bg-gold/20 font-semibold':'border-white/30'}`} onClick={()=>setPendingCombatAction(action)}>{({attack:'Declare Attack',dash:'Dash',disengage:'Disengage',dodge:'Dodge'} as const)[action]}</button>)}
             <button type="button" disabled={saving||!!pendingCombatAction} className="rounded-lg bg-gold p-3 font-semibold text-ink disabled:opacity-40" onClick={()=>void combatAction('end')}>End Turn</button>
           </div>
           <p className="text-xs text-parchment/70">This stage tracks actions and movement only. Attack rolls, damage, and enemy decisions are not implemented yet.</p>
