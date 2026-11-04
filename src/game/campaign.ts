@@ -22,7 +22,7 @@ export interface Campaign {
   xp?: number;
   xpAwards?: { id: string; amount: number; reason: string }[];
   levelOneSnapshot?: { character: CharacterStats; xp: number; xpAwards: { id: string; amount: number; reason: string }[] };
-  combat?: { status:'awaiting-initiative'|'initiative-set'; enemyName:string; enemyInitiative:number; playerInitiative?:number; round:number; order?:string[] };
+  combat?: { status:'awaiting-initiative'|'initiative-set'; enemyName:string; enemyInitiative:number; playerInitiative?:number; round:number; order?:string[]; turnIndex?:number; movementUsed?:number; actionUsed?:boolean; bonusActionUsed?:boolean; lastAction?:string };
   pendingCheck?: { skill: string; mode: 'normal' | 'advantage' | 'disadvantage'; reason: string; token: string; dice?: number[] };
 }
 export function newCampaign(title: string, id: string = crypto.randomUUID(), now: string = new Date().toISOString()): Campaign {
@@ -213,5 +213,31 @@ export function rollDuelInitiative(campaign:Campaign):Campaign {
   const total=roll+modifier;
   const order=total>=combat.enemyInitiative?['Nighthawk',combat.enemyName]:[combat.enemyName,'Nighthawk'];
   const now=new Date().toISOString();
-  return {...campaign,combat:{...combat,status:'initiative-set',playerInitiative:total,order},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:'Nighthawk initiative: d20 '+roll+' + DEX '+modifier+' = '+total+'. '+combat.enemyName+': '+combat.enemyInitiative+'. Turn order: '+order.join(' → ')+'.',createdAt:now}]};
+  return {...campaign,combat:{...combat,status:'initiative-set',playerInitiative:total,order,turnIndex:0,movementUsed:0,actionUsed:false,bonusActionUsed:false},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:'Nighthawk initiative: d20 '+roll+' + DEX '+modifier+' = '+total+'. '+combat.enemyName+': '+combat.enemyInitiative+'. Turn order: '+order.join(' → ')+'.',createdAt:now}]};
+}
+
+export function takeDuelTurnAction(campaign:Campaign, action:'move'|'attack'|'dash'|'disengage'|'dodge'|'end'):Campaign {
+ const combat=campaign.combat;
+ if(!combat||combat.status!=='initiative-set'||!combat.order)throw Error('Initiative must be completed first.');
+ const current=combat.order[combat.turnIndex??0];
+ if(current!=='Nighthawk')throw Error('It is not Nighthawk\'s turn.');
+ const next={...combat};let description='';
+ const speed=35;
+ if(action==='move'){
+   if((next.movementUsed??0)>=speed)throw Error('No movement remaining.');
+   next.movementUsed=Math.min(speed,(next.movementUsed??0)+5);
+   description='Nighthawk moves 5 feet ('+next.movementUsed+'/'+speed+' feet).';
+ }else if(action==='end'){
+   next.turnIndex=1;next.movementUsed=0;next.actionUsed=false;next.bonusActionUsed=false;
+   description='Nighthawk ends their turn. '+combat.enemyName+' is next.';
+ }else {
+   if(next.actionUsed)throw Error('Action already used this turn.');
+   next.actionUsed=true;
+   if(action==='dash'){next.lastAction='Dash';description='Nighthawk Dashes, gaining another '+speed+' feet of movement this turn.';}
+   if(action==='disengage'){next.lastAction='Disengage';description='Nighthawk takes the Disengage action.';}
+   if(action==='dodge'){next.lastAction='Dodge';description='Nighthawk takes the Dodge action.';}
+   if(action==='attack'){next.lastAction='Attack declared';description='Nighthawk declares an attack on '+combat.enemyName+'. No attack roll or damage has been resolved yet.';}
+ }
+ const now=new Date().toISOString();
+ return {...campaign,combat:next,updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:description,createdAt:now}]};
 }
