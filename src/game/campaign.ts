@@ -22,7 +22,7 @@ export interface Campaign {
   xp?: number;
   xpAwards?: { id: string; amount: number; reason: string }[];
   levelOneSnapshot?: { character: CharacterStats; xp: number; xpAwards: { id: string; amount: number; reason: string }[] };
-  combat?: { status:'awaiting-initiative'|'initiative-set'|'completed'; enemyName:string; enemyInitiative:number; playerInitiative?:number; round:number; order?:string[]; turnIndex?:number; movementUsed?:number; actionUsed?:boolean; bonusActionUsed?:boolean; lastAction?:string; attack?:{phase:'roll-to-hit'|'roll-damage'|'resolved'; d20?:number; total?:number; hit?:boolean; critical?:boolean; damage?:number}; enemyHp?:number; enemyMaxHp?:number; outcome?:'nonlethal-victory' };
+  combat?: { status:'awaiting-initiative'|'initiative-set'|'completed'; enemyName:string; enemyInitiative:number; playerInitiative?:number; round:number; order?:string[]; turnIndex?:number; movementUsed?:number; actionUsed?:boolean; bonusActionUsed?:boolean; lastAction?:string; attack?:{phase:'roll-to-hit'|'roll-damage'|'resolved'; d20?:number; total?:number; hit?:boolean; critical?:boolean; damage?:number}; enemyHp?:number; enemyMaxHp?:number; outcome?:'nonlethal-victory'|'player-defeated'; enemyLastTurn?:string };
   pendingCheck?: { skill: string; mode: 'normal' | 'advantage' | 'disadvantage'; reason: string; token: string; dice?: number[] };
 }
 export function newCampaign(title: string, id: string = crypto.randomUUID(), now: string = new Date().toISOString()): Campaign {
@@ -241,6 +241,30 @@ export function takeDuelTurnAction(campaign:Campaign, action:'move'|'attack'|'da
  }
  const now=new Date().toISOString();
  return {...campaign,combat:next,updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:description,createdAt:now}]};
+}
+
+export function resolveDuelEnemyTurn(campaign:Campaign):Campaign {
+ const combat=campaign.combat;
+ if(!combat||combat.status!=='initiative-set'||!combat.order||combat.order[combat.turnIndex??0]==='Nighthawk')throw Error('It is not the opponent\'s turn.');
+ const character=campaign.character??prototypeNighthawk;
+ const die=(sides:number)=>crypto.getRandomValues(new Uint32Array(1))[0]%sides+1;
+ const first=die(20);
+ const dodging=combat.lastAction==='Dodge';
+ const second=dodging?die(20):undefined;
+ const attackRoll=second===undefined?first:Math.min(first,second);
+ const total=attackRoll+4;
+ const ac=14; // Temporary training AC; replace with equipment-derived AC later.
+ const hit=attackRoll===20||(attackRoll!==1&&total>=ac);
+ const critical=attackRoll===20;
+ const damage=hit?die(6)+(critical?die(6):0)+2:0;
+ const before=character.currentHitPoints??character.maxHitPoints??10;
+ const after=Math.max(0,before-damage);
+ const defeated=hit&&after===0;
+ const detail=combat.enemyName+' training attack: '+(dodging?'disadvantage ('+first+', '+second+') → ':'d20 ')+attackRoll+' + 4 = '+total+' vs temporary AC '+ac+': '+(hit?'HIT':'MISS')+'.'+(hit?' Nonlethal damage: '+damage+'. Nighthawk HP: '+before+' → '+after+'/'+(character.maxHitPoints??10)+'.':'')+(defeated?' Nighthawk is knocked unconscious; sparring ends.':'');
+ const nextRound=combat.order[0]==='Nighthawk'?combat.round+1:combat.round;
+ const nextCombat={...combat,turnIndex:combat.order.indexOf('Nighthawk'),round:nextRound,movementUsed:0,actionUsed:false,bonusActionUsed:false,lastAction:undefined,attack:undefined,enemyLastTurn:detail,status:defeated?'completed' as const:combat.status,outcome:defeated?'player-defeated' as const:combat.outcome};
+ const now=new Date().toISOString();
+ return {...campaign,character:{...character,currentHitPoints:after},combat:nextCombat,updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:detail,createdAt:now}]};
 }
 
 export function advanceDuelTestEnemyTurn(campaign:Campaign):Campaign {
