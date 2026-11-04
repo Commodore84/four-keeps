@@ -153,7 +153,7 @@ export function longRestRestriction(campaign: Campaign): string | null {
   }
   return null;
 }
-export function takeNighthawkRest(campaign: Campaign, kind: 'short'|'long', hitDiceToSpend = 0): Campaign {
+export function takeNighthawkRest(campaign: Campaign, kind: 'short'|'long', hitDiceToSpend = 0, hitDieRolls: number[] = []): Campaign {
   if(kind==='long') {const restriction=longRestRestriction(campaign);if(restriction)throw new Error(restriction);}
   const character=campaign.character ?? prototypeNighthawk;
   const level=character.level??1;
@@ -161,13 +161,13 @@ export function takeNighthawkRest(campaign: Campaign, kind: 'short'|'long', hitD
   const currentHp=character.currentHitPoints??maxHp;
   const available=campaign.hitDiceRemaining??level;
   if(!Number.isInteger(hitDiceToSpend)||hitDiceToSpend<0||hitDiceToSpend>available || (kind==='long'&&hitDiceToSpend!==0)) throw new Error('Invalid Hit Dice expenditure');
+  if(kind==='short' && (hitDieRolls.length!==hitDiceToSpend || hitDieRolls.some(d=>!Number.isInteger(d)||d<1||d>8)))throw new Error('Roll each selected Hit Die before completing the rest');
   const now=new Date().toISOString();
   const conBonus=Math.floor(((character.scores.con??10)-10)/2);
-  // 2024 short rests recover HP via individually rolled Hit Dice; use secure random dice.
-  const rolls=kind==='short'?Array.from({length:hitDiceToSpend},()=>crypto.getRandomValues(new Uint32Array(1))[0]%8+1):[];
+  const rolls=kind==='short'?hitDieRolls:[];
   const healing=rolls.reduce((sum,die)=>sum+Math.max(0,die+conBonus),0);
   const nextHp=kind==='long'?maxHp:Math.min(maxHp,currentHp+healing);
-  const remaining=kind==='long'?Math.min(level,available+Math.max(1,Math.floor(level/2))):available-hitDiceToSpend;
+  const remaining=kind==='long'?Math.min(level,available+Math.max(1,Math.ceil(level/2))):available-hitDiceToSpend;
   const slots=character.spellSlots;
   const nextCharacter={...character,currentHitPoints:nextHp,spellSlots:slots?{...slots,usedLevel1:kind==='long'?0:slots.usedLevel1}:slots};
   const minutes=kind==='long'?480:60;
