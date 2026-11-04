@@ -355,7 +355,7 @@ export function rollTrainingReaction(campaign:Campaign,kind:'hit'|'damage'|'fini
  const character=campaign.character??prototypeNighthawk;
  const die=(sides:number)=>crypto.getRandomValues(new Uint32Array(1))[0]%sides+1;
  const now=new Date().toISOString();
- let next={...c,reactionAttack:{...attack}},detail='';
+ let next:NonNullable<Campaign['combat']>={...c,reactionAttack:{...attack}};let detail='';
  if(kind==='hit'){
   if(attack.phase!=='roll-to-hit')throw Error('Attack roll already resolved.');
   const d20=die(20),bonus=abilityModifier(character.scores.dex)+character.proficiencyBonus,total=d20+bonus;
