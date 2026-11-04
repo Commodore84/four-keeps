@@ -171,6 +171,7 @@ export function App() {
   const [restDice,setRestDice] = useState(0);
   const [restRolls,setRestRolls] = useState<number[]>([]);
   const [restApproved,setRestApproved] = useState(false);
+  const [restNarration,setRestNarration] = useState('');
   const [notice, setNotice] = useState('');
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [campaign, setCampaign] = useState<Campaign | null>(null);
@@ -342,37 +343,49 @@ export function App() {
     return {spell:name,ritual:isRitualSpell(name)&&/\britual\b/.test(normalized),intent:message};
   }
   async function submitAdventure() {
+    if(pendingAdventureSpell || pendingRest || saving)return;
     const lower=draft.toLowerCase();
-    if(/\b(short rest|long rest)\b/.test(lower) && /\b(take|start|begin|have|rest)\b/.test(lower)) {setPendingRest(lower.includes('long rest')?'long':'short');setRestDice(0);setRestRolls([]);setRestApproved(false);return;}
-    if(pendingAdventureSpell || saving)return;
+    const explicit=/\b(short rest|long rest)\b/.exec(lower);
+    const natural=/\b(rest|sleep|nap|bed down|turn in for the night)\b/.test(lower) && /\b(want|would like|try|take|start|begin|settle|sleep|rest|nap|bed|turn)\b/.test(lower);
+    const shortTime=/\b(an? hour|one hour|60 minutes|short rest|nap)\b/.test(lower);
+    const longTime=/\b(eight hours|8 hours|overnight|until morning|through the night|long rest|sleep for the night)\b/.test(lower);
+    if(explicit || natural && (shortTime || longTime)) {
+      const kind=explicit?explicit[1].startsWith('long')?'long':'short':longTime?'long':'short';
+      setPendingRest(kind);setRestDice(0);setRestRolls([]);setRestApproved(false);setRestNarration('');
+      await requestRestApproval(kind);
+      return;
+    }
     const found=detectAdventureSpell(draft);
     if(found){setPendingAdventureSpell(found);setAdventureComponentsConfirmed(false);return;}
     await sendToDM();
   }
-  async function confirmRest() {
-    if(!campaign || !pendingRest || saving)return;
-    if(!accessCode){setNotice('Enter your game access code first.');return;}
-    const kind=pendingRest;
-    if(restApproved){
-      if(kind==='short'&&restRolls.length!==restDice){setNotice('Tap to roll every selected Hit Die first.');return;}
-      setSaving(true);
-      try {const base=takeNighthawkRest(campaign,kind,kind==='short'?restDice:0,restRolls);const next=addExchange(base,draft,'The approved '+kind+' rest is complete.',new Date().toISOString());await localCampaignStorage.save(next);setCampaign(next);setCampaigns(items=>items.map(item=>item.id===next.id?next:item));setPendingRest(null);setRestApproved(false);setRestRolls([]);setDraft('');setNotice('Rest completed and saved.');}catch(error){setNotice('Rest error: '+String(error));}finally{setSaving(false);}return;
-    }
+  async function requestRestApproval(kind:'short'|'long') {
+    if(!campaign || saving)return;
+    if(!accessCode){setNotice('Enter your game access code first.');setPendingRest(null);return;}
     if(kind==='long'){const restriction=longRestRestriction(campaign);if(restriction){setNotice(restriction);setPendingRest(null);return;}}
-    setSaving(true);
-    setNotice('The Dungeon Master is evaluating the rest…');
+    setSaving(true);setNotice('The Dungeon Master is evaluating your rest request…');
     try {
       const history=campaign.journal.filter(e=>e.kind==='player'||e.kind==='dm').slice(-12).map(e=>({role:e.kind==='player'?'user':'assistant',content:e.text}));
       const response=await fetch('/api/dm',{method:'POST',headers:{'Content-Type':'application/json','x-four-keeps-access':accessCode},body:JSON.stringify({message:draft,restRequest:kind,character:campaign.character??prototypeNighthawk,gameState:{familiar:campaign.familiar??null,elapsedMinutes:campaign.elapsedMinutes??0,recentEvents:campaign.journal.filter(e=>e.kind==='system').slice(-8).map(e=>e.text)},history,worldFacts:campaign.worldFacts??[],world:campaign.world??emptyWorld()})});
       const result:{narration?:string;restDecision?:'approved'|'denied';error?:string}=await response.json();
       if(!response.ok||!result.narration||!['approved','denied'].includes(result.restDecision??''))throw new Error(result.error??'Rest adjudication failed');
-      if(result.restDecision==='approved'){setRestApproved(true);setNotice('DM approved the rest. Roll Hit Dice if needed, then complete it.');return;}
-      const base=campaign;
-      const next=addExchange(base,draft,result.narration,new Date().toISOString());
-      await localCampaignStorage.save(next);
-      setCampaign(next);setCampaigns(items=>items.map(item=>item.id===next.id?next:item));
-      setPendingRest(null);setDraft('');setActiveView('adventure');
-      setNotice(result.restDecision==='approved'?'Rest approved, completed and saved.':'The DM denied the rest. No resources or time changed.');
+      if(result.restDecision==='approved'){setRestNarration(result.narration);setRestApproved(true);setNotice('Rest approved. Choose your recovery options below.');return;}
+      const next=addExchange(campaign,draft,result.narration,new Date().toISOString());
+      await localCampaignStorage.save(next);setCampaign(next);setCampaigns(items=>items.map(item=>item.id===next.id?next:item));
+      setPendingRest(null);setDraft('');setNotice('The DM denied or interrupted the rest. No resources changed.');
+    }catch(error){setPendingRest(null);setNotice('Rest request failed: '+String(error));}
+    finally{setSaving(false);}
+  }
+  async function confirmRest() {
+    if(!campaign||!pendingRest||!restApproved||saving)return;
+    if(pendingRest==='short'&&restRolls.length!==restDice){setNotice('Roll each selected Hit Die before completing the rest.');return;}
+    setSaving(true);
+    try {
+      const base=takeNighthawkRest(campaign,pendingRest,pendingRest==='short'?restDice:0,restRolls);
+      const next=addExchange(base,draft,restNarration,new Date().toISOString());
+      await localCampaignStorage.save(next);setCampaign(next);setCampaigns(items=>items.map(item=>item.id===next.id?next:item));
+      setPendingRest(null);setRestApproved(false);setRestRolls([]);setRestNarration('');setDraft('');
+      setNotice('Rest completed and saved.');
     }catch(error){setNotice('Rest error: '+String(error));}
     finally{setSaving(false);}
   }
@@ -504,7 +517,7 @@ export function App() {
         {content[activeView]}
       </main>
       <div className="sticky bottom-0 z-20 border-t border-white/10 bg-ink/95 backdrop-blur">
-        {pendingRest && <div className="mx-4 mt-3 space-y-3 rounded-xl border border-gold/50 bg-panel p-4"><p className="eyebrow">Confirm rest</p><h3 className="font-serif text-xl">{pendingRest==='long'?'Long Rest · 8 hours':'Short Rest · 1 hour'}</h3><p className="text-sm">{pendingRest==='long'?'Restore all HP and expended spell slots. Recover up to half your Hit Dice (minimum one).':'Spend Hit Dice to recover HP. Spell slots do not recover.'}</p><p className="text-xs">HP: {campaign?.character?.currentHitPoints??10}/{campaign?.character?.maxHitPoints??10} · Hit Dice available: {campaign?.hitDiceRemaining??campaign?.character?.level??1} · Level 1 slots remaining: {(campaign?.character?.spellSlots?.level1??0)-(campaign?.character?.spellSlots?.usedLevel1??0)}</p>{pendingRest==='short' && <label className="block text-sm">Hit Dice to roll (d8 + CON each)<select className="mt-2 w-full rounded-lg border border-white/20 bg-ink p-2" value={restDice} onChange={e=>{setRestDice(Number(e.target.value));setRestRolls([])}}>{Array.from({length:(campaign?.hitDiceRemaining??campaign?.character?.level??1)+1},(_,i)=><option key={i} value={i}>{i}</option>)}</select></label>}{pendingRest==='short' && restApproved && restRolls.length<restDice && <button type="button" className="w-full rounded-lg border border-gold/60 p-3 text-gold" onClick={()=>setRestRolls(v=>[...v,crypto.getRandomValues(new Uint32Array(1))[0]%8+1])}>Roll Hit Die {restRolls.length+1} of {restDice} (d8)</button>}{pendingRest==='short' && restRolls.length>0 && <p className="text-sm">Your rolls: {restRolls.join(', ')} · CON {signed(abilityModifier((campaign?.character??prototypeNighthawk).scores.con))} per die</p>}<div className="flex gap-2"><button type="button" className="flex-1 rounded-lg border border-white/30 p-3" onClick={()=>{setPendingRest(null);setRestApproved(false);setRestRolls([])}}>Cancel</button><button type="button" disabled={saving} className="flex-1 rounded-lg bg-gold p-3 font-semibold text-ink disabled:opacity-40" onClick={()=>void confirmRest()}>{restApproved?'Complete approved rest':'Ask DM for approval'}</button></div><p className="text-xs text-parchment/60">The DM must approve an uninterrupted rest before time or resources change.</p></div>}
+        {pendingRest && restApproved && <div className="mx-4 mt-3 space-y-3 rounded-xl border border-gold/50 bg-panel p-4"><p className="eyebrow">DM-approved rest · Recovery options</p><p className="text-sm text-parchment/80">{restNarration}</p><h3 className="font-serif text-xl">{pendingRest==='long'?'Long Rest · 8 hours':'Short Rest · 1 hour'}</h3><p className="text-sm">{pendingRest==='long'?'Restore all HP and expended spell slots. Recover up to half your Hit Dice (minimum one).':'Spend Hit Dice to recover HP. Spell slots do not recover.'}</p><p className="text-xs">HP: {campaign?.character?.currentHitPoints??10}/{campaign?.character?.maxHitPoints??10} · Hit Dice available: {campaign?.hitDiceRemaining??campaign?.character?.level??1} · Level 1 slots remaining: {(campaign?.character?.spellSlots?.level1??0)-(campaign?.character?.spellSlots?.usedLevel1??0)}</p>{pendingRest==='short' && <label className="block text-sm">Hit Dice to roll (d8 + CON each)<select className="mt-2 w-full rounded-lg border border-white/20 bg-ink p-2" value={restDice} onChange={e=>{setRestDice(Number(e.target.value));setRestRolls([])}}>{Array.from({length:(campaign?.hitDiceRemaining??campaign?.character?.level??1)+1},(_,i)=><option key={i} value={i}>{i}</option>)}</select></label>}{pendingRest==='short' && restApproved && restRolls.length<restDice && <button type="button" className="w-full rounded-lg border border-gold/60 p-3 text-gold" onClick={()=>setRestRolls(v=>[...v,crypto.getRandomValues(new Uint32Array(1))[0]%8+1])}>Roll Hit Die {restRolls.length+1} of {restDice} (d8)</button>}{pendingRest==='short' && restRolls.length>0 && <p className="text-sm">Your rolls: {restRolls.join(', ')} · CON {signed(abilityModifier((campaign?.character??prototypeNighthawk).scores.con))} per die</p>}<div className="flex gap-2"><button type="button" className="flex-1 rounded-lg border border-white/30 p-3" onClick={()=>{setPendingRest(null);setRestApproved(false);setRestRolls([])}}>Cancel</button><button type="button" disabled={saving} className="flex-1 rounded-lg bg-gold p-3 font-semibold text-ink disabled:opacity-40" onClick={()=>void confirmRest()}>Complete rest</button></div><p className="text-xs text-parchment/60">The DM approved this rest. Choose recovery options, then apply them.</p></div>}
         {pendingAdventureSpell && <div className="mx-4 mt-3 rounded-xl border border-gold/50 bg-panel p-4 space-y-3" role="group" aria-label="Confirm spell cast"><p className="eyebrow">Confirm Adventure spell</p><h3 className="font-serif text-xl">{pendingAdventureSpell.spell}{pendingAdventureSpell.ritual?' · Ritual':''}</h3><p className="text-sm text-parchment/80">{pendingAdventureSpell.intent}</p><p className="text-xs text-parchment/70">{pendingAdventureSpell.ritual?'No spell slot spent.':campaign?.character?.cantrips?.includes(pendingAdventureSpell.spell)?'Cantrip · no spell slot spent.':'Consumes one Level 1 spell slot.'}</p>{pendingAdventureSpell.spell==='Find Familiar' && <label className="flex gap-2 text-xs"><input type="checkbox" checked={adventureComponentsConfirmed} onChange={e=>setAdventureComponentsConfirmed(e.target.checked)}/> I have and consume the required 10 gp material components (inventory is not yet tracked).</label>}<div className="flex gap-2"><button type="button" className="flex-1 rounded-lg border border-white/30 p-3" onClick={()=>setPendingAdventureSpell(null)}>Edit action</button><button type="button" disabled={saving || (pendingAdventureSpell.spell==='Find Familiar'&&!adventureComponentsConfirmed)} className="flex-1 rounded-lg bg-gold p-3 font-semibold text-ink disabled:opacity-40" onClick={()=>void confirmAdventureSpell()}>Cast and continue</button></div></div>}
         {campaign?.pendingCheck && <div className="mx-4 mt-3 rounded-xl border border-gold/40 bg-panel p-4 space-y-2" role="group" aria-label="Pending skill check">
           <p className="eyebrow">Dungeon Master requests a check</p>
