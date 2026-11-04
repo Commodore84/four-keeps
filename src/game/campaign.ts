@@ -22,7 +22,7 @@ export interface Campaign {
   xp?: number;
   xpAwards?: { id: string; amount: number; reason: string }[];
   levelOneSnapshot?: { character: CharacterStats; xp: number; xpAwards: { id: string; amount: number; reason: string }[] };
-  combat?: { status:'awaiting-initiative'|'initiative-set'; enemyName:string; enemyInitiative:number; playerInitiative?:number; round:number; order?:string[]; turnIndex?:number; movementUsed?:number; actionUsed?:boolean; bonusActionUsed?:boolean; lastAction?:string };
+  combat?: { status:'awaiting-initiative'|'initiative-set'; enemyName:string; enemyInitiative:number; playerInitiative?:number; round:number; order?:string[]; turnIndex?:number; movementUsed?:number; actionUsed?:boolean; bonusActionUsed?:boolean; lastAction?:string; attack?:{phase:'roll-to-hit'|'roll-damage'|'resolved'; d20?:number; total?:number; hit?:boolean; critical?:boolean; damage?:number}; enemyHp?:number; enemyMaxHp?:number };
   pendingCheck?: { skill: string; mode: 'normal' | 'advantage' | 'disadvantage'; reason: string; token: string; dice?: number[] };
 }
 export function newCampaign(title: string, id: string = crypto.randomUUID(), now: string = new Date().toISOString()): Campaign {
@@ -213,7 +213,7 @@ export function rollDuelInitiative(campaign:Campaign):Campaign {
   const total=roll+modifier;
   const order=total>=combat.enemyInitiative?['Nighthawk',combat.enemyName]:[combat.enemyName,'Nighthawk'];
   const now=new Date().toISOString();
-  return {...campaign,combat:{...combat,status:'initiative-set',playerInitiative:total,order,turnIndex:0,movementUsed:0,actionUsed:false,bonusActionUsed:false},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:'Nighthawk initiative: d20 '+roll+' + DEX '+modifier+' = '+total+'. '+combat.enemyName+': '+combat.enemyInitiative+'. Turn order: '+order.join(' → ')+'.',createdAt:now}]};
+  return {...campaign,combat:{...combat,status:'initiative-set',playerInitiative:total,order,turnIndex:0,movementUsed:0,actionUsed:false,bonusActionUsed:false,enemyHp:12,enemyMaxHp:12},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:'Nighthawk initiative: d20 '+roll+' + DEX '+modifier+' = '+total+'. '+combat.enemyName+': '+combat.enemyInitiative+'. Turn order: '+order.join(' → ')+'.',createdAt:now}]};
 }
 
 export function takeDuelTurnAction(campaign:Campaign, action:'move'|'attack'|'dash'|'disengage'|'dodge'|'end'):Campaign {
@@ -228,7 +228,8 @@ export function takeDuelTurnAction(campaign:Campaign, action:'move'|'attack'|'da
    next.movementUsed=Math.min(speed,(next.movementUsed??0)+5);
    description='Nighthawk moves 5 feet ('+next.movementUsed+'/'+speed+' feet).';
  }else if(action==='end'){
-   next.turnIndex=1;next.movementUsed=0;next.actionUsed=false;next.bonusActionUsed=false;
+   if(next.attack && next.attack.phase!=='resolved')throw Error('Resolve the attack before ending the turn.');
+   next.turnIndex=1;next.movementUsed=0;next.actionUsed=false;next.bonusActionUsed=false;next.attack=undefined;
    description='Nighthawk ends their turn. '+combat.enemyName+' is next.';
  }else {
    if(next.actionUsed)throw Error('Action already used this turn.');
@@ -236,7 +237,7 @@ export function takeDuelTurnAction(campaign:Campaign, action:'move'|'attack'|'da
    if(action==='dash'){next.lastAction='Dash';description='Nighthawk Dashes, gaining another '+speed+' feet of movement this turn.';}
    if(action==='disengage'){next.lastAction='Disengage';description='Nighthawk takes the Disengage action.';}
    if(action==='dodge'){next.lastAction='Dodge';description='Nighthawk takes the Dodge action.';}
-   if(action==='attack'){next.lastAction='Attack declared';description='Nighthawk declares an attack on '+combat.enemyName+'. No attack roll or damage has been resolved yet.';}
+   if(action==='attack'){next.lastAction='Attack';next.attack={phase:'roll-to-hit'};description='Nighthawk prepares a nonlethal training strike against '+combat.enemyName+'. Roll to hit next.';}
  }
  const now=new Date().toISOString();
  return {...campaign,combat:next,updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:description,createdAt:now}]};
@@ -247,5 +248,27 @@ export function advanceDuelTestEnemyTurn(campaign:Campaign):Campaign {
  if(!combat||combat.status!=='initiative-set'||!combat.order||combat.order[combat.turnIndex??0]==='Nighthawk')throw Error('No enemy turn to advance.');
  const now=new Date().toISOString();
  const nextRound=combat.order[0]==='Nighthawk'?combat.round+1:combat.round;
- return {...campaign,combat:{...combat,turnIndex:combat.order.indexOf('Nighthawk'),round:nextRound,movementUsed:0,actionUsed:false,bonusActionUsed:false,lastAction:undefined},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:'TEST ONLY: '+combat.enemyName+' turn skipped without an attack, damage, or other effect. Nighthawk can act again.',createdAt:now}]};
+ return {...campaign,combat:{...combat,turnIndex:combat.order.indexOf('Nighthawk'),round:nextRound,movementUsed:0,actionUsed:false,bonusActionUsed:false,lastAction:undefined,attack:undefined},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:'TEST ONLY: '+combat.enemyName+' turn skipped without an attack, damage, or other effect. Nighthawk can act again.',createdAt:now}]};
+}
+
+export function rollDuelAttack(campaign:Campaign,kind:'hit'|'damage'):Campaign {
+ const combat=campaign.combat;
+ if(!combat||combat.status!=='initiative-set'||!combat.attack||combat.order?.[combat.turnIndex??0]!=='Nighthawk')throw Error('No attack awaiting a roll.');
+ const next={...combat,attack:{...combat.attack}};
+ const die=(sides:number)=>crypto.getRandomValues(new Uint32Array(1))[0]%sides+1;
+ let description='';
+ if(kind==='hit'){
+  if(next.attack.phase!=='roll-to-hit')throw Error('Attack roll already made.');
+  const d20=die(20),total=d20+5,critical=d20===20,hit=critical||(d20!==1&&total>=12);
+  next.attack={phase:hit?'roll-damage':'resolved',d20,total,critical,hit};
+  description='Training strike: d20 '+d20+' + 5 = '+total+' vs training AC 12: '+(hit?'HIT':'MISS')+'.'+(critical?' Critical hit.':'');
+ }else{
+  if(next.attack.phase!=='roll-damage')throw Error('Roll to hit first.');
+  const first=die(6),second=next.attack.critical?die(6):0,damage=first+second+3;
+  next.attack={...next.attack,phase:'resolved',damage};
+  next.enemyHp=Math.max(0,(next.enemyHp??12)-damage);
+  description='Nonlethal training damage: '+first+(second?' + '+second+' (critical)':'')+' + 3 = '+damage+'. '+combat.enemyName+' HP: '+next.enemyHp+'/'+(next.enemyMaxHp??12)+'.';
+ }
+ const now=new Date().toISOString();
+ return {...campaign,combat:next,updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:description,createdAt:now}]};
 }
