@@ -22,7 +22,7 @@ export interface Campaign {
   xp?: number;
   xpAwards?: { id: string; amount: number; reason: string }[];
   levelOneSnapshot?: { character: CharacterStats; xp: number; xpAwards: { id: string; amount: number; reason: string }[] };
-  combat?: { status:'awaiting-initiative'|'initiative-set'|'completed'; enemyName:string; enemyInitiative:number; playerInitiative?:number; round:number; order?:string[]; turnIndex?:number; movementUsed?:number; actionUsed?:boolean; bonusActionUsed?:boolean; lastAction?:string; attack?:{phase:'roll-to-hit'|'roll-damage'|'resolved'; d20?:number; firstD20?:number; total?:number; hit?:boolean; critical?:boolean; damage?:number; sneakAttackDamage?:number; advantage?:boolean; secondD20?:number}; steadyAim?:boolean; movementAllowance?:number; disengaged?:boolean; enemyHp?:number; enemyMaxHp?:number; outcome?:'nonlethal-victory'|'player-defeated'; enemyLastTurn?:string; trainingStartingHp?:number; playerPosition?:{x:number;y:number}; enemyPosition?:{x:number;y:number} };
+  combat?: { status:'awaiting-initiative'|'initiative-set'|'completed'; enemyName:string; enemyInitiative:number; playerInitiative?:number; round:number; order?:string[]; turnIndex?:number; movementUsed?:number; actionUsed?:boolean; bonusActionUsed?:boolean; lastAction?:string; arrowsRemaining?:number; attack?:{weapon?:'dagger'|'shortbow'; disadvantage?:boolean; phase:'roll-to-hit'|'roll-damage'|'resolved'; d20?:number; firstD20?:number; total?:number; hit?:boolean; critical?:boolean; damage?:number; sneakAttackDamage?:number; advantage?:boolean; secondD20?:number}; steadyAim?:boolean; movementAllowance?:number; disengaged?:boolean; enemyHp?:number; enemyMaxHp?:number; outcome?:'nonlethal-victory'|'player-defeated'; enemyLastTurn?:string; trainingStartingHp?:number; playerPosition?:{x:number;y:number}; enemyPosition?:{x:number;y:number} };
   pendingAftermath?: { opponent: string; playerDefeated: boolean };
   pendingCheck?: { skill: string; mode: 'normal' | 'advantage' | 'disadvantage'; reason: string; token: string; dice?: number[] };
 }
@@ -214,7 +214,7 @@ export function rollDuelInitiative(campaign:Campaign):Campaign {
   const total=roll+modifier;
   const order=total>=combat.enemyInitiative?['Nighthawk',combat.enemyName]:[combat.enemyName,'Nighthawk'];
   const now=new Date().toISOString();
-  return {...campaign,combat:{...combat,status:'initiative-set',playerInitiative:total,order,turnIndex:0,movementUsed:0,actionUsed:false,bonusActionUsed:false,enemyHp:12,enemyMaxHp:12,playerPosition:{x:1,y:3},enemyPosition:{x:5,y:3}},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:'Nighthawk initiative: d20 '+roll+' + DEX '+modifier+' = '+total+'. '+combat.enemyName+': '+combat.enemyInitiative+'. Turn order: '+order.join(' → ')+'.',createdAt:now}]};
+  return {...campaign,combat:{...combat,status:'initiative-set',playerInitiative:total,order,turnIndex:0,movementUsed:0,actionUsed:false,bonusActionUsed:false,enemyHp:12,enemyMaxHp:12,arrowsRemaining:20,playerPosition:{x:1,y:3},enemyPosition:{x:5,y:3}},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:'Nighthawk initiative: d20 '+roll+' + DEX '+modifier+' = '+total+'. '+combat.enemyName+': '+combat.enemyInitiative+'. Turn order: '+order.join(' → ')+'.',createdAt:now}]};
 }
 
 export function moveDuelToken(campaign:Campaign,x:number,y:number):Campaign {
@@ -234,7 +234,7 @@ export function moveDuelToken(campaign:Campaign,x:number,y:number):Campaign {
  return {...campaign,combat:{...combat,playerPosition:{x,y},movementUsed:used+cost},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:'Nighthawk moves '+cost+' feet on the tactical grid ('+(used+cost)+'/'+allowance+' feet used).',createdAt:now}]};
 }
 
-export function takeDuelTurnAction(campaign:Campaign, action:'move'|'attack'|'dash'|'disengage'|'dodge'|'steady-aim'|'cunning-dash'|'cunning-disengage'|'end'):Campaign {
+export function takeDuelTurnAction(campaign:Campaign, action:'move'|'attack'|'shortbow'|'dash'|'disengage'|'dodge'|'steady-aim'|'cunning-dash'|'cunning-disengage'|'end'):Campaign {
  const combat=campaign.combat;
  if(!combat||combat.status!=='initiative-set'||!combat.order)throw Error('Initiative must be completed first.');
  const current=combat.order[combat.turnIndex??0];
@@ -265,7 +265,7 @@ export function takeDuelTurnAction(campaign:Campaign, action:'move'|'attack'|'da
    if(action==='dash'){next.lastAction='Dash';next.movementAllowance=(next.movementAllowance??speed)+speed;description='Nighthawk Dashes, gaining another '+speed+' feet of movement this turn.';}
    if(action==='disengage'){next.lastAction='Disengage';next.disengaged=true;description='Nighthawk takes the Disengage action.';}
    if(action==='dodge'){next.lastAction='Dodge';description='Nighthawk takes the Dodge action.';}
-   if(action==='attack'){const p=next.playerPosition??{x:1,y:3};const e=next.enemyPosition??{x:5,y:3};if(Math.max(Math.abs(p.x-e.x),Math.abs(p.y-e.y))>1)throw Error('Move adjacent to the opponent to attack with a dagger.');next.lastAction='Attack';next.attack={phase:'roll-to-hit'};description='Nighthawk draws a dagger for a nonlethal melee strike against '+combat.enemyName+'. Roll to hit next.';}
+   if(action==='attack'||action==='shortbow'){const p=next.playerPosition??{x:1,y:3};const e=next.enemyPosition??{x:5,y:3};const distance=5*Math.max(Math.abs(p.x-e.x),Math.abs(p.y-e.y));if(action==='attack'&&distance>5)throw Error('Move adjacent to the opponent to attack with a dagger.');if(action==='shortbow'&&(next.arrowsRemaining??20)<1)throw Error('No arrows remaining.');next.lastAction=action==='shortbow'?'Shortbow':'Dagger';next.attack={phase:'roll-to-hit',weapon:action==='shortbow'?'shortbow':'dagger',disadvantage:action==='shortbow'&&distance<=5};description=action==='shortbow'?'Nighthawk readies a shortbow attack at '+distance+' feet. Roll to hit next.':'Nighthawk draws a dagger for a nonlethal melee strike against '+combat.enemyName+'. Roll to hit next.';}
  }
  const now=new Date().toISOString();
  return {...campaign,combat:next,updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:description,createdAt:now}]};
@@ -313,17 +313,18 @@ export function rollDuelAttack(campaign:Campaign,kind:'hit'|'damage'):Campaign {
   if(next.attack.phase!=='roll-to-hit')throw Error('Attack roll already made.');
   const character=campaign.character??prototypeNighthawk;
   const attackBonus=abilityModifier(character.scores.dex)+character.proficiencyBonus;
-  const firstD20=die(20),secondD20=combat.steadyAim?die(20):undefined,d20=secondD20===undefined?firstD20:Math.max(firstD20,secondD20),total=d20+attackBonus,critical=d20===20,hit=critical||(d20!==1&&total>=12);
-  next.attack={phase:hit?'roll-damage':'resolved',d20,firstD20,total,critical,hit,advantage:!!combat.steadyAim,secondD20};
-  description='Dagger (nonlethal melee): '+(secondD20===undefined?'':'advantage '+firstD20+'/'+secondD20+' → ')+'d20 '+d20+' + '+attackBonus+' = '+total+' vs training AC 12: '+(hit?'HIT':'MISS')+'.'+(critical?' Critical hit.':'');
+  const advantage=!!combat.steadyAim&&!next.attack.disadvantage;const disadvantage=!!next.attack.disadvantage&&!combat.steadyAim;const firstD20=die(20),secondD20=(advantage||disadvantage)?die(20):undefined,d20=secondD20===undefined?firstD20:advantage?Math.max(firstD20,secondD20):Math.min(firstD20,secondD20),total=d20+attackBonus,critical=d20===20,hit=critical||(d20!==1&&total>=12);
+  next.attack={phase:hit?'roll-damage':'resolved',d20,firstD20,total,critical,hit,advantage,disadvantage,weapon:next.attack.weapon,secondD20};
+  if(next.attack.weapon==='shortbow')next.arrowsRemaining=(next.arrowsRemaining??20)-1;
+  description=(next.attack.weapon==='shortbow'?'Shortbow (ranged)':'Dagger (nonlethal melee)')+': '+(secondD20===undefined?'':(advantage?'advantage ':'disadvantage ')+firstD20+'/'+secondD20+' → ')+'d20 '+d20+' + '+attackBonus+' = '+total+' vs training AC 12: '+(hit?'HIT':'MISS')+'.'+(critical?' Critical hit.':'');
  }else{
   if(next.attack.phase!=='roll-damage')throw Error('Roll to hit first.');
   const modifier=abilityModifier((campaign.character??prototypeNighthawk).scores.dex);
-  const first=die(4),second=next.attack.critical?die(4):0,sneakDice=next.attack.advantage?2:0,sneakRolls=Array.from({length:sneakDice*(next.attack.critical?2:1)},()=>die(6)),sneakDamage=sneakRolls.reduce((a,b)=>a+b,0),damage=Math.max(0,first+second+modifier+sneakDamage);
+  const sides=next.attack.weapon==='shortbow'?6:4;const first=die(sides),second=next.attack.critical?die(sides):0,sneakDice=next.attack.advantage?2:0,sneakRolls=Array.from({length:sneakDice*(next.attack.critical?2:1)},()=>die(6)),sneakDamage=sneakRolls.reduce((a,b)=>a+b,0),damage=Math.max(0,first+second+modifier+sneakDamage);
   next.attack={...next.attack,phase:'resolved',damage,sneakAttackDamage:sneakDamage};
   next.enemyHp=Math.max(0,(next.enemyHp??12)-damage);
   if(next.enemyHp===0){next.status='completed';next.outcome='nonlethal-victory';}
-  description='Nonlethal dagger damage: '+first+(second?' + '+second+' (critical)':'')+' + '+modifier+' DEX'+(sneakDice?' + Sneak Attack '+sneakRolls.join('+')+' = '+sneakDamage:'')+' = '+damage+'. '+combat.enemyName+' HP: '+next.enemyHp+'/'+(next.enemyMaxHp??12)+(next.enemyHp===0?' '+combat.enemyName+' falls unconscious from the nonlethal strike. Combat is over.':'')+'.';
+  description=(next.attack.weapon==='shortbow'?'Shortbow piercing damage: ':'Nonlethal dagger damage: ')+first+(second?' + '+second+' (critical)':'')+' + '+modifier+' DEX'+(sneakDice?' + Sneak Attack '+sneakRolls.join('+')+' = '+sneakDamage:'')+' = '+damage+'. '+combat.enemyName+' HP: '+next.enemyHp+'/'+(next.enemyMaxHp??12)+(next.enemyHp===0?' '+combat.enemyName+' falls unconscious from the nonlethal strike. Combat is over.':'')+'.';
  }
  const now=new Date().toISOString();
  return {...campaign,combat:next,updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:description,createdAt:now}]};
