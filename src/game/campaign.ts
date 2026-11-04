@@ -15,6 +15,7 @@ export interface Campaign {
   preReconciliationScores?: CharacterStats['scores'];
   elapsedMinutes?: number;
   hitDiceRemaining?: number;
+  lastLongRestCompletedAt?: number;
   concentration?: { spell: string; target?: string; startedAt: string };
   spellEffects?: { id: string; spell: string; target?: string; status: 'awaiting-adjudication' | 'active'; createdAt: string }[];
   familiar?: { form: 'Owl'; summonedAt: string };
@@ -136,6 +137,7 @@ export function castNighthawkSpell(campaign: Campaign, spell: string, ritual: bo
 }
 
 export function takeNighthawkRest(campaign: Campaign, kind: 'short'|'long', hitDiceToSpend = 0): Campaign {
+  if(kind==='long' && campaign.lastLongRestCompletedAt !== undefined && (campaign.elapsedMinutes??0)-campaign.lastLongRestCompletedAt < 1440) throw new Error('You cannot benefit from another Long Rest until 24 hours have passed since the last one.');
   const character=campaign.character ?? prototypeNighthawk;
   const level=character.level??1;
   const maxHp=character.maxHitPoints??10;
@@ -153,5 +155,5 @@ export function takeNighthawkRest(campaign: Campaign, kind: 'short'|'long', hitD
   const nextCharacter={...character,currentHitPoints:nextHp,spellSlots:slots?{...slots,usedLevel1:kind==='long'?0:slots.usedLevel1}:slots};
   const minutes=kind==='long'?480:60;
   const details=kind==='long'?'HP restored to maximum; spell slots restored; Hit Dice recovered.':'Spent '+hitDiceToSpend+' Hit Dice'+(rolls.length?' ('+rolls.join(', ')+')':'')+'; healed '+(nextHp-currentHp)+' HP. Spell slots unchanged.';
-  return {...campaign,character:nextCharacter,hitDiceRemaining:remaining,elapsedMinutes:(campaign.elapsedMinutes??0)+minutes,updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:'Nighthawk completes a '+kind+' rest ('+minutes+' minutes). '+details,createdAt:now}]};
+  return {...campaign,character:nextCharacter,hitDiceRemaining:remaining,elapsedMinutes:(campaign.elapsedMinutes??0)+minutes,lastLongRestCompletedAt:kind==='long'?(campaign.elapsedMinutes??0)+minutes:campaign.lastLongRestCompletedAt,updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:'Nighthawk completes a '+kind+' rest ('+minutes+' minutes). '+details,createdAt:now}]};
 }
