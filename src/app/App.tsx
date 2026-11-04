@@ -448,8 +448,10 @@ export function App() {
     try {const next=rollDuelInitiative(campaign);await localCampaignStorage.save(next);setCampaign(next);setCampaigns(items=>items.map(item=>item.id===next.id?next:item));setNotice('Initiative rolled and turn order saved.');}
     catch(error){setNotice('Initiative error: '+String(error));}finally{setSaving(false);}
   }
+  const [pendingCombatAction,setPendingCombatAction]=useState<'attack'|'dash'|'disengage'|'dodge'|null>(null);
   async function combatAction(action:'move'|'attack'|'dash'|'disengage'|'dodge'|'end') {
     if(!campaign||saving)return;
+    setPendingCombatAction(null);
     setSaving(true);
     try {
       const next=takeDuelTurnAction(campaign,action);
@@ -549,13 +551,19 @@ export function App() {
           <h3 className="font-serif text-lg">Nighthawk vs {campaign.combat.enemyName}</h3>
           {campaign.combat.status==='awaiting-initiative' ? <><p className="text-sm">The enemy's initiative has been rolled. Roll Nighthawk's d20 to establish turn order.</p><button type="button" disabled={saving} className="w-full rounded-lg bg-gold p-3 font-semibold text-ink disabled:opacity-40" onClick={()=>void rollInitiative()}>Roll initiative (d20 + DEX)</button></> : <><p className="font-semibold text-gold">{campaign.combat.order?.[0]==='Nighthawk'?'Your turn — Nighthawk acts first':'Bran acts first — enemy turn pending'}</p><p className="text-sm">Initiative order</p><ol className="space-y-2">{campaign.combat.order?.map((name,i)=><li key={name} className="flex justify-between rounded-lg border border-white/20 p-3"><span>{i+1}. {name}</span><strong>{name==='Nighthawk'?campaign.combat?.playerInitiative:campaign.combat?.enemyInitiative}</strong></li>)}</ol>{campaign.combat.order?.[campaign.combat.turnIndex??0]==='Nighthawk' ? <div className="space-y-3">
           <p className="text-sm font-semibold">Your turn · Movement: {campaign.combat.movementUsed??0}/35 ft · Action: {campaign.combat.actionUsed?'used':'available'}</p>
+          {campaign.combat.lastAction && <p className="rounded-lg border border-gold/60 bg-gold/10 p-3 text-sm">Last action: <strong>{campaign.combat.lastAction}</strong> (confirmed)</p>}
+          {pendingCombatAction && <div className="space-y-2 rounded-lg border-2 border-gold bg-gold/10 p-3">
+            <p className="font-semibold">Selected: {({attack:'Declare Attack',dash:'Dash',disengage:'Disengage',dodge:'Dodge'} as const)[pendingCombatAction]}</p>
+            <p className="text-sm">This action has not been spent or saved. Confirm to use it, or undo to choose something else.</p>
+            <div className="grid grid-cols-2 gap-2">
+              <button type="button" className="rounded-lg border border-white/40 p-3" onClick={()=>setPendingCombatAction(null)}>Undo selection</button>
+              <button type="button" disabled={saving} className="rounded-lg bg-gold p-3 font-semibold text-ink" onClick={()=>void combatAction(pendingCombatAction)}>Confirm Action</button>
+            </div>
+          </div>}
           <div className="grid grid-cols-2 gap-2">
-            <button type="button" disabled={saving||(campaign.combat.movementUsed??0)>=35} className="rounded-lg border border-gold/60 p-3 disabled:opacity-40" onClick={()=>void combatAction('move')}>Move 5 ft</button>
-            <button type="button" disabled={saving||!!campaign.combat.actionUsed} className="rounded-lg border border-gold/60 p-3 disabled:opacity-40" onClick={()=>void combatAction('attack')}>Declare Attack</button>
-            <button type="button" disabled={saving||!!campaign.combat.actionUsed} className="rounded-lg border border-white/30 p-3 disabled:opacity-40" onClick={()=>void combatAction('dash')}>Dash</button>
-            <button type="button" disabled={saving||!!campaign.combat.actionUsed} className="rounded-lg border border-white/30 p-3 disabled:opacity-40" onClick={()=>void combatAction('disengage')}>Disengage</button>
-            <button type="button" disabled={saving||!!campaign.combat.actionUsed} className="rounded-lg border border-white/30 p-3 disabled:opacity-40" onClick={()=>void combatAction('dodge')}>Dodge</button>
-            <button type="button" disabled={saving} className="rounded-lg bg-gold p-3 font-semibold text-ink disabled:opacity-40" onClick={()=>void combatAction('end')}>End Turn</button>
+            <button type="button" disabled={saving||!!pendingCombatAction||(campaign.combat.movementUsed??0)>=35} className="rounded-lg border border-gold/60 p-3 disabled:opacity-40" onClick={()=>void combatAction('move')}>Move 5 ft</button>
+            {(['attack','dash','disengage','dodge'] as const).map(action=><button key={action} type="button" disabled={saving||!!campaign.combat.actionUsed} className={`rounded-lg border p-3 disabled:opacity-40 ${pendingCombatAction===action?'border-gold bg-gold/20 font-semibold':'border-white/30'}`} onClick={()=>setPendingCombatAction(action)}>{({attack:'Declare Attack',dash:'Dash',disengage:'Disengage',dodge:'Dodge'} as const)[action]}</button>)}
+            <button type="button" disabled={saving||!!pendingCombatAction} className="rounded-lg bg-gold p-3 font-semibold text-ink disabled:opacity-40" onClick={()=>void combatAction('end')}>End Turn</button>
           </div>
           <p className="text-xs text-parchment/70">This stage tracks actions and movement only. Attack rolls, damage, and enemy decisions are not implemented yet.</p>
         </div> : <p className="text-sm">Bran Holt's turn is next. Automated enemy turns are not enabled yet.</p>}</>}
