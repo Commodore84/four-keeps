@@ -237,15 +237,16 @@ export function trainingCoverBlocksSight(p:{x:number;y:number},e:{x:number;y:num
 export function hideNighthawk(campaign:Campaign):Campaign {
  const c=campaign.combat;
  if(!c||c.status!=='initiative-set'||c.order?.[c.turnIndex??0]!=='Nighthawk')throw Error('Hide requires your turn.');
- if(c.bonusActionUsed)throw Error('Bonus action already used.');
+ const useBonus=!c.bonusActionUsed;
+ if(!useBonus&&(c.actionUsed||c.attack))throw Error('No action or bonus action available to Hide.');
  const p=c.playerPosition??{x:2,y:4},e=c.enemyPosition??{x:6,y:4};
  if(!trainingCoverBlocksSight(p,e))throw Error('You must be out of the enemy’s line of sight behind the pillar to Hide.');
  const character=campaign.character??prototypeNighthawk;
  const mod=abilityModifier(character.scores.dex)+character.proficiencyBonus*(character.expertiseSkills?.includes('Stealth')?2:character.proficientSkills?.includes('Stealth')?1:0);
  const roll=crypto.getRandomValues(new Uint32Array(1))[0]%20+1,total=roll+mod,success=total>=15;
- const detail='Cunning Action: Hide. Stealth d20 '+roll+' + '+mod+' = '+total+' vs DC 15. '+(success?'Success: Hidden behind cover.':'Failure: enemy knows your position.');
+ const detail=(useBonus?'Cunning Action: Hide (bonus action).':'Hide (action).')+' Stealth d20 '+roll+' + '+mod+' = '+total+' vs DC 15. '+(success?'Success: Hidden behind cover.':'Failure: enemy knows your position.');
  const now=new Date().toISOString();
- return {...campaign,combat:{...c,bonusActionUsed:true,playerHidden:success,hideRoll:roll,hideTotal:total,hideResult:detail},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:detail,createdAt:now}]};
+ return {...campaign,combat:{...c,bonusActionUsed:c.bonusActionUsed||useBonus,actionUsed:c.actionUsed||!useBonus,lastAction:'Hide',playerHidden:success,hideRoll:roll,hideTotal:total,hideResult:detail},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:detail,createdAt:now}]};
 }
 export function searchForNighthawk(campaign:Campaign):Campaign {
  const c=campaign.combat;
@@ -526,7 +527,7 @@ export function advanceDuelTestEnemyTurn(campaign:Campaign):Campaign {
  return {...campaign,combat:{...combat,turnIndex:combat.order.indexOf('Nighthawk'),round:nextRound,movementUsed:0,actionUsed:false,bonusActionUsed:false,lastAction:undefined,attack:undefined},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:'TEST ONLY: '+combat.enemyName+' turn skipped without an attack, damage, or other effect. Nighthawk can act again.',createdAt:now}]};
 }
 
-export function rollDuelAttack(campaign:Campaign,kind:'hit'|'damage',applySneakAttack:boolean=false):Campaign {
+export function rollDuelAttack(campaign:Campaign,kind:'hit'|'damage',applySneakAttack?:boolean):Campaign {
  const combat=campaign.combat;
  if(!combat||combat.status!=='initiative-set'||!combat.attack||combat.order?.[combat.turnIndex??0]!=='Nighthawk')throw Error('No attack awaiting a roll.');
  const next={...combat,attack:{...combat.attack}};
@@ -545,8 +546,9 @@ export function rollDuelAttack(campaign:Campaign,kind:'hit'|'damage',applySneakA
  }else{
   if(next.attack.phase!=='roll-damage')throw Error('Roll to hit first.');
   const modifier=abilityModifier((campaign.character??prototypeNighthawk).scores.dex);
-  if(applySneakAttack&&!next.sneakAttackEligible)throw Error('Sneak Attack not eligible.');const sides=next.attack.weapon==='shortbow'?6:4;const first=die(sides),second=next.attack.critical?die(sides):0,sneakDice=applySneakAttack?Math.ceil(((campaign.character??prototypeNighthawk).level??1)/2):0,sneakRolls=Array.from({length:sneakDice*(next.attack.critical?2:1)},()=>die(6)),sneakDamage=sneakRolls.reduce((a,b)=>a+b,0),damage=Math.max(0,first+second+modifier+sneakDamage);
-  next.attack={...next.attack,phase:'resolved',damage,sneakAttackDamage:sneakDamage};if(applySneakAttack)next.sneakAttackUsedThisTurn=true;
+  const includeSneakAttack=applySneakAttack??!!next.sneakAttackEligible;
+  if(includeSneakAttack&&!next.sneakAttackEligible)throw Error('Sneak Attack not eligible.');const sides=next.attack.weapon==='shortbow'?6:4;const first=die(sides),second=next.attack.critical?die(sides):0,sneakDice=includeSneakAttack?Math.ceil(((campaign.character??prototypeNighthawk).level??1)/2):0,sneakRolls=Array.from({length:sneakDice*(next.attack.critical?2:1)},()=>die(6)),sneakDamage=sneakRolls.reduce((a,b)=>a+b,0),damage=Math.max(0,first+second+modifier+sneakDamage);
+  next.attack={...next.attack,phase:'resolved',damage,sneakAttackDamage:sneakDamage};if(includeSneakAttack)next.sneakAttackUsedThisTurn=true;
   next.enemyHp=Math.max(0,(next.enemyHp??12)-damage);
   if(next.enemyHp===0){next.status='completed';next.outcome='nonlethal-victory';}
   description=(next.attack.weapon==='shortbow'?'Shortbow piercing damage: ':next.attack.thrown?'Thrown dagger piercing damage: ':'Nonlethal dagger damage: ')+first+(second?' + '+second+' (critical)':'')+' + '+modifier+' DEX'+(sneakDice?' + Sneak Attack '+sneakRolls.join('+')+' = '+sneakDamage:'')+' = '+damage+'. '+combat.enemyName+' HP: '+next.enemyHp+'/'+(next.enemyMaxHp??12)+(next.enemyHp===0?' '+combat.enemyName+' falls unconscious from the nonlethal strike. Combat is over.':'')+'.';
