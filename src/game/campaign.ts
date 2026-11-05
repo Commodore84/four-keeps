@@ -234,6 +234,17 @@ export function trainingCoverBlocksSight(p:{x:number;y:number},e:{x:number;y:num
  for(let t=0;t<=1;t+=0.02)if(Math.abs(p.x+dx*t-trainingCover.x)<0.48&&Math.abs(p.y+dy*t-trainingCover.y)<0.48)return true;
  return false;
 }
+function nextActiveTurn(c:NonNullable<Campaign['combat']>):{index:number;round:number} {
+ const order=c.order??['Nighthawk',c.enemyName];
+ let index=c.turnIndex??0,round=c.round;
+ for(let n=0;n<order.length;n++){
+  index=(index+1)%order.length;
+  if(index===0)round++;
+  const name=order[index];
+  if(name==='Nighthawk'||name===c.enemyName&&(c.enemyHp??12)>0||name===c.secondEnemy?.name&&(c.secondEnemy?.hp??0)>0)return {index,round};
+ }
+ return {index,round};
+}
 export function selectTrainingTarget(campaign:Campaign,target:'first'|'second'):Campaign {
  const c=campaign.combat;
  if(!c||c.status!=='initiative-set'||c.order?.[c.turnIndex??0]!=='Nighthawk')throw Error('Select a target on Nighthawk’s turn.');
@@ -277,8 +288,9 @@ export function searchForNighthawk(campaign:Campaign):Campaign {
  const found=total>=(c.hideTotal??15);
  const detail=(c.order?.[c.turnIndex??0]??'Dummy')+' Search action: Wisdom (Perception) d20 '+roll+' + 0 = '+total+' vs Stealth '+(c.hideTotal??15)+'. '+(found?'Nighthawk found.':'Nighthawk remains hidden.');
  const now=new Date().toISOString();
- const followingIndex=((c.turnIndex??0)+1)%(c.order?.length??2);
- const nextRound=followingIndex===0?c.round+1:c.round;
+ const turn=nextActiveTurn(c);
+ const followingIndex=turn.index;
+ const nextRound=turn.round;
  return {...campaign,combat:{...c,playerHidden:!found,enemySearchResult:detail,turnIndex:followingIndex,round:nextRound,movementUsed:0,actionUsed:false,bonusActionUsed:false,attack:undefined},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:detail,createdAt:now}]};
 }
 export function moveDuelToken(campaign:Campaign,x:number,y:number):Campaign {
@@ -355,8 +367,8 @@ export function takeDuelTurnAction(campaign:Campaign, action:'move'|'attack'|'th
    next.movementUsed=Math.min(allowance,(next.movementUsed??0)+5);
    description='Nighthawk moves 5 feet ('+next.movementUsed+'/'+allowance+' feet).';
  }else if(action==='end'){
-   next.turnIndex=(combat.turnIndex!+1)%combat.order.length;next.lastShoveSave=undefined;next.lastPlayerShoveSave=undefined;next.lastGrappleResult=undefined;next.lastPlayerGrappleResult=undefined;next.movementUsed=0;next.actionUsed=false;next.bonusActionUsed=false;next.attack=undefined;next.steadyAim=false;next.movementAllowance=speed;next.disengaged=false;next.sneakAttackUsedThisTurn=false;
-   description='Nighthawk ends their turn. '+combat.enemyName+' is next.';
+   const turn=nextActiveTurn(combat);next.turnIndex=turn.index;next.round=turn.round;next.lastShoveSave=undefined;next.lastPlayerShoveSave=undefined;next.lastGrappleResult=undefined;next.lastPlayerGrappleResult=undefined;next.movementUsed=0;next.actionUsed=false;next.bonusActionUsed=false;next.attack=undefined;next.steadyAim=false;next.movementAllowance=speed;next.disengaged=false;next.sneakAttackUsedThisTurn=false;
+   description='Nighthawk ends their turn. '+combat.order[next.turnIndex]+' is next.';
  }else {
    if(next.actionUsed)throw Error('Action already used this turn.');
    next.actionUsed=true;
@@ -455,7 +467,9 @@ export function resolveDuelEnemyTurn(campaign:Campaign):Campaign {
  if(!combat||combat.status!=='initiative-set'||!combat.order||combat.order[combat.turnIndex??0]==='Nighthawk')throw Error('It is not the opponent\'s turn.');
  if(combat.opportunity)throw Error('Resolve the opportunity attack before continuing.');
  if(combat.pendingEnemyShove)throw Error('Resolve the pending Shove save first.');
- const standingCost=combat.enemyProne?15:0;
+ const currentName=combat.order[combat.turnIndex??0];
+ if(currentName===combat.enemyName&&(combat.enemyHp??12)===0||currentName===combat.secondEnemy?.name&&combat.secondEnemy?.hp===0)throw Error('Defeated enemies cannot act.');
+ const standingCost=combat.enemyProne&&currentName===combat.enemyName?15:0;
  const standDescription=combat.enemyProne?'Enemy stands from Prone, spending '+standingCost+' of 30 feet of movement (15 feet remaining). ':'';
  const character=campaign.character??prototypeNighthawk;
  const die=(sides:number)=>crypto.getRandomValues(new Uint32Array(1))[0]%sides+1;
@@ -472,8 +486,9 @@ export function resolveDuelEnemyTurn(campaign:Campaign):Campaign {
  const after=Math.max(0,before-damage);
  const defeated=hit&&after===0;
  const detail=standDescription+(combat.order[combat.turnIndex??0]??combat.enemyName)+' training attack: '+(dodging?'disadvantage ('+first+', '+second+') → ':'d20 ')+attackRoll+' + 4 = '+total+' vs temporary AC '+ac+': '+(hit?'HIT':'MISS')+'.'+(hit?' Nonlethal damage: '+damage+'. Nighthawk HP: '+before+' → '+after+'/'+(character.maxHitPoints??10)+'.':'')+(defeated?' Nighthawk is knocked unconscious; sparring ends.':'');
- const followingIndex=((combat.turnIndex??0)+1)%combat.order.length;
- const nextRound=followingIndex===0?combat.round+1:combat.round;
+ const turn=nextActiveTurn(combat);
+ const followingIndex=turn.index;
+ const nextRound=turn.round;
  const nextCombat={...combat,enemyProne:false,turnIndex:followingIndex,round:nextRound,reactionUsed:false,enemyReactionUsed:false,movementUsed:0,actionUsed:false,bonusActionUsed:false,lastAction:undefined,attack:undefined,enemyLastTurn:detail,status:defeated?'completed' as const:combat.status,outcome:defeated?'player-defeated' as const:combat.outcome};
  const now=new Date().toISOString();
  return {...campaign,character:{...character,currentHitPoints:after},combat:nextCombat,updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:detail,createdAt:now}]};
