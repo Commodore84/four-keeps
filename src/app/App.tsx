@@ -694,7 +694,7 @@ export function App() {
                 const remaining=(campaign.combat!.movementAllowance??35)-(campaign.combat!.movementUsed??0);
                 const reachable=cost>0&&cost<=remaining&&!enemy&&!campaign.combat!.steadyAim&&!campaign.combat!.attack;
                 const chosen=gridDestination?.x===x&&gridDestination?.y===y;
-                return <button key={i} type="button" role="gridcell" aria-label={own?'Nighthawk':enemy?campaign.combat!.enemyName:`Square ${x+1}, ${y+1}; ${cost} feet`} disabled={saving||!!campaign.combat.playerOpportunity||own||enemy||!reachable} onClick={()=>setGridDestination({x,y})} className={`aspect-square rounded border text-xs font-bold min-w-0 ${own?'bg-gold text-ink border-gold':enemy?'bg-red-900/70 text-white border-red-500':chosen?'bg-gold/50 border-gold':reachable?'bg-emerald-900/40 border-emerald-500/70':'bg-white/5 border-white/15'}`}>{own?'N':enemy?'E':chosen?'✓':''}</button>;
+                return <button key={i} type="button" role="gridcell" aria-label={own?'Nighthawk':enemy?campaign.combat!.enemyName:`Square ${x+1}, ${y+1}; ${cost} feet`} disabled={saving||!!campaign.combat!.playerOpportunity||own||enemy||!reachable} onClick={()=>setGridDestination({x,y})} className={`aspect-square rounded border text-xs font-bold min-w-0 ${own?'bg-gold text-ink border-gold':enemy?'bg-red-900/70 text-white border-red-500':chosen?'bg-gold/50 border-gold':reachable?'bg-emerald-900/40 border-emerald-500/70':'bg-white/5 border-white/15'}`}>{own?'N':enemy?'E':chosen?'✓':''}</button>;
               })}
             </div>
             {campaign.combat.playerOpportunity&&<div className="rounded-lg border border-gold p-3 space-y-2 text-sm">
@@ -734,7 +734,7 @@ export function App() {
             ] as const).map(([action,label,available])=><button key={action} type="button" disabled={saving||!available} title={action==='steady-aim'?'Bonus action: advantage on your next attack this turn; no movement this turn.':action==='cunning-dash'?'Bonus action: gain movement equal to your speed.':action==='cunning-disengage'?'Bonus action: avoid opportunity attacks for the rest of the turn.':undefined} className={`rounded-lg border p-2.5 text-sm min-h-11 disabled:opacity-40 ${pendingCombatAction===action?'border-gold bg-gold/20 font-semibold':'border-white/30'}`} onClick={()=>{setPendingCombatAction(action);if(action==='attack')setSelectedWeapon(null);}}>{label}</button>)}
           </div>
           {pendingCombatAction && <div className="rounded-lg border border-gold bg-gold/10 p-3 text-sm space-y-2" role="region" aria-label="Confirm combat action">
-            <p className="font-semibold">{({attack:'Choose weapon','steady-aim':'Steady Aim','cunning-dash':'Dash','cunning-disengage':'Disengage',dodge:'Dodge',end:'End Turn'} as const)[pendingCombatAction]}</p>
+            <p className="font-semibold">{({attack:'Choose weapon','steady-aim':'Steady Aim','cunning-dash':'Dash','cunning-disengage':'Cunning Disengage',disengage:'Disengage (Action)',dodge:'Dodge',end:'End Turn'} as const)[pendingCombatAction]}</p>
             {pendingCombatAction==='attack' ? <div className="space-y-2">
               <p className="text-parchment/80">Choose a weapon before confirming your attack.</p>
               {(()=>{const p=campaign.combat!.playerPosition??{x:2,y:4},e=campaign.combat!.enemyPosition??{x:6,y:4};const distance=5*Math.max(Math.abs(p.x-e.x),Math.abs(p.y-e.y));const choices=[
