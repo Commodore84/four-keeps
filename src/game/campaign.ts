@@ -336,7 +336,7 @@ export function rollPlayerShoveSave(campaign:Campaign,ability:'str'|'dex'):Campa
  const c=campaign.combat;
  if(!c?.pendingEnemyShove||!c.order||c.order[c.turnIndex??0]==='Nighthawk')throw Error('No enemy Shove save pending.');
  const character=campaign.character??prototypeNighthawk;
- const modifier=abilityModifier(character.scores[ability]);
+ const modifier=abilityModifier(character.scores[ability])+(ability==='dex'?character.proficiencyBonus:0);
  const roll=crypto.getRandomValues(new Uint32Array(1))[0]%20+1;
  const dc=12; // Temporary dummy STR +2 and proficiency +2.
  const total=roll+modifier;
