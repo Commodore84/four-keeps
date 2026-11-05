@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { createBackup, parseBackup } from '../game/backup';
 import { BookOpen, Compass, Map, RefreshCw, Send, Settings, Shield, Swords, Users } from 'lucide-react';
-import { addExchange, addNote, addRoll, beginDuel, adjustEquipment, rollDuelInitiative, takeDuelTurnAction, moveDuelToken, resolveEnemyOpportunity, moveTrainingDummy, resolveTrainingReaction, rollTrainingReaction, advanceDuelTestEnemyTurn, resolveDuelEnemyTurn, rollDuelAttack, setTrainingAllyAdjacent, setTrainingEnemyProne, concludeDuel, quitTrainingEncounter, newCampaign, awardExperience, levelUpRogue, levelUpArcaneTrickster, tricksterCantrips, tricksterSpells, isRitualSpell, castNighthawkSpell, takeNighthawkRest, applyNighthawkDamage, minutesUntilLongRestEligible, advanceToLongRestEligibility, endNighthawkConcentration, spellRequiresConcentration, reconcileNighthawkScores, undoNighthawkScoreReconciliation, xpThresholds, type Campaign } from '../game/campaign';
+import { addExchange, addNote, addRoll, beginDuel, adjustEquipment, rollDuelInitiative, takeDuelTurnAction, moveDuelToken, resolveEnemyOpportunity, moveTrainingDummy, resolveTrainingReaction, rollTrainingReaction, advanceDuelTestEnemyTurn, resolveDuelEnemyTurn, rollDuelAttack, setTrainingAllyAdjacent, setTrainingEnemyProne, shoveTrainingEnemy, concludeDuel, quitTrainingEncounter, newCampaign, awardExperience, levelUpRogue, levelUpArcaneTrickster, tricksterCantrips, tricksterSpells, isRitualSpell, castNighthawkSpell, takeNighthawkRest, applyNighthawkDamage, minutesUntilLongRestEligible, advanceToLongRestEligibility, endNighthawkConcentration, spellRequiresConcentration, reconcileNighthawkScores, undoNighthawkScoreReconciliation, xpThresholds, type Campaign } from '../game/campaign';
 import { localCampaignStorage } from '../game/storage';
 import type { View } from '../game/types';
 import { emptyWorld } from '../game/world';
@@ -505,6 +505,12 @@ export function App() {
     try{const next=resolveEnemyOpportunity(campaign,kind);await localCampaignStorage.save(next);setCampaign(next);setCampaigns(items=>items.map(item=>item.id===next.id?next:item));setNotice(next.journal[next.journal.length-1].text);}
     catch(error){setNotice('Opportunity attack: '+String(error));}finally{setSaving(false);}
   }
+  async function performShove(outcome:'prone'|'push') {
+    if(!campaign||saving)return;
+    setSaving(true);
+    try {const next=shoveTrainingEnemy(campaign,outcome);await localCampaignStorage.save(next);setCampaign(next);setCampaigns(items=>items.map(item=>item.id===next.id?next:item));setPendingCombatAction(null);setNotice(next.journal[next.journal.length-1].text);}
+    catch(error){setNotice('Shove: '+String(error));}finally{setSaving(false);}
+  }
   async function toggleEnemyProne(enabled:boolean) {
     if(!campaign||saving)return;
     setSaving(true);
@@ -764,6 +770,7 @@ export function App() {
               ['end','End Turn',!campaign.combat.attack||campaign.combat.attack.phase==='resolved']
             ] as const).map(([action,label,available])=><button key={action} type="button" disabled={saving||!available} title={action==='steady-aim'?'Bonus action: advantage on your next attack this turn; no movement this turn.':action==='cunning-dash'?'Bonus action: gain movement equal to your speed.':action==='cunning-disengage'?'Bonus action: avoid opportunity attacks for the rest of the turn.':undefined} className={`rounded-lg border p-2.5 text-sm min-h-11 disabled:opacity-40 ${pendingCombatAction===action?'border-gold bg-gold/20 font-semibold':'border-white/30'}`} onClick={()=>{setPendingCombatAction(action);if(action==='attack')setSelectedWeapon(null);}}>{label}</button>)}
           </div>
+          {(()=>{const p=campaign.combat!.playerPosition??{x:2,y:4},e=campaign.combat!.enemyPosition??{x:6,y:4},adjacent=Math.max(Math.abs(p.x-e.x),Math.abs(p.y-e.y))<=1;return adjacent&&!campaign.combat!.actionUsed&&!campaign.combat!.attack&&campaign.combat!.order?.[campaign.combat!.turnIndex??0]==='Nighthawk' ? <div className="rounded-lg border border-white/30 p-3 space-y-2"><p className="text-sm font-semibold">Shove (Attack action)</p><p className="text-xs text-parchment/70">Target makes a Strength or Dexterity save. A failed save knocks it Prone or pushes it 5 feet.</p><div className="grid grid-cols-2 gap-2"><button type="button" disabled={saving} className="rounded-lg border border-gold p-2.5 text-sm" onClick={()=>void performShove('prone')}>Shove Prone</button><button type="button" disabled={saving} className="rounded-lg border border-gold p-2.5 text-sm" onClick={()=>void performShove('push')}>Push 5 ft</button></div></div>:null;})()}
           {pendingCombatAction && <div className="rounded-lg border border-gold bg-gold/10 p-3 text-sm space-y-2" role="region" aria-label="Confirm combat action">
             <p className="font-semibold">{({attack:'Choose weapon','steady-aim':'Steady Aim','cunning-dash':'Cunning Dash (Bonus)',dash:'Dash (Action)','cunning-disengage':'Cunning Disengage',disengage:'Disengage (Action)',dodge:'Dodge',end:'End Turn'} as const)[pendingCombatAction]}</p>
             {pendingCombatAction==='attack' ? <div className="space-y-2">
