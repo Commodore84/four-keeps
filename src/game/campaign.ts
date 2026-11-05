@@ -298,7 +298,7 @@ export function takeDuelTurnAction(campaign:Campaign, action:'move'|'attack'|'th
    next.movementUsed=Math.min(allowance,(next.movementUsed??0)+5);
    description='Nighthawk moves 5 feet ('+next.movementUsed+'/'+allowance+' feet).';
  }else if(action==='end'){
-   next.turnIndex=(combat.turnIndex!+1)%combat.order.length;next.lastShoveSave=undefined;next.lastPlayerShoveSave=undefined;next.movementUsed=0;next.actionUsed=false;next.bonusActionUsed=false;next.attack=undefined;next.steadyAim=false;next.movementAllowance=speed;next.disengaged=false;next.sneakAttackUsedThisTurn=false;
+   next.turnIndex=(combat.turnIndex!+1)%combat.order.length;next.lastShoveSave=undefined;next.lastPlayerShoveSave=undefined;next.lastGrappleResult=undefined;next.movementUsed=0;next.actionUsed=false;next.bonusActionUsed=false;next.attack=undefined;next.steadyAim=false;next.movementAllowance=speed;next.disengaged=false;next.sneakAttackUsedThisTurn=false;
    description='Nighthawk ends their turn. '+combat.enemyName+' is next.';
  }else {
    if(next.actionUsed)throw Error('Action already used this turn.');
@@ -386,6 +386,7 @@ export function resolveDuelEnemyTurn(campaign:Campaign):Campaign {
 export function moveTrainingDummy(campaign:Campaign):Campaign {
  const c=campaign.combat;
  if(!c||c.enemyName!=='Training Dummy'||c.status!=='initiative-set'||c.order?.[c.turnIndex??0]==='Nighthawk'||c.opportunity)throw Error('Dummy movement is unavailable.');
+ if(c.enemyGrappled)throw Error('Grappled: Speed 0. Escape before moving.');
  const p=c.playerPosition??{x:2,y:4},e=c.enemyPosition??{x:6,y:4};
  const distance=(a:{x:number;y:number},b:{x:number;y:number})=>Math.max(Math.abs(a.x-b.x),Math.abs(a.y-b.y));
  const adjacent=distance(p,e)<=1;
@@ -533,6 +534,18 @@ export function grappleTrainingEnemy(campaign:Campaign):Campaign {
  const detail='Grapple save: d20 '+roll+' vs DC '+dc+'. '+(grabbed?'Failed: Grappled (Speed 0).':'Passed: not Grappled.');
  const now=new Date().toISOString();
  return {...campaign,combat:{...c,actionUsed:true,lastAction:'Grapple',enemyGrappled:grabbed,lastGrappleResult:detail},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:detail,createdAt:now}]};
+}
+export function escapeTrainingGrapple(campaign:Campaign,ability:'str'|'dex'):Campaign {
+ const c=campaign.combat;
+ if(!c||!c.enemyGrappled||c.order?.[c.turnIndex??0]==='Nighthawk')throw Error('The dummy must be Grappled on its turn to escape.');
+ const character=campaign.character??prototypeNighthawk;
+ const dc=8+abilityModifier(character.scores.str)+character.proficiencyBonus;
+ const roll=crypto.getRandomValues(new Uint32Array(1))[0]%20+1;
+ const success=roll>=dc;
+ const detail='Escape '+(ability==='str'?'Athletics':'Acrobatics')+' check: d20 '+roll+' vs DC '+dc+'. '+(success?'Success: Grapple ends.':'Failure: still Grappled.');
+ const now=new Date().toISOString();
+ const nextRound=c.order?.[0]==='Nighthawk'?c.round+1:c.round;
+ return {...campaign,combat:{...c,enemyGrappled:!success,lastGrappleResult:detail,turnIndex:c.order?.indexOf('Nighthawk')??0,round:nextRound,movementUsed:0,actionUsed:false,bonusActionUsed:false,attack:undefined},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:detail,createdAt:now}]};
 }
 export function shoveTrainingEnemy(campaign:Campaign,outcome:'prone'|'push'):Campaign {
  const c=campaign.combat;
