@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { createBackup, parseBackup } from '../game/backup';
 import { BookOpen, Compass, Map, RefreshCw, Send, Settings, Shield, Swords, Users } from 'lucide-react';
-import { addExchange, addNote, addRoll, beginDuel, adjustEquipment, rollDuelInitiative, takeDuelTurnAction, moveDuelToken, resolveEnemyOpportunity, moveTrainingDummy, resolveTrainingReaction, rollTrainingReaction, advanceDuelTestEnemyTurn, resolveDuelEnemyTurn, beginEnemyShove, rollPlayerShoveSave, standNighthawk, rollDuelAttack, shoveTrainingEnemy, concludeDuel, quitTrainingEncounter, newCampaign, awardExperience, levelUpRogue, levelUpArcaneTrickster, tricksterCantrips, tricksterSpells, isRitualSpell, castNighthawkSpell, takeNighthawkRest, applyNighthawkDamage, minutesUntilLongRestEligible, advanceToLongRestEligibility, endNighthawkConcentration, spellRequiresConcentration, reconcileNighthawkScores, undoNighthawkScoreReconciliation, xpThresholds, type Campaign } from '../game/campaign';
+import { addExchange, addNote, addRoll, beginDuel, adjustEquipment, rollDuelInitiative, takeDuelTurnAction, moveDuelToken, resolveEnemyOpportunity, moveTrainingDummy, resolveTrainingReaction, rollTrainingReaction, advanceDuelTestEnemyTurn, resolveDuelEnemyTurn, beginEnemyShove, rollPlayerShoveSave, standNighthawk, rollDuelAttack, shoveTrainingEnemy, grappleTrainingEnemy, escapeTrainingGrapple, concludeDuel, quitTrainingEncounter, newCampaign, awardExperience, levelUpRogue, levelUpArcaneTrickster, tricksterCantrips, tricksterSpells, isRitualSpell, castNighthawkSpell, takeNighthawkRest, applyNighthawkDamage, minutesUntilLongRestEligible, advanceToLongRestEligibility, endNighthawkConcentration, spellRequiresConcentration, reconcileNighthawkScores, undoNighthawkScoreReconciliation, xpThresholds, type Campaign } from '../game/campaign';
 import { localCampaignStorage } from '../game/storage';
 import type { View } from '../game/types';
 import { emptyWorld } from '../game/world';
@@ -511,6 +511,12 @@ export function App() {
     try {const next=shoveTrainingEnemy(campaign,outcome);await localCampaignStorage.save(next);setCampaign(next);setCampaigns(items=>items.map(item=>item.id===next.id?next:item));setPendingCombatAction(null);setNotice(next.journal[next.journal.length-1].text);}
     catch(error){setNotice('Shove: '+String(error));}finally{setSaving(false);}
   }
+  async function grappleTest(kind:'grapple'|'str'|'dex') {
+    if(!campaign||saving)return;
+    setSaving(true);
+    try {const next=kind==='grapple'?grappleTrainingEnemy(campaign):escapeTrainingGrapple(campaign,kind);await localCampaignStorage.save(next);setCampaign(next);setCampaigns(items=>items.map(item=>item.id===next.id?next:item));setPendingCombatAction(null);setNotice(next.journal[next.journal.length-1].text);}
+    catch(error){setNotice('Grapple: '+String(error));}finally{setSaving(false);}
+  }
   async function rollCombatAttack(kind:'hit'|'damage',applySneakAttack:boolean=false) {
     if(!campaign||saving)return;
     setSaving(true);
@@ -766,7 +772,9 @@ export function App() {
             <p className="text-sm">Strength or Dexterity save vs DC {campaign.combat.lastShoveSave.dc}</p>
             <p className="text-sm">{campaign.combat.lastShoveSave.passed?'The enemy resisted the Shove.':campaign.combat.lastShoveSave.effectApplied?(campaign.combat.lastShoveSave.outcome==='prone'?'Enemy knocked Prone.':'Enemy pushed 5 feet.'):'Shove succeeded, but the enemy cannot be pushed outside the map.'}</p>
           </div>}
-          {(()=>{const p=campaign.combat!.playerPosition??{x:2,y:4},e=campaign.combat!.enemyPosition??{x:6,y:4},adjacent=Math.max(Math.abs(p.x-e.x),Math.abs(p.y-e.y))<=1;return adjacent&&!campaign.combat!.actionUsed&&!campaign.combat!.attack&&campaign.combat!.order?.[campaign.combat!.turnIndex??0]==='Nighthawk' ? <div className="rounded-lg border border-white/30 p-3 space-y-2"><p className="text-sm font-semibold">Shove (Attack action)</p><p className="text-xs text-parchment/70">Target makes a Strength or Dexterity save. A failed save knocks it Prone or pushes it 5 feet.</p><div className="grid grid-cols-2 gap-2"><button type="button" disabled={saving} className="rounded-lg border border-gold p-2.5 text-sm" onClick={()=>void performShove('prone')}>Shove Prone</button><button type="button" disabled={saving} className="rounded-lg border border-gold p-2.5 text-sm" onClick={()=>void performShove('push')}>Push 5 ft</button></div></div>:null;})()}
+          {(()=>{const p=campaign.combat!.playerPosition??{x:2,y:4},e=campaign.combat!.enemyPosition??{x:6,y:4},adjacent=Math.max(Math.abs(p.x-e.x),Math.abs(p.y-e.y))<=1;return adjacent&&!campaign.combat!.actionUsed&&!campaign.combat!.attack&&campaign.combat!.order?.[campaign.combat!.turnIndex??0]==='Nighthawk' ? <div className="rounded-lg border border-white/30 p-3 space-y-2"><p className="text-sm font-semibold">Shove (Attack action)</p><p className="text-xs text-parchment/70">Target makes a Strength or Dexterity save. A failed save knocks it Prone or pushes it 5 feet.</p><div className="grid grid-cols-2 gap-2"><button type="button" disabled={saving} className="rounded-lg border border-gold p-2.5 text-sm" onClick={()=>void performShove('prone')}>Shove Prone</button><button type="button" disabled={saving} className="rounded-lg border border-gold p-2.5 text-sm" onClick={()=>void performShove('push')}>Push 5 ft</button></div><button type="button" disabled={saving||!!campaign.combat!.enemyGrappled} className="w-full rounded-lg border border-gold p-2.5 text-sm disabled:opacity-40" onClick={()=>void grappleTest('grapple')}>Grapple Enemy (Attack action)</button></div>:null;})()}
+          {campaign.combat.enemyGrappled&&<p role="status" className="rounded-lg border border-amber-400 p-3 text-sm font-semibold">Enemy Grappled · Speed 0 · Cannot move until it escapes.</p>}
+          {campaign.combat.lastGrappleResult&&<p role="status" className="rounded-lg border border-gold p-3 text-sm">{campaign.combat.lastGrappleResult}</p>}
           {(pendingCombatAction==='dash'||pendingCombatAction==='disengage')&&<div className="rounded-lg border border-gold bg-gold/10 p-3 space-y-2" role="region" aria-label="Choose action economy">
             <p className="font-semibold">{pendingCombatAction==='dash'?'Dash':'Disengage'} · Choose action type</p>
             <div className="grid grid-cols-2 gap-2">
@@ -792,7 +800,7 @@ export function App() {
         </div> : <div className="space-y-3">
           {campaign.combat.enemyName==='Training Dummy'&&<div className="grid grid-cols-9 gap-1" aria-label="Training dummy movement map">{Array.from({length:81},(_,i)=>{const x=i%9,y=Math.floor(i/9),p=campaign.combat!.playerPosition??{x:2,y:4},e=campaign.combat!.enemyPosition??{x:6,y:4};return <div key={i} className={`aspect-square rounded border flex items-center justify-center text-xs font-bold ${x===p.x&&y===p.y?'bg-gold text-ink border-gold':x===e.x&&y===e.y?'bg-red-900 text-white border-red-500':'bg-white/5 border-white/15'}`}>{x===p.x&&y===p.y?'N':x===e.x&&y===e.y?'E':''}</div>})}</div>}
           {campaign.combat.enemyName==='Training Dummy'&&<div className="rounded-lg border border-gold/40 p-3 space-y-2">
-            <p className="font-semibold">Moving dummy · Reaction test</p>
+            <p className="font-semibold">Moving dummy · Reaction test</p>{campaign.combat.enemyGrappled&&<div className="rounded-lg border border-amber-400 p-3 space-y-2"><p className="font-semibold">Dummy is Grappled (Speed 0)</p><p className="text-sm">Use its action to attempt escape: Strength (Athletics) or Dexterity (Acrobatics) against Nighthawk's Grapple DC.</p><div className="grid grid-cols-2 gap-2"><button type="button" disabled={saving} className="rounded border border-gold p-2" onClick={()=>void grappleTest('str')}>Escape: Athletics</button><button type="button" disabled={saving} className="rounded border border-gold p-2" onClick={()=>void grappleTest('dex')}>Escape: Acrobatics</button></div></div>}
             {campaign.combat.opportunity?<>{campaign.combat.reactionAttack?<div className="space-y-3 rounded-lg border border-gold/50 p-3">
               <p className="font-semibold">Opportunity attack · Dagger</p>
               <p className="text-sm">Your reaction is spent. The dummy stays within reach until this attack resolves.</p>
