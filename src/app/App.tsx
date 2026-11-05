@@ -768,6 +768,11 @@ export function App() {
               ['end','End Turn',!campaign.combat.attack||campaign.combat.attack.phase==='resolved']
             ] as const).map(([action,label,available])=><button key={action} type="button" disabled={saving||!available}  className={`rounded-lg border p-2.5 text-sm min-h-11 disabled:opacity-40 ${pendingCombatAction===action?'border-gold bg-gold/20 font-semibold':'border-white/30'}`} onClick={()=>{setPendingCombatAction(action);if(action==='attack')setSelectedWeapon(null);}}>{label}</button>)}
           </div>
+          {campaign.combat.order?.[campaign.combat.turnIndex??0]==='Nighthawk'&&campaign.combat.actionUsed&&(!campaign.combat.attack||campaign.combat.attack.phase==='resolved')&&<div className="rounded-lg border border-gold/60 bg-gold/10 p-3 space-y-2" role="region" aria-label="Action used">
+            <p className="text-sm font-semibold">Action spent · {campaign.combat.bonusActionUsed?'Bonus action spent':'Bonus action available'}</p>
+            <p className="text-xs text-parchment/75">You may still move or use an available bonus action, or finish your turn now.</p>
+            <button type="button" disabled={saving} className="w-full rounded-lg bg-gold p-3 font-semibold text-ink disabled:opacity-40" onClick={()=>void combatAction('end')}>End Turn Now</button>
+          </div>}
           {campaign.combat.lastShoveSave&&<div role="status" aria-live="polite" className={`rounded-lg border-2 p-4 space-y-1 ${campaign.combat.lastShoveSave.passed?'border-emerald-400 bg-emerald-950/50':'border-amber-400 bg-amber-950/40'}`}>
             <p className="text-xs uppercase tracking-widest font-bold">Shove · Saving Throw</p>
             <p className="text-xl font-extrabold">{campaign.combat.lastShoveSave.passed?'SAVE PASSED':'SAVE FAILED'}</p>
