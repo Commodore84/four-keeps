@@ -256,7 +256,7 @@ export function resolveEnemyOpportunity(campaign:Campaign,kind:'hit'|'damage'|'f
  let next:NonNullable<Campaign['combat']>={...c},character=campaign.character??prototypeNighthawk,detail='';
  if(kind==='hit'){
   if(pending.phase!=='roll-to-hit')throw Error('Attack roll already made.');
-  const d20=die(20),total=d20+4,ac=character.armorClass??14,hit=d20===20||(d20!==1&&total>=ac);
+  const d20=die(20),total=d20+4,ac=14,hit=d20===20||(d20!==1&&total>=ac);
   next.playerOpportunity={...pending,phase:hit?'roll-damage':'resolved',d20,total,hit,critical:d20===20};
   detail='Enemy opportunity attack: d20 '+d20+' + 4 = '+total+' vs AC '+ac+'. '+(hit?'Hit — roll damage.':'Miss.');
  }else if(kind==='damage'){
