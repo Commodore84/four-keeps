@@ -471,3 +471,10 @@ export function concludeDuel(campaign:Campaign):Campaign {
  }
  return {...campaign,combat:undefined,pendingAftermath:{opponent:combat.enemyName,playerDefeated:combat.outcome==='player-defeated'},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:combat.outcome==='player-defeated'?'Nighthawk was reduced to 0 HP by a nonlethal training strike and is unconscious. The sparring encounter is finished. Resume normal adventure and narrate aid and recovery, without restarting combat.':combat.enemyName+' was reduced to 0 HP by Nighthawk\'s nonlethal training strike and is unconscious, not dead. The sparring encounter is finished. Resume normal adventure; the DM narrates the aftermath and NPC reactions. Do not restart this combat.',createdAt:now}]};
 }
+
+export function setTrainingAllyAdjacent(campaign:Campaign,enabled:boolean):Campaign {
+ const combat=campaign.combat;
+ if(!combat||combat.status!=='initiative-set'||combat.attack?.phase==='roll-damage')throw Error('Finish pending attack first.');
+ const now=new Date().toISOString();
+ return {...campaign,combat:{...combat,trainingAllyAdjacent:enabled},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:enabled?'Training ally adjacent to dummy; no advantage granted.':'Training ally removed.',createdAt:now}]};
+}
