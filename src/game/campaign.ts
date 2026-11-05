@@ -297,7 +297,7 @@ export function takeDuelTurnAction(campaign:Campaign, action:'move'|'attack'|'th
    next.movementUsed=Math.min(allowance,(next.movementUsed??0)+5);
    description='Nighthawk moves 5 feet ('+next.movementUsed+'/'+allowance+' feet).';
  }else if(action==='end'){
-   next.turnIndex=(combat.turnIndex!+1)%combat.order.length;next.movementUsed=0;next.actionUsed=false;next.bonusActionUsed=false;next.attack=undefined;next.steadyAim=false;next.movementAllowance=speed;next.disengaged=false;next.sneakAttackUsedThisTurn=false;
+   next.turnIndex=(combat.turnIndex!+1)%combat.order.length;next.lastShoveSave=undefined;next.movementUsed=0;next.actionUsed=false;next.bonusActionUsed=false;next.attack=undefined;next.steadyAim=false;next.movementAllowance=speed;next.disengaged=false;next.sneakAttackUsedThisTurn=false;
    description='Nighthawk ends their turn. '+combat.enemyName+' is next.';
  }else {
    if(next.actionUsed)throw Error('Action already used this turn.');
