@@ -762,10 +762,8 @@ export function App() {
             {([
               ['attack','Attack',!campaign.combat.actionUsed&&!campaign.combat.attack],
               ['steady-aim','Steady Aim',!campaign.combat.bonusActionUsed&&!campaign.combat.movementUsed],
-              ['cunning-disengage','Cunning Disengage',!campaign.combat.bonusActionUsed],
-              ['disengage','Disengage (Action)',!campaign.combat.actionUsed&&!campaign.combat.attack],
-              ['cunning-dash','Cunning Dash (Bonus)',!campaign.combat.bonusActionUsed],
-              ['dash','Dash (Action)',!campaign.combat.actionUsed&&!campaign.combat.attack],
+              ['disengage','Disengage',(!campaign.combat.actionUsed&&!campaign.combat.attack)||!campaign.combat.bonusActionUsed],
+              ['dash','Dash',(!campaign.combat.actionUsed&&!campaign.combat.attack)||!campaign.combat.bonusActionUsed],
               ['dodge','Dodge',!campaign.combat.actionUsed&&!campaign.combat.attack],
               ['end','End Turn',!campaign.combat.attack||campaign.combat.attack.phase==='resolved']
             ] as const).map(([action,label,available])=><button key={action} type="button" disabled={saving||!available} title={action==='steady-aim'?'Bonus action: advantage on your next attack this turn; no movement this turn.':action==='cunning-dash'?'Bonus action: gain movement equal to your speed.':action==='cunning-disengage'?'Bonus action: avoid opportunity attacks for the rest of the turn.':undefined} className={`rounded-lg border p-2.5 text-sm min-h-11 disabled:opacity-40 ${pendingCombatAction===action?'border-gold bg-gold/20 font-semibold':'border-white/30'}`} onClick={()=>{setPendingCombatAction(action);if(action==='attack')setSelectedWeapon(null);}}>{label}</button>)}
@@ -777,7 +775,15 @@ export function App() {
             <p className="text-sm">{campaign.combat.lastShoveSave.passed?'The enemy resisted the Shove.':campaign.combat.lastShoveSave.effectApplied?(campaign.combat.lastShoveSave.outcome==='prone'?'Enemy knocked Prone.':'Enemy pushed 5 feet.'):'Shove succeeded, but the enemy cannot be pushed outside the map.'}</p>
           </div>}
           {(()=>{const p=campaign.combat!.playerPosition??{x:2,y:4},e=campaign.combat!.enemyPosition??{x:6,y:4},adjacent=Math.max(Math.abs(p.x-e.x),Math.abs(p.y-e.y))<=1;return adjacent&&!campaign.combat!.actionUsed&&!campaign.combat!.attack&&campaign.combat!.order?.[campaign.combat!.turnIndex??0]==='Nighthawk' ? <div className="rounded-lg border border-white/30 p-3 space-y-2"><p className="text-sm font-semibold">Shove (Attack action)</p><p className="text-xs text-parchment/70">Target makes a Strength or Dexterity save. A failed save knocks it Prone or pushes it 5 feet.</p><div className="grid grid-cols-2 gap-2"><button type="button" disabled={saving} className="rounded-lg border border-gold p-2.5 text-sm" onClick={()=>void performShove('prone')}>Shove Prone</button><button type="button" disabled={saving} className="rounded-lg border border-gold p-2.5 text-sm" onClick={()=>void performShove('push')}>Push 5 ft</button></div></div>:null;})()}
-          {pendingCombatAction && <div className="rounded-lg border border-gold bg-gold/10 p-3 text-sm space-y-2" role="region" aria-label="Confirm combat action">
+          {(pendingCombatAction==='dash'||pendingCombatAction==='disengage')&&<div className="rounded-lg border border-gold bg-gold/10 p-3 space-y-2" role="region" aria-label="Choose action economy">
+            <p className="font-semibold">{pendingCombatAction==='dash'?'Dash':'Disengage'} · Choose action type</p>
+            <div className="grid grid-cols-2 gap-2">
+              <button type="button" disabled={saving||campaign.combat.actionUsed||!!campaign.combat.attack} className="rounded-lg border border-gold p-2.5 disabled:opacity-40" onClick={()=>void combatAction(pendingCombatAction)}>Use Action</button>
+              <button type="button" disabled={saving||campaign.combat.bonusActionUsed} className="rounded-lg border border-gold p-2.5 disabled:opacity-40" onClick={()=>void combatAction(pendingCombatAction==='dash'?'cunning-dash':'cunning-disengage')}>Use Bonus Action</button>
+            </div>
+            <button type="button" className="text-xs underline" onClick={()=>setPendingCombatAction(null)}>Cancel</button>
+          </div>}
+          {pendingCombatAction && pendingCombatAction!=='dash' && pendingCombatAction!=='disengage' && <div className="rounded-lg border border-gold bg-gold/10 p-3 text-sm space-y-2" role="region" aria-label="Confirm combat action">
             <p className="font-semibold">{({attack:'Choose weapon','steady-aim':'Steady Aim','cunning-dash':'Cunning Dash (Bonus)',dash:'Dash (Action)','cunning-disengage':'Cunning Disengage',disengage:'Disengage (Action)',dodge:'Dodge',end:'End Turn'} as const)[pendingCombatAction]}</p>
             {pendingCombatAction==='attack' ? <div className="space-y-2">
               <p className="text-parchment/80">Choose a weapon before confirming your attack.</p>
