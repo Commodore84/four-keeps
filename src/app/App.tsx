@@ -523,10 +523,10 @@ export function App() {
     try {const next=kind==='grapple'?grappleTrainingEnemy(campaign):escapeTrainingGrapple(campaign,kind);await localCampaignStorage.save(next);setCampaign(next);setCampaigns(items=>items.map(item=>item.id===next.id?next:item));setPendingCombatAction(null);setNotice(next.journal[next.journal.length-1].text);}
     catch(error){setNotice('Grapple: '+String(error));}finally{setSaving(false);}
   }
-  async function rollCombatAttack(kind:'hit'|'damage',applySneakAttack:boolean=false) {
+  async function rollCombatAttack(kind:'hit'|'damage') {
     if(!campaign||saving)return;
     setSaving(true);
-    try {const next=rollDuelAttack(campaign,kind,applySneakAttack);await localCampaignStorage.save(next);setCampaign(next);setCampaigns(items=>items.map(item=>item.id===next.id?next:item));setNotice(next.journal[next.journal.length-1].text);}
+    try {const next=rollDuelAttack(campaign,kind);await localCampaignStorage.save(next);setCampaign(next);setCampaigns(items=>items.map(item=>item.id===next.id?next:item));setNotice(next.journal[next.journal.length-1].text);}
     catch(error){setNotice('Combat: '+String(error));}finally{setSaving(false);}
   }
   const [confirmTrainingReset,setConfirmTrainingReset]=useState(false);
@@ -774,9 +774,8 @@ export function App() {
             {campaign.combat.attack.damage!==undefined && <p className="text-sm">{campaign.combat.attack.weapon==='shortbow'||campaign.combat.attack.thrown?'Piercing damage':'Nonlethal damage'}: {campaign.combat.attack.damage}{campaign.combat.attack.sneakAttackDamage ? ` (includes ${campaign.combat.attack.sneakAttackDamage} Sneak Attack)` : ''}</p>}
             {campaign.combat.attack.phase==='roll-to-hit' && <button type="button" disabled={saving} className="w-full rounded-lg bg-gold p-3 font-semibold text-ink" onClick={()=>void rollCombatAttack('hit')}>Attack{(()=>{const p=campaign.combat!.playerPosition??{x:2,y:4},e=campaign.combat!.enemyPosition??{x:6,y:4},near=Math.max(Math.abs(p.x-e.x),Math.abs(p.y-e.y))<=1,a=!!campaign.combat!.playerHidden||!!campaign.combat!.steadyAim||(!!campaign.combat!.enemyProne&&near),d=!!campaign.combat!.attack!.disadvantage||(!!campaign.combat!.enemyProne&&!near);return a===d?'':a?' (A)':' (D)';})()}</button>}
             {campaign.combat.attack.phase==='roll-damage' && <div className="space-y-2">
-              {campaign.combat.sneakAttackEligible && <p className="text-emerald-300">Sneak Attack eligible: {campaign.combat.attack.advantage?'advantage on attack':'ally adjacent to target without disadvantage'}. Choose whether to apply it.</p>}
-              <button type="button" disabled={saving} className="w-full rounded-lg bg-gold p-3 font-semibold text-ink" onClick={()=>void rollCombatAttack('damage',false)}>Roll weapon damage only</button>
-              {campaign.combat.sneakAttackEligible && <button type="button" disabled={saving} className="w-full rounded-lg border border-gold p-3 font-semibold" onClick={()=>void rollCombatAttack('damage',true)}>Roll damage + Sneak Attack ({rogueSneakAttackDice((campaign.character??prototypeNighthawk).level??1)}d6)</button>}
+              {campaign.combat.sneakAttackEligible&&<p className="text-emerald-300">Sneak Attack eligible · automatically included.</p>}
+              <button type="button" disabled={saving} className="w-full rounded-lg bg-gold p-3 font-semibold text-ink" onClick={()=>void rollCombatAttack('damage')}>{campaign.combat.sneakAttackEligible?'Roll Damage + Sneak Attack':'Roll Damage'}</button>
             </div>}
             {campaign.combat.attack.phase==='resolved' && <button type="button" disabled={saving} className="w-full rounded-lg bg-gold p-3 font-semibold text-ink" onClick={()=>void combatAction('end')}>Finish turn</button>}
           </div>}
