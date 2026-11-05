@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { createBackup, parseBackup } from '../game/backup';
 import { BookOpen, Compass, Map, RefreshCw, Send, Settings, Shield, Swords, Users } from 'lucide-react';
-import { addExchange, addNote, addRoll, beginDuel, adjustEquipment, rollDuelInitiative, takeDuelTurnAction, moveDuelToken, resolveEnemyOpportunity, moveTrainingDummy, resolveTrainingReaction, rollTrainingReaction, advanceDuelTestEnemyTurn, resolveDuelEnemyTurn, rollDuelAttack, setTrainingAllyAdjacent, concludeDuel, quitTrainingEncounter, newCampaign, awardExperience, levelUpRogue, levelUpArcaneTrickster, tricksterCantrips, tricksterSpells, isRitualSpell, castNighthawkSpell, takeNighthawkRest, applyNighthawkDamage, minutesUntilLongRestEligible, advanceToLongRestEligibility, endNighthawkConcentration, spellRequiresConcentration, reconcileNighthawkScores, undoNighthawkScoreReconciliation, xpThresholds, type Campaign } from '../game/campaign';
+import { addExchange, addNote, addRoll, beginDuel, adjustEquipment, rollDuelInitiative, takeDuelTurnAction, moveDuelToken, resolveEnemyOpportunity, moveTrainingDummy, resolveTrainingReaction, rollTrainingReaction, advanceDuelTestEnemyTurn, resolveDuelEnemyTurn, rollDuelAttack, setTrainingAllyAdjacent, setTrainingEnemyProne, concludeDuel, quitTrainingEncounter, newCampaign, awardExperience, levelUpRogue, levelUpArcaneTrickster, tricksterCantrips, tricksterSpells, isRitualSpell, castNighthawkSpell, takeNighthawkRest, applyNighthawkDamage, minutesUntilLongRestEligible, advanceToLongRestEligibility, endNighthawkConcentration, spellRequiresConcentration, reconcileNighthawkScores, undoNighthawkScoreReconciliation, xpThresholds, type Campaign } from '../game/campaign';
 import { localCampaignStorage } from '../game/storage';
 import type { View } from '../game/types';
 import { emptyWorld } from '../game/world';
@@ -505,6 +505,12 @@ export function App() {
     try{const next=resolveEnemyOpportunity(campaign,kind);await localCampaignStorage.save(next);setCampaign(next);setCampaigns(items=>items.map(item=>item.id===next.id?next:item));setNotice(next.journal[next.journal.length-1].text);}
     catch(error){setNotice('Opportunity attack: '+String(error));}finally{setSaving(false);}
   }
+  async function toggleEnemyProne(enabled:boolean) {
+    if(!campaign||saving)return;
+    setSaving(true);
+    try {const next=setTrainingEnemyProne(campaign,enabled);await localCampaignStorage.save(next);setCampaign(next);setCampaigns(items=>items.map(item=>item.id===next.id?next:item));setNotice(next.journal[next.journal.length-1].text);}
+    catch(error){setNotice('Prone: '+String(error));}finally{setSaving(false);}
+  }
   async function toggleTrainingAlly(enabled:boolean) {
     if(!campaign||saving)return;
     setSaving(true);
@@ -719,6 +725,9 @@ export function App() {
             {!gridDestination&&<p className="text-xs text-parchment/60">N = Nighthawk · E = enemy</p>}
           </div>
           <div className="rounded-lg border border-white/30 p-3 text-sm space-y-2">
+            <p className="font-semibold">Prone condition</p>
+            <button type="button" disabled={saving||campaign.combat.attack?.phase==='roll-damage'} className="w-full rounded-lg border border-gold p-2.5" onClick={()=>void toggleEnemyProne(!campaign.combat!.enemyProne)}>{campaign.combat.enemyProne?'Stand enemy up':'Knock enemy Prone'}</button>
+            <p>{campaign.combat.enemyProne?'Enemy is Prone. Attacks from within 5 feet gain advantage; attacks from farther away have disadvantage.':'Enemy is standing.'}</p>
             <p className="font-semibold">Sneak Attack training ally</p>
             <p>Simulate a conscious ally within 5 feet of the dummy. This allows Sneak Attack on a qualifying hit without granting attack advantage.</p>
             <button type="button" disabled={saving||campaign.combat.attack?.phase==='roll-damage'} className="w-full rounded-lg border border-gold p-2.5" onClick={()=>void toggleTrainingAlly(!campaign.combat!.trainingAllyAdjacent)}>{campaign.combat.trainingAllyAdjacent?'Remove adjacent ally':'Place ally next to dummy'}</button>
@@ -734,7 +743,7 @@ export function App() {
               <p>Attack: {campaign.combat.attack.d20} + {(abilityModifier((campaign.character??prototypeNighthawk).scores.dex)+(campaign.character??prototypeNighthawk).proficiencyBonus)} = {campaign.combat.attack.total} · {campaign.combat.attack.hit?'Hit':'Miss'}</p>
             </div>}
             {campaign.combat.attack.damage!==undefined && <p className="text-sm">{campaign.combat.attack.weapon==='shortbow'||campaign.combat.attack.thrown?'Piercing damage':'Nonlethal damage'}: {campaign.combat.attack.damage}{campaign.combat.attack.sneakAttackDamage ? ` (includes ${campaign.combat.attack.sneakAttackDamage} Sneak Attack)` : ''}</p>}
-            {campaign.combat.attack.phase==='roll-to-hit' && <button type="button" disabled={saving} className="w-full rounded-lg bg-gold p-3 font-semibold text-ink" onClick={()=>void rollCombatAttack('hit')}>Attack{campaign.combat.steadyAim&&!campaign.combat.attack.disadvantage?' (A)':campaign.combat.attack.disadvantage&&!campaign.combat.steadyAim?' (D)':''}</button>}
+            {campaign.combat.attack.phase==='roll-to-hit' && <button type="button" disabled={saving} className="w-full rounded-lg bg-gold p-3 font-semibold text-ink" onClick={()=>void rollCombatAttack('hit')}>Attack{(()=>{const p=campaign.combat!.playerPosition??{x:2,y:4},e=campaign.combat!.enemyPosition??{x:6,y:4},near=Math.max(Math.abs(p.x-e.x),Math.abs(p.y-e.y))<=1,a=!!campaign.combat!.steadyAim||(!!campaign.combat!.enemyProne&&near),d=!!campaign.combat!.attack!.disadvantage||(!!campaign.combat!.enemyProne&&!near);return a===d?'':a?' (A)':' (D)';})()}</button>}
             {campaign.combat.attack.phase==='roll-damage' && <div className="space-y-2">
               {campaign.combat.sneakAttackEligible && <p className="text-emerald-300">Sneak Attack eligible: {campaign.combat.attack.advantage?'advantage on attack':'ally adjacent to target without disadvantage'}. Choose whether to apply it.</p>}
               <button type="button" disabled={saving} className="w-full rounded-lg bg-gold p-3 font-semibold text-ink" onClick={()=>void rollCombatAttack('damage',false)}>Roll weapon damage only</button>
