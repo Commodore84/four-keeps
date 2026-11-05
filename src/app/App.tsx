@@ -738,7 +738,7 @@ export function App() {
             {campaign.combat.attack.phase==='roll-damage' && <div className="space-y-2">
               {campaign.combat.sneakAttackEligible && <p className="text-emerald-300">Sneak Attack eligible: {campaign.combat.attack.advantage?'advantage on attack':'ally adjacent to target without disadvantage'}. Choose whether to apply it.</p>}
               <button type="button" disabled={saving} className="w-full rounded-lg bg-gold p-3 font-semibold text-ink" onClick={()=>void rollCombatAttack('damage',false)}>Roll weapon damage only</button>
-              {campaign.combat.sneakAttackEligible && <button type="button" disabled={saving} className="w-full rounded-lg border border-gold p-3 font-semibold" onClick={()=>void rollCombatAttack('damage',true)}>Roll damage + Sneak Attack ({rogueSneakAttackDice((campaign.character??prototypeNighthawk).level)}d6)</button>}
+              {campaign.combat.sneakAttackEligible && <button type="button" disabled={saving} className="w-full rounded-lg border border-gold p-3 font-semibold" onClick={()=>void rollCombatAttack('damage',true)}>Roll damage + Sneak Attack ({rogueSneakAttackDice((campaign.character??prototypeNighthawk).level??1)}d6)</button>}
             </div>}
             {campaign.combat.attack.phase==='resolved' && <button type="button" disabled={saving} className="w-full rounded-lg bg-gold p-3 font-semibold text-ink" onClick={()=>void combatAction('end')}>Finish turn</button>}
           </div>}
