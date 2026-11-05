@@ -354,7 +354,6 @@ export function rollPlayerGrappleEscape(campaign:Campaign,ability:'str'|'dex'):C
  const c=campaign.combat;
  if(!c?.pendingPlayerEscape||!c.playerGrappled||c.order?.[c.turnIndex??0]!=='Nighthawk')throw Error('No Grapple escape check pending.');
  const character=campaign.character??prototypeNighthawk;
- const skill=ability==='str'?'athletics':'acrobatics';
  const proficient=character.proficientSkills.includes(ability==='str'?'Athletics':'Acrobatics');
  const modifier=abilityModifier(character.scores[ability])+(proficient?character.proficiencyBonus:0);
  const roll=crypto.getRandomValues(new Uint32Array(1))[0]%20+1;
