@@ -23,7 +23,7 @@ export interface Campaign {
   xp?: number;
   xpAwards?: { id: string; amount: number; reason: string }[];
   levelOneSnapshot?: { character: CharacterStats; xp: number; xpAwards: { id: string; amount: number; reason: string }[] };
-  combat?: { status:'awaiting-initiative'|'initiative-set'|'completed'; enemyName:string; enemyInitiative:number; playerInitiative?:number; round:number; order?:string[]; turnIndex?:number; movementUsed?:number; actionUsed?:boolean; bonusActionUsed?:boolean; lastAction?:string; arrowsRemaining?:number; daggersAvailable?:number; daggersThrown?:number; reactionUsed?:boolean; enemyReactionUsed?:boolean; playerOpportunity?:{from:{x:number;y:number};to:{x:number;y:number};cost:number;phase:'roll-to-hit'|'roll-damage'|'resolved';d20?:number;total?:number;hit?:boolean;damage?:number;critical?:boolean}; reactionAttack?:{phase:'roll-to-hit'|'roll-damage'|'resolved';d20?:number;total?:number;hit?:boolean;critical?:boolean;damage?:number}; opportunity?:{from:{x:number;y:number};to:{x:number;y:number}}; attack?:{weapon?:'dagger'|'shortbow'; thrown?:boolean; disadvantage?:boolean; phase:'roll-to-hit'|'roll-damage'|'resolved'; d20?:number; firstD20?:number; total?:number; hit?:boolean; critical?:boolean; damage?:number; sneakAttackDamage?:number; advantage?:boolean; secondD20?:number}; steadyAim?:boolean; movementAllowance?:number; disengaged?:boolean; enemyHp?:number; enemyMaxHp?:number; outcome?:'nonlethal-victory'|'player-defeated'; enemyLastTurn?:string; trainingStartingHp?:number; playerPosition?:{x:number;y:number}; enemyPosition?:{x:number;y:number}; trainingAllyAdjacent?:boolean; enemyProne?:boolean; enemyGrappled?:boolean; lastGrappleResult?:string; playerProne?:boolean; playerGrappled?:boolean; pendingEnemyGrapple?:boolean; pendingPlayerEscape?:boolean; lastPlayerGrappleResult?:string; pendingEnemyShove?:boolean; lastPlayerShoveSave?:string; lastShoveSave?:{passed:boolean;dc:number;outcome:'prone'|'push';effectApplied:boolean}; sneakAttackUsedThisTurn?:boolean; sneakAttackEligible?:boolean };
+  combat?: { status:'awaiting-initiative'|'initiative-set'|'completed'; enemyName:string; enemyInitiative:number; playerInitiative?:number; round:number; order?:string[]; turnIndex?:number; movementUsed?:number; actionUsed?:boolean; bonusActionUsed?:boolean; lastAction?:string; arrowsRemaining?:number; daggersAvailable?:number; daggersThrown?:number; reactionUsed?:boolean; enemyReactionUsed?:boolean; playerOpportunity?:{from:{x:number;y:number};to:{x:number;y:number};cost:number;phase:'roll-to-hit'|'roll-damage'|'resolved';d20?:number;total?:number;hit?:boolean;damage?:number;critical?:boolean}; reactionAttack?:{phase:'roll-to-hit'|'roll-damage'|'resolved';d20?:number;total?:number;hit?:boolean;critical?:boolean;damage?:number}; opportunity?:{from:{x:number;y:number};to:{x:number;y:number}}; attack?:{weapon?:'dagger'|'shortbow'; thrown?:boolean; disadvantage?:boolean; phase:'roll-to-hit'|'roll-damage'|'resolved'; d20?:number; firstD20?:number; total?:number; hit?:boolean; critical?:boolean; damage?:number; sneakAttackDamage?:number; advantage?:boolean; secondD20?:number}; steadyAim?:boolean; movementAllowance?:number; disengaged?:boolean; enemyHp?:number; enemyMaxHp?:number; outcome?:'nonlethal-victory'|'player-defeated'; enemyLastTurn?:string; trainingStartingHp?:number; playerPosition?:{x:number;y:number}; enemyPosition?:{x:number;y:number}; trainingAllyAdjacent?:boolean; enemyProne?:boolean; enemyGrappled?:boolean; lastGrappleResult?:string; playerProne?:boolean; playerGrappled?:boolean; playerHidden?:boolean; hideRoll?:number; hideTotal?:number; hideResult?:string; enemySearchResult?:string; pendingEnemyGrapple?:boolean; pendingPlayerEscape?:boolean; lastPlayerGrappleResult?:string; pendingEnemyShove?:boolean; lastPlayerShoveSave?:string; lastShoveSave?:{passed:boolean;dc:number;outcome:'prone'|'push';effectApplied:boolean}; sneakAttackUsedThisTurn?:boolean; sneakAttackEligible?:boolean };
   pendingAftermath?: { opponent: string; playerDefeated: boolean };
   pendingCheck?: { skill: string; mode: 'normal' | 'advantage' | 'disadvantage'; reason: string; token: string; dice?: number[] };
 }
@@ -226,6 +226,38 @@ export function rollDuelInitiative(campaign:Campaign):Campaign {
   return {...campaign,combat:{...combat,status:'initiative-set',playerInitiative:total,order,turnIndex:0,reactionUsed:false,movementUsed:0,actionUsed:false,bonusActionUsed:false,enemyHp:12,enemyMaxHp:12,arrowsRemaining:campaign.equipment?.arrows??20,daggersAvailable:campaign.equipment?.daggers??2,daggersThrown:0,playerPosition:{x:2,y:4},enemyPosition:{x:6,y:4}},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:'Nighthawk initiative: d20 '+roll+' + DEX '+modifier+' = '+total+'. '+combat.enemyName+': '+combat.enemyInitiative+'. Turn order: '+order.join(' → ')+'.',createdAt:now}]};
 }
 
+// A fixed stone pillar for the first cover/Hide encounter. Line of sight is blocked
+// when the segment between the token centers intersects this occupied square.
+export const trainingCover={x:4,y:4};
+export function trainingCoverBlocksSight(p:{x:number;y:number},e:{x:number;y:number}):boolean {
+ const dx=e.x-p.x,dy=e.y-p.y;
+ for(let t=0;t<=1;t+=0.02)if(Math.abs(p.x+dx*t-trainingCover.x)<0.48&&Math.abs(p.y+dy*t-trainingCover.y)<0.48)return true;
+ return false;
+}
+export function hideNighthawk(campaign:Campaign):Campaign {
+ const c=campaign.combat;
+ if(!c||c.status!=='initiative-set'||c.order?.[c.turnIndex??0]!=='Nighthawk')throw Error('Hide requires your turn.');
+ if(c.bonusActionUsed)throw Error('Bonus action already used.');
+ const p=c.playerPosition??{x:2,y:4},e=c.enemyPosition??{x:6,y:4};
+ if(!trainingCoverBlocksSight(p,e))throw Error('You must be out of the enemy’s line of sight behind the pillar to Hide.');
+ const character=campaign.character??prototypeNighthawk;
+ const mod=abilityModifier(character.scores.dex)+character.proficiencyBonus*(character.expertiseSkills.includes('Stealth')?2:character.proficientSkills.includes('Stealth')?1:0);
+ const roll=crypto.getRandomValues(new Uint32Array(1))[0]%20+1,total=roll+mod,success=total>=15;
+ const detail='Cunning Action: Hide. Stealth d20 '+roll+' + '+mod+' = '+total+' vs DC 15. '+(success?'Success: Hidden behind cover.':'Failure: enemy knows your position.');
+ const now=new Date().toISOString();
+ return {...campaign,combat:{...c,bonusActionUsed:true,playerHidden:success,hideRoll:roll,hideTotal:total,hideResult:detail},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:detail,createdAt:now}]};
+}
+export function searchForNighthawk(campaign:Campaign):Campaign {
+ const c=campaign.combat;
+ if(!c||c.status!=='initiative-set'||c.order?.[c.turnIndex??0]==='Nighthawk'||!c.playerHidden)throw Error('Search requires a hidden player on the enemy turn.');
+ const roll=crypto.getRandomValues(new Uint32Array(1))[0]%20+1;
+ const total=roll; // Training dummy has no Investigation or Perception proficiency.
+ const found=total>=(c.hideTotal??15);
+ const detail='Dummy Search action: Wisdom (Perception) d20 '+roll+' + 0 = '+total+' vs Stealth '+(c.hideTotal??15)+'. '+(found?'Nighthawk found.':'Nighthawk remains hidden.');
+ const now=new Date().toISOString();
+ const nextRound=c.order?.[0]==='Nighthawk'?c.round+1:c.round;
+ return {...campaign,combat:{...c,playerHidden:!found,enemySearchResult:detail,turnIndex:c.order?.indexOf('Nighthawk')??0,round:nextRound,movementUsed:0,actionUsed:false,bonusActionUsed:false,attack:undefined},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:detail,createdAt:now}]};
+}
 export function moveDuelToken(campaign:Campaign,x:number,y:number):Campaign {
  const combat=campaign.combat;
  if(!combat||combat.status!=='initiative-set'||combat.order?.[combat.turnIndex??0]!=='Nighthawk')throw Error('You can move only on your turn.');
@@ -237,6 +269,7 @@ export function moveDuelToken(campaign:Campaign,x:number,y:number):Campaign {
  const from=combat.playerPosition??{x:1,y:3};
  const enemy=combat.enemyPosition??{x:5,y:3};
  if(x===enemy.x&&y===enemy.y)throw Error('That square is occupied by the opponent.');
+ if(x===trainingCover.x&&y===trainingCover.y)throw Error('Stone pillar blocks that square.');
  const cost=5*Math.max(Math.abs(x-from.x),Math.abs(y-from.y));
  if(cost===0)throw Error('Choose another square.');
  const used=combat.movementUsed??0;
@@ -247,7 +280,7 @@ export function moveDuelToken(campaign:Campaign,x:number,y:number):Campaign {
  const provoke=fromAdjacent&&!toAdjacent&&!combat.disengaged&&!combat.enemyReactionUsed;
  const now=new Date().toISOString();
  if(provoke)return {...campaign,combat:{...combat,playerOpportunity:{from,to:{x,y},cost,phase:'roll-to-hit'}},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:'Nighthawk attempts to leave enemy reach without Disengage. Enemy opportunity attack triggered; resolve before moving.',createdAt:now}]};
- return {...campaign,combat:{...combat,playerPosition:{x,y},movementUsed:used+cost},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:'Nighthawk moves '+cost+' feet on the tactical grid ('+(used+cost)+'/'+allowance+' feet used).',createdAt:now}]};
+ return {...campaign,combat:{...combat,playerPosition:{x,y},playerHidden:combat.playerHidden&&trainingCoverBlocksSight({x,y},enemy),movementUsed:used+cost},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:'Nighthawk moves '+cost+' feet on the tactical grid ('+(used+cost)+'/'+allowance+' feet used).',createdAt:now}]};
 }
 
 export function resolveEnemyOpportunity(campaign:Campaign,kind:'hit'|'damage'|'finish'):Campaign {
@@ -404,7 +437,7 @@ export function resolveDuelEnemyTurn(campaign:Campaign):Campaign {
  const character=campaign.character??prototypeNighthawk;
  const die=(sides:number)=>crypto.getRandomValues(new Uint32Array(1))[0]%sides+1;
  const first=die(20);
- const dodging=combat.lastAction==='Dodge';
+ const dodging=combat.lastAction==='Dodge'||!!combat.playerHidden;
  const second=dodging?die(20):undefined;
  const attackRoll=second===undefined?first:Math.min(first,second);
  const total=attackRoll+4;
@@ -503,7 +536,8 @@ export function rollDuelAttack(campaign:Campaign,kind:'hit'|'damage',applySneakA
   if(next.attack.phase!=='roll-to-hit')throw Error('Attack roll already made.');
   const character=campaign.character??prototypeNighthawk;
   const attackBonus=abilityModifier(character.scores.dex)+character.proficiencyBonus;
-  const player=combat.playerPosition??{x:2,y:4},enemy=combat.enemyPosition??{x:6,y:4},withinFive=Math.max(Math.abs(player.x-enemy.x),Math.abs(player.y-enemy.y))<=1;const hasAdvantage=!!combat.steadyAim||(!!combat.enemyProne&&withinFive);const hasDisadvantage=!!next.attack.disadvantage||(!!combat.enemyProne&&!withinFive);const advantage=hasAdvantage&&!hasDisadvantage;const disadvantage=hasDisadvantage&&!hasAdvantage;const firstD20=die(20),secondD20=(advantage||disadvantage)?die(20):undefined,d20=secondD20===undefined?firstD20:advantage?Math.max(firstD20,secondD20):Math.min(firstD20,secondD20),total=d20+attackBonus,critical=d20===20,hit=critical||(d20!==1&&total>=12);
+  const player=combat.playerPosition??{x:2,y:4},enemy=combat.enemyPosition??{x:6,y:4},withinFive=Math.max(Math.abs(player.x-enemy.x),Math.abs(player.y-enemy.y))<=1;const hasAdvantage=!!combat.playerHidden||!!combat.steadyAim||(!!combat.enemyProne&&withinFive);const hasDisadvantage=!!next.attack.disadvantage||(!!combat.enemyProne&&!withinFive);const advantage=hasAdvantage&&!hasDisadvantage;const disadvantage=hasDisadvantage&&!hasAdvantage;const firstD20=die(20),secondD20=(advantage||disadvantage)?die(20):undefined,d20=secondD20===undefined?firstD20:advantage?Math.max(firstD20,secondD20):Math.min(firstD20,secondD20),total=d20+attackBonus,critical=d20===20,hit=critical||(d20!==1&&total>=12);
+  next.playerHidden=false;
   next.attack={phase:hit?'roll-damage':'resolved',d20,firstD20,total,critical,hit,advantage,disadvantage,weapon:next.attack.weapon,thrown:next.attack.thrown,secondD20};next.sneakAttackEligible=hit&&!next.sneakAttackUsedThisTurn&&(advantage|| (!!next.trainingAllyAdjacent&&!disadvantage));
   if(next.attack.weapon==='shortbow')next.arrowsRemaining=(next.arrowsRemaining??20)-1;
   if(next.attack.thrown){next.daggersAvailable=(next.daggersAvailable??2)-1;next.daggersThrown=(next.daggersThrown??0)+1;}
