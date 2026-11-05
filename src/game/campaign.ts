@@ -241,7 +241,7 @@ export function hideNighthawk(campaign:Campaign):Campaign {
  const p=c.playerPosition??{x:2,y:4},e=c.enemyPosition??{x:6,y:4};
  if(!trainingCoverBlocksSight(p,e))throw Error('You must be out of the enemy’s line of sight behind the pillar to Hide.');
  const character=campaign.character??prototypeNighthawk;
- const mod=abilityModifier(character.scores.dex)+character.proficiencyBonus*(character.expertiseSkills.includes('Stealth')?2:character.proficientSkills.includes('Stealth')?1:0);
+ const mod=abilityModifier(character.scores.dex)+character.proficiencyBonus*(character.expertiseSkills?.includes('Stealth')?2:character.proficientSkills?.includes('Stealth')?1:0);
  const roll=crypto.getRandomValues(new Uint32Array(1))[0]%20+1,total=roll+mod,success=total>=15;
  const detail='Cunning Action: Hide. Stealth d20 '+roll+' + '+mod+' = '+total+' vs DC 15. '+(success?'Success: Hidden behind cover.':'Failure: enemy knows your position.');
  const now=new Date().toISOString();
