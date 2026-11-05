@@ -349,7 +349,7 @@ export function rollPlayerShoveSave(campaign:Campaign,ability:'str'|'dex'):Campa
 export function standNighthawk(campaign:Campaign):Campaign {
  const c=campaign.combat;
  if(!c||c.order?.[c.turnIndex??0]!=='Nighthawk'||!c.playerProne)throw Error('You must be Prone on your turn to stand.');
- const cost=15; // Four Keeps 5-foot grid convention for 35-foot Speed.
+ const cost=15; // Fixed 15-foot cost to stand from Prone in 2024 rules.
  if((c.movementUsed??0)+cost>(c.movementAllowance??35))throw Error('Not enough movement to stand.');
  const now=new Date().toISOString();
  const detail='Nighthawk stands up, spending 15 feet of movement. '+((c.movementAllowance??35)-(c.movementUsed??0)-cost)+' feet remaining.';
@@ -360,7 +360,7 @@ export function resolveDuelEnemyTurn(campaign:Campaign):Campaign {
  if(!combat||combat.status!=='initiative-set'||!combat.order||combat.order[combat.turnIndex??0]==='Nighthawk')throw Error('It is not the opponent\'s turn.');
  if(combat.opportunity)throw Error('Resolve the opportunity attack before continuing.');
  if(combat.pendingEnemyShove)throw Error('Resolve the pending Shove save first.');
- const standingCost=combat.enemyProne?Math.floor(30/2):0;
+ const standingCost=combat.enemyProne?15:0;
  const standDescription=combat.enemyProne?'Enemy stands from Prone, spending '+standingCost+' of 30 feet of movement (15 feet remaining). ':'';
  const character=campaign.character??prototypeNighthawk;
  const die=(sides:number)=>crypto.getRandomValues(new Uint32Array(1))[0]%sides+1;
