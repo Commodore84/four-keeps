@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { createBackup, parseBackup } from '../game/backup';
 import { BookOpen, Compass, Map, RefreshCw, Send, Settings, Shield, Swords, Users } from 'lucide-react';
-import { addExchange, addNote, addRoll, beginDuel, adjustEquipment, rollDuelInitiative, takeDuelTurnAction, moveDuelToken, moveTrainingDummy, resolveTrainingReaction, rollTrainingReaction, advanceDuelTestEnemyTurn, resolveDuelEnemyTurn, rollDuelAttack, concludeDuel, quitTrainingEncounter, newCampaign, awardExperience, levelUpRogue, levelUpArcaneTrickster, tricksterCantrips, tricksterSpells, isRitualSpell, castNighthawkSpell, takeNighthawkRest, applyNighthawkDamage, minutesUntilLongRestEligible, advanceToLongRestEligibility, endNighthawkConcentration, spellRequiresConcentration, reconcileNighthawkScores, undoNighthawkScoreReconciliation, xpThresholds, type Campaign } from '../game/campaign';
+import { addExchange, addNote, addRoll, beginDuel, adjustEquipment, rollDuelInitiative, takeDuelTurnAction, moveDuelToken, resolveEnemyOpportunity, moveTrainingDummy, resolveTrainingReaction, rollTrainingReaction, advanceDuelTestEnemyTurn, resolveDuelEnemyTurn, rollDuelAttack, concludeDuel, quitTrainingEncounter, newCampaign, awardExperience, levelUpRogue, levelUpArcaneTrickster, tricksterCantrips, tricksterSpells, isRitualSpell, castNighthawkSpell, takeNighthawkRest, applyNighthawkDamage, minutesUntilLongRestEligible, advanceToLongRestEligibility, endNighthawkConcentration, spellRequiresConcentration, reconcileNighthawkScores, undoNighthawkScoreReconciliation, xpThresholds, type Campaign } from '../game/campaign';
 import { localCampaignStorage } from '../game/storage';
 import type { View } from '../game/types';
 import { emptyWorld } from '../game/world';
@@ -476,7 +476,7 @@ export function App() {
   }
   const [gridDestination,setGridDestination]=useState<{x:number;y:number}|null>(null);
   const [selectedWeapon,setSelectedWeapon]=useState<'dagger'|'throw-dagger'|'shortbow'|null>(null);
-  const [pendingCombatAction,setPendingCombatAction]=useState<'attack'|'dodge'|'steady-aim'|'cunning-dash'|'cunning-disengage'|'end'|null>(null);
+  const [pendingCombatAction,setPendingCombatAction]=useState<'attack'|'dodge'|'steady-aim'|'cunning-dash'|'cunning-disengage'|'disengage'|'end'|null>(null);
   async function combatAction(action:'move'|'attack'|'throw-dagger'|'shortbow'|'dash'|'disengage'|'dodge'|'steady-aim'|'cunning-dash'|'cunning-disengage'|'end') {
     if(!campaign||saving)return;
     setSaving(true);
@@ -498,6 +498,12 @@ export function App() {
       setNotice(next.journal[next.journal.length-1].text);
       setGridDestination(null);
     }catch(error){setNotice('Movement: '+String(error));}finally{setSaving(false);}
+  }
+  async function enemyOpportunityRoll(kind:'hit'|'damage'|'finish'){
+    if(!campaign||saving)return;
+    setSaving(true);
+    try{const next=resolveEnemyOpportunity(campaign,kind);await localCampaignStorage.save(next);setCampaign(next);setCampaigns(items=>items.map(item=>item.id===next.id?next:item));setNotice(next.journal[next.journal.length-1].text);}
+    catch(error){setNotice('Opportunity attack: '+String(error));}finally{setSaving(false);}
   }
   async function rollCombatAttack(kind:'hit'|'damage') {
     if(!campaign||saving)return;
@@ -688,9 +694,16 @@ export function App() {
                 const remaining=(campaign.combat!.movementAllowance??35)-(campaign.combat!.movementUsed??0);
                 const reachable=cost>0&&cost<=remaining&&!enemy&&!campaign.combat!.steadyAim&&!campaign.combat!.attack;
                 const chosen=gridDestination?.x===x&&gridDestination?.y===y;
-                return <button key={i} type="button" role="gridcell" aria-label={own?'Nighthawk':enemy?campaign.combat!.enemyName:`Square ${x+1}, ${y+1}; ${cost} feet`} disabled={saving||own||enemy||!reachable} onClick={()=>setGridDestination({x,y})} className={`aspect-square rounded border text-xs font-bold min-w-0 ${own?'bg-gold text-ink border-gold':enemy?'bg-red-900/70 text-white border-red-500':chosen?'bg-gold/50 border-gold':reachable?'bg-emerald-900/40 border-emerald-500/70':'bg-white/5 border-white/15'}`}>{own?'N':enemy?'E':chosen?'✓':''}</button>;
+                return <button key={i} type="button" role="gridcell" aria-label={own?'Nighthawk':enemy?campaign.combat!.enemyName:`Square ${x+1}, ${y+1}; ${cost} feet`} disabled={saving||!!campaign.combat.playerOpportunity||own||enemy||!reachable} onClick={()=>setGridDestination({x,y})} className={`aspect-square rounded border text-xs font-bold min-w-0 ${own?'bg-gold text-ink border-gold':enemy?'bg-red-900/70 text-white border-red-500':chosen?'bg-gold/50 border-gold':reachable?'bg-emerald-900/40 border-emerald-500/70':'bg-white/5 border-white/15'}`}>{own?'N':enemy?'E':chosen?'✓':''}</button>;
               })}
             </div>
+            {campaign.combat.playerOpportunity&&<div className="rounded-lg border border-gold p-3 space-y-2 text-sm">
+              <p className="font-semibold">Enemy Opportunity Attack</p>
+              <p>Nighthawk is leaving melee reach without Disengage. Movement pauses while the dummy uses its reaction.</p>
+              {campaign.combat.playerOpportunity.d20!==undefined&&<p>Enemy attack: d20 {campaign.combat.playerOpportunity.d20} → {campaign.combat.playerOpportunity.total} vs AC 14 · {campaign.combat.playerOpportunity.hit?'Hit':'Miss'}</p>}
+              {campaign.combat.playerOpportunity.damage!==undefined&&<p>Damage: {campaign.combat.playerOpportunity.damage}</p>}
+              <button type="button" disabled={saving} className="w-full rounded-lg bg-gold p-3 font-semibold text-ink" onClick={()=>void enemyOpportunityRoll(campaign.combat!.playerOpportunity!.phase==='roll-to-hit'?'hit':campaign.combat!.playerOpportunity!.phase==='roll-damage'?'damage':'finish')}>{campaign.combat.playerOpportunity.phase==='roll-to-hit'?'Roll enemy attack':campaign.combat.playerOpportunity.phase==='roll-damage'?'Roll enemy damage':'Finish reaction & move'}</button>
+            </div>}
             {gridDestination&&(()=>{const p=campaign.combat!.playerPosition??{x:2,y:4};const cost=5*Math.max(Math.abs(gridDestination.x-p.x),Math.abs(gridDestination.y-p.y));const remaining=(campaign.combat!.movementAllowance??35)-(campaign.combat!.movementUsed??0);return <div className="flex items-center justify-between gap-2 text-sm"><span>Move {cost} ft · {remaining-cost} ft left</span><div className="flex gap-2"><button type="button" className="rounded border border-white/40 px-3 py-2" onClick={()=>setGridDestination(null)}>Cancel</button><button type="button" disabled={saving} className="rounded bg-gold text-ink px-3 py-2 font-semibold" onClick={()=>void confirmGridMove()}>Confirm</button></div></div>;})()}
             {!gridDestination&&<p className="text-xs text-parchment/60">N = Nighthawk · E = enemy</p>}
           </div>
@@ -713,7 +726,8 @@ export function App() {
             {([
               ['attack','Attack',!campaign.combat.actionUsed&&!campaign.combat.attack],
               ['steady-aim','Steady Aim',!campaign.combat.bonusActionUsed&&!campaign.combat.movementUsed],
-              ['cunning-disengage','Disengage',!campaign.combat.bonusActionUsed],
+              ['cunning-disengage','Cunning Disengage',!campaign.combat.bonusActionUsed],
+              ['disengage','Disengage (Action)',!campaign.combat.actionUsed&&!campaign.combat.attack],
               ['cunning-dash','Dash',!campaign.combat.bonusActionUsed],
               ['dodge','Dodge',!campaign.combat.actionUsed&&!campaign.combat.attack],
               ['end','End Turn',!campaign.combat.attack||campaign.combat.attack.phase==='resolved']
@@ -729,7 +743,7 @@ export function App() {
                 {id:'shortbow' as const,label:'Shortbow',detail:'1d6 · 80/320 ft · 1 arrow'+(distance<=5?' · disadvantage':''),eligible:distance<=320&&(campaign.combat!.arrowsRemaining??20)>0}
               ];return <><p className="text-xs text-parchment/70">Target: {distance} ft away. Only eligible attacks are available.</p><div className="grid grid-cols-2 gap-2">{choices.filter(c=>c.eligible).map(c=><button key={c.id} type="button" className={`rounded-lg border p-3 text-left ${selectedWeapon===c.id?'border-gold bg-gold/20':'border-white/30'}`} onClick={()=>setSelectedWeapon(c.id)}><strong>{c.label}</strong><span className="block text-xs">{c.detail}</span></button>)}</div>{!choices.some(c=>c.eligible)&&<p>No weapon is in range.</p>}</>;})()}
 
-            </div> : <p className="text-parchment/80">{({'steady-aim':'Bonus action · Advantage on your next attack this turn. Your speed becomes 0 until the turn ends.','cunning-dash':'Cunning Action · Gain additional movement.','cunning-disengage':'Cunning Action · Avoid opportunity attacks this turn.',dodge:'Action · Attacks against you have disadvantage.',end:'End your turn.'} as const)[pendingCombatAction]}</p>}
+            </div> : <p className="text-parchment/80">{({'steady-aim':'Bonus action · Advantage on your next attack this turn. Your speed becomes 0 until the turn ends.','cunning-dash':'Cunning Action · Gain additional movement.','cunning-disengage':'Cunning Action · Avoid opportunity attacks this turn.',disengage:'Action · Avoid opportunity attacks this turn.',dodge:'Action · Attacks against you have disadvantage.',end:'End your turn.'} as const)[pendingCombatAction]}</p>}
             <div className="grid grid-cols-2 gap-2"><button type="button" disabled={saving} className="rounded-lg border border-white/40 p-2.5" onClick={()=>setPendingCombatAction(null)}>Cancel</button><button type="button" disabled={saving||(pendingCombatAction==='attack'&&!selectedWeapon)} className="rounded-lg bg-gold p-2.5 font-semibold text-ink disabled:opacity-40" onClick={()=>void combatAction(pendingCombatAction==='attack'?(selectedWeapon==='shortbow'?'shortbow':selectedWeapon==='throw-dagger'?'throw-dagger':'attack'):pendingCombatAction)}>Confirm</button></div>
           </div>}
           <p className="text-xs text-parchment/70">Select an action to see details. Nothing is spent until Confirm. Already confirmed actions cannot be undone. Opportunity attacks are not simulated yet.</p>
