@@ -706,7 +706,7 @@ export function App() {
                 const remaining=(campaign.combat!.movementAllowance??35)-(campaign.combat!.movementUsed??0);
                 const reachable=cost>0&&cost<=remaining&&!enemy&&!campaign.combat!.steadyAim&&!campaign.combat!.attack;
                 const chosen=gridDestination?.x===x&&gridDestination?.y===y;
-                return <button key={i} type="button" role="gridcell" aria-label={own?'Nighthawk':enemy?campaign.combat!.enemyName:`Square ${x+1}, ${y+1}; ${cost} feet`} disabled={saving||!!campaign.combat!.playerOpportunity||own||enemy||!reachable} onClick={()=>setGridDestination({x,y})} className={`aspect-square rounded border text-xs font-bold min-w-0 ${own?'bg-gold text-ink border-gold':enemy?'bg-red-900/70 text-white border-red-500':chosen?'bg-gold/50 border-gold':reachable?'bg-emerald-900/40 border-emerald-500/70':'bg-white/5 border-white/15'}`}>{own?'N':enemy?'E':chosen?'✓':''}</button>;
+                return <button key={i} type="button" role="gridcell" aria-label={own?'Nighthawk':enemy?`${campaign.combat!.enemyName}${campaign.combat!.enemyProne?' (Prone)':''}`:`Square ${x+1}, ${y+1}; ${cost} feet`} disabled={saving||!!campaign.combat!.playerOpportunity||own||enemy||!reachable} onClick={()=>setGridDestination({x,y})} className={`aspect-square rounded border text-xs font-bold min-w-0 ${own?'bg-gold text-ink border-gold':enemy?'bg-red-900/70 text-white border-red-500':chosen?'bg-gold/50 border-gold':reachable?'bg-emerald-900/40 border-emerald-500/70':'bg-white/5 border-white/15'}`}>{own?'N':enemy?<span className="relative inline-flex items-center justify-center w-full h-full"><span>E</span>{campaign.combat!.enemyProne&&<span aria-hidden="true" className="absolute -right-0.5 -top-1 rounded bg-amber-300 px-0.5 text-[9px] leading-3 font-extrabold text-black shadow">P</span>}</span>:chosen?'✓':''}</button>;
               })}
             </div>
             {campaign.combat.playerOpportunity&&<div className="rounded-lg border border-gold p-3 space-y-2 text-sm">
@@ -722,7 +722,7 @@ export function App() {
               {!provokes&&wasAdjacent&&!willBeAdjacent&&<p className="text-xs text-emerald-300">{campaign.combat!.disengaged?'Protected by Disengage: no Opportunity Attack.':'Enemy reaction already spent: no Opportunity Attack.'}</p>}
               <div className="flex gap-2"><button type="button" className="flex-1 rounded border border-white/40 px-3 py-2" onClick={()=>setGridDestination(null)}>Cancel</button><button type="button" disabled={saving} className="flex-1 rounded bg-gold text-ink px-3 py-2 font-semibold" onClick={()=>void confirmGridMove()}>{provokes?'Move Anyway':'Confirm Move'}</button></div>
             </div>;})()}
-            {!gridDestination&&<p className="text-xs text-parchment/60">N = Nighthawk · E = enemy</p>}
+            {!gridDestination&&<p className="text-xs text-parchment/60">N = Nighthawk · E = enemy · P = Prone</p>}
           </div>
           <div className="rounded-lg border border-white/30 p-3 text-sm space-y-2">
             <p className="font-semibold">Prone condition</p>
