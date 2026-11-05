@@ -476,7 +476,7 @@ export function App() {
   }
   const [gridDestination,setGridDestination]=useState<{x:number;y:number}|null>(null);
   const [selectedWeapon,setSelectedWeapon]=useState<'dagger'|'throw-dagger'|'shortbow'|null>(null);
-  const [pendingCombatAction,setPendingCombatAction]=useState<'attack'|'dodge'|'steady-aim'|'cunning-dash'|'cunning-disengage'|'disengage'|'dash'|'end'|null>(null);
+  const [pendingCombatAction,setPendingCombatAction]=useState<'hide'|'attack'|'dodge'|'steady-aim'|'cunning-dash'|'cunning-disengage'|'disengage'|'dash'|'end'|null>(null);
   async function combatAction(action:'move'|'attack'|'throw-dagger'|'shortbow'|'dash'|'disengage'|'dodge'|'steady-aim'|'cunning-dash'|'cunning-disengage'|'end') {
     if(!campaign||saving)return;
     setSaving(true);
@@ -732,7 +732,7 @@ export function App() {
           {campaign.combat.playerHidden&&<p role="status" className="rounded-lg border border-emerald-400 p-3 font-semibold">Hidden · Enemy cannot see Nighthawk · Next attack has advantage while unseen</p>}
           {campaign.combat.hideResult&&<p role="status" className="rounded-lg border border-gold p-3 text-sm">{campaign.combat.hideResult}</p>}
           {campaign.combat.enemySearchResult&&<p role="status" className="rounded-lg border border-gold p-3 text-sm">{campaign.combat.enemySearchResult}</p>}
-          <div className="rounded-lg border border-white/30 p-3 space-y-2"><p className="font-semibold">Cover and Hide</p><p className="text-sm">The # square is a stone pillar. Move behind it so it blocks the enemy's view, then use Cunning Action: Hide (bonus action). Stealth expertise applies; DC 15.</p><button type="button" disabled={saving||campaign.combat.bonusActionUsed||!trainingCoverBlocksSight(campaign.combat.playerPosition??{x:2,y:4},campaign.combat.enemyPosition??{x:6,y:4})} className="w-full rounded border border-gold p-3 disabled:opacity-40" onClick={()=>void stealthTest('hide')}>Hide (Bonus Action) · Roll Stealth</button></div>
+          <div className="rounded-lg border border-white/30 p-3 space-y-2"><p className="font-semibold">Cover and Hide</p><p className="text-sm">The # square is a stone pillar. Move behind it so it blocks the enemy's view, then use Cunning Action: Hide (bonus action). Stealth expertise applies; DC 15.</p></div>
           <p className="text-sm font-semibold">Your turn · Daggers: {campaign.combat.daggersAvailable??2} ({campaign.combat.daggersThrown??0} thrown) · Arrows: {campaign.combat.arrowsRemaining??20} · Movement remaining: {campaign.combat.playerGrappled?0:Math.max(0,(campaign.combat.movementAllowance??35)-(campaign.combat.movementUsed??0))} ft · Action: {campaign.combat.actionUsed?'used':'available'}</p>
           <div className="rounded-xl border border-white/20 p-2 space-y-2">
             <p className="text-xs text-parchment/70">Tactical grid · 5 ft per square · Tap a destination to preview movement. Diagonal movement costs 5 ft per square.</p>
@@ -784,6 +784,7 @@ export function App() {
             {([
               ['attack','Attack',!campaign.combat.actionUsed&&!campaign.combat.attack],
               ['steady-aim','Steady Aim',!campaign.combat.bonusActionUsed&&!campaign.combat.movementUsed],
+              ['hide','Hide',(!campaign.combat.bonusActionUsed||(!campaign.combat.actionUsed&&!campaign.combat.attack))&&trainingCoverBlocksSight(campaign.combat.playerPosition??{x:2,y:4},campaign.combat.enemyPosition??{x:6,y:4})],
               ['disengage','Disengage',(!campaign.combat.actionUsed&&!campaign.combat.attack)||!campaign.combat.bonusActionUsed],
               ['dash','Dash',(!campaign.combat.actionUsed&&!campaign.combat.attack)||!campaign.combat.bonusActionUsed],
               ['dodge','Dodge',!campaign.combat.actionUsed&&!campaign.combat.attack]
