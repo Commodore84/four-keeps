@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { createBackup, parseBackup } from '../game/backup';
 import { BookOpen, Compass, Map, RefreshCw, Send, Settings, Shield, Swords, Users } from 'lucide-react';
-import { addExchange, addNote, addRoll, beginDuel, adjustEquipment, rollDuelInitiative, takeDuelTurnAction, moveDuelToken, resolveEnemyOpportunity, moveTrainingDummy, resolveTrainingReaction, rollTrainingReaction, advanceDuelTestEnemyTurn, resolveDuelEnemyTurn, rollDuelAttack, concludeDuel, quitTrainingEncounter, newCampaign, awardExperience, levelUpRogue, levelUpArcaneTrickster, tricksterCantrips, tricksterSpells, isRitualSpell, castNighthawkSpell, takeNighthawkRest, applyNighthawkDamage, minutesUntilLongRestEligible, advanceToLongRestEligibility, endNighthawkConcentration, spellRequiresConcentration, reconcileNighthawkScores, undoNighthawkScoreReconciliation, xpThresholds, type Campaign } from '../game/campaign';
+import { addExchange, addNote, addRoll, beginDuel, adjustEquipment, rollDuelInitiative, takeDuelTurnAction, moveDuelToken, resolveEnemyOpportunity, moveTrainingDummy, resolveTrainingReaction, rollTrainingReaction, advanceDuelTestEnemyTurn, resolveDuelEnemyTurn, rollDuelAttack, setTrainingAllyAdjacent, concludeDuel, quitTrainingEncounter, newCampaign, awardExperience, levelUpRogue, levelUpArcaneTrickster, tricksterCantrips, tricksterSpells, isRitualSpell, castNighthawkSpell, takeNighthawkRest, applyNighthawkDamage, minutesUntilLongRestEligible, advanceToLongRestEligibility, endNighthawkConcentration, spellRequiresConcentration, reconcileNighthawkScores, undoNighthawkScoreReconciliation, xpThresholds, type Campaign } from '../game/campaign';
 import { localCampaignStorage } from '../game/storage';
 import type { View } from '../game/types';
 import { emptyWorld } from '../game/world';
@@ -505,10 +505,16 @@ export function App() {
     try{const next=resolveEnemyOpportunity(campaign,kind);await localCampaignStorage.save(next);setCampaign(next);setCampaigns(items=>items.map(item=>item.id===next.id?next:item));setNotice(next.journal[next.journal.length-1].text);}
     catch(error){setNotice('Opportunity attack: '+String(error));}finally{setSaving(false);}
   }
-  async function rollCombatAttack(kind:'hit'|'damage') {
+  async function toggleTrainingAlly(enabled:boolean) {
     if(!campaign||saving)return;
     setSaving(true);
-    try {const next=rollDuelAttack(campaign,kind);await localCampaignStorage.save(next);setCampaign(next);setCampaigns(items=>items.map(item=>item.id===next.id?next:item));setNotice(next.journal[next.journal.length-1].text);}
+    try {const next=setTrainingAllyAdjacent(campaign,enabled);await localCampaignStorage.save(next);setCampaign(next);setCampaigns(items=>items.map(item=>item.id===next.id?next:item));setNotice(next.journal[next.journal.length-1].text);}
+    catch(error){setNotice('Training ally: '+String(error));}finally{setSaving(false);}
+  }
+  async function rollCombatAttack(kind:'hit'|'damage',applySneakAttack:boolean=false) {
+    if(!campaign||saving)return;
+    setSaving(true);
+    try {const next=rollDuelAttack(campaign,kind,applySneakAttack);await localCampaignStorage.save(next);setCampaign(next);setCampaigns(items=>items.map(item=>item.id===next.id?next:item));setNotice(next.journal[next.journal.length-1].text);}
     catch(error){setNotice('Combat: '+String(error));}finally{setSaving(false);}
   }
   const [confirmTrainingReset,setConfirmTrainingReset]=useState(false);
