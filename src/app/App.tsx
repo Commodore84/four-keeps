@@ -476,7 +476,7 @@ export function App() {
   }
   const [gridDestination,setGridDestination]=useState<{x:number;y:number}|null>(null);
   const [selectedWeapon,setSelectedWeapon]=useState<'dagger'|'throw-dagger'|'shortbow'|null>(null);
-  const [pendingCombatAction,setPendingCombatAction]=useState<'attack'|'dodge'|'steady-aim'|'cunning-dash'|'cunning-disengage'|'disengage'|'end'|null>(null);
+  const [pendingCombatAction,setPendingCombatAction]=useState<'attack'|'dodge'|'steady-aim'|'cunning-dash'|'cunning-disengage'|'disengage'|'dash'|'end'|null>(null);
   async function combatAction(action:'move'|'attack'|'throw-dagger'|'shortbow'|'dash'|'disengage'|'dodge'|'steady-aim'|'cunning-dash'|'cunning-disengage'|'end') {
     if(!campaign||saving)return;
     setSaving(true);
@@ -733,13 +733,14 @@ export function App() {
               ['steady-aim','Steady Aim',!campaign.combat.bonusActionUsed&&!campaign.combat.movementUsed],
               ['cunning-disengage','Cunning Disengage',!campaign.combat.bonusActionUsed],
               ['disengage','Disengage (Action)',!campaign.combat.actionUsed&&!campaign.combat.attack],
-              ['cunning-dash','Dash',!campaign.combat.bonusActionUsed],
+              ['cunning-dash','Cunning Dash (Bonus)',!campaign.combat.bonusActionUsed],
+              ['dash','Dash (Action)',!campaign.combat.actionUsed&&!campaign.combat.attack],
               ['dodge','Dodge',!campaign.combat.actionUsed&&!campaign.combat.attack],
               ['end','End Turn',!campaign.combat.attack||campaign.combat.attack.phase==='resolved']
             ] as const).map(([action,label,available])=><button key={action} type="button" disabled={saving||!available} title={action==='steady-aim'?'Bonus action: advantage on your next attack this turn; no movement this turn.':action==='cunning-dash'?'Bonus action: gain movement equal to your speed.':action==='cunning-disengage'?'Bonus action: avoid opportunity attacks for the rest of the turn.':undefined} className={`rounded-lg border p-2.5 text-sm min-h-11 disabled:opacity-40 ${pendingCombatAction===action?'border-gold bg-gold/20 font-semibold':'border-white/30'}`} onClick={()=>{setPendingCombatAction(action);if(action==='attack')setSelectedWeapon(null);}}>{label}</button>)}
           </div>
           {pendingCombatAction && <div className="rounded-lg border border-gold bg-gold/10 p-3 text-sm space-y-2" role="region" aria-label="Confirm combat action">
-            <p className="font-semibold">{({attack:'Choose weapon','steady-aim':'Steady Aim','cunning-dash':'Dash','cunning-disengage':'Cunning Disengage',disengage:'Disengage (Action)',dodge:'Dodge',end:'End Turn'} as const)[pendingCombatAction]}</p>
+            <p className="font-semibold">{({attack:'Choose weapon','steady-aim':'Steady Aim','cunning-dash':'Cunning Dash (Bonus)',dash:'Dash (Action)','cunning-disengage':'Cunning Disengage',disengage:'Disengage (Action)',dodge:'Dodge',end:'End Turn'} as const)[pendingCombatAction]}</p>
             {pendingCombatAction==='attack' ? <div className="space-y-2">
               <p className="text-parchment/80">Choose a weapon before confirming your attack.</p>
               {(()=>{const p=campaign.combat!.playerPosition??{x:2,y:4},e=campaign.combat!.enemyPosition??{x:6,y:4};const distance=5*Math.max(Math.abs(p.x-e.x),Math.abs(p.y-e.y));const choices=[
@@ -748,7 +749,7 @@ export function App() {
                 {id:'shortbow' as const,label:'Shortbow',detail:'1d6 · 80/320 ft · 1 arrow'+(distance<=5?' · disadvantage':''),eligible:distance<=320&&(campaign.combat!.arrowsRemaining??20)>0}
               ];return <><p className="text-xs text-parchment/70">Target: {distance} ft away. Only eligible attacks are available.</p><div className="grid grid-cols-2 gap-2">{choices.filter(c=>c.eligible).map(c=><button key={c.id} type="button" className={`rounded-lg border p-3 text-left ${selectedWeapon===c.id?'border-gold bg-gold/20':'border-white/30'}`} onClick={()=>setSelectedWeapon(c.id)}><strong>{c.label}</strong><span className="block text-xs">{c.detail}</span></button>)}</div>{!choices.some(c=>c.eligible)&&<p>No weapon is in range.</p>}</>;})()}
 
-            </div> : <p className="text-parchment/80">{({'steady-aim':'Bonus action · Advantage on your next attack this turn. Your speed becomes 0 until the turn ends.','cunning-dash':'Cunning Action · Gain additional movement.','cunning-disengage':'Cunning Action · Avoid opportunity attacks this turn.',disengage:'Action · Avoid opportunity attacks this turn.',dodge:'Action · Attacks against you have disadvantage.',end:'End your turn.'} as const)[pendingCombatAction]}</p>}
+            </div> : <p className="text-parchment/80">{({'steady-aim':'Bonus action · Advantage on your next attack this turn. Your speed becomes 0 until the turn ends.','cunning-dash':'Bonus Action · Gain additional movement equal to your speed.',dash:'Action · Gain additional movement equal to your speed.','cunning-disengage':'Cunning Action · Avoid opportunity attacks this turn.',disengage:'Action · Avoid opportunity attacks this turn.',dodge:'Action · Attacks against you have disadvantage.',end:'End your turn.'} as const)[pendingCombatAction]}</p>}
             <div className="grid grid-cols-2 gap-2"><button type="button" disabled={saving} className="rounded-lg border border-white/40 p-2.5" onClick={()=>setPendingCombatAction(null)}>Cancel</button><button type="button" disabled={saving||(pendingCombatAction==='attack'&&!selectedWeapon)} className="rounded-lg bg-gold p-2.5 font-semibold text-ink disabled:opacity-40" onClick={()=>void combatAction(pendingCombatAction==='attack'?(selectedWeapon==='shortbow'?'shortbow':selectedWeapon==='throw-dagger'?'throw-dagger':'attack'):pendingCombatAction)}>Confirm</button></div>
           </div>}
           <p className="text-xs text-parchment/70">Select an action to see details. Nothing is spent until Confirm. Already confirmed actions cannot be undone. Opportunity attacks are not simulated yet.</p>
