@@ -437,7 +437,7 @@ export function rollDuelAttack(campaign:Campaign,kind:'hit'|'damage',applySneakA
  }else{
   if(next.attack.phase!=='roll-damage')throw Error('Roll to hit first.');
   const modifier=abilityModifier((campaign.character??prototypeNighthawk).scores.dex);
-  if(applySneakAttack&&!next.sneakAttackEligible)throw Error('Sneak Attack not eligible.');const sides=next.attack.weapon==='shortbow'?6:4;const first=die(sides),second=next.attack.critical?die(sides):0,sneakDice=applySneakAttack?Math.ceil((campaign.character??prototypeNighthawk).level/2):0,sneakRolls=Array.from({length:sneakDice*(next.attack.critical?2:1)},()=>die(6)),sneakDamage=sneakRolls.reduce((a,b)=>a+b,0),damage=Math.max(0,first+second+modifier+sneakDamage);
+  if(applySneakAttack&&!next.sneakAttackEligible)throw Error('Sneak Attack not eligible.');const sides=next.attack.weapon==='shortbow'?6:4;const first=die(sides),second=next.attack.critical?die(sides):0,sneakDice=applySneakAttack?Math.ceil(((campaign.character??prototypeNighthawk).level??1)/2):0,sneakRolls=Array.from({length:sneakDice*(next.attack.critical?2:1)},()=>die(6)),sneakDamage=sneakRolls.reduce((a,b)=>a+b,0),damage=Math.max(0,first+second+modifier+sneakDamage);
   next.attack={...next.attack,phase:'resolved',damage,sneakAttackDamage:sneakDamage};if(applySneakAttack)next.sneakAttackUsedThisTurn=true;
   next.enemyHp=Math.max(0,(next.enemyHp??12)-damage);
   if(next.enemyHp===0){next.status='completed';next.outcome='nonlethal-victory';}
