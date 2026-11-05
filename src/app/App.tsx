@@ -718,6 +718,12 @@ export function App() {
             </div>;})()}
             {!gridDestination&&<p className="text-xs text-parchment/60">N = Nighthawk · E = enemy</p>}
           </div>
+          <div className="rounded-lg border border-white/30 p-3 text-sm space-y-2">
+            <p className="font-semibold">Sneak Attack training ally</p>
+            <p>Simulate a conscious ally within 5 feet of the dummy. This allows Sneak Attack on a qualifying hit without granting attack advantage.</p>
+            <button type="button" disabled={saving||campaign.combat.attack?.phase==='roll-damage'} className="w-full rounded-lg border border-gold p-2.5" onClick={()=>void toggleTrainingAlly(!campaign.combat!.trainingAllyAdjacent)}>{campaign.combat.trainingAllyAdjacent?'Remove adjacent ally':'Place ally next to dummy'}</button>
+            <p>{campaign.combat.trainingAllyAdjacent?'Ally engaged in melee with dummy':'No allied creature adjacent to dummy'}</p>
+          </div>
           {campaign.combat.steadyAim && <p className="rounded-lg border border-gold/60 bg-gold/10 p-3 text-sm">Steady Aim active: roll two d20s on your next attack this turn and use the higher result. Sneak Attack applies on a qualifying hit. You cannot move this turn.</p>}
           {campaign.combat.attack && <div className="space-y-2 rounded-lg border border-gold/60 p-3">
             <p className="font-semibold">{campaign.combat.attack.weapon==='shortbow'?'Shortbow attack':campaign.combat.attack.thrown?'Thrown dagger attack':'Nonlethal dagger attack'} · Opponent HP: {campaign.combat.enemyHp??12}/{campaign.combat.enemyMaxHp??12}</p>
