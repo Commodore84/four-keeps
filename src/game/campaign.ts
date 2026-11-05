@@ -250,7 +250,7 @@ export function hideNighthawk(campaign:Campaign):Campaign {
  if(!c||c.status!=='initiative-set'||c.order?.[c.turnIndex??0]!=='Nighthawk')throw Error('Hide requires your turn.');
  const useBonus=!c.bonusActionUsed;
  if(!useBonus&&(c.actionUsed||c.attack))throw Error('No action or bonus action available to Hide.');
- const p=c.playerPosition??{x:2,y:4},e=c.enemyPosition??{x:6,y:4};
+
  if(!canNighthawkHide(c))throw Error('Hide requires cover and being outside every enemy’s line of sight.');
  const character=campaign.character??prototypeNighthawk;
  const mod=abilityModifier(character.scores.dex)+character.proficiencyBonus*(character.expertiseSkills?.includes('Stealth')?2:character.proficientSkills?.includes('Stealth')?1:0);
