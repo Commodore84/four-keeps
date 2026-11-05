@@ -265,10 +265,11 @@ export function searchForNighthawk(campaign:Campaign):Campaign {
  const roll=crypto.getRandomValues(new Uint32Array(1))[0]%20+1;
  const total=roll; // Training dummy has no Investigation or Perception proficiency.
  const found=total>=(c.hideTotal??15);
- const detail='Dummy Search action: Wisdom (Perception) d20 '+roll+' + 0 = '+total+' vs Stealth '+(c.hideTotal??15)+'. '+(found?'Nighthawk found.':'Nighthawk remains hidden.');
+ const detail=(c.order?.[c.turnIndex??0]??'Dummy')+' Search action: Wisdom (Perception) d20 '+roll+' + 0 = '+total+' vs Stealth '+(c.hideTotal??15)+'. '+(found?'Nighthawk found.':'Nighthawk remains hidden.');
  const now=new Date().toISOString();
- const nextRound=c.order?.[0]==='Nighthawk'?c.round+1:c.round;
- return {...campaign,combat:{...c,playerHidden:!found,enemySearchResult:detail,turnIndex:c.order?.indexOf('Nighthawk')??0,round:nextRound,movementUsed:0,actionUsed:false,bonusActionUsed:false,attack:undefined},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:detail,createdAt:now}]};
+ const followingIndex=((c.turnIndex??0)+1)%(c.order?.length??2);
+ const nextRound=followingIndex===0?c.round+1:c.round;
+ return {...campaign,combat:{...c,playerHidden:!found,enemySearchResult:detail,turnIndex:followingIndex,round:nextRound,movementUsed:0,actionUsed:false,bonusActionUsed:false,attack:undefined},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:detail,createdAt:now}]};
 }
 export function moveDuelToken(campaign:Campaign,x:number,y:number):Campaign {
  const combat=campaign.combat;
@@ -460,9 +461,10 @@ export function resolveDuelEnemyTurn(campaign:Campaign):Campaign {
  const before=character.currentHitPoints??character.maxHitPoints??10;
  const after=Math.max(0,before-damage);
  const defeated=hit&&after===0;
- const detail=standDescription+combat.enemyName+' training attack: '+(dodging?'disadvantage ('+first+', '+second+') → ':'d20 ')+attackRoll+' + 4 = '+total+' vs temporary AC '+ac+': '+(hit?'HIT':'MISS')+'.'+(hit?' Nonlethal damage: '+damage+'. Nighthawk HP: '+before+' → '+after+'/'+(character.maxHitPoints??10)+'.':'')+(defeated?' Nighthawk is knocked unconscious; sparring ends.':'');
- const nextRound=combat.order[0]==='Nighthawk'?combat.round+1:combat.round;
- const nextCombat={...combat,enemyProne:false,turnIndex:combat.order.indexOf('Nighthawk'),round:nextRound,reactionUsed:false,enemyReactionUsed:false,movementUsed:0,actionUsed:false,bonusActionUsed:false,lastAction:undefined,attack:undefined,enemyLastTurn:detail,status:defeated?'completed' as const:combat.status,outcome:defeated?'player-defeated' as const:combat.outcome};
+ const detail=standDescription+(combat.order[combat.turnIndex??0]??combat.enemyName)+' training attack: '+(dodging?'disadvantage ('+first+', '+second+') → ':'d20 ')+attackRoll+' + 4 = '+total+' vs temporary AC '+ac+': '+(hit?'HIT':'MISS')+'.'+(hit?' Nonlethal damage: '+damage+'. Nighthawk HP: '+before+' → '+after+'/'+(character.maxHitPoints??10)+'.':'')+(defeated?' Nighthawk is knocked unconscious; sparring ends.':'');
+ const followingIndex=((combat.turnIndex??0)+1)%combat.order.length;
+ const nextRound=followingIndex===0?combat.round+1:combat.round;
+ const nextCombat={...combat,enemyProne:false,turnIndex:followingIndex,round:nextRound,reactionUsed:false,enemyReactionUsed:false,movementUsed:0,actionUsed:false,bonusActionUsed:false,lastAction:undefined,attack:undefined,enemyLastTurn:detail,status:defeated?'completed' as const:combat.status,outcome:defeated?'player-defeated' as const:combat.outcome};
  const now=new Date().toISOString();
  return {...campaign,character:{...character,currentHitPoints:after},combat:nextCombat,updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:detail,createdAt:now}]};
 }
