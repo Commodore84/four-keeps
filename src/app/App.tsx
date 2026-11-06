@@ -828,7 +828,15 @@ export function App() {
                 <ol className="space-y-1">{order.map((name,i)=><li key={name} className={`flex items-center justify-between gap-2 rounded-lg border px-3 py-2 ${i===index?'border-gold bg-gold/15 text-gold':'border-white/15'}`}><span><span className="mr-2 text-parchment/60">{i+1}.</span><strong>{name}</strong>{i===index&&<span className="ml-2 text-xs">CURRENT</span>}</span><span className="tabular-nums">{name==='Nighthawk'?c.playerInitiative:name===c.secondEnemy?.name?c.secondEnemy.initiative:c.enemyInitiative}</span></li>)}</ol>
                 <div className="border-t border-white/20 pt-3">
                   <p className="mb-2 font-semibold text-gold">Encounter actions</p>
-                  {actions.length===0?<p className="text-parchment/65">No actions taken yet.</p>:<ol className="space-y-2">{actions.map((entry,i)=><li key={entry.id} className="rounded-lg border border-white/15 bg-black/10 p-3"><span className="text-xs text-parchment/55">Action {i+1}</span><p className="mt-1 whitespace-pre-wrap break-words">{entry.text}</p></li>)}</ol>}
+                  {actions.length===0?<p className="text-parchment/65">No actions taken yet.</p>:<ol className="space-y-2">{actions.map(entry=>{
+                    const message=entry.text;
+                    const actor=message.includes('Training Dummy 2 training attack:')?'Training Dummy 2':message.includes('Training Dummy training attack:')?'Training Dummy':message.startsWith('Nighthawk ')||message.startsWith('Nighthawk’s ')||message.startsWith('Nighthawk\'s ')?'Nighthawk':undefined;
+                    const slot=actor?order.indexOf(actor):-1;
+                    return <li key={entry.id} className="rounded-lg border border-white/15 bg-black/10 p-3">
+                      <div className="mb-1 flex items-center gap-2 text-xs text-gold"><span className="font-semibold">{slot>=0?`#${slot+1} · `:''}{actor??'Combat event'}</span></div>
+                      <p className="whitespace-pre-wrap break-words">{message}</p>
+                    </li>;
+                  })}</ol>}
                 </div>
               </div>;
             })()}
