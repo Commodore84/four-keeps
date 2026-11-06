@@ -819,19 +819,17 @@ export function App() {
           {(campaign.combat.status==='completed'||(campaign.combat.enemyHp===0&&(!campaign.combat.secondEnemy||campaign.combat.secondEnemy.hp===0))) ? <div className="space-y-3 rounded-lg border border-gold/60 bg-gold/10 p-3"><p className="font-semibold text-gold">{campaign.combat.outcome==='player-defeated'?'Nighthawk is unconscious — sparring ends':'Victory — nonlethal sparring match'}</p><p className="text-sm">{campaign.combat.outcome==='player-defeated'?'Nighthawk was reduced to 0 HP by a nonlethal training strike. Combat has ended.':campaign.combat.enemyName+' is at 0 HP and unconscious, not dead. Combat is over; no further turns are needed.'}</p><button type="button" disabled={saving} className="w-full rounded-lg bg-gold p-3 font-semibold text-ink disabled:opacity-40" onClick={()=>void finishDefeatedDuel()}>Continue to aftermath</button></div> : campaign.combat.status==='awaiting-initiative' ? <><p className="text-sm">The enemy's initiative has been rolled. Roll Nighthawk's d20 to establish turn order.</p><button type="button" disabled={saving} className="w-full rounded-lg bg-gold p-3 font-semibold text-ink disabled:opacity-40" onClick={()=>void rollInitiative()}>Roll initiative (d20 + DEX)</button></> : <><p className="font-semibold text-gold">{campaign.combat.order?.[campaign.combat.turnIndex??0]==='Nighthawk'?'Your turn — Nighthawk':'Enemy turn — '+campaign.combat.order?.[campaign.combat.turnIndex??0]}</p>{!campaign.combat.secondEnemy&&<button type="button" disabled={saving} className="hidden" onClick={()=>void addSecondDummy()}>Add Second Training Dummy · Test Multiple Enemies</button>}
           
           <div className="rounded-xl border border-gold/40 bg-gold/5 p-3 space-y-3" aria-label="Combat turn summary">
-            <p className="text-sm font-semibold text-gold">Combat timeline · Round {campaign.combat.round}</p>
+            <p className="text-sm font-semibold text-gold">Initiative · Round {campaign.combat.round}</p>
             {(()=>{
               const c=campaign.combat!,order=c.order??[],index=c.turnIndex??0;
-              const alive=order.filter(name=>name==='Nighthawk'||name===c.enemyName&&(c.enemyHp??12)>0||name===c.secondEnemy?.name&&(c.secondEnemy?.hp??0)>0);
-              const current=order[index]??'Nighthawk';
-              const next=order.slice(index+1).concat(order.slice(0,index+1)).find(name=>alive.includes(name))??current;
               const encounterEntries=campaign.journal.slice(c.journalStartIndex??Math.max(0,campaign.journal.length-1-campaign.journal.slice().reverse().findIndex(entry=>entry.kind==='system'&&entry.text.startsWith('Combat begins:'))));
-              const last=encounterEntries.filter(entry=>entry.kind==='system'&&!/^(Nighthawk initiative:|Combat begins:)/.test(entry.text)).slice(-1)[0];
-              return <div className="space-y-2 text-sm">
-                {last&&<div className="rounded-lg border border-white/15 p-2"><span className="text-xs text-parchment/60">LAST ACTION</span><p className="mt-1 line-clamp-3">{last.text}</p></div>}
-                <div className="rounded-lg border border-gold bg-gold/10 p-2"><span className="text-xs text-gold">CURRENT · {current==='Nighthawk'?'YOUR TURN':'RESOLVING AUTOMATICALLY'}</span><p className="font-semibold">{current}</p></div>
-                <div className="rounded-lg border border-white/15 p-2"><span className="text-xs text-parchment/60">UP NEXT</span><p className="font-semibold">{next}</p></div>
-                <details open={!last}><summary className="cursor-pointer text-xs text-parchment/70">{last?'Full initiative order':'Initiative order · No actions taken yet'}</summary><ol className="mt-2 space-y-1">{order.map((name,i)=><li key={name} className={`flex justify-between rounded px-2 py-1 ${i===index?'bg-gold/15 text-gold':''}`}><span>{i+1}. {name}</span><span>{name==='Nighthawk'?c.playerInitiative:name===c.secondEnemy?.name?c.secondEnemy.initiative:c.enemyInitiative}</span></li>)}</ol></details>
+              const actions=encounterEntries.filter(entry=>entry.kind==='system'&&!/^(Nighthawk initiative:|Combat begins:)/.test(entry.text));
+              return <div className="space-y-3 text-sm">
+                <ol className="space-y-1">{order.map((name,i)=><li key={name} className={`flex items-center justify-between gap-2 rounded-lg border px-3 py-2 ${i===index?'border-gold bg-gold/15 text-gold':'border-white/15'}`}><span><span className="mr-2 text-parchment/60">{i+1}.</span><strong>{name}</strong>{i===index&&<span className="ml-2 text-xs">CURRENT</span>}</span><span className="tabular-nums">{name==='Nighthawk'?c.playerInitiative:name===c.secondEnemy?.name?c.secondEnemy.initiative:c.enemyInitiative}</span></li>)}</ol>
+                <div className="border-t border-white/20 pt-3">
+                  <p className="mb-2 font-semibold text-gold">Encounter actions</p>
+                  {actions.length===0?<p className="text-parchment/65">No actions taken yet.</p>:<ol className="space-y-2">{actions.map((entry,i)=><li key={entry.id} className="rounded-lg border border-white/15 bg-black/10 p-3"><span className="text-xs text-parchment/55">Action {i+1}</span><p className="mt-1 whitespace-pre-wrap break-words">{entry.text}</p></li>)}</ol>}
+                </div>
               </div>;
             })()}
           </div>{campaign.combat.order?.[campaign.combat.turnIndex??0]==='Nighthawk' ? <div className="space-y-3">
