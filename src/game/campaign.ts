@@ -6,6 +6,8 @@ export interface Campaign {
   id: string;
   title: string;
   location: string;
+  mapLocation?: 'frontier'|'crossroads'|'watchtower';
+  mapDiscovered?: string[];
   createdAt: string;
   updatedAt: string;
   journal: JournalEntry[];
