@@ -619,7 +619,7 @@ export function rollDuelAttack(campaign:Campaign,kind:'hit'|'damage',applySneakA
   next.attack={phase:hit?'roll-damage':'resolved',d20,firstD20,total,critical,hit,advantage,disadvantage,weapon:next.attack.weapon,thrown:next.attack.thrown,secondD20};next.sneakAttackEligible=hit&&!next.sneakAttackUsedThisTurn&&(advantage|| (!!next.trainingAllyAdjacent&&!disadvantage));
   if(next.attack.weapon==='shortbow')next.arrowsRemaining=(next.arrowsRemaining??20)-1;
   if(next.attack.thrown){next.daggersAvailable=(next.daggersAvailable??2)-1;next.daggersThrown=(next.daggersThrown??0)+1;}
-  description=(next.attack.weapon==='shortbow'?'Shortbow (ranged)':next.attack.thrown?'Thrown dagger (ranged)':'Dagger (nonlethal melee)')+': '+(secondD20===undefined?'':(advantage?'advantage ':'disadvantage ')+firstD20+'/'+secondD20+' → ')+'d20 '+d20+' + '+attackBonus+' = '+total+' vs training AC 12: '+(hit?'HIT':'MISS')+'.'+(critical?' Critical hit.':'');
+  description=(next.attack.weapon==='shortbow'?'Shortbow (ranged)':next.attack.thrown?'Thrown dagger (ranged)':'Dagger (melee)')+': '+(secondD20===undefined?'':(advantage?'advantage ':'disadvantage ')+firstD20+'/'+secondD20+' → ')+'d20 '+d20+' + '+attackBonus+' = '+total+' vs training AC 12: '+(hit?'HIT':'MISS')+'.'+(critical?' Critical hit.':'');
  }else{
   if(next.attack.phase!=='roll-damage')throw Error('Roll to hit first.');
   const modifier=abilityModifier((campaign.character??prototypeNighthawk).scores.dex);
@@ -631,7 +631,16 @@ export function rollDuelAttack(campaign:Campaign,kind:'hit'|'damage',applySneakA
   if(bothDown){next.status='completed';next.outcome='nonlethal-victory';}
   const targetName=next.selectedEnemy==='second'&&next.secondEnemy?next.secondEnemy.name:combat.enemyName;
   const hp=next.selectedEnemy==='second'&&next.secondEnemy?next.secondEnemy.hp:next.enemyHp??12;
-  description='Damage to '+targetName+': '+damage+' ('+first+' weapon + '+modifier+' DEX'+(sneakDice?' + '+sneakDamage+' Sneak Attack':'')+'). HP '+hp+'/12.'+(hp===0?' '+targetName+' is defeated.':'')+((next.enemyHp??12)===0&&(!next.secondEnemy||next.secondEnemy.hp===0)?' Encounter complete.':'');
+  description='Damage to '+targetName+': '+damage+' ('+first+' weapon + '+modifier+' DEX'+(sneakDice?' + '+sneakDamage+' Sneak Attack':'')+'). HP '+hp+'/12.'+(hp===0?' '+targetName+' is defeated.':'')+(bothDown?' Encounter complete.':'');
+  if(hp===0&&!bothDown){
+    const survivors:[('first'|'second'),{x:number;y:number}][]=[];
+    if((next.enemyHp??12)>0)survivors.push(['first',next.enemyPosition??{x:6,y:4}]);
+    if(next.secondEnemy&&next.secondEnemy.hp>0)survivors.push(['second',next.secondEnemy.position]);
+    const player=next.playerPosition??{x:2,y:4};
+    survivors.sort((a,b)=>Math.max(Math.abs(a[1].x-player.x),Math.abs(a[1].y-player.y))-Math.max(Math.abs(b[1].x-player.x),Math.abs(b[1].y-player.y))||(next.order??[]).indexOf(a[0]==='first'?next.enemyName:next.secondEnemy!.name)-(next.order??[]).indexOf(b[0]==='first'?next.enemyName:next.secondEnemy!.name));
+    next.selectedEnemy=survivors[0][0];
+    description+=' Now targeting '+(next.selectedEnemy==='first'?next.enemyName:next.secondEnemy!.name)+'.';
+  }
  }
  const now=new Date().toISOString();
  return {...campaign,equipment:{daggers:next.daggersAvailable??campaign.equipment?.daggers??2,arrows:next.arrowsRemaining??campaign.equipment?.arrows??20,caltrops:campaign.equipment?.caltrops??0,ballBearings:campaign.equipment?.ballBearings??0},combat:next,updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:description,createdAt:now}]};
