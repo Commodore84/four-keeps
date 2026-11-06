@@ -542,9 +542,31 @@ export function App() {
   const combatTouches=(touches:React.TouchList)=>Array.from(touches,t=>({x:t.clientX,y:t.clientY}));
   const combatDistance=(p:{x:number;y:number}[])=>Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y);
   const combatMid=(p:{x:number;y:number}[])=>({x:p.reduce((s,t)=>s+t.x,0)/p.length,y:p.reduce((s,t)=>s+t.y,0)/p.length});
-  function startCombatTouch(e:React.TouchEvent<HTMLDivElement>){const el=combatMapRef.current;if(!el)return;const points=combatTouches(e.touches),mid=combatMid(points);combatGesture.current={points,startDistance:points.length>=2?combatDistance(points):0,startZoom:combatZoom,startScrollX:el.scrollLeft,startScrollY:el.scrollTop,startMidX:mid.x,startMidY:mid.y,moved:false};}
-  function moveCombatTouch(e:React.TouchEvent<HTMLDivElement>){const el=combatMapRef.current,g=combatGesture.current;if(!el||!g)return;const points=combatTouches(e.touches);if(!points.length)return;e.preventDefault();const mid=combatMid(points);if(points.length>=2&&g.startDistance>0){const next=Math.max(0.75,Math.min(3,g.startZoom*combatDistance(points)/g.startDistance));if(Math.abs(next-g.startZoom)>0.02)g.moved=true;const rect=el.getBoundingClientRect(),anchorX=g.startScrollX+g.startMidX-rect.left,anchorY=g.startScrollY+g.startMidY-rect.top;setCombatZoom(next);requestAnimationFrame(()=>{if(combatMapRef.current){combatMapRef.current.scrollLeft=anchorX*next/g.startZoom-(mid.x-rect.left);combatMapRef.current.scrollTop=anchorY*next/g.startZoom-(mid.y-rect.top);}});}else if(points.length===1&&g.points.length===1){const dx=mid.x-g.startMidX,dy=mid.y-g.startMidY;if(Math.hypot(dx,dy)>7)g.moved=true;el.scrollLeft=g.startScrollX-dx;el.scrollTop=g.startScrollY-dy;}if(g.moved)suppressCombatTap.current=true;}
-  function endCombatTouch(e:React.TouchEvent<HTMLDivElement>){if(e.touches.length){const points=combatTouches(e.touches),mid=combatMid(points),el=combatMapRef.current;combatGesture.current={points,startDistance:points.length>=2?combatDistance(points):0,startZoom:combatZoom,startScrollX:el?.scrollLeft??0,startScrollY:el?.scrollTop??0,startMidX:mid.x,startMidY:mid.y,moved:combatGesture.current?.moved??false};}else{combatGesture.current=null;}}
+  function startCombatTouch(e:React.TouchEvent<HTMLDivElement>){
+    const el=combatMapRef.current;if(!el)return;
+    const points=combatTouches(e.touches),mid=combatMid(points);
+    if(points.length<2){combatGesture.current=null;return;}
+    suppressCombatTap.current=true;
+    combatGesture.current={points,startDistance:combatDistance(points),startZoom:combatZoom,startScrollX:el.scrollLeft,startScrollY:el.scrollTop,startMidX:mid.x,startMidY:mid.y,moved:true};
+  }
+  function moveCombatTouch(e:React.TouchEvent<HTMLDivElement>){
+    const el=combatMapRef.current;if(!el||e.touches.length<2)return;
+    e.preventDefault();
+    const points=combatTouches(e.touches),mid=combatMid(points);
+    let g=combatGesture.current;
+    if(!g||g.points.length<2){g={points,startDistance:combatDistance(points),startZoom:combatZoom,startScrollX:el.scrollLeft,startScrollY:el.scrollTop,startMidX:mid.x,startMidY:mid.y,moved:true};combatGesture.current=g;}
+    suppressCombatTap.current=true;
+    const next=Math.max(0.75,Math.min(3,g.startZoom*combatDistance(points)/g.startDistance));
+    const rect=el.getBoundingClientRect();
+    const anchorX=g.startScrollX+g.startMidX-rect.left,anchorY=g.startScrollY+g.startMidY-rect.top;
+    setCombatZoom(next);
+    requestAnimationFrame(()=>{if(combatMapRef.current){combatMapRef.current.scrollLeft=anchorX*next/g.startZoom-(mid.x-rect.left);combatMapRef.current.scrollTop=anchorY*next/g.startZoom-(mid.y-rect.top);}});
+  }
+  function endCombatTouch(e:React.TouchEvent<HTMLDivElement>){
+    if(e.touches.length<2){combatGesture.current=null;return;}
+    const points=combatTouches(e.touches),mid=combatMid(points),el=combatMapRef.current;
+    combatGesture.current={points,startDistance:combatDistance(points),startZoom:combatZoom,startScrollX:el?.scrollLeft??0,startScrollY:el?.scrollTop??0,startMidX:mid.x,startMidY:mid.y,moved:true};
+  }
 
   const [selectedWeapon,setSelectedWeapon]=useState<'dagger'|'throw-dagger'|'shortbow'|null>(null);
   const [attackChoice,setAttackChoice]=useState<'weapon'|'shove'|'grapple'>('weapon');
@@ -860,7 +882,7 @@ export function App() {
           <p className="text-sm font-semibold">Your turn · Daggers: {campaign.combat.daggersAvailable??2} ({campaign.combat.daggersThrown??0} thrown) · Arrows: {campaign.combat.arrowsRemaining??20} · Movement remaining: {campaign.combat.playerGrappled?0:Math.max(0,(campaign.combat.movementAllowance??35)-(campaign.combat.movementUsed??0))} ft · Action: {campaign.combat.actionUsed?'used':'available'}</p>
           <div className="rounded-xl border border-white/20 p-2 space-y-2">
             <p className="text-xs text-parchment/70">Tactical grid · Tap 1 or 2 to select your attack target; tap an empty square to move. Selected target has a gold border.</p><p className="text-sm font-semibold">Target: {campaign.combat.selectedEnemy==='second'&&campaign.combat.secondEnemy?campaign.combat.secondEnemy.name:campaign.combat.enemyName} · HP {campaign.combat.selectedEnemy==='second'&&campaign.combat.secondEnemy?campaign.combat.secondEnemy.hp:campaign.combat.enemyHp??12}/12</p>
-            <p className="text-xs text-parchment/70">Pinch with two fingers to zoom · Drag with one finger to pan · Tap to select · {Math.round(combatZoom*100)}%</p><div ref={combatMapRef} onTouchStart={startCombatTouch} onTouchMove={moveCombatTouch} onTouchEnd={endCombatTouch} onTouchCancel={endCombatTouch} onClickCapture={e=>{if(suppressCombatTap.current){e.stopPropagation();e.preventDefault();suppressCombatTap.current=false;}}} className="h-[340px] max-h-[55vh] overflow-auto overscroll-contain rounded-lg border border-white/20" style={{touchAction:'none',WebkitOverflowScrolling:'touch'}}><div className="grid gap-0.5 p-1" style={{gridTemplateColumns:`repeat(${trainingMapSize},minmax(0,1fr))`,width:`${trainingMapSize*28*combatZoom}px`,minWidth:'100%'}} role="grid" aria-label="Combat movement grid">
+            <p className="text-xs text-parchment/70">Pinch to zoom · Two fingers to pan · One finger scrolls the page · Tap to select · {Math.round(combatZoom*100)}%</p><div ref={combatMapRef} onTouchStart={startCombatTouch} onTouchMove={moveCombatTouch} onTouchEnd={endCombatTouch} onTouchCancel={endCombatTouch} onClickCapture={e=>{if(suppressCombatTap.current){e.stopPropagation();e.preventDefault();suppressCombatTap.current=false;}}} className="h-[340px] max-h-[55vh] overflow-hidden rounded-lg border border-white/20" style={{touchAction:'pan-y'}}><div className="grid gap-0.5 p-1" style={{gridTemplateColumns:`repeat(${trainingMapSize},minmax(0,1fr))`,width:`${trainingMapSize*28*combatZoom}px`,minWidth:'100%'}} role="grid" aria-label="Combat movement grid">
               {Array.from({length:trainingMapSize*trainingMapSize},(_,i)=>{
                 const x=i%trainingMapSize,y=Math.floor(i/trainingMapSize),p=campaign.combat!.playerPosition??{x:2,y:4},e=campaign.combat!.enemyPosition??{x:6,y:4};
                 const own=x===p.x&&y===p.y,enemy=x===e.x&&y===e.y&&(campaign.combat!.enemyHp??12)>0,secondEnemy=!!campaign.combat!.secondEnemy&&campaign.combat!.secondEnemy.hp>0&&x===campaign.combat!.secondEnemy.position.x&&y===campaign.combat!.secondEnemy.position.y,cover=isTrainingPillar(x,y);
