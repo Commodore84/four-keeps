@@ -535,7 +535,7 @@ export function App() {
     catch(error){setNotice('Initiative error: '+String(error));}finally{setSaving(false);}
   }
   const [gridDestination,setGridDestination]=useState<{x:number;y:number}|null>(null);
-  const [combatZoom,setCombatZoom]=useState(1);
+  const [combatZoom,setCombatZoom]=useState(0.75);
   const combatMapRef=useRef<HTMLDivElement>(null);
   const combatGesture=useRef<{points:{x:number;y:number}[];startDistance:number;startZoom:number;startScrollX:number;startScrollY:number;startMidX:number;startMidY:number;moved:boolean}|null>(null);
   const suppressCombatTap=useRef(false);
