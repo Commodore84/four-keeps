@@ -825,7 +825,7 @@ export function App() {
               const alive=order.filter(name=>name==='Nighthawk'||name===c.enemyName&&(c.enemyHp??12)>0||name===c.secondEnemy?.name&&(c.secondEnemy?.hp??0)>0);
               const current=order[index]??'Nighthawk';
               const next=order.slice(index+1).concat(order.slice(0,index+1)).find(name=>alive.includes(name))??current;
-              const encounterEntries=campaign.journal.slice(c.journalStartIndex??Math.max(0,campaign.journal.findLastIndex(entry=>entry.kind==='system'&&entry.text.startsWith('Combat begins:'))+1));
+              const encounterEntries=campaign.journal.slice(c.journalStartIndex??Math.max(0,campaign.journal.length-1-campaign.journal.slice().reverse().findIndex(entry=>entry.kind==='system'&&entry.text.startsWith('Combat begins:'))));
               const last=encounterEntries.filter(entry=>entry.kind==='system'&&!/^(Nighthawk initiative:|Combat begins:)/.test(entry.text)).slice(-1)[0];
               return <div className="space-y-2 text-sm">
                 {last&&<div className="rounded-lg border border-white/15 p-2"><span className="text-xs text-parchment/60">LAST ACTION</span><p className="mt-1 line-clamp-3">{last.text}</p></div>}
