@@ -535,7 +535,7 @@ export function App() {
     catch(error){setNotice('Initiative error: '+String(error));}finally{setSaving(false);}
   }
   const [gridDestination,setGridDestination]=useState<{x:number;y:number}|null>(null);
-  const [combatZoom,setCombatZoom]=useState(0.75);
+  const [combatZoom,setCombatZoom]=useState(1);
   const combatMapRef=useRef<HTMLDivElement>(null);
   const combatGesture=useRef<{points:{x:number;y:number}[];startDistance:number;startZoom:number;startScrollX:number;startScrollY:number;startMidX:number;startMidY:number;moved:boolean}|null>(null);
   const suppressCombatTap=useRef(false);
@@ -556,7 +556,7 @@ export function App() {
     let g=combatGesture.current;
     if(!g||g.points.length<2){g={points,startDistance:combatDistance(points),startZoom:combatZoom,startScrollX:el.scrollLeft,startScrollY:el.scrollTop,startMidX:mid.x,startMidY:mid.y,moved:true};combatGesture.current=g;}
     suppressCombatTap.current=true;
-    const next=Math.max(0.75,Math.min(3,g.startZoom*combatDistance(points)/g.startDistance));
+    const next=Math.max(1,Math.min(4,g.startZoom*combatDistance(points)/g.startDistance));
     const rect=el.getBoundingClientRect();
     const anchorX=g.startScrollX+g.startMidX-rect.left,anchorY=g.startScrollY+g.startMidY-rect.top;
     setCombatZoom(next);
@@ -882,7 +882,7 @@ export function App() {
           <p className="text-sm font-semibold">Your turn · Daggers: {campaign.combat.daggersAvailable??2} ({campaign.combat.daggersThrown??0} thrown) · Arrows: {campaign.combat.arrowsRemaining??20} · Movement remaining: {campaign.combat.playerGrappled?0:Math.max(0,(campaign.combat.movementAllowance??35)-(campaign.combat.movementUsed??0))} ft · Action: {campaign.combat.actionUsed?'used':'available'}</p>
           <div className="rounded-xl border border-white/20 p-2 space-y-2">
             <p className="text-xs text-parchment/70">Tactical grid · Tap 1 or 2 to select your attack target; tap an empty square to move. Selected target has a gold border.</p><p className="text-sm font-semibold">Target: {campaign.combat.selectedEnemy==='second'&&campaign.combat.secondEnemy?campaign.combat.secondEnemy.name:campaign.combat.enemyName} · HP {campaign.combat.selectedEnemy==='second'&&campaign.combat.secondEnemy?campaign.combat.secondEnemy.hp:campaign.combat.enemyHp??12}/12</p>
-            <p className="text-xs text-parchment/70">Pinch to zoom · Two fingers to pan · One finger scrolls the page · Tap to select · {Math.round(combatZoom*100)}%</p><div ref={combatMapRef} onTouchStart={startCombatTouch} onTouchMove={moveCombatTouch} onTouchEnd={endCombatTouch} onTouchCancel={endCombatTouch} onClickCapture={e=>{if(suppressCombatTap.current){e.stopPropagation();e.preventDefault();suppressCombatTap.current=false;}}} className="h-[340px] max-h-[55vh] overflow-hidden rounded-lg border border-white/20" style={{touchAction:'pan-y'}}><div className="grid gap-0.5 p-1" style={{gridTemplateColumns:`repeat(${trainingMapSize},minmax(0,1fr))`,width:`${trainingMapSize*28*combatZoom}px`,minWidth:'100%'}} role="grid" aria-label="Combat movement grid">
+            <p className="text-xs text-parchment/70">Pinch to zoom · Two fingers to pan · One finger scrolls the page · Tap to select · {Math.round(combatZoom*100)}%</p><div ref={combatMapRef} onTouchStart={startCombatTouch} onTouchMove={moveCombatTouch} onTouchEnd={endCombatTouch} onTouchCancel={endCombatTouch} onClickCapture={e=>{if(suppressCombatTap.current){e.stopPropagation();e.preventDefault();suppressCombatTap.current=false;}}} className="h-[340px] max-h-[55vh] overflow-hidden rounded-lg border border-white/20" style={{touchAction:'pan-y'}}><div className="grid gap-0.5 p-1" style={{gridTemplateColumns:`repeat(${trainingMapSize},minmax(0,1fr))`,width:`${trainingMapSize*21*combatZoom}px`,minWidth:'100%'}} role="grid" aria-label="Combat movement grid">
               {Array.from({length:trainingMapSize*trainingMapSize},(_,i)=>{
                 const x=i%trainingMapSize,y=Math.floor(i/trainingMapSize),p=campaign.combat!.playerPosition??{x:2,y:4},e=campaign.combat!.enemyPosition??{x:6,y:4};
                 const own=x===p.x&&y===p.y,enemy=x===e.x&&y===e.y&&(campaign.combat!.enemyHp??12)>0,secondEnemy=!!campaign.combat!.secondEnemy&&campaign.combat!.secondEnemy.hp>0&&x===campaign.combat!.secondEnemy.position.x&&y===campaign.combat!.secondEnemy.position.y,cover=isTrainingPillar(x,y);
