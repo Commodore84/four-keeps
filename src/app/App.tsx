@@ -170,14 +170,28 @@ const atlasSites = [
  {id:'watchtower',name:'Weathered Watchtower',x:33,y:35,description:'A crumbling lookout near the western woodland.'},
 ] as const;
 function WorldMap({campaign}:{campaign:Campaign|null}) {
+ const [detail,setDetail]=useState<'world'|'frontier'>('world');
+ const [zoom,setZoom]=useState(1);
+ const [offset,setOffset]=useState({x:0,y:0});
+ const gesture=useRef<{x:number;y:number;distance?:number}|null>(null);
  const current=campaign?.location??'Frontier Village';
  const known=new Set(['frontier',...(campaign?.mapDiscovered??[])]);
  const mapped=atlasSites.filter(p=>known.has(p.id)||p.name.toLowerCase()===current.toLowerCase());
+ const reset=()=>{setZoom(1);setOffset({x:0,y:0});gesture.current=null;};
+ const showDetail=()=>{setDetail('frontier');reset();};
+ const showWorld=()=>{setDetail('world');reset();};
+ const distance=(a:React.Touch,b:React.Touch)=>Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY);
+ const touchStart=(e:React.TouchEvent)=>{if(e.touches.length===2)gesture.current={x:0,y:0,distance:distance(e.touches[0],e.touches[1])};else if(e.touches.length===1)gesture.current={x:e.touches[0].clientX,y:e.touches[0].clientY};};
+ const touchMove=(e:React.TouchEvent)=>{const g=gesture.current;if(!g)return;if(e.touches.length===2&&g.distance){const d=distance(e.touches[0],e.touches[1]);setZoom(v=>Math.max(1,Math.min(5,v*d/g.distance!)));gesture.current={...g,distance:d};}else if(e.touches.length===1&&!g.distance){setOffset(v=>({x:v.x+e.touches[0].clientX-g.x,y:v.y+e.touches[0].clientY-g.y}));gesture.current={x:e.touches[0].clientX,y:e.touches[0].clientY};}};
  return <section aria-label="World map" className="flex h-full min-h-0 flex-col">
-  <div className="mb-2 flex shrink-0 items-center gap-2"><Map className="text-gold" size={20}/><h2 className="font-serif text-xl">World Atlas</h2></div>
-  <div className="relative min-h-0 w-full flex-1 overflow-hidden rounded-xl border border-gold/40 bg-[#d6c39a]">
-   <div className="absolute inset-0 mx-auto h-full max-w-full" style={{aspectRatio:'4 / 5'}}>
-    <svg viewBox="0 0 400 500" className="absolute inset-0 h-full w-full" role="img" aria-label="Parchment continent with northern mountains, western forest, eastern greenlands and southern coast">
+  <div className="mb-2 flex shrink-0 items-center justify-between gap-2">
+   <div className="flex min-w-0 items-center gap-2">{detail==='frontier'?<button type="button" aria-label="Back to Four Keeps world map" onClick={showWorld} className="rounded-lg border border-gold/40 px-3 py-2 text-sm text-gold">← Back</button>:<Map className="text-gold" size={20}/>}<h2 className="truncate font-serif text-lg">{detail==='world'?'Four Keeps':'Frontier Village'}</h2></div>
+   <div className="flex shrink-0 items-center gap-1"><button type="button" aria-label="Zoom out" onClick={()=>setZoom(v=>Math.max(1,v-.5))} className="rounded border border-gold/40 px-3 py-1.5">−</button><button type="button" aria-label="Zoom in" onClick={()=>setZoom(v=>Math.min(5,v+.5))} className="rounded border border-gold/40 px-3 py-1.5">+</button><button type="button" onClick={reset} className="rounded border border-gold/40 px-2 py-1.5 text-xs">Reset</button></div>
+  </div>
+  <div className="relative min-h-0 w-full flex-1 overflow-hidden rounded-xl border border-gold/40 bg-[#d6c39a] touch-none" onTouchStart={touchStart} onTouchMove={touchMove} onTouchEnd={()=>{gesture.current=null;}} onPointerDown={e=>{if(e.pointerType==='mouse')gesture.current={x:e.clientX,y:e.clientY};}} onPointerMove={e=>{if(e.pointerType==='mouse'&&e.buttons===1&&gesture.current){setOffset(v=>({x:v.x+e.clientX-gesture.current!.x,y:v.y+e.clientY-gesture.current!.y}));gesture.current={x:e.clientX,y:e.clientY};}}} onPointerUp={()=>{gesture.current=null;}}>
+   <div className="absolute inset-0 mx-auto h-full max-w-full origin-center" style={{aspectRatio:'4 / 5',transform:`translate(${offset.x}px,${offset.y}px) scale(${zoom})`}}>
+    {detail==='world'?<>
+     <svg viewBox="0 0 400 500" className="absolute inset-0 h-full w-full" role="img" aria-label="Parchment continent with northern mountains, western forest, eastern greenlands and southern coast">
      <defs><radialGradient id="mapPaper"><stop stopColor="#f0dfb7"/><stop offset="1" stopColor="#c6aa78"/></radialGradient><pattern id="mapWaves" width="24" height="22" patternUnits="userSpaceOnUse"><path d="M2 12q6 -7 12 0t12 0" fill="none" stroke="#7897a1" strokeWidth="1" opacity=".55"/></pattern></defs>
      <rect width="400" height="500" fill="url(#mapPaper)"/>
      <path d="M0 320Q55 300 72 345T160 369Q213 345 245 388T400 351V500H0Z" fill="#9cb8b7" opacity=".85"/>
@@ -195,7 +209,21 @@ function WorldMap({campaign}:{campaign:Campaign|null}) {
      <g transform="translate(348 460)" stroke="#594a38" fill="none"><circle r="22"/><path d="M0 -28V28M-28 0H28"/><path d="M0 -20L-6 8L0 4L6 8Z" fill="#594a38"/></g>
      <text x="348" y="423" fontSize="13" textAnchor="middle" fill="#594a38">N</text>
     </svg>
-    {mapped.map(p=><span key={p.id} title={p.name} aria-label={p.name} style={{left:p.x+'%',top:p.y+'%'}} className={`pointer-events-none absolute z-10 flex h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border border-[#fff2d4] bg-[#795c35] ${p.name.toLowerCase()===current.toLowerCase()?'ring-2 ring-amber-300':''}`}/>)}
+     {mapped.map(p=>p.id==='frontier'?<button key={p.id} type="button" onClick={showDetail} style={{left:p.x+'%',top:p.y+'%'}} aria-label="Open acquired Frontier Village map" className="absolute z-10 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center rounded-lg border-2 border-amber-700 bg-[#f9e6b9] px-2 py-1 text-[#543a20] shadow-lg"><span className="text-base">⌂</span><span className="whitespace-nowrap text-[10px] font-bold">Frontier Village ↗</span></button>:<span key={p.id} style={{left:p.x+'%',top:p.y+'%'}} className="pointer-events-none absolute h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border border-[#fff2d4] bg-[#795c35]"/>)}
+    </>:<svg viewBox="0 0 400 500" className="absolute inset-0 h-full w-full" role="img" aria-label="Acquired detailed map of Frontier Village showing the village roads, buildings, inn, market and surrounding farms">
+      <defs><radialGradient id="villagePaper"><stop stopColor="#f2e2bb"/><stop offset="1" stopColor="#c8ab78"/></radialGradient></defs>
+      <rect width="400" height="500" fill="url(#villagePaper)"/>
+      <path d="M0 75Q120 40 210 80T400 55M0 420Q150 390 270 430T400 410" stroke="#7f9d7a" strokeWidth="38" fill="none" opacity=".35"/>
+      <path d="M12 350Q100 325 145 345T260 330Q330 310 405 360" fill="none" stroke="#7c9fa9" strokeWidth="28" opacity=".7"/>
+      <path d="M12 350Q100 325 145 345T260 330Q330 310 405 360" fill="none" stroke="#e5d7b3" strokeWidth="2"/>
+      <path d="M190 -10L185 175L212 250L190 520M-10 235L140 225L212 250L405 205" fill="none" stroke="#b29a6c" strokeWidth="22"/>
+      <path d="M190 -10L185 175L212 250L190 520M-10 235L140 225L212 250L405 205" fill="none" stroke="#e9d6aa" strokeWidth="16"/>
+      {Array.from({length:18},(_,i)=>{const x=36+(i%5)*76+(i%2)*8,y=104+Math.floor(i/5)*83;return <g key={i} transform={`translate(${x} ${y}) rotate(${i%3===0?12:-8})`}><rect x="-16" y="-11" width="32" height="24" fill="#e0c89b" stroke="#785b3e" strokeWidth="1.5"/><path d="M-20 -11L0 -25L20 -11Z" fill="#9a6747" stroke="#6e4d37" strokeWidth="1.5"/></g>})}
+      <g stroke="#667e53" fill="#71885d">{Array.from({length:20},(_,i)=><circle key={i} cx={18+(i%5)*93} cy={65+Math.floor(i/5)*115} r={9+(i%3)*3}/>)}</g>
+      <g fontFamily="Georgia,serif" textAnchor="middle" fill="#4e3b2c"><text x="200" y="35" fontSize="23" letterSpacing="2">FRONTIER VILLAGE</text><text x="200" y="56" fontSize="11">A TRAVELER'S SURVEY</text><text x="104" y="165" fontSize="13">The Inn</text><text x="302" y="169" fontSize="13">Market Square</text><text x="90" y="305" fontSize="12">West Farms</text><text x="302" y="290" fontSize="12">Village Green</text><text x="215" y="462" fontSize="12">South Road</text><text x="198" y="93" fontSize="12">North Road</text></g>
+      <g stroke="#785b3e" fill="none" strokeWidth="2"><path d="M81 187h46v29H81zM271 184h65v38h-65z"/><circle cx="295" cy="270" r="24"/></g>
+      <g transform="translate(345 453)" stroke="#594a38" fill="none"><circle r="19"/><path d="M0 -25V25M-25 0H25"/><path d="M0 -19L-5 6L0 3L5 6Z" fill="#594a38"/></g>
+     </svg>}
    </div>
   </div>
  </section>;
