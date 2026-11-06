@@ -25,7 +25,7 @@ export interface Campaign {
   xp?: number;
   xpAwards?: { id: string; amount: number; reason: string }[];
   levelOneSnapshot?: { character: CharacterStats; xp: number; xpAwards: { id: string; amount: number; reason: string }[] };
-  combat?: { status:'awaiting-initiative'|'initiative-set'|'completed'; enemyName:string; enemyInitiative:number; selectedEnemy?:'first'|'second'; secondEnemy?:{name:string;initiative:number;position:{x:number;y:number};hp:number;maxHp:number;detected:boolean}; playerInitiative?:number; round:number; order?:string[]; turnIndex?:number; movementUsed?:number; actionUsed?:boolean; bonusActionUsed?:boolean; lastAction?:string; arrowsRemaining?:number; daggersAvailable?:number; daggersThrown?:number; reactionUsed?:boolean; enemyReactionUsed?:boolean; secondEnemyReactionUsed?:boolean; playerOpportunity?:{remainingEnemyIds?:('first'|'second')[];enemyId?:'first'|'second';from:{x:number;y:number};to:{x:number;y:number};cost:number;phase:'roll-to-hit'|'roll-damage'|'resolved';d20?:number;total?:number;hit?:boolean;damage?:number;critical?:boolean}; reactionAttack?:{phase:'roll-to-hit'|'roll-damage'|'resolved';d20?:number;total?:number;hit?:boolean;critical?:boolean;damage?:number}; opportunity?:{from:{x:number;y:number};to:{x:number;y:number}}; attack?:{weapon?:'dagger'|'shortbow'; thrown?:boolean; disadvantage?:boolean; phase:'roll-to-hit'|'roll-damage'|'resolved'; d20?:number; firstD20?:number; total?:number; hit?:boolean; critical?:boolean; damage?:number; sneakAttackDamage?:number; advantage?:boolean; secondD20?:number}; steadyAim?:boolean; movementAllowance?:number; disengaged?:boolean; enemyHp?:number; enemyMaxHp?:number; outcome?:'nonlethal-victory'|'player-defeated'; enemyLastTurn?:string; trainingStartingHp?:number; playerPosition?:{x:number;y:number}; enemyPosition?:{x:number;y:number}; trainingAllyAdjacent?:boolean; enemyProne?:boolean; enemyGrappled?:boolean; lastGrappleResult?:string; playerProne?:boolean; playerGrappled?:boolean; playerHidden?:boolean; hideRoll?:number; hideTotal?:number; hideResult?:string; enemySearchResult?:string; pendingEnemyGrapple?:boolean; pendingPlayerEscape?:boolean; lastPlayerGrappleResult?:string; pendingEnemyShove?:boolean; lastPlayerShoveSave?:string; lastShoveSave?:{passed:boolean;dc:number;outcome:'prone'|'push';effectApplied:boolean}; sneakAttackUsedThisTurn?:boolean; sneakAttackEligible?:boolean };
+  combat?: { status:'awaiting-initiative'|'initiative-set'|'completed'; enemyName:string; enemyInitiative:number; selectedEnemy?:'first'|'second'; secondEnemy?:{name:string;initiative:number;position:{x:number;y:number};hp:number;maxHp:number;detected:boolean;prone?:boolean;grappled?:boolean}; playerInitiative?:number; round:number; order?:string[]; turnIndex?:number; movementUsed?:number; actionUsed?:boolean; bonusActionUsed?:boolean; lastAction?:string; arrowsRemaining?:number; daggersAvailable?:number; daggersThrown?:number; reactionUsed?:boolean; enemyReactionUsed?:boolean; secondEnemyReactionUsed?:boolean; playerOpportunity?:{remainingEnemyIds?:('first'|'second')[];enemyId?:'first'|'second';from:{x:number;y:number};to:{x:number;y:number};cost:number;phase:'roll-to-hit'|'roll-damage'|'resolved';d20?:number;total?:number;hit?:boolean;damage?:number;critical?:boolean}; reactionAttack?:{phase:'roll-to-hit'|'roll-damage'|'resolved';d20?:number;total?:number;hit?:boolean;critical?:boolean;damage?:number}; opportunity?:{from:{x:number;y:number};to:{x:number;y:number}}; attack?:{weapon?:'dagger'|'shortbow'; thrown?:boolean; disadvantage?:boolean; phase:'roll-to-hit'|'roll-damage'|'resolved'; d20?:number; firstD20?:number; total?:number; hit?:boolean; critical?:boolean; damage?:number; sneakAttackDamage?:number; advantage?:boolean; secondD20?:number}; steadyAim?:boolean; movementAllowance?:number; disengaged?:boolean; enemyHp?:number; enemyMaxHp?:number; outcome?:'nonlethal-victory'|'player-defeated'; enemyLastTurn?:string; trainingStartingHp?:number; playerPosition?:{x:number;y:number}; enemyPosition?:{x:number;y:number}; trainingAllyAdjacent?:boolean; enemyProne?:boolean; enemyGrappled?:boolean; lastGrappleResult?:string; playerProne?:boolean; playerGrappled?:boolean; playerHidden?:boolean; hideRoll?:number; hideTotal?:number; hideResult?:string; enemySearchResult?:string; pendingEnemyGrapple?:boolean; pendingPlayerEscape?:boolean; lastPlayerGrappleResult?:string; pendingEnemyShove?:boolean; lastPlayerShoveSave?:string; lastShoveSave?:{passed:boolean;dc:number;outcome:'prone'|'push';effectApplied:boolean}; sneakAttackUsedThisTurn?:boolean; sneakAttackEligible?:boolean };
   pendingAftermath?: { opponent: string; playerDefeated: boolean };
   pendingCheck?: { skill: string; mode: 'normal' | 'advantage' | 'disadvantage'; reason: string; token: string; dice?: number[] };
 }
@@ -486,8 +486,9 @@ export function resolveDuelEnemyTurn(campaign:Campaign):Campaign {
  const otherPosition=secondEnemyTurn?(combat.enemyHp??12)>0?combat.enemyPosition:undefined:combat.secondEnemy&&combat.secondEnemy.hp>0?combat.secondEnemy.position:undefined;
  const distance=(a:{x:number;y:number},b:{x:number;y:number})=>Math.max(Math.abs(a.x-b.x),Math.abs(a.y-b.y));
  const isBlocked=(p:{x:number;y:number})=>p.x<0||p.x>8||p.y<0||p.y>8||p.x===trainingCover.x&&p.y===trainingCover.y||p.x===playerPosition.x&&p.y===playerPosition.y||!!otherPosition&&p.x===otherPosition.x&&p.y===otherPosition.y;
- const standing=!!combat.enemyProne&&!secondEnemyTurn;
- const speed=!secondEnemyTurn&&combat.enemyGrappled?0:standing?3:6;
+ const standing=!!(secondEnemyTurn?combat.secondEnemy?.prone:combat.enemyProne);
+ const grappled=!!(secondEnemyTurn?combat.secondEnemy?.grappled:combat.enemyGrappled);
+ const speed=grappled?0:standing?3:6;
  let position={...startingPosition};
  // Move at most Speed/5 squares along a shortest walkable route.
  const queue=[{pos:startingPosition,steps:0}],seen=new Set([startingPosition.x+','+startingPosition.y]);
@@ -525,7 +526,7 @@ export function resolveDuelEnemyTurn(campaign:Campaign):Campaign {
  const turn=nextActiveTurn(combat);
  const followingIndex=turn.index;
  const nextRound=turn.round;
- const nextCombat={...combat,enemyPosition:secondEnemyTurn?combat.enemyPosition:position,secondEnemy:secondEnemyTurn&&combat.secondEnemy?{...combat.secondEnemy,position}:combat.secondEnemy,enemyProne:secondEnemyTurn?combat.enemyProne:false,turnIndex:followingIndex,round:nextRound,reactionUsed:false,enemyReactionUsed:secondEnemyTurn?combat.enemyReactionUsed:false,secondEnemyReactionUsed:secondEnemyTurn?false:combat.secondEnemyReactionUsed,movementUsed:0,actionUsed:false,bonusActionUsed:false,lastAction:undefined,attack:undefined,enemyLastTurn:detail,status:defeated?'completed' as const:combat.status,outcome:defeated?'player-defeated' as const:combat.outcome};
+ const nextCombat={...combat,enemyPosition:secondEnemyTurn?combat.enemyPosition:position,secondEnemy:secondEnemyTurn&&combat.secondEnemy?{...combat.secondEnemy,position,prone:false}:combat.secondEnemy,enemyProne:secondEnemyTurn?combat.enemyProne:false,turnIndex:followingIndex,round:nextRound,reactionUsed:false,enemyReactionUsed:secondEnemyTurn?combat.enemyReactionUsed:false,secondEnemyReactionUsed:secondEnemyTurn?false:combat.secondEnemyReactionUsed,movementUsed:0,actionUsed:false,bonusActionUsed:false,lastAction:undefined,attack:undefined,enemyLastTurn:detail,status:defeated?'completed' as const:combat.status,outcome:defeated?'player-defeated' as const:combat.outcome};
  const now=new Date().toISOString();
  return {...campaign,character:{...character,currentHitPoints:after},combat:nextCombat,updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:detail,createdAt:now}]};
 }
@@ -677,7 +678,8 @@ export function grappleTrainingEnemy(campaign:Campaign):Campaign {
  const c=campaign.combat;
  if(!c||c.status!=='initiative-set'||c.order?.[c.turnIndex??0]!=='Nighthawk')throw Error('Grapple requires your turn.');
  if(c.actionUsed||c.attack)throw Error('Attack action already used.');
- const p=c.playerPosition??{x:2,y:4},e=c.enemyPosition??{x:6,y:4};
+ const second=c.selectedEnemy==='second'&&!!c.secondEnemy;
+ const p=c.playerPosition??{x:2,y:4},e=second?c.secondEnemy!.position:c.enemyPosition??{x:6,y:4};
  if(Math.max(Math.abs(p.x-e.x),Math.abs(p.y-e.y))>1)throw Error('Target must be within 5 feet.');
  const character=campaign.character??prototypeNighthawk;
  const dc=8+abilityModifier(character.scores.str)+character.proficiencyBonus;
@@ -685,11 +687,13 @@ export function grappleTrainingEnemy(campaign:Campaign):Campaign {
  const grabbed=roll<dc;
  const detail='Grapple save: d20 '+roll+' vs DC '+dc+'. '+(grabbed?'Failed: Grappled (Speed 0).':'Passed: not Grappled.');
  const now=new Date().toISOString();
- return {...campaign,combat:{...c,actionUsed:true,lastAction:'Grapple',enemyGrappled:grabbed,lastGrappleResult:detail},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:detail,createdAt:now}]};
+ return {...campaign,combat:{...c,actionUsed:true,lastAction:'Grapple',enemyGrappled:second?c.enemyGrappled:grabbed,secondEnemy:second?{...c.secondEnemy!,grappled:grabbed}:c.secondEnemy,lastGrappleResult:(second?c.secondEnemy!.name:c.enemyName)+': '+detail},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:detail,createdAt:now}]};
 }
 export function escapeTrainingGrapple(campaign:Campaign,ability:'str'|'dex'):Campaign {
  const c=campaign.combat;
- if(!c||!c.enemyGrappled||c.order?.[c.turnIndex??0]==='Nighthawk')throw Error('The dummy must be Grappled on its turn to escape.');
+ if(!c||c.order?.[c.turnIndex??0]==='Nighthawk')throw Error('Escape requires an enemy turn.');
+ const second=c.order?.[c.turnIndex??0]===c.secondEnemy?.name;
+ if(!(second?c.secondEnemy?.grappled:c.enemyGrappled))throw Error('The active enemy is not Grappled.');
  const character=campaign.character??prototypeNighthawk;
  const dc=8+abilityModifier(character.scores.str)+character.proficiencyBonus;
  const roll=crypto.getRandomValues(new Uint32Array(1))[0]%20+1;
@@ -697,20 +701,21 @@ export function escapeTrainingGrapple(campaign:Campaign,ability:'str'|'dex'):Cam
  const detail='Escape '+(ability==='str'?'Athletics':'Acrobatics')+' check: d20 '+roll+' vs DC '+dc+'. '+(success?'Success: Grapple ends.':'Failure: still Grappled.');
  const now=new Date().toISOString();
  const nextRound=c.order?.[0]==='Nighthawk'?c.round+1:c.round;
- return {...campaign,combat:{...c,enemyGrappled:!success,lastGrappleResult:detail,turnIndex:c.order?.indexOf('Nighthawk')??0,round:nextRound,movementUsed:0,actionUsed:false,bonusActionUsed:false,attack:undefined},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:detail,createdAt:now}]};
+ return {...campaign,combat:{...c,enemyGrappled:second?c.enemyGrappled:!success,secondEnemy:second?{...c.secondEnemy!,grappled:!success}:c.secondEnemy,lastGrappleResult:(second?c.secondEnemy!.name:c.enemyName)+': '+detail,turnIndex:c.order?.indexOf('Nighthawk')??0,round:nextRound,movementUsed:0,actionUsed:false,bonusActionUsed:false,attack:undefined},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:detail,createdAt:now}]};
 }
 export function shoveTrainingEnemy(campaign:Campaign,outcome:'prone'|'push'):Campaign {
  const c=campaign.combat;
  if(!c||c.status!=='initiative-set'||c.order?.[c.turnIndex??0]!=='Nighthawk')throw Error('Shove requires your turn.');
  if(c.actionUsed||c.attack)throw Error('Attack action already used.');
- const p=c.playerPosition??{x:2,y:4},e=c.enemyPosition??{x:6,y:4};
+ const second=c.selectedEnemy==='second'&&!!c.secondEnemy;
+ const p=c.playerPosition??{x:2,y:4},e=second?c.secondEnemy!.position:c.enemyPosition??{x:6,y:4};
  if(Math.max(Math.abs(p.x-e.x),Math.abs(p.y-e.y))>1)throw Error('Shove requires an enemy within 5 feet.');
  const character=campaign.character??prototypeNighthawk;
  const dc=8+abilityModifier(character.scores.str)+character.proficiencyBonus;
  // The training dummy has STR and DEX save modifiers of +0, so either save is equivalent.
  const roll=crypto.getRandomValues(new Uint32Array(1))[0]%20+1;
  const succeeds=roll>=dc;
- let target={...e},prone=!!c.enemyProne,detail='';
+ let target={...e},prone=!!(second?c.secondEnemy?.prone:c.enemyProne),detail='';
  if(!succeeds){
   if(outcome==='prone'){prone=true;detail='The enemy falls Prone.';}
   else{
@@ -722,5 +727,5 @@ export function shoveTrainingEnemy(campaign:Campaign,outcome:'prone'|'push'):Cam
  }else detail='The enemy resists the Shove.';
  const now=new Date().toISOString();
  const description='Nighthawk attempts Shove ('+(outcome==='prone'?'Prone':'Push 5 ft')+'). DC '+dc+' Strength/Dexterity save: '+(succeeds?'PASSED':'FAILED')+'. '+detail;
- return {...campaign,combat:{...c,actionUsed:true,lastAction:'Shove',enemyPosition:target,enemyProne:prone,lastShoveSave:{passed:succeeds,dc,outcome,effectApplied:!succeeds&&(outcome==='prone'||target.x!==e.x||target.y!==e.y)}},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:description,createdAt:now}]};
+ return {...campaign,combat:{...c,actionUsed:true,lastAction:'Shove',enemyPosition:second?c.enemyPosition:target,enemyProne:second?c.enemyProne:prone,secondEnemy:second?{...c.secondEnemy!,position:target,prone}:c.secondEnemy,lastShoveSave:{passed:succeeds,dc,outcome,effectApplied:!succeeds&&(outcome==='prone'||target.x!==e.x||target.y!==e.y)}},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:description,createdAt:now}]};
 }
