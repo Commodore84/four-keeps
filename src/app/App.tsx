@@ -169,25 +169,13 @@ const atlasSites = [
  {id:'watchtower',name:'Weathered Watchtower',x:33,y:35,description:'A crumbling lookout near the western woodland.'},
 ] as const;
 function WorldMap({campaign}:{campaign:Campaign|null}) {
- const [zoom,setZoom]=useState(1);
- const [offset,setOffset]=useState({x:0,y:0});
- const [selected,setSelected]=useState<string|null>(null);
- const touch=useRef<{x:number;y:number;distance?:number}|null>(null);
  const current=campaign?.location??'Frontier Village';
  const known=new Set(['frontier',...(campaign?.mapDiscovered??[])]);
- const dmPlaces=campaign?.world?.places??[];
  const mapped=atlasSites.filter(p=>known.has(p.id)||p.name.toLowerCase()===current.toLowerCase());
- const selectedSite=atlasSites.find(p=>p.id===selected);
- const selectSite=(id:string)=>setSelected(id);
- const distance=(a:React.Touch,b:React.Touch)=>Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY);
- const beginTouch=(e:React.TouchEvent)=>{if(e.touches.length===2)touch.current={x:0,y:0,distance:distance(e.touches[0],e.touches[1])};else if(e.touches.length===1)touch.current={x:e.touches[0].clientX,y:e.touches[0].clientY};};
- const moveTouch=(e:React.TouchEvent)=>{const t=touch.current;if(!t)return;if(e.touches.length===2&&t.distance){const d=distance(e.touches[0],e.touches[1]);setZoom(z=>Math.max(1,Math.min(4,z*d/t.distance!)));touch.current={...t,distance:d};}else if(e.touches.length===1&&!t.distance){setOffset(o=>({x:o.x+e.touches[0].clientX-t.x,y:o.y+e.touches[0].clientY-t.y}));touch.current={x:e.touches[0].clientX,y:e.touches[0].clientY};}};
- return <section className="space-y-4">
-  <div className="flex items-center gap-3"><Map className="text-gold"/><h2 className="font-serif text-2xl">World Atlas</h2></div>
-  <p className="text-sm text-parchment/70">Travel by speaking with the Dungeon Master in Adventure. This map is a reference, not a movement control.</p>
-  <div className="flex items-center justify-between gap-2"><span className="text-xs text-parchment/70">Pinch or use the zoom controls. Drag to pan.</span><div className="flex gap-2"><button type="button" className="rounded border border-gold/40 px-3 py-2" aria-label="Zoom out" onClick={()=>setZoom(z=>Math.max(1,z-.5))}>−</button><button type="button" className="rounded border border-gold/40 px-3 py-2" aria-label="Zoom in" onClick={()=>setZoom(z=>Math.min(4,z+.5))}>+</button><button type="button" className="rounded border border-gold/40 px-3 py-2 text-xs" onClick={()=>{setZoom(1);setOffset({x:0,y:0});}}>Reset</button></div></div>
-  <div className="relative aspect-[4/5] overflow-hidden rounded-xl border border-gold/40 bg-[#d6c39a] touch-none" onTouchStart={beginTouch} onTouchMove={moveTouch} onTouchEnd={()=>{touch.current=null;}} onPointerDown={e=>{if(e.pointerType==='mouse')touch.current={x:e.clientX,y:e.clientY};}} onPointerMove={e=>{if(e.pointerType==='mouse'&&e.buttons===1&&touch.current){setOffset(o=>({x:o.x+e.clientX-touch.current!.x,y:o.y+e.clientY-touch.current!.y}));touch.current={x:e.clientX,y:e.clientY};}}} onPointerUp={()=>{touch.current=null;}}>
-   <div className="absolute inset-0 origin-center" style={{transform:`translate(${offset.x}px,${offset.y}px) scale(${zoom})`}}>
+ return <section aria-label="World map" className="flex h-full min-h-0 flex-col">
+  <div className="mb-2 flex shrink-0 items-center gap-2"><Map className="text-gold" size={20}/><h2 className="font-serif text-xl">World Atlas</h2></div>
+  <div className="relative min-h-0 w-full flex-1 overflow-hidden rounded-xl border border-gold/40 bg-[#d6c39a]">
+   <div className="absolute inset-0 mx-auto h-full max-w-full" style={{aspectRatio:'4 / 5'}}>
     <svg viewBox="0 0 400 500" className="absolute inset-0 h-full w-full" role="img" aria-label="Parchment continent with northern mountains, western forest, eastern greenlands and southern coast">
      <defs><radialGradient id="mapPaper"><stop stopColor="#f0dfb7"/><stop offset="1" stopColor="#c6aa78"/></radialGradient><pattern id="mapWaves" width="24" height="22" patternUnits="userSpaceOnUse"><path d="M2 12q6 -7 12 0t12 0" fill="none" stroke="#7897a1" strokeWidth="1" opacity=".55"/></pattern></defs>
      <rect width="400" height="500" fill="url(#mapPaper)"/>
@@ -206,13 +194,9 @@ function WorldMap({campaign}:{campaign:Campaign|null}) {
      <g transform="translate(348 460)" stroke="#594a38" fill="none"><circle r="22"/><path d="M0 -28V28M-28 0H28"/><path d="M0 -20L-6 8L0 4L6 8Z" fill="#594a38"/></g>
      <text x="348" y="423" fontSize="13" textAnchor="middle" fill="#594a38">N</text>
     </svg>
-    {mapped.map(p=><button key={p.id} type="button" style={{left:p.x+'%',top:p.y+'%'}} onClick={()=>selectSite(p.id)} aria-label={'Inspect '+p.name} className={`absolute z-10 flex h-7 w-7 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-2 border-[#fff2d4] bg-[#795c35] text-white shadow-md ${p.name.toLowerCase()===current.toLowerCase()?'ring-4 ring-amber-300':''}`}>●</button>)}
+    {mapped.map(p=><span key={p.id} title={p.name} aria-label={p.name} style={{left:p.x+'%',top:p.y+'%'}} className={`pointer-events-none absolute z-10 flex h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border border-[#fff2d4] bg-[#795c35] ${p.name.toLowerCase()===current.toLowerCase()?'ring-2 ring-amber-300':''}`}/>)}
    </div>
   </div>
-  <p className="text-xs text-parchment/60">Current location: <strong className="text-gold">{current}</strong>{atlasSites.some(p=>p.name.toLowerCase()===current.toLowerCase())?'':' · Not yet positioned on the continent map'}</p>
-  {selectedSite&&<div className="rounded-xl border border-gold/30 bg-panel p-4"><h3 className="font-serif text-lg">{selectedSite.name}</h3><p className="text-sm text-parchment/70">{selectedSite.description}</p><p className="mt-2 text-xs text-gold">Reference only · Travel through the DM</p></div>}
-  <div className="rounded-xl border border-white/15 bg-panel p-4 space-y-2"><h3 className="font-serif text-lg">DM-discovered places</h3>{dmPlaces.length?dmPlaces.map(p=><div key={p.id} className="border-t border-white/10 pt-2"><p className="font-semibold">{p.name}</p><p className="text-xs text-parchment/70">{p.description||'Recorded in the persistent world.'}</p><p className="text-xs text-parchment/50">Map coordinates not yet established</p></div>):<p className="text-sm text-parchment/60">Places established through the DM will appear here. They will not be placed arbitrarily on the map.</p>}</div>
-  <p className="text-xs text-parchment/60">The continent and four keep illustrations are provisional. Detailed settlement maps will be separate views connected to the same persistent world.</p>
  </section>;
 }
 export function App() {
@@ -712,12 +696,12 @@ export function App() {
 
   const content = { adventure: <Adventure campaign={campaign} fullHistory={fullHistory} onToggleHistory={() => setFullHistory(value => !value)}/>, party: <Party campaign={campaign} saving={saving} onRoll={(skill,mode) => void saveSkillRoll(skill,mode)} onSaveRoll={(ability,mode) => void saveSavingThrow(ability,mode)} onAwardXP={(amount,reason) => void updateProgress('award',amount,reason)} onLevelUp={hp => void updateProgress('level',hp)} onLevelThree={(hp,cantrips,spells) => void updateProgress('level3',hp,'',cantrips,spells)} onReconcile={() => void updateProgress('reconcile')} onUndoReconcile={() => void updateProgress('undoReconcile')} onRestore={() => void updateProgress('restore')} onCastSpell={(spell,ritual,components,target)=>void castSpell(spell,ritual,components,target)} onEndConcentration={()=>void endConcentration()} onAdjustEquipment={(item,delta)=>void changeEquipment(item,delta)}/>, journal: <Journal campaign={campaign}/>, map: <WorldMap campaign={campaign}/>, settings: <section className="space-y-4"><h2 className="font-serif text-2xl">Settings</h2><p className="text-sm text-parchment/60">Manage campaigns, backups, and Dungeon Master access below.</p></section> };
   return <div className="min-h-dvh bg-ink text-parchment">
-    <div className="mx-auto flex min-h-dvh w-full max-w-3xl flex-col">
+    <div className={activeView==='map'?"mx-auto flex h-dvh w-full max-w-3xl flex-col overflow-hidden":"mx-auto flex min-h-dvh w-full max-w-3xl flex-col"}>
       <header className="sticky top-0 z-20 border-b border-white/10 bg-ink/95 px-5 pb-4 pt-[max(1.2rem,env(safe-area-inset-top))] backdrop-blur">
         <div className="flex items-center justify-between gap-3"><div><p className="eyebrow">A living tabletop adventure</p><h1 className="font-serif text-3xl tracking-wide">Four Keeps</h1></div><span className="rounded-full border border-gold/30 px-3 py-1 text-xs text-gold">Prototype</span></div>
         <div className="mt-3 flex items-center justify-between text-xs text-parchment/60"><span>{campaign?.title ?? 'No campaign selected'}</span><span>{campaign?.location ?? 'Frontier Village'}</span></div>
       </header>
-      <main className="flex-1 px-5 py-6 pb-48" id="main-content">
+      <main className={activeView==='map'?"min-h-0 flex-1 overflow-hidden px-3 py-3":"flex-1 px-5 py-6 pb-48"} id="main-content">
         {activeView === 'settings' && <>
         <section className="mb-5 rounded-xl border border-gold/25 bg-panel p-4 space-y-3" aria-label="Local campaigns">
           <div className="flex items-center justify-between"><h2 className="font-serif text-lg">Local campaigns</h2><span className="text-xs text-parchment/55">{loading ? 'Loading…' : 'Saved on this device'}</span></div>
@@ -937,7 +921,7 @@ export function App() {
           <p className="text-xs text-parchment/60">Changes are saved when you finish the rest. You may spend zero Hit Dice.</p>
         </div>}
         {pendingAdventureSpell && <div className="mx-4 mt-3 rounded-xl border border-gold/50 bg-panel p-4 space-y-3" role="group" aria-label="Confirm spell cast"><p className="eyebrow">Confirm Adventure spell</p><h3 className="font-serif text-xl">{pendingAdventureSpell.spell}{pendingAdventureSpell.ritual?' · Ritual':''}</h3><p className="text-sm text-parchment/80">{pendingAdventureSpell.intent}</p><p className="text-xs text-parchment/70">{pendingAdventureSpell.ritual?'No spell slot spent.':campaign?.character?.cantrips?.includes(pendingAdventureSpell.spell)?'Cantrip · no spell slot spent.':'Consumes one Level 1 spell slot.'}</p>{pendingAdventureSpell.spell==='Find Familiar' && <label className="flex gap-2 text-xs"><input type="checkbox" checked={adventureComponentsConfirmed} onChange={e=>setAdventureComponentsConfirmed(e.target.checked)}/> I have and consume the required 10 gp material components (inventory is not yet tracked).</label>}<div className="flex gap-2"><button type="button" className="flex-1 rounded-lg border border-white/30 p-3" onClick={()=>setPendingAdventureSpell(null)}>Edit action</button><button type="button" disabled={saving || (pendingAdventureSpell.spell==='Find Familiar'&&!adventureComponentsConfirmed)} className="flex-1 rounded-lg bg-gold p-3 font-semibold text-ink disabled:opacity-40" onClick={()=>void confirmAdventureSpell()}>Cast and continue</button></div></div>}
-        {activeView !== "settings" && <form className="flex items-end gap-2 px-4 py-3" onSubmit={(event) => { event.preventDefault(); void (dmMode ? submitAdventure() : saveNote()); }}>
+        {activeView !== "settings" && activeView !== "map" && <form className="flex items-end gap-2 px-4 py-3" onSubmit={(event) => { event.preventDefault(); void (dmMode ? submitAdventure() : saveNote()); }}>
           <button type="button" onClick={() => window.location.reload()} aria-label="Refresh Four Keeps" title="Refresh Four Keeps" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-white/20 bg-panel text-gold"><RefreshCw size={19}/></button>
           <label htmlFor="dm-input" className="sr-only">Message the Dungeon Master</label>
           <textarea id="dm-input" value={draft} onChange={(event) => { setDraft(event.target.value); setNotice(''); }} rows={1} placeholder={campaign ? (dmMode ? 'What does Nighthawk do?' : 'Write a journal note…') : 'Create a campaign first'} disabled={!campaign || saving || !!campaign.pendingCheck || !!pendingAdventureSpell || !!pendingRest} className="max-h-32 min-h-11 min-w-0 flex-1 resize-y rounded-xl border border-white/20 bg-panel px-3 py-3 text-base text-parchment placeholder:text-parchment/45 focus:border-gold focus:outline-none"/>
