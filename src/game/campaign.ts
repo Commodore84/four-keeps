@@ -223,9 +223,11 @@ export function rollDuelInitiative(campaign:Campaign):Campaign {
   const modifier=Math.floor((dex-10)/2);
   const roll=crypto.getRandomValues(new Uint32Array(1))[0]%20+1;
   const total=roll+modifier;
-  const order=total>=combat.enemyInitiative?['Nighthawk',combat.enemyName]:[combat.enemyName,'Nighthawk'];
+  const secondRoll=combat.enemyName==='Training Dummy'?crypto.getRandomValues(new Uint32Array(1))[0]%20+2:undefined;
+  const second=secondRoll===undefined?undefined:{name:'Training Dummy 2',initiative:secondRoll,position:{x:3,y:1},hp:12,maxHp:12,detected:false};
+  const order=[{name:'Nighthawk',initiative:total},{name:combat.enemyName,initiative:combat.enemyInitiative},...(second?[{name:second.name,initiative:second.initiative}]:[])].sort((a,b)=>b.initiative-a.initiative).map(x=>x.name);
   const now=new Date().toISOString();
-  return {...campaign,combat:{...combat,status:'initiative-set',playerInitiative:total,order,turnIndex:0,reactionUsed:false,movementUsed:0,actionUsed:false,bonusActionUsed:false,enemyHp:12,enemyMaxHp:12,arrowsRemaining:campaign.equipment?.arrows??20,daggersAvailable:campaign.equipment?.daggers??2,daggersThrown:0,playerPosition:{x:2,y:4},enemyPosition:{x:6,y:4}},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:'Nighthawk initiative: d20 '+roll+' + DEX '+modifier+' = '+total+'. '+combat.enemyName+': '+combat.enemyInitiative+'. Turn order: '+order.join(' → ')+'.',createdAt:now}]};
+  return {...campaign,combat:{...combat,status:'initiative-set',playerInitiative:total,secondEnemy:second,selectedEnemy:'first',order,turnIndex:0,reactionUsed:false,movementUsed:0,actionUsed:false,bonusActionUsed:false,enemyHp:12,enemyMaxHp:12,arrowsRemaining:campaign.equipment?.arrows??20,daggersAvailable:campaign.equipment?.daggers??2,daggersThrown:0,playerPosition:{x:2,y:4},enemyPosition:{x:6,y:4}},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:'Nighthawk initiative: d20 '+roll+' + DEX '+modifier+' = '+total+'. '+combat.enemyName+': '+combat.enemyInitiative+'. Turn order: '+order.join(' → ')+'.',createdAt:now}]};
 }
 
 // A fixed stone pillar for the first cover/Hide encounter. Line of sight is blocked
