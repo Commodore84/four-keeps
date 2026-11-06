@@ -828,22 +828,15 @@ export function App() {
               const c=campaign.combat!,order=c.order??[],index=c.turnIndex??0;
               const encounterEntries=campaign.journal.slice(c.journalStartIndex??Math.max(0,campaign.journal.length-1-campaign.journal.slice().reverse().findIndex(entry=>entry.kind==='system'&&entry.text.startsWith('Combat begins:'))));
               const actions=encounterEntries.filter(entry=>entry.kind==='system'&&!/^(Nighthawk initiative:|Combat begins:)/.test(entry.text));
-              return <div className="space-y-3 text-sm">
-                <ol className="space-y-1">{order.map((name,i)=><li key={name} className={`flex items-center justify-between gap-2 rounded-lg border px-3 py-2 ${i===index?'border-gold bg-gold/15 text-gold':'border-white/15'}`}><span><span className="mr-2 text-parchment/60">{i+1}.</span><strong>{name}</strong>{i===index&&<span className="ml-2 text-xs">CURRENT</span>}</span><span className="tabular-nums">{name==='Nighthawk'?c.playerInitiative:name===c.secondEnemy?.name?c.secondEnemy.initiative:c.enemyInitiative}</span></li>)}</ol>
-                <div className="border-t border-white/20 pt-3">
-                  <p className="mb-2 font-semibold text-gold">Encounter actions</p>
-                  {actions.length===0?<p className="text-parchment/65">No actions taken yet.</p>:<ol className="space-y-2">{actions.map(entry=>{
-                    const message=entry.text;
-                    const actor=message.includes('Training Dummy 2 training attack:')?'Training Dummy 2':message.includes('Training Dummy training attack:')?'Training Dummy':message.startsWith('Nighthawk ')||message.startsWith('Nighthawk’s ')||message.startsWith('Nighthawk\'s ')?'Nighthawk':undefined;
-                    const slot=actor?order.indexOf(actor):-1;
-                    return <li key={entry.id} className="rounded-lg border border-white/15 bg-black/10 p-3">
-                      <div className="mb-1 flex items-center gap-2 text-xs text-gold"><span className="font-semibold">{slot>=0?`#${slot+1} · `:''}{actor??'Combat event'}</span></div>
-                      <p className="whitespace-pre-wrap break-words">{message}</p>
-                    </li>;
-                  })}</ol>}
-                </div>
-              </div>;
-            })()}
+              const actorFor=(message:string)=>message.includes('Training Dummy 2 training attack:')||message.startsWith('Training Dummy 2 ')?'Training Dummy 2':message.includes('Training Dummy training attack:')||message.startsWith('Training Dummy ')?'Training Dummy':message.startsWith('Nighthawk ')||message.startsWith('Nighthawk’s ')||message.startsWith("Nighthawk's ")?'Nighthawk':undefined;
+               const lastByActor=new Map<string,string>();
+               for(const entry of actions){const actor=actorFor(entry.text);if(actor)lastByActor.set(actor,entry.text);}
+               const concise=(message:string)=>message.length>135?message.slice(0,132).trimEnd()+'…':message;
+               return <div className="space-y-3 text-sm">
+                 <ol className="space-y-1">{order.map((name,i)=><li key={name} className={`rounded-lg border px-3 py-2 ${i===index?'border-gold bg-gold/15':'border-white/15'}`}><div className="flex items-center justify-between gap-2"><span><span className="mr-2 text-parchment/60">{i+1}.</span><strong className={i===index?'text-gold':''}>{name}</strong>{i===index&&<span className="ml-2 text-xs text-gold">CURRENT</span>}</span><span className="tabular-nums">{name==='Nighthawk'?c.playerInitiative:name===c.secondEnemy?.name?c.secondEnemy.initiative:c.enemyInitiative}</span></div><p className="mt-1 pl-5 text-xs leading-relaxed text-parchment/75">{lastByActor.has(name)?concise(lastByActor.get(name)!):'No action recorded yet'}</p></li>)}</ol>
+                 <details className="border-t border-white/20 pt-3"><summary className="cursor-pointer text-sm font-semibold text-gold">Full encounter history ({actions.length} events)</summary>{actions.length===0?<p className="mt-2 text-parchment/65">No actions taken yet.</p>:<ol className="mt-3 max-h-72 space-y-2 overflow-y-auto">{actions.map(entry=><li key={entry.id} className="rounded-lg border border-white/15 bg-black/10 p-3"><p className="whitespace-pre-wrap break-words">{entry.text}</p></li>)}</ol>}</details>
+               </div>;
+             })()}
           </div>{campaign.combat.order?.[campaign.combat.turnIndex??0]==='Nighthawk' ? <div className="space-y-3">
           {campaign.combat.lastPlayerShoveSave&&<div role="status" aria-live="polite" className="rounded-lg border-2 border-gold bg-gold/10 p-4 space-y-2"><p className="text-sm font-bold uppercase tracking-wide">Saving Throw Result · Current Turn</p><p className="text-base font-semibold">{campaign.combat.lastPlayerShoveSave}</p><p className="text-xs text-parchment/70">This result remains visible until you confirm End Turn.</p></div>}
           {campaign.combat.playerProne&&<div className="rounded-lg border border-amber-400 p-3 space-y-2"><p className="font-semibold">Nighthawk is Prone</p><p className="text-sm">Stand up costs 15 feet of movement, leaving {Math.max(0,(campaign.combat.movementAllowance??35)-(campaign.combat.movementUsed??0)-15)} feet. Normal grid movement is unavailable until you stand.</p><button type="button" disabled={saving||!!campaign.combat.playerGrappled||(campaign.combat.movementUsed??0)+15>(campaign.combat.movementAllowance??35)} className="w-full rounded-lg bg-gold p-3 font-semibold text-ink disabled:opacity-40" onClick={()=>void proneTrainingAction('stand')}>Stand Up (15 ft movement)</button></div>}
