@@ -23,7 +23,7 @@ export interface Campaign {
   xp?: number;
   xpAwards?: { id: string; amount: number; reason: string }[];
   levelOneSnapshot?: { character: CharacterStats; xp: number; xpAwards: { id: string; amount: number; reason: string }[] };
-  combat?: { status:'awaiting-initiative'|'initiative-set'|'completed'; enemyName:string; enemyInitiative:number; selectedEnemy?:'first'|'second'; secondEnemy?:{name:string;initiative:number;position:{x:number;y:number};hp:number;maxHp:number;detected:boolean}; playerInitiative?:number; round:number; order?:string[]; turnIndex?:number; movementUsed?:number; actionUsed?:boolean; bonusActionUsed?:boolean; lastAction?:string; arrowsRemaining?:number; daggersAvailable?:number; daggersThrown?:number; reactionUsed?:boolean; enemyReactionUsed?:boolean; playerOpportunity?:{from:{x:number;y:number};to:{x:number;y:number};cost:number;phase:'roll-to-hit'|'roll-damage'|'resolved';d20?:number;total?:number;hit?:boolean;damage?:number;critical?:boolean}; reactionAttack?:{phase:'roll-to-hit'|'roll-damage'|'resolved';d20?:number;total?:number;hit?:boolean;critical?:boolean;damage?:number}; opportunity?:{from:{x:number;y:number};to:{x:number;y:number}}; attack?:{weapon?:'dagger'|'shortbow'; thrown?:boolean; disadvantage?:boolean; phase:'roll-to-hit'|'roll-damage'|'resolved'; d20?:number; firstD20?:number; total?:number; hit?:boolean; critical?:boolean; damage?:number; sneakAttackDamage?:number; advantage?:boolean; secondD20?:number}; steadyAim?:boolean; movementAllowance?:number; disengaged?:boolean; enemyHp?:number; enemyMaxHp?:number; outcome?:'nonlethal-victory'|'player-defeated'; enemyLastTurn?:string; trainingStartingHp?:number; playerPosition?:{x:number;y:number}; enemyPosition?:{x:number;y:number}; trainingAllyAdjacent?:boolean; enemyProne?:boolean; enemyGrappled?:boolean; lastGrappleResult?:string; playerProne?:boolean; playerGrappled?:boolean; playerHidden?:boolean; hideRoll?:number; hideTotal?:number; hideResult?:string; enemySearchResult?:string; pendingEnemyGrapple?:boolean; pendingPlayerEscape?:boolean; lastPlayerGrappleResult?:string; pendingEnemyShove?:boolean; lastPlayerShoveSave?:string; lastShoveSave?:{passed:boolean;dc:number;outcome:'prone'|'push';effectApplied:boolean}; sneakAttackUsedThisTurn?:boolean; sneakAttackEligible?:boolean };
+  combat?: { status:'awaiting-initiative'|'initiative-set'|'completed'; enemyName:string; enemyInitiative:number; selectedEnemy?:'first'|'second'; secondEnemy?:{name:string;initiative:number;position:{x:number;y:number};hp:number;maxHp:number;detected:boolean}; playerInitiative?:number; round:number; order?:string[]; turnIndex?:number; movementUsed?:number; actionUsed?:boolean; bonusActionUsed?:boolean; lastAction?:string; arrowsRemaining?:number; daggersAvailable?:number; daggersThrown?:number; reactionUsed?:boolean; enemyReactionUsed?:boolean; secondEnemyReactionUsed?:boolean; playerOpportunity?:{enemyId?:'first'|'second';from:{x:number;y:number};to:{x:number;y:number};cost:number;phase:'roll-to-hit'|'roll-damage'|'resolved';d20?:number;total?:number;hit?:boolean;damage?:number;critical?:boolean}; reactionAttack?:{phase:'roll-to-hit'|'roll-damage'|'resolved';d20?:number;total?:number;hit?:boolean;critical?:boolean;damage?:number}; opportunity?:{from:{x:number;y:number};to:{x:number;y:number}}; attack?:{weapon?:'dagger'|'shortbow'; thrown?:boolean; disadvantage?:boolean; phase:'roll-to-hit'|'roll-damage'|'resolved'; d20?:number; firstD20?:number; total?:number; hit?:boolean; critical?:boolean; damage?:number; sneakAttackDamage?:number; advantage?:boolean; secondD20?:number}; steadyAim?:boolean; movementAllowance?:number; disengaged?:boolean; enemyHp?:number; enemyMaxHp?:number; outcome?:'nonlethal-victory'|'player-defeated'; enemyLastTurn?:string; trainingStartingHp?:number; playerPosition?:{x:number;y:number}; enemyPosition?:{x:number;y:number}; trainingAllyAdjacent?:boolean; enemyProne?:boolean; enemyGrappled?:boolean; lastGrappleResult?:string; playerProne?:boolean; playerGrappled?:boolean; playerHidden?:boolean; hideRoll?:number; hideTotal?:number; hideResult?:string; enemySearchResult?:string; pendingEnemyGrapple?:boolean; pendingPlayerEscape?:boolean; lastPlayerGrappleResult?:string; pendingEnemyShove?:boolean; lastPlayerShoveSave?:string; lastShoveSave?:{passed:boolean;dc:number;outcome:'prone'|'push';effectApplied:boolean}; sneakAttackUsedThisTurn?:boolean; sneakAttackEligible?:boolean };
   pendingAftermath?: { opponent: string; playerDefeated: boolean };
   pendingCheck?: { skill: string; mode: 'normal' | 'advantage' | 'disadvantage'; reason: string; token: string; dice?: number[] };
 }
@@ -310,11 +310,13 @@ export function moveDuelToken(campaign:Campaign,x:number,y:number):Campaign {
  const used=combat.movementUsed??0;
  const allowance=combat.movementAllowance??35;
  if(used+cost>allowance)throw Error('Not enough movement remaining.');
- const fromAdjacent=Math.max(Math.abs(from.x-enemy.x),Math.abs(from.y-enemy.y))<=1;
- const toAdjacent=Math.max(Math.abs(x-enemy.x),Math.abs(y-enemy.y))<=1;
- const provoke=fromAdjacent&&!toAdjacent&&!combat.disengaged&&!combat.enemyReactionUsed;
+ const adjacent=(position:{x:number;y:number})=>Math.max(Math.abs(from.x-position.x),Math.abs(from.y-position.y))<=1&&! (Math.max(Math.abs(x-position.x),Math.abs(y-position.y))<=1);
+ const firstProvokes=(combat.enemyHp??12)>0&&!combat.enemyReactionUsed&&adjacent(enemy);
+ const secondProvokes=!!combat.secondEnemy&&combat.secondEnemy.hp>0&&!combat.secondEnemyReactionUsed&&adjacent(combat.secondEnemy.position);
+ const provokingEnemy: 'first'|'second'|undefined=combat.disengaged?undefined:firstProvokes?'first':secondProvokes?'second':undefined;
+ const provoke=!!provokingEnemy;
  const now=new Date().toISOString();
- if(provoke)return {...campaign,combat:{...combat,playerOpportunity:{from,to:{x,y},cost,phase:'roll-to-hit'}},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:'Nighthawk attempts to leave enemy reach without Disengage. Enemy opportunity attack triggered; resolve before moving.',createdAt:now}]};
+ if(provoke)return {...campaign,combat:{...combat,playerOpportunity:{enemyId:provokingEnemy,from,to:{x,y},cost,phase:'roll-to-hit'}},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:'Nighthawk leaves enemy '+(provokingEnemy==='second'?'2':'1')+' reach without Disengage. Opportunity Attack triggered; resolve before moving.',createdAt:now}]};
  return {...campaign,combat:{...combat,playerPosition:{x,y},playerHidden:combat.playerHidden&&trainingCoverBlocksSight({x,y},enemy)&&(!combat.secondEnemy||trainingCoverBlocksSight({x,y},combat.secondEnemy.position)),movementUsed:used+cost},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:'Nighthawk moves '+cost+' feet on the tactical grid ('+(used+cost)+'/'+allowance+' feet used).',createdAt:now}]};
 }
 
@@ -328,7 +330,7 @@ export function resolveEnemyOpportunity(campaign:Campaign,kind:'hit'|'damage'|'f
   if(pending.phase!=='roll-to-hit')throw Error('Attack roll already made.');
   const d20=die(20),total=d20+4,ac=14,hit=d20===20||(d20!==1&&total>=ac);
   next.playerOpportunity={...pending,phase:hit?'roll-damage':'resolved',d20,total,hit,critical:d20===20};
-  detail='Enemy opportunity attack: d20 '+d20+' + 4 = '+total+' vs AC '+ac+'. '+(hit?'Hit — roll damage.':'Miss.');
+  detail='Enemy '+(pending.enemyId==='second'?'2':'1')+' opportunity attack: d20 '+d20+' + 4 = '+total+' vs AC '+ac+'. '+(hit?'Hit — roll damage.':'Miss.');
  }else if(kind==='damage'){
   if(pending.phase!=='roll-damage')throw Error('Roll to hit first.');
   const damage=die(6)+2+(pending.critical?die(6):0);
@@ -338,7 +340,7 @@ export function resolveEnemyOpportunity(campaign:Campaign,kind:'hit'|'damage'|'f
   if(pending.phase!=='resolved')throw Error('Resolve attack and damage first.');
   const hp=Math.max(0,(character.currentHitPoints??character.maxHitPoints??24)-(pending.damage??0));
   character={...character,currentHitPoints:hp};
-  next={...next,playerOpportunity:undefined,enemyReactionUsed:true,playerPosition:pending.to,movementUsed:(c.movementUsed??0)+pending.cost};
+  next={...next,playerOpportunity:undefined,enemyReactionUsed:pending.enemyId==='second'?c.enemyReactionUsed:true,secondEnemyReactionUsed:pending.enemyId==='second'?true:c.secondEnemyReactionUsed,playerPosition:pending.to,movementUsed:(c.movementUsed??0)+pending.cost};
   if(hp===0){next.status='completed';next.outcome='player-defeated';}
   detail='Enemy reaction spent. Nighthawk moves '+pending.cost+' ft and has '+hp+' HP remaining.';
  }
@@ -514,7 +516,7 @@ export function resolveDuelEnemyTurn(campaign:Campaign):Campaign {
  const turn=nextActiveTurn(combat);
  const followingIndex=turn.index;
  const nextRound=turn.round;
- const nextCombat={...combat,enemyPosition:secondEnemyTurn?combat.enemyPosition:position,secondEnemy:secondEnemyTurn&&combat.secondEnemy?{...combat.secondEnemy,position}:combat.secondEnemy,enemyProne:secondEnemyTurn?combat.enemyProne:false,turnIndex:followingIndex,round:nextRound,reactionUsed:false,enemyReactionUsed:false,movementUsed:0,actionUsed:false,bonusActionUsed:false,lastAction:undefined,attack:undefined,enemyLastTurn:detail,status:defeated?'completed' as const:combat.status,outcome:defeated?'player-defeated' as const:combat.outcome};
+ const nextCombat={...combat,enemyPosition:secondEnemyTurn?combat.enemyPosition:position,secondEnemy:secondEnemyTurn&&combat.secondEnemy?{...combat.secondEnemy,position}:combat.secondEnemy,enemyProne:secondEnemyTurn?combat.enemyProne:false,turnIndex:followingIndex,round:nextRound,reactionUsed:false,enemyReactionUsed:secondEnemyTurn?combat.enemyReactionUsed:false,secondEnemyReactionUsed:secondEnemyTurn?false:combat.secondEnemyReactionUsed,movementUsed:0,actionUsed:false,bonusActionUsed:false,lastAction:undefined,attack:undefined,enemyLastTurn:detail,status:defeated?'completed' as const:combat.status,outcome:defeated?'player-defeated' as const:combat.outcome};
  const now=new Date().toISOString();
  return {...campaign,character:{...character,currentHitPoints:after},combat:nextCombat,updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:detail,createdAt:now}]};
 }
