@@ -476,22 +476,8 @@ export function resolveDuelEnemyTurn(campaign:Campaign):Campaign {
  const distance=(a:{x:number;y:number},b:{x:number;y:number})=>Math.max(Math.abs(a.x-b.x),Math.abs(a.y-b.y));
  const isBlocked=(p:{x:number;y:number})=>p.x<0||p.x>8||p.y<0||p.y>8||p.x===trainingCover.x&&p.y===trainingCover.y||p.x===playerPosition.x&&p.y===playerPosition.y||!!otherPosition&&p.x===otherPosition.x&&p.y===otherPosition.y;
  const standing=!!combat.enemyProne&&!secondEnemyTurn;
- const speed=secondEnemyTurn||!combat.enemyGrappled?standing?3:6:0;
+ const speed=!secondEnemyTurn&&combat.enemyGrappled?0:standing?3:6;
  let position={...startingPosition};
- const visited=new Set([position.x+','+position.y]);
- const path=[position];
- while(path.length&&distance(position,playerPosition)>1&&visited.size<=81){
-  const candidates:typeof position[]=[];
-  for(const p of path){for(let dx=-1;dx<=1;dx++)for(let dy=-1;dy<=1;dy++){
-   if(!dx&&!dy)continue;
-   const q={x:p.x+dx,y:p.y+dy},key=q.x+','+q.y;
-   if(!visited.has(key)&&!isBlocked(q)){visited.add(key);candidates.push(q);}
-  }}
-  if(!candidates.length)break;
-  candidates.sort((a,b)=>distance(a,playerPosition)-distance(b,playerPosition));
-  position=candidates[0];
-  break;
- }
  // Move at most Speed/5 squares along a shortest walkable route.
  const queue=[{pos:startingPosition,steps:0}],seen=new Set([startingPosition.x+','+startingPosition.y]);
  let best={pos:startingPosition,steps:0};
