@@ -337,7 +337,6 @@ export function moveDuelToken(campaign:Campaign,x:number,y:number):Campaign {
  if(combat.playerGrappled)throw Error('Grappled: Speed 0. Escape before moving.');
  if(combat.playerProne)throw Error('Stand up first to use normal movement.');
  if(!Number.isInteger(x)||!Number.isInteger(y)||x<0||x>=trainingMapSize||y<0||y>=trainingMapSize)throw Error('Destination is outside the map.');
- const from=combat.playerPosition??{x:1,y:3};
  const enemy=combat.enemyPosition??{x:5,y:3};
  if(x===enemy.x&&y===enemy.y||combat.secondEnemy?.hp&&x===combat.secondEnemy.position.x&&y===combat.secondEnemy.position.y)throw Error('That square is occupied by an opponent.');
  if(isTrainingPillar(x,y))throw Error('Stone pillar blocks that square.');
