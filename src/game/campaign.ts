@@ -225,18 +225,21 @@ export function rollDuelInitiative(campaign:Campaign):Campaign {
   const roll=crypto.getRandomValues(new Uint32Array(1))[0]%20+1;
   const total=roll+modifier;
   const secondRoll=combat.enemyName==='Training Dummy'?crypto.getRandomValues(new Uint32Array(1))[0]%20+2:undefined;
-  const second=secondRoll===undefined?undefined:{name:'Training Dummy 2',initiative:secondRoll,position:{x:3,y:1},hp:12,maxHp:12,detected:false};
+  const second=secondRoll===undefined?undefined:{name:'Training Dummy 2',initiative:secondRoll,position:{x:10,y:2},hp:12,maxHp:12,detected:false};
   const order=[{name:'Nighthawk',initiative:total},{name:combat.enemyName,initiative:combat.enemyInitiative},...(second?[{name:second.name,initiative:second.initiative}]:[])].sort((a,b)=>b.initiative-a.initiative).map(x=>x.name);
   const now=new Date().toISOString();
-  return {...campaign,combat:{...combat,status:'initiative-set',playerInitiative:total,secondEnemy:second,selectedEnemy:'first',order,turnIndex:0,reactionUsed:false,movementUsed:0,actionUsed:false,bonusActionUsed:false,enemyHp:12,enemyMaxHp:12,arrowsRemaining:campaign.equipment?.arrows??20,daggersAvailable:campaign.equipment?.daggers??2,daggersThrown:0,playerPosition:{x:2,y:4},enemyPosition:{x:6,y:4}},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:'Nighthawk initiative: d20 '+roll+' + DEX '+modifier+' = '+total+'. '+combat.enemyName+': '+combat.enemyInitiative+'. Turn order: '+order.join(' → ')+'.',createdAt:now}]};
+  return {...campaign,combat:{...combat,status:'initiative-set',playerInitiative:total,secondEnemy:second,selectedEnemy:'first',order,turnIndex:0,reactionUsed:false,movementUsed:0,actionUsed:false,bonusActionUsed:false,enemyHp:12,enemyMaxHp:12,arrowsRemaining:campaign.equipment?.arrows??20,daggersAvailable:campaign.equipment?.daggers??2,daggersThrown:0,playerPosition:{x:2,y:10},enemyPosition:{x:10,y:10}},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:'Nighthawk initiative: d20 '+roll+' + DEX '+modifier+' = '+total+'. '+combat.enemyName+': '+combat.enemyInitiative+'. Turn order: '+order.join(' → ')+'.',createdAt:now}]};
 }
 
 // A fixed stone pillar for the first cover/Hide encounter. Line of sight is blocked
 // when the segment between the token centers intersects this occupied square.
-export const trainingCover={x:4,y:4};
+export const trainingCover={x:6,y:6};
+export const trainingMapSize=13;
+export const trainingPillars=[trainingCover,{x:4,y:4},{x:8,y:4},{x:4,y:8},{x:8,y:8}];
+export const isTrainingPillar=(x:number,y:number)=>trainingPillars.some(p=>p.x===x&&p.y===y);
 export function trainingCoverBlocksSight(p:{x:number;y:number},e:{x:number;y:number}):boolean {
  const dx=e.x-p.x,dy=e.y-p.y;
- for(let t=0;t<=1;t+=0.02)if(Math.abs(p.x+dx*t-trainingCover.x)<0.48&&Math.abs(p.y+dy*t-trainingCover.y)<0.48)return true;
+ for(let t=0;t<=1;t+=0.02)if(trainingPillars.some(pillar=>Math.abs(p.x+dx*t-pillar.x)<0.48&&Math.abs(p.y+dy*t-pillar.y)<0.48))return true;
  return false;
 }
 function nextActiveTurn(c:NonNullable<Campaign['combat']>):{index:number;round:number} {
@@ -264,11 +267,11 @@ export function addSecondTrainingEnemy(campaign:Campaign):Campaign {
  const c=campaign.combat;
  if(!c||c.status!=='initiative-set'||c.secondEnemy)throw Error('Start a training encounter before adding a second opponent.');
  const roll=crypto.getRandomValues(new Uint32Array(1))[0]%20+2;
- const second={name:'Training Dummy 2',initiative:roll,position:{x:3,y:1},hp:12,maxHp:12,detected:false};
+ const second={name:'Training Dummy 2',initiative:roll,position:{x:10,y:2},hp:12,maxHp:12,detected:false};
  const order=[{name:'Nighthawk',initiative:c.playerInitiative??0},{name:c.enemyName,initiative:c.enemyInitiative},{name:second.name,initiative:roll}].sort((a,b)=>b.initiative-a.initiative).map(a=>a.name);
  const current=c.order?.[c.turnIndex??0]??'Nighthawk';
  const now=new Date().toISOString();
- return {...campaign,combat:{...c,secondEnemy:second,selectedEnemy:'first' as const,order,turnIndex:order.indexOf(current),playerHidden:c.playerHidden&&trainingCoverBlocksSight(c.playerPosition??{x:2,y:4},second.position)},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:'Second training dummy joins at (4, 2). Initiative '+roll+'. Each enemy now has a separate turn; Hide requires blocked sight from both.',createdAt:now}]};
+ return {...campaign,combat:{...c,secondEnemy:second,selectedEnemy:'first' as const,order,turnIndex:order.indexOf(current),playerHidden:c.playerHidden&&trainingCoverBlocksSight(c.playerPosition??{x:2,y:4},second.position)},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:'Second training dummy joins at (11, 3). Initiative '+roll+'. Each enemy now has a separate turn; Hide requires blocked sight from both.',createdAt:now}]};
 }
 export function canNighthawkHide(c:NonNullable<Campaign['combat']>):boolean {const p=c.playerPosition??{x:2,y:4};return trainingCoverBlocksSight(p,c.enemyPosition??{x:6,y:4})&&(!c.secondEnemy||c.secondEnemy.hp<=0||trainingCoverBlocksSight(p,c.secondEnemy.position));}
 export function hideNighthawk(campaign:Campaign):Campaign {
@@ -305,11 +308,11 @@ export function moveDuelToken(campaign:Campaign,x:number,y:number):Campaign {
  if(combat.steadyAim||combat.attack)throw Error('Movement is unavailable after Steady Aim or while resolving an attack.');
  if(combat.playerGrappled)throw Error('Grappled: Speed 0. Escape before moving.');
  if(combat.playerProne)throw Error('Stand up first to use normal movement.');
- if(!Number.isInteger(x)||!Number.isInteger(y)||x<0||x>8||y<0||y>8)throw Error('Destination is outside the map.');
+ if(!Number.isInteger(x)||!Number.isInteger(y)||x<0||x>=trainingMapSize||y<0||y>=trainingMapSize)throw Error('Destination is outside the map.');
  const from=combat.playerPosition??{x:1,y:3};
  const enemy=combat.enemyPosition??{x:5,y:3};
  if(x===enemy.x&&y===enemy.y||combat.secondEnemy?.hp&&x===combat.secondEnemy.position.x&&y===combat.secondEnemy.position.y)throw Error('That square is occupied by an opponent.');
- if(x===trainingCover.x&&y===trainingCover.y)throw Error('Stone pillar blocks that square.');
+ if(isTrainingPillar(x,y))throw Error('Stone pillar blocks that square.');
  const cost=5*Math.max(Math.abs(x-from.x),Math.abs(y-from.y));
  if(cost===0)throw Error('Choose another square.');
  const used=combat.movementUsed??0;
@@ -488,10 +491,10 @@ export function resolveDuelEnemyTurn(campaign:Campaign):Campaign {
  const playerPosition=combat.playerPosition??{x:2,y:4};
  const otherPosition=secondEnemyTurn?(combat.enemyHp??12)>0?combat.enemyPosition:undefined:combat.secondEnemy&&combat.secondEnemy.hp>0?combat.secondEnemy.position:undefined;
  const distance=(a:{x:number;y:number},b:{x:number;y:number})=>Math.max(Math.abs(a.x-b.x),Math.abs(a.y-b.y));
- const isBlocked=(p:{x:number;y:number})=>p.x<0||p.x>8||p.y<0||p.y>8||p.x===trainingCover.x&&p.y===trainingCover.y||p.x===playerPosition.x&&p.y===playerPosition.y||!!otherPosition&&p.x===otherPosition.x&&p.y===otherPosition.y;
+ const isBlocked=(p:{x:number;y:number})=>p.x<0||p.x>=trainingMapSize||p.y<0||p.y>=trainingMapSize||isTrainingPillar(p.x,p.y)||p.x===playerPosition.x&&p.y===playerPosition.y||!!otherPosition&&p.x===otherPosition.x&&p.y===otherPosition.y;
  const standing=!!(secondEnemyTurn?combat.secondEnemy?.prone:combat.enemyProne);
  const grappled=!!(secondEnemyTurn?combat.secondEnemy?.grappled:combat.enemyGrappled);
- const speed=grappled?0:standing?3:6;
+ const speed=grappled?0:standing?1:2; // Training-only: slow dummies allow ranged testing.
  let position={...startingPosition};
  // Move at most Speed/5 squares along a shortest walkable route.
  const queue=[{pos:startingPosition,steps:0}],seen=new Set([startingPosition.x+','+startingPosition.y]);
@@ -521,7 +524,7 @@ export function resolveDuelEnemyTurn(campaign:Campaign):Campaign {
  const ac=14; // Temporary training AC; replace with equipment-derived AC later.
  const hit=inReach&&(attackRoll===20||(attackRoll!==1&&total>=ac));
  const critical=attackRoll===20;
- const damage=hit?die(6)+(critical?die(6):0)+2:0;
+ const damage=hit?die(2)+(critical?die(2):0):0; // Training-only: light practice strikes.
  const before=character.currentHitPoints??character.maxHitPoints??10;
  const after=Math.max(0,before-damage);
  const defeated=hit&&after===0;
