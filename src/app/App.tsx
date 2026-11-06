@@ -157,6 +157,7 @@ function Party({ campaign, onRoll, onSaveRoll, onAwardXP, onLevelUp, onLevelThre
 }
 function Journal({ campaign }: { campaign: Campaign | null }) {
   return <section className="space-y-4"><div className="flex items-center gap-3"><BookOpen className="text-gold"/><h2 className="font-serif text-2xl">Campaign Journal</h2></div>
+    {!!campaign?.world?.places?.length && <div className="rounded-xl border border-gold/25 bg-panel p-4 space-y-3"><h3 className="font-serif text-lg">Discovered places</h3>{campaign.world.places.map(place=><div key={place.id} className="border-t border-white/10 pt-2"><p className="font-semibold text-gold">{place.name}</p><p className="text-sm text-parchment/75">{place.description}</p>{place.notes.map((note,i)=><p key={i} className="text-xs text-parchment/60">{note}</p>)}</div>)}</div>}
     {campaign ? campaign.journal.filter(entry => entry.kind === 'note' || entry.kind === 'system').map((entry) => <div key={entry.id} className="rounded-xl border border-white/10 bg-panel p-4">
       <p className="text-xs text-gold">{entry.kind === 'note' ? 'Your note' : entry.kind === 'player' ? 'Nighthawk' : entry.kind === 'dm' ? 'Dungeon Master' : 'Campaign event'} · {new Date(entry.createdAt).toLocaleString()}</p>
       <p className="mt-2 text-sm leading-6">{entry.text}</p>
