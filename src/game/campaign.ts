@@ -323,7 +323,7 @@ export function moveDuelToken(campaign:Campaign,x:number,y:number):Campaign {
  const provoke=!!provokingEnemy;
  const now=new Date().toISOString();
  if(provoke)return {...campaign,combat:{...combat,playerOpportunity:{enemyId:provokingEnemy,remainingEnemyIds,from,to:{x,y},cost,phase:'roll-to-hit'}},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:'Nighthawk leaves enemy '+(provokingEnemy==='second'?'2':'1')+' reach without Disengage. Opportunity Attack triggered; resolve before moving.',createdAt:now}]};
- return {...campaign,combat:{...combat,playerPosition:{x,y},playerHidden:combat.playerHidden&&trainingCoverBlocksSight({x,y},enemy)&&(!combat.secondEnemy||trainingCoverBlocksSight({x,y},combat.secondEnemy.position)),movementUsed:used+cost},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:'Nighthawk moves '+cost+' feet on the tactical grid ('+(used+cost)+'/'+allowance+' feet used).',createdAt:now}]};
+ return {...campaign,combat:{...combat,playerPosition:{x,y},playerHidden:combat.playerHidden&&trainingCoverBlocksSight({x,y},enemy)&&(!combat.secondEnemy||trainingCoverBlocksSight({x,y},combat.secondEnemy.position)),movementUsed:used+cost,stats:{...(combat.stats??{damage:0,movement:0,attacks:0,hits:0,criticalHits:0,sneakDamage:0,finishingBlows:0}),movement:(combat.stats?.movement??0)+cost}},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:'Nighthawk moves '+cost+' feet on the tactical grid ('+(used+cost)+'/'+allowance+' feet used).',createdAt:now}]};
 }
 
 export function resolveEnemyOpportunity(campaign:Campaign,kind:'hit'|'damage'|'finish'):Campaign {
