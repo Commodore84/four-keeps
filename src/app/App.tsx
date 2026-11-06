@@ -163,37 +163,31 @@ function Journal({ campaign }: { campaign: Campaign | null }) {
     </div>) : <p className="text-parchment/60">Create a campaign to start your journal.</p>}
   </section>;
 }
-const worldStops = [
- {id:'frontier',name:'Frontier Village',x:68,y:55,region:'Greenlands',description:'Nighthawk’s starting settlement. A familiar inn and a road west.'},
- {id:'crossroads',name:'Old Crossroads',x:49,y:48,region:'Greenlands',description:'An ancient junction between the four regions. The road to the watchtower continues northwest.'},
- {id:'watchtower',name:'Weathered Watchtower',x:33,y:35,region:'Forest',description:'A crumbling lookout above the western woodland.'},
+const atlasSites = [
+ {id:'frontier',name:'Frontier Village',x:68,y:55,description:'Nighthawk’s starting settlement.'},
+ {id:'crossroads',name:'Old Crossroads',x:49,y:48,description:'An ancient road junction.'},
+ {id:'watchtower',name:'Weathered Watchtower',x:33,y:35,description:'A crumbling lookout near the western woodland.'},
 ] as const;
-type WorldStopId = typeof worldStops[number]['id'];
-const travelRoads:Record<WorldStopId,Partial<Record<WorldStopId,{miles:number;minutes:number}>>> = {
- frontier:{crossroads:{miles:6,minutes:120}},
- crossroads:{frontier:{miles:6,minutes:120},watchtower:{miles:3,minutes:60}},
- watchtower:{crossroads:{miles:3,minutes:60}}
-};
-const locationActivities:Record<WorldStopId,{label:string;detail:string}[]> = {
- frontier:[{label:'Visit the inn',detail:'The Hearth & Lantern offers a warm meal, local rumors, and rooms for travelers.'},{label:'Inspect the notice board',detail:'A weathered notice board lists missing livestock and requests for escorts.'}],
- crossroads:[{label:'Study the old waystones',detail:'Four worn stones mark roads to the mountains, forest, greenlands, and coast.'},{label:'Examine passing tracks',detail:'Cart ruts and boot prints show that traders still use this route.'}],
- watchtower:[{label:'Survey the forest',detail:'From the upper landing, Nighthawk can see a dark canopy stretching west.'},{label:'Search the ruins',detail:'Loose masonry and abandoned guardrooms suggest the tower has been empty for years.'}]
-};
-function WorldMap({campaign,onTravel,onActivity,saving}:{campaign:Campaign|null;onTravel:(id:WorldStopId)=>void;onActivity:(id:WorldStopId,index:number)=>void;saving:boolean}) {
- const current=campaign?.mapLocation??'frontier';
- const [selected,setSelected]=useState<WorldStopId>(current);
- useEffect(()=>setSelected(campaign?.mapLocation??'frontier'),[campaign?.id,campaign?.mapLocation]);
- const discovered=new Set(['frontier',...(campaign?.mapDiscovered??[])]);
- const paths:Record<WorldStopId,WorldStopId[]>={frontier:['crossroads'],crossroads:['frontier','watchtower'],watchtower:['crossroads']};
- const stop=worldStops.find(p=>p.id===selected)!;
- const canTravel=!!campaign&&selected!==current&&paths[current].includes(selected);
- const road=travelRoads[current][selected];
+function WorldMap({campaign}:{campaign:Campaign|null}) {
+ const [zoom,setZoom]=useState(1);
+ const [offset,setOffset]=useState({x:0,y:0});
+ const [selected,setSelected]=useState<string|null>(null);
+ const touch=useRef<{x:number;y:number;distance?:number}|null>(null);
+ const current=campaign?.location??'Frontier Village';
+ const known=new Set(['frontier',...(campaign?.mapDiscovered??[])]);
+ const dmPlaces=campaign?.world?.places??[];
+ const mapped=atlasSites.filter(p=>known.has(p.id)||p.name.toLowerCase()===current.toLowerCase());
+ const selectedSite=atlasSites.find(p=>p.id===selected);
+ const selectSite=(id:string)=>setSelected(id);
+ const distance=(a:React.Touch,b:React.Touch)=>Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY);
+ const beginTouch=(e:React.TouchEvent)=>{if(e.touches.length===2)touch.current={x:0,y:0,distance:distance(e.touches[0],e.touches[1])};else if(e.touches.length===1)touch.current={x:e.touches[0].clientX,y:e.touches[0].clientY};};
+ const moveTouch=(e:React.TouchEvent)=>{const t=touch.current;if(!t)return;if(e.touches.length===2&&t.distance){const d=distance(e.touches[0],e.touches[1]);setZoom(z=>Math.max(1,Math.min(4,z*d/t.distance!)));touch.current={...t,distance:d};}else if(e.touches.length===1&&!t.distance){setOffset(o=>({x:o.x+e.touches[0].clientX-t.x,y:o.y+e.touches[0].clientY-t.y}));touch.current={x:e.touches[0].clientX,y:e.touches[0].clientY};}};
  return <section className="space-y-4">
-  <div className="flex items-center gap-3"><Map className="text-gold"/><h2 className="font-serif text-2xl">World Map</h2></div>
-  <p className="text-xs text-gold">Campaign travel time: {Math.floor((campaign?.elapsedMinutes??0)/60)}h {(campaign?.elapsedMinutes??0)%60}m · Current location: {worldStops.find(p=>p.id===current)?.name}</p>
-  <p className="text-sm text-parchment/70">A hand-drawn view of the Four Keeps. Select a landmark, then travel along an adjoining road. Exploration is saved to your campaign.</p>
-  <div className="overflow-hidden rounded-xl border border-gold/40 bg-[#d6c39a] text-[#3b3025]">
-   <div className="relative aspect-[4/5] w-full" aria-label="Illustrated map of the Four Keeps">
+  <div className="flex items-center gap-3"><Map className="text-gold"/><h2 className="font-serif text-2xl">World Atlas</h2></div>
+  <p className="text-sm text-parchment/70">Travel by speaking with the Dungeon Master in Adventure. This map is a reference, not a movement control.</p>
+  <div className="flex items-center justify-between gap-2"><span className="text-xs text-parchment/70">Pinch or use the zoom controls. Drag to pan.</span><div className="flex gap-2"><button type="button" className="rounded border border-gold/40 px-3 py-2" aria-label="Zoom out" onClick={()=>setZoom(z=>Math.max(1,z-.5))}>−</button><button type="button" className="rounded border border-gold/40 px-3 py-2" aria-label="Zoom in" onClick={()=>setZoom(z=>Math.min(4,z+.5))}>+</button><button type="button" className="rounded border border-gold/40 px-3 py-2 text-xs" onClick={()=>{setZoom(1);setOffset({x:0,y:0});}}>Reset</button></div></div>
+  <div className="relative aspect-[4/5] overflow-hidden rounded-xl border border-gold/40 bg-[#d6c39a] touch-none" onTouchStart={beginTouch} onTouchMove={moveTouch} onTouchEnd={()=>{touch.current=null;}} onPointerDown={e=>{if(e.pointerType==='mouse')touch.current={x:e.clientX,y:e.clientY};}} onPointerMove={e=>{if(e.pointerType==='mouse'&&e.buttons===1&&touch.current){setOffset(o=>({x:o.x+e.clientX-touch.current!.x,y:o.y+e.clientY-touch.current!.y}));touch.current={x:e.clientX,y:e.clientY};}}} onPointerUp={()=>{touch.current=null;}}>
+   <div className="absolute inset-0 origin-center" style={{transform:`translate(${offset.x}px,${offset.y}px) scale(${zoom})`}}>
     <svg viewBox="0 0 400 500" className="absolute inset-0 h-full w-full" role="img" aria-label="Parchment continent with northern mountains, western forest, eastern greenlands and southern coast">
      <defs><radialGradient id="mapPaper"><stop stopColor="#f0dfb7"/><stop offset="1" stopColor="#c6aa78"/></radialGradient><pattern id="mapWaves" width="24" height="22" patternUnits="userSpaceOnUse"><path d="M2 12q6 -7 12 0t12 0" fill="none" stroke="#7897a1" strokeWidth="1" opacity=".55"/></pattern></defs>
      <rect width="400" height="500" fill="url(#mapPaper)"/>
@@ -212,18 +206,13 @@ function WorldMap({campaign,onTravel,onActivity,saving}:{campaign:Campaign|null;
      <g transform="translate(348 460)" stroke="#594a38" fill="none"><circle r="22"/><path d="M0 -28V28M-28 0H28"/><path d="M0 -20L-6 8L0 4L6 8Z" fill="#594a38"/></g>
      <text x="348" y="423" fontSize="13" textAnchor="middle" fill="#594a38">N</text>
     </svg>
-    {worldStops.map(point=>{const known=discovered.has(point.id)||point.id===current;const active=selected===point.id;return <button key={point.id} type="button" onClick={()=>setSelected(point.id)} style={{left:point.x+'%',top:point.y+'%'}} className={`absolute z-10 flex h-9 w-9 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-2 shadow-md ${active?'border-[#f6e4b1] bg-[#624525] text-white ring-2 ring-[#624525]':known?'border-[#fff2d4] bg-[#795c35] text-white':'border-[#715c3f] bg-[#d3bd93] text-[#55452e]'}`} aria-label={point.name+(point.id===current?' (current location)':'')} aria-pressed={active}>{point.id===current?'◆':known?'●':'?'}</button>})}
-   </div>
-   <div className="border-t border-[#806d4c]/40 bg-[#ead8af] p-4 space-y-2">
-    <p className="text-xs uppercase tracking-widest text-[#766142]">{stop.region} · {selected===current?'You are here':discovered.has(selected)?'Discovered':'Unexplored'}</p>
-    <h3 className="font-serif text-xl">{stop.name}</h3>
-    <p className="text-sm">{discovered.has(selected)||selected===current?stop.description:'An unvisited landmark marked on an old traveler’s chart.'}</p>
-    {canTravel&&road&&<p className="text-sm font-semibold">Road: {road.miles} miles · {Math.floor(road.minutes/60)}h {road.minutes%60?road.minutes%60+'m':''} on foot (normal pace)</p>}
-    <button type="button" disabled={!canTravel||saving} onClick={()=>onTravel(selected)} className="w-full rounded-lg bg-[#4c4937] px-4 py-3 font-semibold text-[#fff3d8] disabled:opacity-45">{selected===current?'Current location':canTravel?'Travel to '+stop.name:'Select an adjoining road destination'}</button>
+    {mapped.map(p=><button key={p.id} type="button" style={{left:p.x+'%',top:p.y+'%'}} onClick={()=>selectSite(p.id)} aria-label={'Inspect '+p.name} className={`absolute z-10 flex h-7 w-7 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-2 border-[#fff2d4] bg-[#795c35] text-white shadow-md ${p.name.toLowerCase()===current.toLowerCase()?'ring-4 ring-amber-300':''}`}>●</button>)}
    </div>
   </div>
-  <div className="rounded-xl border border-white/15 bg-panel p-4 space-y-3"><h3 className="font-serif text-lg">At {worldStops.find(p=>p.id===current)?.name}</h3><p className="text-xs text-parchment/60">Explore local details without leaving the map. Activities are recorded in the campaign journal.</p>{locationActivities[current].map((activity,index)=><button key={activity.label} type="button" disabled={!campaign||saving||campaign.combat?.status==='initiative-set'} onClick={()=>onActivity(current,index)} className="w-full rounded-lg border border-gold/30 p-3 text-left disabled:opacity-40"><span className="font-semibold text-gold">{activity.label}</span><span className="mt-1 block text-xs text-parchment/70">{activity.detail}</span></button>)}</div>
-  <p className="text-xs text-parchment/60">First increment: road travel between Frontier Village, Old Crossroads, and Weathered Watchtower. The four keeps are map landmarks only; travel encounters and full exploration are coming later.</p>
+  <p className="text-xs text-parchment/60">Current location: <strong className="text-gold">{current}</strong>{atlasSites.some(p=>p.name.toLowerCase()===current.toLowerCase())?'':' · Not yet positioned on the continent map'}</p>
+  {selectedSite&&<div className="rounded-xl border border-gold/30 bg-panel p-4"><h3 className="font-serif text-lg">{selectedSite.name}</h3><p className="text-sm text-parchment/70">{selectedSite.description}</p><p className="mt-2 text-xs text-gold">Reference only · Travel through the DM</p></div>}
+  <div className="rounded-xl border border-white/15 bg-panel p-4 space-y-2"><h3 className="font-serif text-lg">DM-discovered places</h3>{dmPlaces.length?dmPlaces.map(p=><div key={p.id} className="border-t border-white/10 pt-2"><p className="font-semibold">{p.name}</p><p className="text-xs text-parchment/70">{p.description||'Recorded in the persistent world.'}</p><p className="text-xs text-parchment/50">Map coordinates not yet established</p></div>):<p className="text-sm text-parchment/60">Places established through the DM will appear here. They will not be placed arbitrarily on the map.</p>}</div>
+  <p className="text-xs text-parchment/60">The continent and four keep illustrations are provisional. Detailed settlement maps will be separate views connected to the same persistent world.</p>
  </section>;
 }
 export function App() {
@@ -575,30 +564,6 @@ export function App() {
     try {const next=selectTrainingTarget(campaign,target);await localCampaignStorage.save(next);setCampaign(next);setCampaigns(items=>items.map(item=>item.id===next.id?next:item));setNotice(next.journal[next.journal.length-1].text);}
     catch(error){setNotice('Target: '+String(error));}finally{setSaving(false);}
   }
-  async function travelWorldMap(id:WorldStopId) {
-    if(!campaign||saving||campaign.combat?.status==='initiative-set') {setNotice('Finish active combat before traveling.');return;}
-    const from=campaign.mapLocation??'frontier';
-    const roads:Record<WorldStopId,WorldStopId[]>={frontier:['crossroads'],crossroads:['frontier','watchtower'],watchtower:['crossroads']};
-    if(!roads[from].includes(id))return;
-    const stop=worldStops.find(point=>point.id===id)!;
-    const road=travelRoads[from][id];
-    if(!road)return;
-    const now=new Date().toISOString();
-    const next:Campaign={...campaign,mapLocation:id,mapDiscovered:[...new Set([...(campaign.mapDiscovered??[]),'frontier',id])],location:stop.name,elapsedMinutes:(campaign.elapsedMinutes??0)+road.minutes,updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:'Nighthawk travels '+road.miles+' miles from '+worldStops.find(p=>p.id===from)!.name+' to '+stop.name+' in '+road.minutes+' minutes at a normal overland pace.',createdAt:now}]};
-    setSaving(true);
-    try {await localCampaignStorage.save(next);setCampaign(next);setCampaigns(items=>items.map(item=>item.id===next.id?next:item));setNotice('Arrived at '+stop.name+'.');}
-    catch(error){setNotice('Travel could not be saved: '+String(error));}finally{setSaving(false);}
-  }
-  async function exploreMapActivity(id:WorldStopId,index:number) {
-    if(!campaign||saving||campaign.combat?.status==='initiative-set'||(campaign.mapLocation??'frontier')!==id)return;
-    const activity=locationActivities[id][index];
-    if(!activity)return;
-    const now=new Date().toISOString();
-    const next:Campaign={...campaign,updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:activity.label+': '+activity.detail,createdAt:now}]};
-    setSaving(true);
-    try{await localCampaignStorage.save(next);setCampaign(next);setCampaigns(items=>items.map(item=>item.id===next.id?next:item));setNotice(activity.label+' recorded in journal.');}
-    catch(error){setNotice('Could not save activity: '+String(error));}finally{setSaving(false);}
-  }
   async function addSecondDummy() {
     if(!campaign||saving)return;
     setSaving(true);
@@ -745,7 +710,7 @@ export function App() {
     finally { setSaving(false); if (importInput.current) importInput.current.value = ''; }
   }
 
-  const content = { adventure: <Adventure campaign={campaign} fullHistory={fullHistory} onToggleHistory={() => setFullHistory(value => !value)}/>, party: <Party campaign={campaign} saving={saving} onRoll={(skill,mode) => void saveSkillRoll(skill,mode)} onSaveRoll={(ability,mode) => void saveSavingThrow(ability,mode)} onAwardXP={(amount,reason) => void updateProgress('award',amount,reason)} onLevelUp={hp => void updateProgress('level',hp)} onLevelThree={(hp,cantrips,spells) => void updateProgress('level3',hp,'',cantrips,spells)} onReconcile={() => void updateProgress('reconcile')} onUndoReconcile={() => void updateProgress('undoReconcile')} onRestore={() => void updateProgress('restore')} onCastSpell={(spell,ritual,components,target)=>void castSpell(spell,ritual,components,target)} onEndConcentration={()=>void endConcentration()} onAdjustEquipment={(item,delta)=>void changeEquipment(item,delta)}/>, journal: <Journal campaign={campaign}/>, map: <WorldMap campaign={campaign} onTravel={id=>void travelWorldMap(id)} onActivity={(id,index)=>void exploreMapActivity(id,index)} saving={saving}/>, settings: <section className="space-y-4"><h2 className="font-serif text-2xl">Settings</h2><p className="text-sm text-parchment/60">Manage campaigns, backups, and Dungeon Master access below.</p></section> };
+  const content = { adventure: <Adventure campaign={campaign} fullHistory={fullHistory} onToggleHistory={() => setFullHistory(value => !value)}/>, party: <Party campaign={campaign} saving={saving} onRoll={(skill,mode) => void saveSkillRoll(skill,mode)} onSaveRoll={(ability,mode) => void saveSavingThrow(ability,mode)} onAwardXP={(amount,reason) => void updateProgress('award',amount,reason)} onLevelUp={hp => void updateProgress('level',hp)} onLevelThree={(hp,cantrips,spells) => void updateProgress('level3',hp,'',cantrips,spells)} onReconcile={() => void updateProgress('reconcile')} onUndoReconcile={() => void updateProgress('undoReconcile')} onRestore={() => void updateProgress('restore')} onCastSpell={(spell,ritual,components,target)=>void castSpell(spell,ritual,components,target)} onEndConcentration={()=>void endConcentration()} onAdjustEquipment={(item,delta)=>void changeEquipment(item,delta)}/>, journal: <Journal campaign={campaign}/>, map: <WorldMap campaign={campaign}/>, settings: <section className="space-y-4"><h2 className="font-serif text-2xl">Settings</h2><p className="text-sm text-parchment/60">Manage campaigns, backups, and Dungeon Master access below.</p></section> };
   return <div className="min-h-dvh bg-ink text-parchment">
     <div className="mx-auto flex min-h-dvh w-full max-w-3xl flex-col">
       <header className="sticky top-0 z-20 border-b border-white/10 bg-ink/95 px-5 pb-4 pt-[max(1.2rem,env(safe-area-inset-top))] backdrop-blur">
