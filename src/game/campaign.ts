@@ -469,27 +469,66 @@ export function resolveDuelEnemyTurn(campaign:Campaign):Campaign {
  if(combat.pendingEnemyShove)throw Error('Resolve the pending Shove save first.');
  const currentName=combat.order[combat.turnIndex??0];
  if(currentName===combat.enemyName&&(combat.enemyHp??12)===0||currentName===combat.secondEnemy?.name&&combat.secondEnemy?.hp===0)throw Error('Defeated enemies cannot act.');
- const standingCost=combat.enemyProne&&currentName===combat.enemyName?15:0;
- const standDescription=combat.enemyProne?'Enemy stands from Prone, spending '+standingCost+' of 30 feet of movement (15 feet remaining). ':'';
+ const secondEnemyTurn=currentName===combat.secondEnemy?.name;
+ const startingPosition=secondEnemyTurn?combat.secondEnemy!.position:combat.enemyPosition??{x:6,y:4};
+ const playerPosition=combat.playerPosition??{x:2,y:4};
+ const otherPosition=secondEnemyTurn?(combat.enemyHp??12)>0?combat.enemyPosition:undefined:combat.secondEnemy&&combat.secondEnemy.hp>0?combat.secondEnemy.position:undefined;
+ const distance=(a:{x:number;y:number},b:{x:number;y:number})=>Math.max(Math.abs(a.x-b.x),Math.abs(a.y-b.y));
+ const isBlocked=(p:{x:number;y:number})=>p.x<0||p.x>8||p.y<0||p.y>8||p.x===trainingCover.x&&p.y===trainingCover.y||p.x===playerPosition.x&&p.y===playerPosition.y||!!otherPosition&&p.x===otherPosition.x&&p.y===otherPosition.y;
+ const standing=!!combat.enemyProne&&!secondEnemyTurn;
+ const speed=secondEnemyTurn||!combat.enemyGrappled?standing?3:6:0;
+ let position={...startingPosition};
+ const visited=new Set([position.x+','+position.y]);
+ const path=[position];
+ while(path.length&&distance(position,playerPosition)>1&&visited.size<=81){
+  const candidates:typeof position[]=[];
+  for(const p of path){for(let dx=-1;dx<=1;dx++)for(let dy=-1;dy<=1;dy++){
+   if(!dx&&!dy)continue;
+   const q={x:p.x+dx,y:p.y+dy},key=q.x+','+q.y;
+   if(!visited.has(key)&&!isBlocked(q)){visited.add(key);candidates.push(q);}
+  }}
+  if(!candidates.length)break;
+  candidates.sort((a,b)=>distance(a,playerPosition)-distance(b,playerPosition));
+  position=candidates[0];
+  break;
+ }
+ // Move at most Speed/5 squares along a shortest walkable route.
+ const queue=[{pos:startingPosition,steps:0}],seen=new Set([startingPosition.x+','+startingPosition.y]);
+ let best={pos:startingPosition,steps:0};
+ for(let head=0;head<queue.length;head++){
+  const node=queue[head];
+  if(distance(node.pos,playerPosition)<distance(best.pos,playerPosition))best=node;
+  if(distance(node.pos,playerPosition)<=1){best=node;break;}
+  if(node.steps>=speed)continue;
+  for(let dx=-1;dx<=1;dx++)for(let dy=-1;dy<=1;dy++){
+   if(!dx&&!dy)continue;
+   const pos={x:node.pos.x+dx,y:node.pos.y+dy},key=pos.x+','+pos.y;
+   if(!seen.has(key)&&!isBlocked(pos)){seen.add(key);queue.push({pos,steps:node.steps+1});}
+  }
+ }
+ position=best.pos;
+ const inReach=distance(position,playerPosition)<=1;
+ const standDescription=(standing?'Enemy stands from Prone, spending 15 feet of movement. ':'')+(best.steps?'Moves '+best.steps*5+' feet to ('+(position.x+1)+', '+(position.y+1)+'). ':'')+(!inReach?'Cannot reach Nighthawk; no melee attack. ':'');
+
  const character=campaign.character??prototypeNighthawk;
  const die=(sides:number)=>crypto.getRandomValues(new Uint32Array(1))[0]%sides+1;
- const first=die(20);
+ const first=inReach?die(20):0;
  const dodging=combat.lastAction==='Dodge'||!!combat.playerHidden;
  const second=dodging?die(20):undefined;
  const attackRoll=second===undefined?first:Math.min(first,second);
  const total=attackRoll+4;
  const ac=14; // Temporary training AC; replace with equipment-derived AC later.
- const hit=attackRoll===20||(attackRoll!==1&&total>=ac);
+ const hit=inReach&&(attackRoll===20||(attackRoll!==1&&total>=ac));
  const critical=attackRoll===20;
  const damage=hit?die(6)+(critical?die(6):0)+2:0;
  const before=character.currentHitPoints??character.maxHitPoints??10;
  const after=Math.max(0,before-damage);
  const defeated=hit&&after===0;
- const detail=standDescription+(combat.order[combat.turnIndex??0]??combat.enemyName)+' training attack: '+(dodging?'disadvantage ('+first+', '+second+') → ':'d20 ')+attackRoll+' + 4 = '+total+' vs temporary AC '+ac+': '+(hit?'HIT':'MISS')+'.'+(hit?' Nonlethal damage: '+damage+'. Nighthawk HP: '+before+' → '+after+'/'+(character.maxHitPoints??10)+'.':'')+(defeated?' Nighthawk is knocked unconscious; sparring ends.':'');
+ const detail=standDescription+(combat.order[combat.turnIndex??0]??combat.enemyName)+(inReach?' training attack: ':' waits out of range. ')+(inReach?(dodging?'disadvantage ('+first+', '+second+') → ':'d20 ')+attackRoll+' + 4 = '+total+' vs temporary AC '+ac+': '+(hit?'HIT':'MISS')+'.'+(hit?' Nonlethal damage: '+damage+'. Nighthawk HP: '+before+' → '+after+'/'+(character.maxHitPoints??10)+'.':'')+(defeated?' Nighthawk is knocked unconscious; sparring ends.':''):'');
  const turn=nextActiveTurn(combat);
  const followingIndex=turn.index;
  const nextRound=turn.round;
- const nextCombat={...combat,enemyProne:false,turnIndex:followingIndex,round:nextRound,reactionUsed:false,enemyReactionUsed:false,movementUsed:0,actionUsed:false,bonusActionUsed:false,lastAction:undefined,attack:undefined,enemyLastTurn:detail,status:defeated?'completed' as const:combat.status,outcome:defeated?'player-defeated' as const:combat.outcome};
+ const nextCombat={...combat,enemyPosition:secondEnemyTurn?combat.enemyPosition:position,secondEnemy:secondEnemyTurn&&combat.secondEnemy?{...combat.secondEnemy,position}:combat.secondEnemy,enemyProne:secondEnemyTurn?combat.enemyProne:false,turnIndex:followingIndex,round:nextRound,reactionUsed:false,enemyReactionUsed:false,movementUsed:0,actionUsed:false,bonusActionUsed:false,lastAction:undefined,attack:undefined,enemyLastTurn:detail,status:defeated?'completed' as const:combat.status,outcome:defeated?'player-defeated' as const:combat.outcome};
  const now=new Date().toISOString();
  return {...campaign,character:{...character,currentHitPoints:after},combat:nextCombat,updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:detail,createdAt:now}]};
 }
