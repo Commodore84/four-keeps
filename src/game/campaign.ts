@@ -219,6 +219,12 @@ export function adjustEquipment(campaign:Campaign,item:'daggers'|'arrows'|'caltr
  const now=new Date().toISOString();
  return {...campaign,equipment:{...equipment,[item]:next},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:'Equipment adjusted: '+item+' '+equipment[item]+' → '+next+'.',createdAt:now}]};
 }
+export function replenishTrainingEquipment(campaign:Campaign):Campaign {
+ const combat=campaign.combat;
+ if(!combat||combat.enemyName!=='Training Dummy')throw Error('Training resupply is only available during training encounters.');
+ const now=new Date().toISOString();
+ return {...campaign,combat:{...combat,arrowsRemaining:20,daggersAvailable:2,daggersThrown:0},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:'Training resupply: 20 practice arrows and 2 practice daggers ready.',createdAt:now}]};
+}
 export function beginDuel(campaign:Campaign, enemyName:string):Campaign {
   if(campaign.combat)return campaign;
   const clean=enemyName.trim().slice(0,60);
@@ -238,7 +244,7 @@ export function rollDuelInitiative(campaign:Campaign):Campaign {
   const second=secondRoll===undefined?undefined:{name:'Training Dummy 2',initiative:secondRoll,position:{x:10,y:2},hp:12,maxHp:12,detected:false};
   const order=[{name:'Nighthawk',initiative:total},{name:combat.enemyName,initiative:combat.enemyInitiative},...(second?[{name:second.name,initiative:second.initiative}]:[])].sort((a,b)=>b.initiative-a.initiative).map(x=>x.name);
   const now=new Date().toISOString();
-  return {...campaign,combat:{...combat,status:'initiative-set',playerInitiative:total,secondEnemy:second,selectedEnemy:'first',order,turnIndex:0,reactionUsed:false,movementUsed:0,actionUsed:false,bonusActionUsed:false,enemyHp:12,enemyMaxHp:12,arrowsRemaining:campaign.equipment?.arrows??20,daggersAvailable:campaign.equipment?.daggers??2,daggersThrown:0,playerPosition:{x:2,y:10},enemyPosition:{x:10,y:10}},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:'Nighthawk initiative: d20 '+roll+' + DEX '+modifier+' = '+total+'. '+combat.enemyName+': '+combat.enemyInitiative+'. Turn order: '+order.join(' → ')+'.',createdAt:now}]};
+  return {...campaign,combat:{...combat,status:'initiative-set',playerInitiative:total,secondEnemy:second,selectedEnemy:'first',order,turnIndex:0,reactionUsed:false,movementUsed:0,actionUsed:false,bonusActionUsed:false,enemyHp:12,enemyMaxHp:12,arrowsRemaining:combat.enemyName==='Training Dummy'?20:campaign.equipment?.arrows??20,daggersAvailable:combat.enemyName==='Training Dummy'?2:campaign.equipment?.daggers??2,daggersThrown:0,playerPosition:{x:2,y:10},enemyPosition:{x:10,y:10}},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:'Nighthawk initiative: d20 '+roll+' + DEX '+modifier+' = '+total+'. '+combat.enemyName+': '+combat.enemyInitiative+'. Turn order: '+order.join(' → ')+'.',createdAt:now}]};
 }
 
 // A fixed stone pillar for the first cover/Hide encounter. Line of sight is blocked
@@ -711,7 +717,7 @@ export function quitTrainingEncounter(campaign:Campaign):Campaign {
  const now=new Date().toISOString();
  const equipment=campaign.equipment??{daggers:2,arrows:20,caltrops:0,ballBearings:0};
  return {...campaign,character:{...character,currentHitPoints:maxHp},
-  equipment:{...equipment,daggers:(combat.daggersAvailable??equipment.daggers)+(combat.daggersThrown??0),arrows:combat.arrowsRemaining??equipment.arrows},
+  equipment:{...equipment,daggers:2,arrows:20},
   combat:undefined,pendingAftermath:undefined,updatedAt:now,
   journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:'Encounter training reset. Nighthawk restored to '+maxHp+'/'+maxHp+' HP; dummy reset. Thrown daggers recovered. Start a new encounter when ready.',createdAt:now}]};
 }
@@ -723,7 +729,7 @@ export function concludeDuel(campaign:Campaign):Campaign {
  if(combat.enemyName==='Training Dummy'){
   const character=campaign.character??prototypeNighthawk;
   const restoredHp=character.maxHitPoints??combat.trainingStartingHp??10;
-  return {...campaign,character:{...character,currentHitPoints:restoredHp},equipment:{daggers:(campaign.equipment?.daggers??combat.daggersAvailable??2)+(combat.daggersThrown??0),arrows:campaign.equipment?.arrows??combat.arrowsRemaining??20,caltrops:campaign.equipment?.caltrops??0,ballBearings:campaign.equipment?.ballBearings??0},combat:undefined,pendingAftermath:undefined,updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:'Training simulation ended; Nighthawk HP restored to '+restoredHp+'. All simulated thrown daggers recovered.',createdAt:now}]};
+  return {...campaign,character:{...character,currentHitPoints:restoredHp},equipment:{daggers:2,arrows:20,caltrops:campaign.equipment?.caltrops??0,ballBearings:campaign.equipment?.ballBearings??0},combat:undefined,pendingAftermath:undefined,updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:'Training simulation ended; Nighthawk HP restored to '+restoredHp+'. All simulated thrown daggers recovered.',createdAt:now}]};
  }
  return {...campaign,combat:undefined,pendingAftermath:{opponent:combat.enemyName,playerDefeated:combat.outcome==='player-defeated'},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:combat.outcome==='player-defeated'?'Nighthawk was reduced to 0 HP by a nonlethal training strike and is unconscious. The sparring encounter is finished. Resume normal adventure and narrate aid and recovery, without restarting combat.':combat.enemyName+' was reduced to 0 HP by Nighthawk\'s nonlethal training strike and is unconscious, not dead. The sparring encounter is finished. Resume normal adventure; the DM narrates the aftermath and NPC reactions. Do not restart this combat.',createdAt:now}]};
 }
