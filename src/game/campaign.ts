@@ -75,9 +75,9 @@ export function enemyHealthDescription(hp:number,maxHp:number):string{
 /** Redact historical enemy HP disclosures from player-facing journal entries. */
 export function publicCombatText(message:string):string{
  return message
-  .replace(/(?:Dummy|Opponent|Enemy|Training Dummy(?: 2)?) HP:\\s*\\d+\\s*\\/\\s*\\d+/gi,'Enemy health: concealed')
-  .replace(/\\bHP\\s+\\d+\\s*\\/\\s*12\\b/g,'Enemy health concealed')
-  .replace(/\\b(?:Dummy|Opponent|Enemy)\\s+(?:has|at)\\s+\\d+\\s*(?:\\/\\s*\\d+)?\\s*HP\\b/gi,'Enemy health concealed');
+  .replace(/(?:Dummy|Opponent|Enemy|Training Dummy(?: 2)?) HP:\s*\d+\s*\/\s*\d+/gi,'Enemy health: concealed')
+  .replace(/\bHP\s+\d+\s*\/\s*12\b/g,'Enemy health concealed')
+  .replace(/\b(?:Dummy|Opponent|Enemy)\s+(?:has|at)\s+\d+\s*(?:\/\s*\d+)?\s*HP\b/gi,'Enemy health concealed');
 }
 export const xpThresholds = [0,300,900,2700,6500,14000,23000,34000,48000,64000,85000,100000,120000,140000,165000,195000,225000,265000,305000,355000];
 export function awardExperience(campaign: Campaign, amount: number, reason: string, awardId: string): Campaign {
