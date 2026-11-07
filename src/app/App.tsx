@@ -586,6 +586,18 @@ export function App() {
       setNotice(publicCombatText(next.journal[next.journal.length-1].text));
     } catch(error){setNotice('Combat: '+String(error));} finally{setSaving(false);}
   }
+  async function confirmWeaponAttack(weapon:'dagger'|'throw-dagger'|'shortbow'){
+    if(!campaign||saving)return;
+    setSaving(true);
+    try{
+      const selected=takeDuelTurnAction(campaign,weapon==='shortbow'?'shortbow':weapon==='throw-dagger'?'throw-dagger':'attack');
+      const next=rollDuelAttack(selected,'hit');
+      await localCampaignStorage.save(next);
+      setCampaign(next);setCampaigns(items=>items.map(item=>item.id===next.id?next:item));
+      setPendingCombatAction(null);setSelectedWeapon(null);
+      setNotice(publicCombatText(next.journal[next.journal.length-1].text));
+    }catch(error){setNotice('Combat: '+String(error));}finally{setSaving(false);}
+  }
   async function confirmGridMove(){
     if(!campaign||!gridDestination||saving)return;
     setSaving(true);
@@ -967,7 +979,7 @@ export function App() {
               ];return <><p className="text-xs text-parchment/70">Target: {distance} ft away. Only eligible attacks are available.</p><div className="grid grid-cols-2 gap-2">{choices.filter(c=>c.eligible).map(c=><button key={c.id} type="button" className={`rounded-lg border p-3 text-left ${selectedWeapon===c.id?'border-gold bg-gold/20':'border-white/30'}`} onClick={()=>setSelectedWeapon(c.id)}><strong>{c.label}</strong><span className="block text-xs">{c.detail}</span><span className={`mt-1 block text-xs font-semibold ${c.roll==='Advantage'?'text-emerald-300':c.roll==='Disadvantage'?'text-rose-300':'text-parchment/80'}`}>{c.roll}</span></button>)}</div>{!choices.some(c=>c.eligible)&&<p>No weapon is in range.</p>}</>;})()}
 
             </div> : pendingCombatAction==='attack'?null:<p className="text-parchment/80">{({'steady-aim':'Bonus action · Advantage on your next attack this turn. Your speed becomes 0 until the turn ends.','cunning-dash':'Bonus Action · Gain additional movement equal to your speed.',dash:'Action · Gain additional movement equal to your speed.','cunning-disengage':'Cunning Action · Avoid opportunity attacks this turn.',disengage:'Action · Avoid opportunity attacks this turn.',dodge:'Action · Attacks against you have disadvantage.',end:'End your turn and advance initiative. Any unused action, bonus action, movement, or unfinished attack is forfeited.'} as const)[pendingCombatAction]}</p>}
-            <div className="grid grid-cols-2 gap-2"><button type="button" disabled={saving} className="rounded-lg border border-white/40 p-2.5" onClick={()=>setPendingCombatAction(null)}>Cancel</button><button type="button" disabled={saving||(pendingCombatAction==='attack'&&(attackChoice!=='weapon'||!selectedWeapon))} className={`rounded-lg bg-gold p-2.5 font-semibold text-ink disabled:opacity-40 ${pendingCombatAction==='attack'&&attackChoice!=='weapon'?'hidden':''}`} onClick={()=>{if(pendingCombatAction==='hide'){void stealthTest('hide',campaign.combat!.bonusActionUsed?'action':'bonus');setPendingCombatAction(null);}else void combatAction(pendingCombatAction==='attack'?(selectedWeapon==='shortbow'?'shortbow':selectedWeapon==='throw-dagger'?'throw-dagger':'attack'):pendingCombatAction);}}>Confirm</button></div>
+            <div className="grid grid-cols-2 gap-2"><button type="button" disabled={saving} className="rounded-lg border border-white/40 p-2.5" onClick={()=>setPendingCombatAction(null)}>Cancel</button><button type="button" disabled={saving||(pendingCombatAction==='attack'&&(attackChoice!=='weapon'||!selectedWeapon))} className={`rounded-lg bg-gold p-2.5 font-semibold text-ink disabled:opacity-40 ${pendingCombatAction==='attack'&&attackChoice!=='weapon'?'hidden':''}`} onClick={()=>{if(pendingCombatAction==='hide'){void stealthTest('hide',campaign.combat!.bonusActionUsed?'action':'bonus');setPendingCombatAction(null);}else if(pendingCombatAction==='attack'&&selectedWeapon)void confirmWeaponAttack(selectedWeapon);else void combatAction(pendingCombatAction);}}>Confirm</button></div>
           </div>}
 </div>}</div>)}
           </div>
