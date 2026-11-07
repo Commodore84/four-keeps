@@ -69,6 +69,16 @@ export function addRoll(campaign: Campaign, description: string, now: string = n
   return { ...campaign, updatedAt: now, journal: [...campaign.journal, { id: crypto.randomUUID(), kind: 'system', text: description, createdAt: now }] };
 }
 
+export function enemyHealthDescription(hp:number,maxHp:number):string{
+ return hp<=0?'Defeated':hp<=maxHp/2?'Bloodied':'Standing';
+}
+/** Redact historical enemy HP disclosures from player-facing journal entries. */
+export function publicCombatText(message:string):string{
+ return message
+  .replace(/(?:Dummy|Opponent|Enemy|Training Dummy(?: 2)?) HP:\\s*\\d+\\s*\\/\\s*\\d+/gi,'Enemy health: concealed')
+  .replace(/\\bHP\\s+\\d+\\s*\\/\\s*12\\b/g,'Enemy health concealed')
+  .replace(/\\b(?:Dummy|Opponent|Enemy)\\s+(?:has|at)\\s+\\d+\\s*(?:\\/\\s*\\d+)?\\s*HP\\b/gi,'Enemy health concealed');
+}
 export const xpThresholds = [0,300,900,2700,6500,14000,23000,34000,48000,64000,85000,100000,120000,140000,165000,195000,225000,265000,305000,355000];
 export function awardExperience(campaign: Campaign, amount: number, reason: string, awardId: string): Campaign {
   if (!Number.isSafeInteger(amount) || amount < 1 || amount > 100000 || !reason.trim() || !awardId.trim()) throw new Error('Invalid XP award');
@@ -628,7 +638,7 @@ export function rollTrainingReaction(campaign:Campaign,kind:'hit'|'damage'|'fini
   next.reactionAttack={...attack,phase:'resolved',damage};
   next.enemyHp=Math.max(0,(c.enemyHp??12)-damage);
   if(next.enemyHp===0){next.status='completed';next.outcome='nonlethal-victory';}
-  detail='Opportunity attack dagger damage: '+first+(extra?' + '+extra+' critical die':'')+' + '+abilityModifier(character.scores.dex)+' DEX = '+damage+'. Dummy HP: '+next.enemyHp+'/'+(c.enemyMaxHp??12)+'.';
+  detail='Opportunity attack dagger damage: '+first+(extra?' + '+extra+' critical die':'')+' + '+abilityModifier(character.scores.dex)+' DEX = '+damage+'. Training Dummy is '+enemyHealthDescription(next.enemyHp,c.enemyMaxHp??12)+'.';
  }else{
   if(attack.phase!=='resolved')throw Error('Finish rolling the reaction first.');
   next.opportunity=undefined;next.reactionAttack=undefined;
@@ -677,7 +687,7 @@ export function rollDuelAttack(campaign:Campaign,kind:'hit'|'damage',applySneakA
   const targetName=next.selectedEnemy==='second'&&next.secondEnemy?next.secondEnemy.name:combat.enemyName;
   const hp=next.selectedEnemy==='second'&&next.secondEnemy?next.secondEnemy.hp:next.enemyHp??12;
   if(hp===0)next.stats={...next.stats!,finishingBlows:(next.stats?.finishingBlows??0)+1};
-  description='Damage to '+targetName+': '+damage+' ('+first+' weapon + '+modifier+' DEX'+(sneakDice?' + '+sneakDamage+' Sneak Attack':'')+'). HP '+hp+'/12.'+(hp===0?' '+targetName+' is defeated.':'')+(bothDown?' Encounter complete.':'');
+  description='Nighthawk hits '+targetName+' for '+damage+' damage ('+first+' weapon + '+modifier+' DEX'+(sneakDice?' + '+sneakDamage+' Sneak Attack':'')+'). '+(hp===0?targetName+' collapses, defeated.':hp<=(next.selectedEnemy==='second'&&next.secondEnemy?next.secondEnemy.maxHp:next.enemyMaxHp??12)/2?targetName+' staggers, Bloodied.':targetName+' remains standing.')+(bothDown?' Encounter complete.':'');
   if(hp===0&&!bothDown){
     const survivors:[('first'|'second'),{x:number;y:number}][]=[];
     if((next.enemyHp??12)>0)survivors.push(['first',next.enemyPosition??{x:6,y:4}]);
