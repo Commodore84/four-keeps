@@ -473,7 +473,7 @@ export function takeDuelTurnAction(campaign:Campaign, action:'move'|'attack'|'th
    next.movementUsed=Math.min(allowance,(next.movementUsed??0)+5);
    description='Nighthawk moves 5 feet ('+next.movementUsed+'/'+allowance+' feet).';
  }else if(action==='end'){
-   const turn=nextActiveTurn(combat);next.turnIndex=turn.index;next.round=turn.round;next.lastShoveSave=undefined;next.lastPlayerShoveSave=undefined;next.lastGrappleResult=undefined;next.lastPlayerGrappleResult=undefined;next.movementUsed=0;next.actionUsed=false;next.bonusActionUsed=false;next.attack=undefined;next.steadyAim=false;next.movementAllowance=speed;next.disengaged=false;next.sneakAttackUsedThisTurn=false;if(next.owl){next.owl={...next.owl,movementUsed:0,actionUsed:false,helpTarget:next.owl.helpRound!==undefined&&next.owl.helpRound<turn.round?undefined:next.owl.helpTarget};}
+   const turn=nextActiveTurn(combat);next.turnIndex=turn.index;next.round=turn.round;next.lastShoveSave=undefined;next.lastPlayerShoveSave=undefined;next.lastGrappleResult=undefined;next.lastPlayerGrappleResult=undefined;next.movementUsed=0;next.actionUsed=false;next.bonusActionUsed=false;next.attack=undefined;next.steadyAim=false;next.movementAllowance=speed;next.disengaged=false;next.sneakAttackUsedThisTurn=false;if(next.owl&&next.order?.[turn.index]==='Nighthawk'){next.owl={...next.owl,movementUsed:0,actionUsed:false,helpTarget:next.owl.helpRound!==undefined&&next.owl.helpRound<turn.round?undefined:next.owl.helpTarget};}
    description='Nighthawk ends their turn. '+combat.order[next.turnIndex]+' is next.';
  }else {
    if(next.actionUsed)throw Error('Action already used this turn.');
@@ -568,6 +568,7 @@ export function standNighthawk(campaign:Campaign):Campaign {
  const detail='Nighthawk stands up, spending 15 feet of movement. '+((c.movementAllowance??35)-(c.movementUsed??0)-cost)+' feet remaining.';
  return {...campaign,combat:{...c,playerProne:false,movementUsed:(c.movementUsed??0)+cost},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:detail,createdAt:now}]};
 }
+function distanceToOwl(a:{x:number;y:number},b:{x:number;y:number}):number{return Math.max(Math.abs(a.x-b.x),Math.abs(a.y-b.y));}
 export function resolveDuelEnemyTurn(campaign:Campaign):Campaign {
  const combat=campaign.combat;
  if(!combat||combat.status!=='initiative-set'||!combat.order||combat.order[combat.turnIndex??0]==='Nighthawk')throw Error('It is not the opponent\'s turn.');
@@ -578,6 +579,8 @@ export function resolveDuelEnemyTurn(campaign:Campaign):Campaign {
  const secondEnemyTurn=currentName===combat.secondEnemy?.name;
  const startingPosition=secondEnemyTurn?combat.secondEnemy!.position:combat.enemyPosition??{x:6,y:4};
  const playerPosition=combat.playerPosition??{x:2,y:4};
+ const owlAtStart=combat.owl?.hp&&distanceToOwl(combat.owl.position,startingPosition)<=1;
+ const targetOwl=!!owlAtStart;
  const otherPosition=secondEnemyTurn?(combat.enemyHp??12)>0?combat.enemyPosition:undefined:combat.secondEnemy&&combat.secondEnemy.hp>0?combat.secondEnemy.position:undefined;
  const distance=(a:{x:number;y:number},b:{x:number;y:number})=>Math.max(Math.abs(a.x-b.x),Math.abs(a.y-b.y));
  const isBlocked=(p:{x:number;y:number})=>p.x<0||p.x>=trainingMapSize||p.y<0||p.y>=trainingMapSize||isTrainingPillar(p.x,p.y)||p.x===playerPosition.x&&p.y===playerPosition.y||!!otherPosition&&p.x===otherPosition.x&&p.y===otherPosition.y;
@@ -605,25 +608,28 @@ export function resolveDuelEnemyTurn(campaign:Campaign):Campaign {
 
  const character=campaign.character??prototypeNighthawk;
  const die=(sides:number)=>crypto.getRandomValues(new Uint32Array(1))[0]%sides+1;
- const first=inReach?die(20):0;
- const dodging=combat.lastAction==='Dodge'||!!combat.playerHidden;
+ const canAttack=targetOwl||inReach;
+ const first=canAttack?die(20):0;
+ const dodging=targetOwl?false:combat.lastAction==='Dodge'||!!combat.playerHidden;
  const second=dodging?die(20):undefined;
  const attackRoll=second===undefined?first:Math.min(first,second);
  const total=attackRoll+4;
- const ac=14; // Temporary training AC; replace with equipment-derived AC later.
- const hit=inReach&&(attackRoll===20||(attackRoll!==1&&total>=ac));
+ const ac=targetOwl?11:14; // Owl AC 11; temporary Nighthawk training AC 14.
+ const hit=canAttack&&(attackRoll===20||(attackRoll!==1&&total>=ac));
  const critical=attackRoll===20;
- const damage=hit?die(2)+(critical?die(2):0):0; // Training-only: light practice strikes.
+ const damage=hit?(targetOwl?die(2)+2+(critical?die(2):0):die(2)+(critical?die(2):0)):0; // Training-only strikes.
  const before=character.currentHitPoints??character.maxHitPoints??10;
- const after=Math.max(0,before-damage);
- const defeated=hit&&after===0;
- const detail=standDescription+(combat.order[combat.turnIndex??0]??combat.enemyName)+(inReach?' training attack: ':' waits out of range. ')+(inReach?(dodging?'disadvantage ('+first+', '+second+') → ':'d20 ')+attackRoll+' + 4 = '+total+' vs temporary AC '+ac+': '+(hit?'HIT':'MISS')+'.'+(hit?' Nonlethal damage: '+damage+'. Nighthawk HP: '+before+' → '+after+'/'+(character.maxHitPoints??10)+'.':'')+(defeated?' Nighthawk is knocked unconscious; sparring ends.':''):'');
+ const owlAfter=targetOwl?Math.max(0,(combat.owl?.hp??1)-damage):undefined;
+ const owlDestroyed=targetOwl&&hit&&owlAfter===0;
+ const after=targetOwl?before:Math.max(0,before-damage);
+ const defeated=!targetOwl&&hit&&after===0;
+ const detail=(targetOwl?'Owl is within melee reach. ':standDescription)+(combat.order[combat.turnIndex??0]??combat.enemyName)+(canAttack?(targetOwl?' attacks Owl: ':' training attack: '):' waits out of range. ')+(canAttack?(dodging?'disadvantage ('+first+', '+second+') → ':'d20 ')+attackRoll+' + 4 = '+total+' vs temporary AC '+ac+': '+(hit?'HIT':'MISS')+'.'+(hit?(targetOwl?' Damage: '+damage+'. Owl HP: '+(combat.owl?.hp??1)+' → '+owlAfter+'.'+(owlDestroyed?' Familiar disappears at 0 HP; Find Familiar must be cast again.':''):' Nonlethal damage: '+damage+'. Nighthawk HP: '+before+' → '+after+'/'+(character.maxHitPoints??10)+'.'):'')+(defeated?' Nighthawk is knocked unconscious; sparring ends.':''):'');
  const turn=nextActiveTurn(combat);
  const followingIndex=turn.index;
  const nextRound=turn.round;
- const nextCombat={...combat,enemyPosition:secondEnemyTurn?combat.enemyPosition:position,secondEnemy:secondEnemyTurn&&combat.secondEnemy?{...combat.secondEnemy,position,prone:false}:combat.secondEnemy,enemyProne:secondEnemyTurn?combat.enemyProne:false,turnIndex:followingIndex,round:nextRound,reactionUsed:false,enemyReactionUsed:secondEnemyTurn?combat.enemyReactionUsed:false,secondEnemyReactionUsed:secondEnemyTurn?false:combat.secondEnemyReactionUsed,movementUsed:0,actionUsed:false,bonusActionUsed:false,lastAction:undefined,attack:undefined,enemyLastTurn:detail,status:defeated?'completed' as const:combat.status,outcome:defeated?'player-defeated' as const:combat.outcome};
+ const nextCombat={...combat,owl:owlDestroyed?undefined:targetOwl&&combat.owl?{...combat.owl,hp:owlAfter??combat.owl.hp}:combat.owl,enemyPosition:secondEnemyTurn?combat.enemyPosition:position,secondEnemy:secondEnemyTurn&&combat.secondEnemy?{...combat.secondEnemy,position,prone:false}:combat.secondEnemy,enemyProne:secondEnemyTurn?combat.enemyProne:false,turnIndex:followingIndex,round:nextRound,reactionUsed:false,enemyReactionUsed:secondEnemyTurn?combat.enemyReactionUsed:false,secondEnemyReactionUsed:secondEnemyTurn?false:combat.secondEnemyReactionUsed,movementUsed:0,actionUsed:false,bonusActionUsed:false,lastAction:undefined,attack:undefined,enemyLastTurn:detail,status:defeated?'completed' as const:combat.status,outcome:defeated?'player-defeated' as const:combat.outcome};
  const now=new Date().toISOString();
- return {...campaign,character:{...character,currentHitPoints:after},combat:nextCombat,updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:detail,createdAt:now}]};
+ return {...campaign,familiar:owlDestroyed&&campaign.familiar?{...campaign.familiar,status:'destroyed' as const,hp:0}:campaign.familiar,character:{...character,currentHitPoints:after},combat:nextCombat,updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:detail,createdAt:now}]};
 }
 
 export function moveTrainingDummy(campaign:Campaign):Campaign {
