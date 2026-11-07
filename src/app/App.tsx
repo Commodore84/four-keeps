@@ -588,7 +588,6 @@ export function App() {
   }
   async function confirmGridMove(){
     if(!campaign||!gridDestination||saving)return;
-    const route=tacticalRoute(campaign.combat!,gridDestination);
     setSaving(true);
     try{
       const next=moveDuelToken(campaign,gridDestination.x,gridDestination.y);
@@ -909,7 +908,7 @@ export function App() {
               <div className="flex items-center justify-between gap-2"><span>Move {cost} ft · {remaining-cost} ft left</span></div>
               {provokes&&<div role="alert" className="rounded-lg border border-amber-500 bg-amber-900/20 p-3 space-y-1"><p className="font-semibold text-amber-300">Warning: Opportunity Attack</p><p>This route leaves the reach of {previewAttacks.length} {previewAttacks.length===1?'enemy':'enemies'} without Disengaging. The {previewAttacks.length===1?'enemy can':'enemies can'} use a Reaction to attack as Nighthawk leaves reach. Cancel to choose another route or Disengage first.</p></div>}
               {!provokes&&campaign.combat!.disengaged&&<p className="text-xs text-emerald-300">Disengage protects this route from Opportunity Attacks.</p>}
-              
+              <div className="flex gap-2"><button type="button" className="flex-1 rounded border border-white/40 px-3 py-2" onClick={()=>setGridDestination(null)}>Cancel</button><button type="button" disabled={saving} className="flex-1 rounded bg-gold text-ink px-3 py-2 font-semibold" onClick={()=>void confirmGridMove()}>{provokes?'Move Anyway':'Confirm Move'}</button></div>
             </div>;})()}
             {!gridDestination&&<p className="text-xs text-parchment/60">N = Nighthawk · Red numbers = enemies · P = Prone</p>}
           </div>
