@@ -284,11 +284,12 @@ export function addSecondTrainingEnemy(campaign:Campaign):Campaign {
  return {...campaign,combat:{...c,secondEnemy:second,selectedEnemy:'first' as const,order,turnIndex:order.indexOf(current),playerHidden:c.playerHidden&&trainingCoverBlocksSight(c.playerPosition??{x:2,y:4},second.position)},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:'Second training dummy joins at (11, 3). Initiative '+roll+'. Each enemy now has a separate turn; Hide requires blocked sight from both.',createdAt:now}]};
 }
 export function canNighthawkHide(c:NonNullable<Campaign['combat']>):boolean {const p=c.playerPosition??{x:2,y:4};return trainingCoverBlocksSight(p,c.enemyPosition??{x:6,y:4})&&(!c.secondEnemy||c.secondEnemy.hp<=0||trainingCoverBlocksSight(p,c.secondEnemy.position));}
-export function hideNighthawk(campaign:Campaign):Campaign {
+export function hideNighthawk(campaign:Campaign,actionType:'action'|'bonus'='bonus'):Campaign {
  const c=campaign.combat;
  if(!c||c.status!=='initiative-set'||c.order?.[c.turnIndex??0]!=='Nighthawk')throw Error('Hide requires your turn.');
- const useBonus=!c.bonusActionUsed;
- if(!useBonus&&(c.actionUsed||c.attack))throw Error('No action or bonus action available to Hide.');
+ const useBonus=actionType==='bonus';
+ if(useBonus&&c.bonusActionUsed)throw Error('Bonus Action already spent. Use the regular Hide Action if available.');
+ if(!useBonus&&(c.actionUsed||c.attack))throw Error('Action already spent. Cannot Hide as an Action.');
 
  if(!canNighthawkHide(c))throw Error('Hide requires cover and being outside every enemy’s line of sight.');
  const character=campaign.character??prototypeNighthawk;
