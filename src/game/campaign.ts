@@ -281,6 +281,17 @@ export function moveOwl(campaign:Campaign,x:number,y:number):Campaign {
  const now=new Date().toISOString(),next={...c,owl:{...owl,position:{x,y},movementUsed:owl.movementUsed+cost}};
  return {...campaign,combat:next,updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:'Owl flies '+cost+' ft to ('+(x+1)+', '+(y+1)+'). Flyby prevents opportunity attacks.',createdAt:now}]};
 }
+export function owlTurnAction(campaign:Campaign,action:'dash'|'disengage'|'dodge'):Campaign {
+ const c=campaign.combat,owl=c?.owl;
+ if(!c||c.status!=='initiative-set'||c.order?.[c.turnIndex??0]!=='Nighthawk'||!owl)throw Error('Owl can act only during Nighthawk’s turn.');
+ if(owl.actionUsed)throw Error('Owl already used its action.');
+ const now=new Date().toISOString();
+ const next={...c,owl:{...owl,actionUsed:true}};
+ // Dash grants an additional 60 feet of flying movement this turn.
+ if(action==='dash')next.owl={...next.owl,movementUsed:owl.movementUsed-60};
+ const description=action==='dash'?'Owl Dashes, gaining 60 additional feet of flight.':action==='disengage'?'Owl Disengages (Flyby already prevents opportunity attacks).':'Owl Dodges until the start of its next turn.';
+ return {...campaign,combat:next,updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:description,createdAt:now}]};
+}
 export function owlHelp(campaign:Campaign,target:'first'|'second'):Campaign {
  const c=campaign.combat,owl=c?.owl;
  if(!c||c.status!=='initiative-set'||c.order?.[c.turnIndex??0]!=='Nighthawk'||!owl)throw Error('Owl can Help only during Nighthawk’s turn.');
