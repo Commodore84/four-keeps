@@ -273,7 +273,7 @@ export function moveOwl(campaign:Campaign,x:number,y:number):Campaign {
  const c=campaign.combat,owl=c?.owl;
  if(!c||c.status!=='initiative-set'||c.order?.[c.turnIndex??0]!=='Nighthawk'||!owl)throw Error('Owl can move only during Nighthawk’s turn.');
  if(!Number.isInteger(x)||!Number.isInteger(y)||x<0||y<0||x>=trainingMapSize||y>=trainingMapSize)throw Error('Outside the training grid.');
- const occupied=(x===(c.playerPosition?.x??2)&&y===(c.playerPosition?.y??10))||(x===(c.enemyPosition?.x??10)&&y===(c.enemyPosition?.y??10)&&(c.enemyHp??12)>0)||(!!c.secondEnemy&&c.secondEnemy.hp>0&&x===c.secondEnemy.position.x&&y===c.secondEnemy.position.y);
+ const occupied=(x===(c.enemyPosition?.x??10)&&y===(c.enemyPosition?.y??10)&&(c.enemyHp??12)>0)||(!!c.secondEnemy&&c.secondEnemy.hp>0&&x===c.secondEnemy.position.x&&y===c.secondEnemy.position.y);
  if(occupied)throw Error('That square is occupied.');
  // Simplified flying: horizontal Chebyshev distance, passing over pillars and enemies.
  const cost=5*Math.max(Math.abs(x-owl.position.x),Math.abs(y-owl.position.y));
