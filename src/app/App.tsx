@@ -573,7 +573,6 @@ export function App() {
   const previewRoute=activeCombatToken==='owl'&&campaign?.combat?.owl&&gridDestination?(()=>{const start=campaign.combat!.owl!.position;const dx=gridDestination.x-start.x,dy=gridDestination.y-start.y,steps=Math.max(Math.abs(dx),Math.abs(dy));return Array.from({length:steps+1},(_,i)=>({x:start.x+Math.sign(dx)*Math.min(i,Math.abs(dx)),y:start.y+Math.sign(dy)*Math.min(i,Math.abs(dy))}));})():campaign?.combat&&gridDestination?tacticalRoute(campaign.combat,gridDestination):null;
   const previewCost=activeCombatToken==='owl'&&campaign?.combat?.owl&&gridDestination?5*Math.max(Math.abs(gridDestination.x-campaign.combat.owl.position.x),Math.abs(gridDestination.y-campaign.combat.owl.position.y)):previewRoute?(previewRoute.length-1)*5:0;
   const previewAttacks=activeCombatToken==='owl'?[]:campaign?.combat&&previewRoute?tacticalOpportunityEnemies(campaign.combat,previewRoute):[];
-  const previewSquares=new Set((previewRoute??[]).slice(1,-1).map(p=>p.x+','+p.y));
   const activeOwlTarget=owlTarget??campaign?.combat?.selectedEnemy??'first';
   const owlHelpPosition=campaign?.combat?.owl?.position;
   const owlHelpEnemy=activeOwlTarget==='second'?campaign?.combat?.secondEnemy?.position:campaign?.combat?.enemyPosition;
