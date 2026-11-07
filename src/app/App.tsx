@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { createBackup, parseBackup } from '../game/backup';
 import { BookOpen, Compass, Droplet, Map, RefreshCw, Send, Settings, Shield, Users } from 'lucide-react';
-import { addExchange, addNote, addRoll, beginDuel, adjustEquipment, rollDuelInitiative, takeDuelTurnAction, moveDuelToken, tacticalRoute, tacticalOpportunityEnemies, resolveEnemyOpportunity, moveTrainingDummy, resolveTrainingReaction, rollTrainingReaction, advanceDuelTestEnemyTurn, resolveDuelEnemyTurn, beginEnemyShove, beginEnemyGrapple, rollPlayerGrappleSave, beginPlayerGrappleEscape, rollPlayerGrappleEscape, rollPlayerShoveSave, standNighthawk, rollDuelAttack, shoveTrainingEnemy, hideNighthawk, searchForNighthawk, trainingMapSize, isTrainingPillar, canNighthawkHide, addSecondTrainingEnemy, selectTrainingTarget, grappleTrainingEnemy, escapeTrainingGrapple, concludeDuel, quitTrainingEncounter, newCampaign, awardExperience, levelUpRogue, levelUpArcaneTrickster, tricksterCantrips, tricksterSpells, isRitualSpell, castNighthawkSpell, takeNighthawkRest, applyNighthawkDamage, minutesUntilLongRestEligible, advanceToLongRestEligibility, endNighthawkConcentration, spellRequiresConcentration, reconcileNighthawkScores, undoNighthawkScoreReconciliation, xpThresholds, type Campaign } from '../game/campaign';
+import { addExchange, addNote, addRoll, beginDuel, adjustEquipment, rollDuelInitiative, takeDuelTurnAction, moveDuelToken, tacticalRoute, tacticalOpportunityEnemies, enemyHealthDescription, publicCombatText, resolveEnemyOpportunity, moveTrainingDummy, resolveTrainingReaction, rollTrainingReaction, advanceDuelTestEnemyTurn, resolveDuelEnemyTurn, beginEnemyShove, beginEnemyGrapple, rollPlayerGrappleSave, beginPlayerGrappleEscape, rollPlayerGrappleEscape, rollPlayerShoveSave, standNighthawk, rollDuelAttack, shoveTrainingEnemy, hideNighthawk, searchForNighthawk, trainingMapSize, isTrainingPillar, canNighthawkHide, addSecondTrainingEnemy, selectTrainingTarget, grappleTrainingEnemy, escapeTrainingGrapple, concludeDuel, quitTrainingEncounter, newCampaign, awardExperience, levelUpRogue, levelUpArcaneTrickster, tricksterCantrips, tricksterSpells, isRitualSpell, castNighthawkSpell, takeNighthawkRest, applyNighthawkDamage, minutesUntilLongRestEligible, advanceToLongRestEligibility, endNighthawkConcentration, spellRequiresConcentration, reconcileNighthawkScores, undoNighthawkScoreReconciliation, xpThresholds, type Campaign } from '../game/campaign';
 import { localCampaignStorage } from '../game/storage';
 import type { View } from '../game/types';
 import { emptyWorld } from '../game/world';
@@ -79,7 +79,7 @@ function Adventure({ campaign, fullHistory, onToggleHistory }: { campaign: Campa
     </div>}
     {turns.map((entry) => <article key={entry.id} className={entry.kind === 'player' ? 'ml-8 rounded-xl border border-gold/30 bg-gold/10 p-4' : 'mr-3 rounded-xl border border-white/10 bg-panel p-5'}>
       <p className="eyebrow">{entry.kind === 'player' ? 'Nighthawk' : 'Dungeon Master'}</p>
-      <p className="mt-2 whitespace-pre-wrap leading-7 text-parchment/90">{entry.text}</p>
+      <p className="mt-2 whitespace-pre-wrap leading-7 text-parchment/90">{entry.kind==='system'?publicCombatText(entry.text):entry.text}</p>
     </article>)}
     {campaign && <p className="text-xs text-gold/80">Campaign saved on this device · {turns.length ? 'AI Dungeon Master connected' : 'Ready for your first action'}</p>}
     <div ref={endRef}/>
@@ -160,7 +160,7 @@ function Journal({ campaign }: { campaign: Campaign | null }) {
     {!!campaign?.world?.places?.length && <div className="rounded-xl border border-gold/25 bg-panel p-4 space-y-3"><h3 className="font-serif text-lg">Discovered places</h3>{campaign.world.places.map(place=><div key={place.id} className="border-t border-white/10 pt-2"><p className="font-semibold text-gold">{place.name}</p><p className="text-sm text-parchment/75">{place.description}</p>{place.notes.map((note,i)=><p key={i} className="text-xs text-parchment/60">{note}</p>)}</div>)}</div>}
     {campaign ? campaign.journal.filter(entry => entry.kind === 'note' || entry.kind === 'system').map((entry) => <div key={entry.id} className="rounded-xl border border-white/10 bg-panel p-4">
       <p className="text-xs text-gold">{entry.kind === 'note' ? 'Your note' : entry.kind === 'player' ? 'Nighthawk' : entry.kind === 'dm' ? 'Dungeon Master' : 'Campaign event'} · {new Date(entry.createdAt).toLocaleString()}</p>
-      <p className="mt-2 text-sm leading-6">{entry.text}</p>
+      <p className="mt-2 text-sm leading-6">{entry.kind==='system'?publicCombatText(entry.text):entry.text}</p>
     </div>) : <p className="text-parchment/60">Create a campaign to start your journal.</p>}
   </section>;
 }
@@ -583,7 +583,7 @@ export function App() {
       await localCampaignStorage.save(next);
       setCampaign(next);setCampaigns(items=>items.map(item=>item.id===next.id?next:item));
       setPendingCombatAction(null);
-      setNotice(next.journal[next.journal.length-1].text);
+      setNotice(publicCombatText(next.journal[next.journal.length-1].text));
     } catch(error){setNotice('Combat: '+String(error));} finally{setSaving(false);}
   }
   async function confirmGridMove(){
@@ -593,50 +593,50 @@ export function App() {
       const next=moveDuelToken(campaign,gridDestination.x,gridDestination.y);
       await localCampaignStorage.save(next);
       setCampaign(next);setCampaigns(items=>items.map(item=>item.id===next.id?next:item));
-      setNotice(next.journal[next.journal.length-1].text);
+      setNotice(publicCombatText(next.journal[next.journal.length-1].text));
       setGridDestination(null);
     }catch(error){setNotice('Movement: '+String(error));}finally{setSaving(false);}
   }
   async function enemyOpportunityRoll(kind:'hit'|'damage'|'finish'){
     if(!campaign||saving)return;
     setSaving(true);
-    try{const next=resolveEnemyOpportunity(campaign,kind);await localCampaignStorage.save(next);setCampaign(next);setCampaigns(items=>items.map(item=>item.id===next.id?next:item));setNotice(next.journal[next.journal.length-1].text);}
+    try{const next=resolveEnemyOpportunity(campaign,kind);await localCampaignStorage.save(next);setCampaign(next);setCampaigns(items=>items.map(item=>item.id===next.id?next:item));setNotice(publicCombatText(next.journal[next.journal.length-1].text));}
     catch(error){setNotice('Opportunity attack: '+String(error));}finally{setSaving(false);}
   }
   async function performShove(outcome:'prone'|'push') {
     if(!campaign||saving)return;
     setSaving(true);
-    try {const next=shoveTrainingEnemy(campaign,outcome);await localCampaignStorage.save(next);setCampaign(next);setCampaigns(items=>items.map(item=>item.id===next.id?next:item));setPendingCombatAction(null);setNotice(next.journal[next.journal.length-1].text);}
+    try {const next=shoveTrainingEnemy(campaign,outcome);await localCampaignStorage.save(next);setCampaign(next);setCampaigns(items=>items.map(item=>item.id===next.id?next:item));setPendingCombatAction(null);setNotice(publicCombatText(next.journal[next.journal.length-1].text));}
     catch(error){setNotice('Shove: '+String(error));}finally{setSaving(false);}
   }
   async function chooseTrainingTarget(target:'first'|'second') {
     if(!campaign||saving)return;
     setSaving(true);
-    try {const next=selectTrainingTarget(campaign,target);await localCampaignStorage.save(next);setCampaign(next);setCampaigns(items=>items.map(item=>item.id===next.id?next:item));setNotice(next.journal[next.journal.length-1].text);}
+    try {const next=selectTrainingTarget(campaign,target);await localCampaignStorage.save(next);setCampaign(next);setCampaigns(items=>items.map(item=>item.id===next.id?next:item));setNotice(publicCombatText(next.journal[next.journal.length-1].text));}
     catch(error){setNotice('Target: '+String(error));}finally{setSaving(false);}
   }
   async function addSecondDummy() {
     if(!campaign||saving)return;
     setSaving(true);
-    try {const next=addSecondTrainingEnemy(campaign);await localCampaignStorage.save(next);setCampaign(next);setCampaigns(items=>items.map(item=>item.id===next.id?next:item));setNotice(next.journal[next.journal.length-1].text);}
+    try {const next=addSecondTrainingEnemy(campaign);await localCampaignStorage.save(next);setCampaign(next);setCampaigns(items=>items.map(item=>item.id===next.id?next:item));setNotice(publicCombatText(next.journal[next.journal.length-1].text));}
     catch(error){setNotice('Training: '+String(error));}finally{setSaving(false);}
   }
   async function stealthTest(kind:'hide'|'search') {
     if(!campaign||saving)return;
     setSaving(true);
-    try {const next=kind==='hide'?hideNighthawk(campaign):searchForNighthawk(campaign);await localCampaignStorage.save(next);setCampaign(next);setCampaigns(items=>items.map(item=>item.id===next.id?next:item));setNotice(next.journal[next.journal.length-1].text);}
+    try {const next=kind==='hide'?hideNighthawk(campaign):searchForNighthawk(campaign);await localCampaignStorage.save(next);setCampaign(next);setCampaigns(items=>items.map(item=>item.id===next.id?next:item));setNotice(publicCombatText(next.journal[next.journal.length-1].text));}
     catch(error){setNotice('Stealth: '+String(error));}finally{setSaving(false);}
   }
   async function grappleTest(kind:'grapple'|'str'|'dex') {
     if(!campaign||saving)return;
     setSaving(true);
-    try {const next=kind==='grapple'?grappleTrainingEnemy(campaign):escapeTrainingGrapple(campaign,kind);await localCampaignStorage.save(next);setCampaign(next);setCampaigns(items=>items.map(item=>item.id===next.id?next:item));setPendingCombatAction(null);setNotice(next.journal[next.journal.length-1].text);}
+    try {const next=kind==='grapple'?grappleTrainingEnemy(campaign):escapeTrainingGrapple(campaign,kind);await localCampaignStorage.save(next);setCampaign(next);setCampaigns(items=>items.map(item=>item.id===next.id?next:item));setPendingCombatAction(null);setNotice(publicCombatText(next.journal[next.journal.length-1].text));}
     catch(error){setNotice('Grapple: '+String(error));}finally{setSaving(false);}
   }
   async function rollCombatAttack(kind:'hit'|'damage') {
     if(!campaign||saving)return;
     setSaving(true);
-    try {const next=rollDuelAttack(campaign,kind);await localCampaignStorage.save(next);setCampaign(next);setCampaigns(items=>items.map(item=>item.id===next.id?next:item));setNotice(next.journal[next.journal.length-1].text);}
+    try {const next=rollDuelAttack(campaign,kind);await localCampaignStorage.save(next);setCampaign(next);setCampaigns(items=>items.map(item=>item.id===next.id?next:item));setNotice(publicCombatText(next.journal[next.journal.length-1].text));}
     catch(error){setNotice('Combat: '+String(error));}finally{setSaving(false);}
   }
   const [confirmTrainingReset,setConfirmTrainingReset]=useState(false);
@@ -697,7 +697,7 @@ export function App() {
       if(kind==='begin'||kind==='str'||kind==='dex')setSelectedShoveSave(null);
       await localCampaignStorage.save(next);
       setCampaign(next);setCampaigns(items=>items.map(item=>item.id===next.id?next:item));
-      setNotice(next.journal[next.journal.length-1]?.text??'Enemy Shove: choose a saving throw.');
+      setNotice(publicCombatText(next.journal[next.journal.length-1]?.text??'Enemy Shove: choose a saving throw.'));
     }catch(error){setNotice('Prone test: '+String(error));}finally{setSaving(false);}
   }
   const [selectedGrappleRoll,setSelectedGrappleRoll]=useState<'str'|'dex'|null>(null);
@@ -708,7 +708,7 @@ export function App() {
       const next=kind==='begin'?beginEnemyGrapple(campaign):kind==='save'?rollPlayerGrappleSave(campaign,selectedGrappleRoll!):kind==='escape'?beginPlayerGrappleEscape(campaign):rollPlayerGrappleEscape(campaign,selectedGrappleRoll!);
       if(kind==='begin'||kind==='escape'||kind==='save'||kind==='check')setSelectedGrappleRoll(null);
       await localCampaignStorage.save(next);setCampaign(next);setCampaigns(items=>items.map(item=>item.id===next.id?next:item));
-      setNotice(next.journal[next.journal.length-1]?.text??'Choose a roll.');
+      setNotice(publicCombatText(next.journal[next.journal.length-1]?.text??'Choose a roll.'));
     }catch(error){setNotice('Grapple: '+String(error));}finally{setSaving(false);}
   }
   const enemyAutoRunning=useRef(false);
@@ -725,7 +725,7 @@ export function App() {
           if(!turn||turn.status!=='initiative-set'||turn.order?.[turn.turnIndex??0]==='Nighthawk'||turn.opportunity||turn.pendingEnemyShove||turn.pendingEnemyGrapple)break;
           next=resolveDuelEnemyTurn(next);
         }
-        if(!cancelled&&next!==campaign){await localCampaignStorage.save(next);setCampaign(next);setCampaigns(items=>items.map(item=>item.id===next.id?next:item));setNotice(next.journal[next.journal.length-1]?.text??'Enemy turn resolved.');}
+        if(!cancelled&&next!==campaign){await localCampaignStorage.save(next);setCampaign(next);setCampaigns(items=>items.map(item=>item.id===next.id?next:item));setNotice(publicCombatText(next.journal[next.journal.length-1]?.text??'Enemy turn resolved.'));}
       }catch(error){if(!cancelled)setNotice('Enemy turn: '+String(error));}
       finally{enemyAutoRunning.current=false;}
     };
@@ -735,7 +735,7 @@ export function App() {
   async function resolveEnemyTurn() {
     if(!campaign||saving)return;
     setSaving(true);
-    try {const next=resolveDuelEnemyTurn(campaign);await localCampaignStorage.save(next);setCampaign(next);setCampaigns(items=>items.map(item=>item.id===next.id?next:item));setPendingCombatAction(null);setNotice(next.journal[next.journal.length-1].text);}
+    try {const next=resolveDuelEnemyTurn(campaign);await localCampaignStorage.save(next);setCampaign(next);setCampaigns(items=>items.map(item=>item.id===next.id?next:item));setPendingCombatAction(null);setNotice(publicCombatText(next.journal[next.journal.length-1].text));}
     catch(error){setNotice('Enemy turn: '+String(error));}finally{setSaving(false);}
   }
   async function trainingReaction(action:'move'|'attack'|'decline'|'hit'|'damage'|'finish'){
@@ -744,7 +744,7 @@ export function App() {
     try{
       const next=action==='move'?moveTrainingDummy(campaign):action==='attack'||action==='decline'?resolveTrainingReaction(campaign,action):rollTrainingReaction(campaign,action);
       await localCampaignStorage.save(next);setCampaign(next);setCampaigns(items=>items.map(item=>item.id===next.id?next:item));
-      setNotice(next.journal[next.journal.length-1].text);
+      setNotice(publicCombatText(next.journal[next.journal.length-1].text));
     }catch(error){setNotice('Reaction test: '+String(error));}finally{setSaving(false);}
   }
   async function skipEnemyTurnForTest() {
@@ -865,13 +865,15 @@ export function App() {
               const c=campaign.combat!,order=c.order??[],index=c.turnIndex??0;
               const encounterEntries=campaign.journal.slice(c.journalStartIndex??Math.max(0,campaign.journal.length-1-campaign.journal.slice().reverse().findIndex(entry=>entry.kind==='system'&&entry.text.startsWith('Combat begins:'))));
               const actions=encounterEntries.filter(entry=>entry.kind==='system'&&!/^(Nighthawk initiative:|Combat begins:)/.test(entry.text));
-              const actorFor=(message:string)=>message.includes('Training Dummy 2 training attack:')||message.startsWith('Training Dummy 2 ')?'Training Dummy 2':message.includes('Training Dummy training attack:')||message.startsWith('Training Dummy ')?'Training Dummy':message.startsWith('Nighthawk ')||message.startsWith('Nighthawk’s ')||message.startsWith("Nighthawk's ")?'Nighthawk':undefined;
+              const actorFor=(message:string)=>message.startsWith('Nighthawk hits ')||message.startsWith('Nighthawk moves ')||message.startsWith('Damage to ')||message.startsWith('Opportunity attack dagger')||message.startsWith('Shortbow (')||message.startsWith('Dagger (')||message.startsWith('Thrown dagger (')?'Nighthawk':message.includes('Training Dummy 2 training attack:')||message.startsWith('Training Dummy 2 ')?'Training Dummy 2':message.includes('Training Dummy training attack:')||message.startsWith('Training Dummy ')?'Training Dummy':message.startsWith('Nighthawk ')||message.startsWith('Nighthawk’s ')||message.startsWith("Nighthawk's ")?'Nighthawk':undefined;
                const lastByActor:Record<string,string>={};
                for(const entry of actions){const actor=actorFor(entry.text);if(actor)lastByActor[actor]=entry.text;}
-               const concise=(message:string)=>message.length>135?message.slice(0,132).trimEnd()+'…':message;
+               const statusFor=(name:string)=>{const hp=name==='Nighthawk'?(campaign.character?.currentHitPoints??campaign.character?.maxHitPoints??10):name===c.secondEnemy?.name?c.secondEnemy.hp:c.enemyHp??12;const max=name==='Nighthawk'?(campaign.character?.maxHitPoints??10):name===c.secondEnemy?.name?c.secondEnemy.maxHp:c.enemyMaxHp??12;return hp<=0?'Defeated':hp<=max/2?'Bloodied':'';};
+               const conditionsFor=(name:string)=>name==='Nighthawk'?[c.playerProne?'Prone':'',c.playerGrappled?'Grappled':'',c.playerHidden?'Hidden':'']:name===c.secondEnemy?.name?[c.secondEnemy.prone?'Prone':'',c.secondEnemy.grappled?'Grappled':'']:[c.enemyProne?'Prone':'',c.enemyGrappled?'Grappled':''];
+               const concise=(message:string)=>{const safe=publicCombatText(message);return safe.length>115?safe.slice(0,112).trimEnd()+'…':safe;};
                return <div className="space-y-3 text-sm">
-                 <ol className="space-y-1">{order.map((name,i)=><li key={name} className={`rounded-lg border px-3 py-2 ${i===index?'border-gold bg-gold/15':'border-white/15'}`}><div className="flex items-center justify-between gap-2"><span><span className="mr-2 text-parchment/60">{i+1}.</span><strong className={i===index?'text-gold':''}>{name}</strong>{i===index&&<span className="ml-2 text-xs text-gold">CURRENT</span>}</span><span className="tabular-nums">{name==='Nighthawk'?c.playerInitiative:name===c.secondEnemy?.name?c.secondEnemy.initiative:c.enemyInitiative}</span></div><p className="mt-1 pl-5 text-xs leading-relaxed text-parchment/75">{lastByActor[name]?concise(lastByActor[name]):'No action recorded yet'}</p></li>)}</ol>
-                 <details className="border-t border-white/20 pt-3"><summary className="cursor-pointer text-sm font-semibold text-gold">Full encounter history ({actions.length} events)</summary>{actions.length===0?<p className="mt-2 text-parchment/65">No actions taken yet.</p>:<ol className="mt-3 max-h-72 space-y-2 overflow-y-auto">{actions.map(entry=><li key={entry.id} className="rounded-lg border border-white/15 bg-black/10 p-3"><p className="whitespace-pre-wrap break-words">{entry.text}</p></li>)}</ol>}</details>
+                 <ol className="space-y-1">{order.map((name,i)=><li key={name} className={`rounded-lg border px-3 py-2 ${statusFor(name)==='Defeated'?'border-white/10 bg-black/30 opacity-60':i===index?'border-gold bg-gold/15':'border-white/15'}`}><div className="flex items-center justify-between gap-2"><span><span className="mr-2 text-parchment/60">{i+1}.</span><strong className={i===index?'text-gold':''}>{name}</strong>{i===index&&<span className="ml-2 text-xs text-gold">CURRENT</span>}</span><span className="flex items-center gap-2">{statusFor(name)==='Bloodied'&&<Droplet aria-label="Bloodied" className="h-3.5 w-3.5 text-red-400" fill="currentColor"/>}{statusFor(name)==='Defeated'&&<span className="text-xs text-red-300">Defeated</span>}<span className="tabular-nums">{name==='Nighthawk'?c.playerInitiative:name===c.secondEnemy?.name?c.secondEnemy.initiative:c.enemyInitiative}</span></span></div>{conditionsFor(name).filter(Boolean).length>0&&<p className="pl-5 text-xs text-amber-200">{conditionsFor(name).filter(Boolean).join(' · ')}</p>}<p className="mt-1 pl-5 text-xs leading-relaxed text-parchment/75">{lastByActor[name]?concise(lastByActor[name]):'No action recorded yet'}</p></li>)}</ol>
+                 <details className="border-t border-white/20 pt-3"><summary className="cursor-pointer text-sm font-semibold text-gold">Full encounter history ({actions.length} events)</summary>{actions.length===0?<p className="mt-2 text-parchment/65">No actions taken yet.</p>:<ol className="mt-3 max-h-72 space-y-2 overflow-y-auto">{actions.map(entry=><li key={entry.id} className="rounded-lg border border-white/15 bg-black/10 p-3"><p className="whitespace-pre-wrap break-words">{entry.kind==='system'?publicCombatText(entry.text):entry.text}</p></li>)}</ol>}</details>
                </div>;
              })()}
           </div>{campaign.combat.order?.[campaign.combat.turnIndex??0]==='Nighthawk' ? <div className="space-y-3">
@@ -889,12 +891,12 @@ export function App() {
             <p className="text-xs text-parchment/70">Pinch to zoom · Two fingers to pan · One finger scrolls the page · Tap to select · {Math.round(combatZoom*100)}%</p><div ref={combatMapRef} onTouchStart={startCombatTouch} onTouchMove={moveCombatTouch} onTouchEnd={endCombatTouch} onTouchCancel={endCombatTouch} onClickCapture={e=>{if(suppressCombatTap.current){e.stopPropagation();e.preventDefault();suppressCombatTap.current=false;}}} className="h-[340px] max-h-[55vh] overflow-hidden rounded-lg border border-white/20" style={{touchAction:'pan-y'}}><div className="grid gap-0.5 p-1" style={{gridTemplateColumns:`repeat(${trainingMapSize},minmax(0,1fr))`,width:`${trainingMapSize*21*combatZoom}px`,minWidth:'100%'}} role="grid" aria-label="Combat movement grid">
               {Array.from({length:trainingMapSize*trainingMapSize},(_,i)=>{
                 const x=i%trainingMapSize,y=Math.floor(i/trainingMapSize),p=campaign.combat!.playerPosition??{x:2,y:4},e=campaign.combat!.enemyPosition??{x:6,y:4};
-                const own=x===p.x&&y===p.y,enemy=x===e.x&&y===e.y&&(campaign.combat!.enemyHp??12)>0,secondEnemy=!!campaign.combat!.secondEnemy&&campaign.combat!.secondEnemy.hp>0&&x===campaign.combat!.secondEnemy.position.x&&y===campaign.combat!.secondEnemy.position.y,cover=isTrainingPillar(x,y);
+                const own=x===p.x&&y===p.y,firstDown=x===e.x&&y===e.y&&campaign.combat!.enemyHp===0,secondDown=!!campaign.combat!.secondEnemy&&campaign.combat!.secondEnemy.hp===0&&x===campaign.combat!.secondEnemy.position.x&&y===campaign.combat!.secondEnemy.position.y,enemy=x===e.x&&y===e.y&&(campaign.combat!.enemyHp??12)>0,secondEnemy=!!campaign.combat!.secondEnemy&&campaign.combat!.secondEnemy.hp>0&&x===campaign.combat!.secondEnemy.position.x&&y===campaign.combat!.secondEnemy.position.y,cover=isTrainingPillar(x,y);
                 const path=tacticalRoute(campaign.combat!,{x,y});const cost=path?(path.length-1)*5:Infinity;
                 const remaining=(campaign.combat!.movementAllowance??35)-(campaign.combat!.movementUsed??0);
-                const reachable=cost>0&&cost<=remaining&&!campaign.combat!.playerGrappled&&!campaign.combat!.playerProne&&!enemy&&!secondEnemy&&!cover&&!campaign.combat!.steadyAim&&!campaign.combat!.attack;
+                const reachable=cost>0&&cost<=remaining&&!campaign.combat!.playerGrappled&&!campaign.combat!.playerProne&&!enemy&&!secondEnemy&&!firstDown&&!secondDown&&!cover&&!campaign.combat!.steadyAim&&!campaign.combat!.attack;
                 const firstBloodied=enemy&&(campaign.combat!.enemyHp??12)<=(campaign.combat!.enemyMaxHp??12)/2;const secondBloodied=secondEnemy&&campaign.combat!.secondEnemy!.hp<=campaign.combat!.secondEnemy!.maxHp/2;const chosen=gridDestination?.x===x&&gridDestination?.y===y;const onRoute=previewSquares.has(x+','+y);
-                return <button key={i} type="button" role="gridcell" aria-label={own?`Nighthawk${campaign.combat!.playerProne?' (Prone)':''}${campaign.combat!.playerGrappled?' (Grappled)':''}`:secondEnemy?`Select Training Dummy 2${campaign.combat!.secondEnemy?.prone?' (Prone)':''}${campaign.combat!.secondEnemy?.grappled?' (Grappled)':''}`:enemy?`${campaign.combat!.enemyName}${campaign.combat!.enemyProne?' (Prone)':''}${campaign.combat!.enemyGrappled?' (Grappled)':''}`:`Square ${x+1}, ${y+1}; ${cost} feet`} disabled={saving||!!campaign.combat!.playerOpportunity||own||cover||(!enemy&&!secondEnemy&&!reachable)} onClick={()=>{if(enemy)void chooseTrainingTarget('first');else if(secondEnemy)void chooseTrainingTarget('second');else setGridDestination({x,y});}} className={`aspect-square rounded border text-xs font-bold min-w-0 ${own?'bg-gold text-ink border-gold':enemy?(campaign.combat!.selectedEnemy!=='second'?'bg-red-700 text-white border-red-500 ring-2 ring-inset ring-gold':'bg-red-700 text-white border-red-500'):secondEnemy?(campaign.combat!.selectedEnemy==='second'?'bg-red-700 text-white border-red-500 ring-2 ring-inset ring-gold':'bg-red-700 text-white border-red-500'):cover?'bg-stone-500/70 border-stone-300':chosen?'bg-gold/50 border-gold':onRoute?'bg-amber-400/40 border-amber-300':reachable?'bg-emerald-900/40 border-emerald-500/70':'bg-white/5 border-white/15'}`}>{own?<span className="relative inline-flex items-center justify-center w-full h-full"><span>N</span>{campaign.combat!.playerProne&&<span aria-hidden="true" className="absolute -right-0.5 -top-1 rounded bg-amber-300 px-0.5 text-[9px] leading-3 font-extrabold text-black shadow">P</span>}{campaign.combat!.playerGrappled&&<span aria-hidden="true" className="absolute -left-0.5 -top-1 rounded bg-orange-300 px-0.5 text-[9px] leading-3 font-extrabold text-black shadow">G</span>}</span>:enemy?<span className="relative inline-flex items-center justify-center w-full h-full"><span>1</span>{campaign.combat!.enemyProne&&<span aria-hidden="true" className="absolute -right-0.5 -top-1 rounded bg-amber-300 px-0.5 text-[9px] leading-3 font-extrabold text-black shadow">P</span>}{firstBloodied&&<Droplet aria-label="Bloodied" fill="currentColor" className="absolute -bottom-1 -right-1 h-3 w-3 text-red-300 drop-shadow"/>}{campaign.combat!.enemyGrappled&&<span aria-hidden="true" className="absolute -left-0.5 -top-1 rounded bg-orange-300 px-0.5 text-[9px] leading-3 font-extrabold text-black shadow">G</span>}</span>:secondEnemy?<span className="relative inline-flex h-full w-full items-center justify-center"><span>2</span>{campaign.combat!.secondEnemy?.prone&&<span className="absolute -right-0.5 -top-1 rounded bg-amber-300 px-0.5 text-[9px] font-bold text-black">P</span>}{secondBloodied&&<Droplet aria-label="Bloodied" fill="currentColor" className="absolute -bottom-1 -right-1 h-3 w-3 text-red-300 drop-shadow"/>}{campaign.combat!.secondEnemy?.grappled&&<span className="absolute -left-0.5 -top-1 rounded bg-orange-300 px-0.5 text-[9px] font-bold text-black">G</span>}</span>:chosen?'✓':onRoute?'·':secondEnemy?'2':cover?'#':''}</button>;
+                return <button key={i} type="button" role="gridcell" aria-label={own?`Nighthawk${campaign.combat!.playerProne?' (Prone)':''}${campaign.combat!.playerGrappled?' (Grappled)':''}`:secondEnemy?`Select Training Dummy 2${campaign.combat!.secondEnemy?.prone?' (Prone)':''}${campaign.combat!.secondEnemy?.grappled?' (Grappled)':''}`:enemy?`${campaign.combat!.enemyName}${campaign.combat!.enemyProne?' (Prone)':''}${campaign.combat!.enemyGrappled?' (Grappled)':''}`:`Square ${x+1}, ${y+1}; ${cost} feet`} disabled={saving||!!campaign.combat!.playerOpportunity||own||cover||firstDown||secondDown||(!enemy&&!secondEnemy&&!reachable)} onClick={()=>{if(enemy)void chooseTrainingTarget('first');else if(secondEnemy)void chooseTrainingTarget('second');else setGridDestination({x,y});}} className={`aspect-square rounded border text-xs font-bold min-w-0 ${own?'bg-gold text-ink border-gold':firstDown||secondDown?'bg-stone-800 text-stone-400 border-stone-600 opacity-60':enemy?(campaign.combat!.selectedEnemy!=='second'?'bg-red-700 text-white border-red-500 ring-2 ring-inset ring-gold':'bg-red-700 text-white border-red-500'):secondEnemy?(campaign.combat!.selectedEnemy==='second'?'bg-red-700 text-white border-red-500 ring-2 ring-inset ring-gold':'bg-red-700 text-white border-red-500'):cover?'bg-stone-500/70 border-stone-300':chosen?'bg-gold/50 border-gold':onRoute?'bg-amber-400/40 border-amber-300':reachable?'bg-emerald-900/40 border-emerald-500/70':'bg-white/5 border-white/15'}`}>{own?<span className="relative inline-flex items-center justify-center w-full h-full"><span>N</span>{campaign.combat!.playerProne&&<span aria-hidden="true" className="absolute -right-0.5 -top-1 rounded bg-amber-300 px-0.5 text-[9px] leading-3 font-extrabold text-black shadow">P</span>}{campaign.combat!.playerGrappled&&<span aria-hidden="true" className="absolute -left-0.5 -top-1 rounded bg-orange-300 px-0.5 text-[9px] leading-3 font-extrabold text-black shadow">G</span>}</span>:firstDown||secondDown?<span aria-label="Defeated" className="text-stone-300 line-through">{firstDown?'1':'2'}</span>:enemy?<span className="relative inline-flex items-center justify-center w-full h-full"><span>1</span>{campaign.combat!.enemyProne&&<span aria-hidden="true" className="absolute -right-0.5 -top-1 rounded bg-amber-300 px-0.5 text-[9px] leading-3 font-extrabold text-black shadow">P</span>}{firstBloodied&&<Droplet aria-label="Bloodied" fill="currentColor" className="absolute -bottom-1 -right-1 h-3 w-3 text-red-300 drop-shadow"/>}{campaign.combat!.enemyGrappled&&<span aria-hidden="true" className="absolute -left-0.5 -top-1 rounded bg-orange-300 px-0.5 text-[9px] leading-3 font-extrabold text-black shadow">G</span>}</span>:secondEnemy?<span className="relative inline-flex h-full w-full items-center justify-center"><span>2</span>{campaign.combat!.secondEnemy?.prone&&<span className="absolute -right-0.5 -top-1 rounded bg-amber-300 px-0.5 text-[9px] font-bold text-black">P</span>}{secondBloodied&&<Droplet aria-label="Bloodied" fill="currentColor" className="absolute -bottom-1 -right-1 h-3 w-3 text-red-300 drop-shadow"/>}{campaign.combat!.secondEnemy?.grappled&&<span className="absolute -left-0.5 -top-1 rounded bg-orange-300 px-0.5 text-[9px] font-bold text-black">G</span>}</span>:chosen?'✓':onRoute?'·':secondEnemy?'2':cover?'#':''}</button>;
               })}
             </div></div>
             {campaign.combat.playerOpportunity&&<div className="rounded-lg border border-gold p-3 space-y-2 text-sm">
@@ -914,7 +916,7 @@ export function App() {
           </div>
           {campaign.combat.steadyAim && <p className="rounded-lg border border-gold/60 bg-gold/10 p-3 text-sm">Steady Aim active: roll two d20s on your next attack this turn and use the higher result. Sneak Attack applies on a qualifying hit. You cannot move this turn.</p>}
           {campaign.combat.attack && <div className="space-y-2 rounded-lg border border-gold/60 p-3">
-            <p className="font-semibold">{campaign.combat.attack.weapon==='shortbow'?'Shortbow attack':campaign.combat.attack.thrown?'Thrown dagger attack':'Dagger attack'} · Opponent HP: {campaign.combat.enemyHp??12}/{campaign.combat.enemyMaxHp??12}</p>
+            <p className="font-semibold">{campaign.combat.attack.weapon==='shortbow'?'Shortbow attack':campaign.combat.attack.thrown?'Thrown dagger attack':'Dagger attack'} · Target: {campaign.combat.selectedEnemy==='second'&&campaign.combat.secondEnemy?campaign.combat.secondEnemy.name:campaign.combat.enemyName} · {enemyHealthDescription(campaign.combat.selectedEnemy==='second'&&campaign.combat.secondEnemy?campaign.combat.secondEnemy.hp:campaign.combat.enemyHp??12,campaign.combat.selectedEnemy==='second'&&campaign.combat.secondEnemy?campaign.combat.secondEnemy.maxHp:campaign.combat.enemyMaxHp??12)}</p>
             <p className="text-sm">{campaign.combat.attack.weapon==='shortbow'?'Shortbow (1d6 piercing, 80/320 ft)':campaign.combat.attack.thrown?'Thrown dagger (1d4 piercing, 20/60 ft)':'Dagger (1d4 piercing, melee)'}: +{(abilityModifier((campaign.character??prototypeNighthawk).scores.dex)+(campaign.character??prototypeNighthawk).proficiencyBonus)} to hit (DEX + proficiency) vs temporary opponent AC 12; 1d4 + {abilityModifier((campaign.character??prototypeNighthawk).scores.dex)} piercing.</p>
             {campaign.combat.attack.d20!==undefined && <div className="rounded-lg border border-white/20 p-2 text-sm space-y-1">
               <p className="font-semibold">{campaign.combat.attack.advantage?'Advantage — higher of two d20s':campaign.combat.attack.disadvantage?'Disadvantage — lower of two d20s':'Normal attack — one d20'}</p>
