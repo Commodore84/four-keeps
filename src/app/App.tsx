@@ -568,11 +568,11 @@ export function App() {
     combatGesture.current={points,startDistance:combatDistance(points),startZoom:combatZoom,startScrollX:el?.scrollLeft??0,startScrollY:el?.scrollTop??0,startMidX:mid.x,startMidY:mid.y,moved:true};
   }
 
+  const [activeCombatToken,setActiveCombatToken]=useState<'nighthawk'|'owl'>('nighthawk');
   const previewRoute=activeCombatToken==='owl'?null:campaign?.combat&&gridDestination?tacticalRoute(campaign.combat,gridDestination):null;
   const previewCost=activeCombatToken==='owl'&&campaign?.combat?.owl&&gridDestination?5*Math.max(Math.abs(gridDestination.x-campaign.combat.owl.position.x),Math.abs(gridDestination.y-campaign.combat.owl.position.y)):previewRoute?(previewRoute.length-1)*5:0;
   const previewAttacks=activeCombatToken==='owl'?[]:campaign?.combat&&previewRoute?tacticalOpportunityEnemies(campaign.combat,previewRoute):[];
   const previewSquares=new Set((previewRoute??[]).slice(1,-1).map(p=>p.x+','+p.y));
-  const [activeCombatToken,setActiveCombatToken]=useState<'nighthawk'|'owl'>('nighthawk');
   const [selectedWeapon,setSelectedWeapon]=useState<'dagger'|'throw-dagger'|'shortbow'|null>(null);
   const [attackChoice,setAttackChoice]=useState<'weapon'|'shove'|'grapple'>('weapon');
   const [pendingCombatAction,setPendingCombatAction]=useState<'hide'|'attack'|'dodge'|'steady-aim'|'cunning-dash'|'cunning-disengage'|'disengage'|'dash'|'end'|null>(null);
