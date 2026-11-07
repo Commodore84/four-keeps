@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { createBackup, parseBackup } from '../game/backup';
 import { BookOpen, Compass, Droplet, Map, RefreshCw, Send, Settings, Shield, Users } from 'lucide-react';
-import { addExchange, addNote, addRoll, beginDuel, adjustEquipment, rollDuelInitiative, takeDuelTurnAction, moveDuelToken, tacticalRoute, tacticalOpportunityEnemies, enemyHealthDescription, publicCombatText, resolveEnemyOpportunity, moveTrainingDummy, resolveTrainingReaction, rollTrainingReaction, advanceDuelTestEnemyTurn, resolveDuelEnemyTurn, beginEnemyShove, beginEnemyGrapple, rollPlayerGrappleSave, beginPlayerGrappleEscape, rollPlayerGrappleEscape, rollPlayerShoveSave, standNighthawk, rollDuelAttack, shoveTrainingEnemy, hideNighthawk, searchForNighthawk, trainingMapSize, isTrainingPillar, canNighthawkHide, addSecondTrainingEnemy, selectTrainingTarget, grappleTrainingEnemy, escapeTrainingGrapple, concludeDuel, quitTrainingEncounter, newCampaign, awardExperience, levelUpRogue, levelUpArcaneTrickster, tricksterCantrips, tricksterSpells, isRitualSpell, castNighthawkSpell, takeNighthawkRest, applyNighthawkDamage, minutesUntilLongRestEligible, advanceToLongRestEligibility, endNighthawkConcentration, spellRequiresConcentration, reconcileNighthawkScores, undoNighthawkScoreReconciliation, xpThresholds, type Campaign } from '../game/campaign';
+import { addExchange, addNote, addRoll, beginDuel, adjustEquipment, rollDuelInitiative, takeDuelTurnAction, moveDuelToken, tacticalRoute, tacticalOpportunityEnemies, enemyHealthDescription, publicCombatText, resolveEnemyOpportunity, moveTrainingDummy, resolveTrainingReaction, rollTrainingReaction, advanceDuelTestEnemyTurn, resolveDuelEnemyTurn, beginEnemyShove, beginEnemyGrapple, rollPlayerGrappleSave, beginPlayerGrappleEscape, rollPlayerGrappleEscape, rollPlayerShoveSave, standNighthawk, rollDuelAttack, shoveTrainingEnemy, hideNighthawk, searchForNighthawk, trainingMapSize, isTrainingPillar, canNighthawkHide, addSecondTrainingEnemy, selectTrainingTarget, grappleTrainingEnemy, escapeTrainingGrapple, concludeDuel, quitTrainingEncounter, replenishTrainingEquipment, newCampaign, awardExperience, levelUpRogue, levelUpArcaneTrickster, tricksterCantrips, tricksterSpells, isRitualSpell, castNighthawkSpell, takeNighthawkRest, applyNighthawkDamage, minutesUntilLongRestEligible, advanceToLongRestEligibility, endNighthawkConcentration, spellRequiresConcentration, reconcileNighthawkScores, undoNighthawkScoreReconciliation, xpThresholds, type Campaign } from '../game/campaign';
 import { localCampaignStorage } from '../game/storage';
 import type { View } from '../game/types';
 import { emptyWorld } from '../game/world';
@@ -651,6 +651,12 @@ export function App() {
       setNotice('Encounter training ended. Nighthawk is fully healed; dummy reset. Start a new encounter to test again.');
     }catch(error){setNotice('Training reset: '+String(error));}finally{setSaving(false);}
   }
+  async function resupplyTraining(){
+    if(!campaign||saving)return;
+    setSaving(true);
+    try{const next=replenishTrainingEquipment(campaign);await localCampaignStorage.save(next);setCampaign(next);setCampaigns(items=>items.map(item=>item.id===next.id?next:item));setNotice('Practice equipment restored: 20 arrows and 2 daggers.');}
+    catch(error){setNotice('Resupply: '+String(error));}finally{setSaving(false);}
+  }
   async function finishDefeatedDuel() {
     if(!campaign||saving||(campaign.combat?.enemyHp!==0&&campaign.combat?.outcome!=='player-defeated'))return;
     const opponent=campaign.combat.enemyName;
@@ -885,6 +891,7 @@ export function App() {
           {campaign.combat.playerHidden&&<p role="status" className="rounded-lg border border-emerald-400 p-3 font-semibold">Hidden · Enemy cannot see Nighthawk · Next attack has advantage while unseen</p>}
           {campaign.combat.hideResult&&<p role="status" className="rounded-lg border border-gold p-3 text-sm">{campaign.combat.hideResult}</p>}
           {campaign.combat.enemySearchResult&&<p role="status" className="rounded-lg border border-gold p-3 text-sm">{campaign.combat.enemySearchResult}</p>}
+          {campaign.combat.enemyName==='Training Dummy'&&<button type="button" disabled={saving} className="rounded-lg border border-gold/60 px-3 py-2 text-xs text-gold" onClick={()=>void resupplyTraining()}>Refill practice arrows & daggers (20 / 2)</button>}
           <p className="text-sm font-semibold">Your turn · Daggers: {campaign.combat.daggersAvailable??2} ({campaign.combat.daggersThrown??0} thrown) · Arrows: {campaign.combat.arrowsRemaining??20} · Movement remaining: {campaign.combat.playerGrappled?0:Math.max(0,(campaign.combat.movementAllowance??35)-(campaign.combat.movementUsed??0))} ft · Action: {campaign.combat.actionUsed?'used':'available'}</p>
           <div className="rounded-xl border border-white/20 p-2 space-y-2">
             <p className="text-xs text-parchment/70">Tactical grid · Tap 1 or 2 to select your attack target; tap an empty square to move. Selected target has a gold border.</p><p className="text-sm font-semibold">Target: {campaign.combat.selectedEnemy==='second'&&campaign.combat.secondEnemy?campaign.combat.secondEnemy.name:campaign.combat.enemyName} · {(()=>{const c=campaign.combat!,second=c.selectedEnemy==='second'&&!!c.secondEnemy;const hp=second?c.secondEnemy!.hp:c.enemyHp??12,max=second?c.secondEnemy!.maxHp:c.enemyMaxHp??12;return hp<=0?'Defeated':hp<=max/2?'Bloodied':'Standing';})()} {(()=>{const c=campaign.combat!,second=c.selectedEnemy==='second'&&!!c.secondEnemy;return <span className="inline-flex gap-2 text-xs text-parchment/75">{(second?c.secondEnemy!.prone:c.enemyProne)&&<span>Prone</span>}{(second?c.secondEnemy!.grappled:c.enemyGrappled)&&<span>Grappled</span>}</span>;})()}</p>
