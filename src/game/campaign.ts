@@ -353,7 +353,7 @@ export function searchForNighthawk(campaign:Campaign):Campaign {
  const turn=nextActiveTurn(c);
  const followingIndex=turn.index;
  const nextRound=turn.round;
- return {...campaign,combat:{...c,playerHidden:!found,enemySearchResult:detail,turnIndex:followingIndex,round:nextRound,owl:c.order[followingIndex]==='Nighthawk'?refreshOwlForNighthawkTurn({...c,round:nextRound}):c.owl,movementUsed:0,actionUsed:false,bonusActionUsed:false,attack:undefined},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:detail,createdAt:now}]};
+ return {...campaign,combat:{...c,playerHidden:!found,enemySearchResult:detail,turnIndex:followingIndex,round:nextRound,owl:c.order?.[followingIndex]==='Nighthawk'?refreshOwlForNighthawkTurn({...c,round:nextRound}):c.owl,movementUsed:0,actionUsed:false,bonusActionUsed:false,attack:undefined},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:detail,createdAt:now}]};
 }
 export type TacticalPoint={x:number;y:number};
 export function tacticalRoute(combat:NonNullable<Campaign['combat']>,destination:TacticalPoint):TacticalPoint[]|null{
