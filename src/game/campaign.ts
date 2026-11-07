@@ -269,6 +269,10 @@ function nextActiveTurn(c:NonNullable<Campaign['combat']>):{index:number;round:n
  }
  return {index,round};
 }
+function refreshOwlForNighthawkTurn(c:NonNullable<Campaign['combat']>):NonNullable<Campaign['combat']>['owl'] {
+ if(!c.owl)return undefined;
+ return {...c.owl,movementUsed:0,actionUsed:false,helpTarget:c.owl.helpRound!==undefined&&c.owl.helpRound<c.round?undefined:c.owl.helpTarget,helpRound:c.owl.helpRound!==undefined&&c.owl.helpRound<c.round?undefined:c.owl.helpRound};
+}
 export function moveOwl(campaign:Campaign,x:number,y:number):Campaign {
  const c=campaign.combat,owl=c?.owl;
  if(!c||c.status!=='initiative-set'||c.order?.[c.turnIndex??0]!=='Nighthawk'||!owl)throw Error('Owl can move only during Nighthawk’s turn.');
@@ -349,7 +353,7 @@ export function searchForNighthawk(campaign:Campaign):Campaign {
  const turn=nextActiveTurn(c);
  const followingIndex=turn.index;
  const nextRound=turn.round;
- return {...campaign,combat:{...c,playerHidden:!found,enemySearchResult:detail,turnIndex:followingIndex,round:nextRound,movementUsed:0,actionUsed:false,bonusActionUsed:false,attack:undefined},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:detail,createdAt:now}]};
+ return {...campaign,combat:{...c,playerHidden:!found,enemySearchResult:detail,turnIndex:followingIndex,round:nextRound,owl:c.order[followingIndex]==='Nighthawk'?refreshOwlForNighthawkTurn({...c,round:nextRound}):c.owl,movementUsed:0,actionUsed:false,bonusActionUsed:false,attack:undefined},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:detail,createdAt:now}]};
 }
 export type TacticalPoint={x:number;y:number};
 export function tacticalRoute(combat:NonNullable<Campaign['combat']>,destination:TacticalPoint):TacticalPoint[]|null{
@@ -473,7 +477,7 @@ export function takeDuelTurnAction(campaign:Campaign, action:'move'|'attack'|'th
    next.movementUsed=Math.min(allowance,(next.movementUsed??0)+5);
    description='Nighthawk moves 5 feet ('+next.movementUsed+'/'+allowance+' feet).';
  }else if(action==='end'){
-   const turn=nextActiveTurn(combat);next.turnIndex=turn.index;next.round=turn.round;next.lastShoveSave=undefined;next.lastPlayerShoveSave=undefined;next.lastGrappleResult=undefined;next.lastPlayerGrappleResult=undefined;next.movementUsed=0;next.actionUsed=false;next.bonusActionUsed=false;next.attack=undefined;next.steadyAim=false;next.movementAllowance=speed;next.disengaged=false;next.sneakAttackUsedThisTurn=false;if(next.owl&&next.order?.[turn.index]==='Nighthawk'){next.owl={...next.owl,movementUsed:0,actionUsed:false,helpTarget:next.owl.helpRound!==undefined&&next.owl.helpRound<turn.round?undefined:next.owl.helpTarget};}
+   const turn=nextActiveTurn(combat);next.turnIndex=turn.index;next.round=turn.round;next.lastShoveSave=undefined;next.lastPlayerShoveSave=undefined;next.lastGrappleResult=undefined;next.lastPlayerGrappleResult=undefined;next.movementUsed=0;next.actionUsed=false;next.bonusActionUsed=false;next.attack=undefined;next.steadyAim=false;next.movementAllowance=speed;next.disengaged=false;next.sneakAttackUsedThisTurn=false;if(next.order?.[turn.index]==='Nighthawk')next.owl=refreshOwlForNighthawkTurn(next);
    description='Nighthawk ends their turn. '+combat.order[next.turnIndex]+' is next.';
  }else {
    if(next.actionUsed)throw Error('Action already used this turn.');
@@ -517,7 +521,7 @@ export function rollPlayerGrappleSave(campaign:Campaign,ability:'str'|'dex'):Cam
  const detail='Enemy Grapple: '+(ability==='str'?'Strength':'Dexterity')+' save d20 '+roll+' '+(modifier>=0?'+ ':'- ')+Math.abs(modifier)+' = '+total+' vs DC 12. '+(passed?'Success: not Grappled.':'Failure: Grappled (Speed 0).');
  const now=new Date().toISOString();
  const nextRound=c.order[0]==='Nighthawk'?c.round+1:c.round;
- return {...campaign,combat:{...c,pendingEnemyGrapple:false,playerGrappled:!passed,lastPlayerGrappleResult:detail,turnIndex:c.order.indexOf('Nighthawk'),round:nextRound,movementUsed:0,actionUsed:false,bonusActionUsed:false,attack:undefined},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:detail,createdAt:now}]};
+ return {...campaign,combat:{...c,pendingEnemyGrapple:false,playerGrappled:!passed,lastPlayerGrappleResult:detail,turnIndex:c.order.indexOf('Nighthawk'),round:nextRound,owl:refreshOwlForNighthawkTurn({...c,round:nextRound}),movementUsed:0,actionUsed:false,bonusActionUsed:false,attack:undefined},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:detail,createdAt:now}]};
 }
 export function beginPlayerGrappleEscape(campaign:Campaign):Campaign {
  const c=campaign.combat;
@@ -556,7 +560,7 @@ export function rollPlayerShoveSave(campaign:Campaign,ability:'str'|'dex'):Campa
  const detail='Enemy Shove: Nighthawk '+(ability==='str'?'Strength':'Dexterity')+' save d20 '+roll+' '+(modifier>=0?'+ ':'- ')+Math.abs(modifier)+' = '+total+' vs DC '+dc+'. '+(passed?'Success: remains standing.':'Failure: knocked Prone.');
  const now=new Date().toISOString();
  const nextRound=c.order[0]==='Nighthawk'?c.round+1:c.round;
- return {...campaign,combat:{...c,pendingEnemyShove:false,playerProne:passed?!!c.playerProne:true,lastPlayerShoveSave:detail,turnIndex:c.order.indexOf('Nighthawk'),round:nextRound,movementUsed:0,actionUsed:false,bonusActionUsed:false,attack:undefined,enemyProne:false},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:detail,createdAt:now}]};
+ return {...campaign,combat:{...c,pendingEnemyShove:false,playerProne:passed?!!c.playerProne:true,lastPlayerShoveSave:detail,turnIndex:c.order.indexOf('Nighthawk'),round:nextRound,owl:refreshOwlForNighthawkTurn({...c,round:nextRound}),movementUsed:0,actionUsed:false,bonusActionUsed:false,attack:undefined,enemyProne:false},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:detail,createdAt:now}]};
 }
 export function standNighthawk(campaign:Campaign):Campaign {
  const c=campaign.combat;
@@ -627,7 +631,8 @@ export function resolveDuelEnemyTurn(campaign:Campaign):Campaign {
  const turn=nextActiveTurn(combat);
  const followingIndex=turn.index;
  const nextRound=turn.round;
- const nextCombat={...combat,owl:owlDestroyed?undefined:targetOwl&&combat.owl?{...combat.owl,hp:owlAfter??combat.owl.hp}:combat.owl,enemyPosition:secondEnemyTurn?combat.enemyPosition:position,secondEnemy:secondEnemyTurn&&combat.secondEnemy?{...combat.secondEnemy,position,prone:false}:combat.secondEnemy,enemyProne:secondEnemyTurn?combat.enemyProne:false,turnIndex:followingIndex,round:nextRound,reactionUsed:false,enemyReactionUsed:secondEnemyTurn?combat.enemyReactionUsed:false,secondEnemyReactionUsed:secondEnemyTurn?false:combat.secondEnemyReactionUsed,movementUsed:0,actionUsed:false,bonusActionUsed:false,lastAction:undefined,attack:undefined,enemyLastTurn:detail,status:defeated?'completed' as const:combat.status,outcome:defeated?'player-defeated' as const:combat.outcome};
+ const nextOwl=owlDestroyed?undefined:targetOwl&&combat.owl?{...combat.owl,hp:owlAfter??combat.owl.hp}:combat.owl;
+ const nextCombat={...combat,owl:followingIndex!==undefined&&combat.order[followingIndex]==='Nighthawk'?refreshOwlForNighthawkTurn({...combat,owl:nextOwl,round:nextRound}):nextOwl,enemyPosition:secondEnemyTurn?combat.enemyPosition:position,secondEnemy:secondEnemyTurn&&combat.secondEnemy?{...combat.secondEnemy,position,prone:false}:combat.secondEnemy,enemyProne:secondEnemyTurn?combat.enemyProne:false,turnIndex:followingIndex,round:nextRound,reactionUsed:false,enemyReactionUsed:secondEnemyTurn?combat.enemyReactionUsed:false,secondEnemyReactionUsed:secondEnemyTurn?false:combat.secondEnemyReactionUsed,movementUsed:0,actionUsed:false,bonusActionUsed:false,lastAction:undefined,attack:undefined,enemyLastTurn:detail,status:defeated?'completed' as const:combat.status,outcome:defeated?'player-defeated' as const:combat.outcome};
  const now=new Date().toISOString();
  return {...campaign,familiar:owlDestroyed&&campaign.familiar?{...campaign.familiar,status:'destroyed' as const,hp:0}:campaign.familiar,character:{...character,currentHitPoints:after},combat:nextCombat,updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:detail,createdAt:now}]};
 }
