@@ -956,7 +956,7 @@ export function App() {
               {campaign.combat.sneakAttackEligible&&<p className="text-emerald-300">Sneak Attack eligible · automatically included.</p>}
               <button type="button" disabled={saving} className="w-full rounded-lg bg-gold p-3 font-semibold text-ink" onClick={()=>void rollCombatAttack('damage')}>{campaign.combat.sneakAttackEligible?'Roll Damage + Sneak Attack':'Roll Damage'}</button>
             </div>}
-            {campaign.combat.attack.phase==='resolved' && <button type="button" disabled={saving} className="w-full rounded-lg bg-gold p-3 font-semibold text-ink" onClick={()=>void combatAction('end')}>Finish turn</button>}
+            {campaign.combat.attack.phase==='resolved' && <p className="text-xs text-parchment/75">Attack resolved. Continue with any remaining movement or Bonus Action below, or use End Turn when ready.</p>}
           </div>}
           {campaign.combat.lastAction && <p className="rounded-lg border border-gold/60 bg-gold/10 p-3 text-sm">Last action: <strong>{campaign.combat.lastAction}</strong> (confirmed)</p>}
           {activeCombatToken==='nighthawk'&&<p className="text-xs text-parchment/75" role="status">Action: {campaign.combat!.actionUsed||!!campaign.combat!.attack?'Spent':'Available'} · Bonus Action: {campaign.combat!.bonusActionUsed?'Spent':'Available'}</p>}
