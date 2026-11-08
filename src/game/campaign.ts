@@ -387,7 +387,7 @@ export function moveDuelToken(campaign:Campaign,x:number,y:number):Campaign {
  const combat=campaign.combat;
  if(!combat||combat.status!=='initiative-set'||combat.order?.[combat.turnIndex??0]!=='Nighthawk')throw Error('You can move only on your turn.');
  if(combat.playerOpportunity)throw Error('Resolve the enemy opportunity attack first.');
- if(combat.steadyAim||combat.attack)throw Error('Movement is unavailable after Steady Aim or while resolving an attack.');
+ if(combat.steadyAim||combat.attack&&combat.attack.phase!=='resolved')throw Error('Movement is unavailable after Steady Aim or while an attack roll is unresolved.');
  if(combat.playerGrappled)throw Error('Grappled: Speed 0. Escape before moving.');
  if(combat.playerProne)throw Error('Stand up first to use normal movement.');
  if(!Number.isInteger(x)||!Number.isInteger(y)||x<0||x>=trainingMapSize||y<0||y>=trainingMapSize)throw Error('Destination is outside the map.');
