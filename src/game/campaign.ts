@@ -869,9 +869,9 @@ export function resolveDuelEnemyTurn(campaign:Campaign):Campaign {
  const concentrationDC=Math.max(10,Math.floor(damage/2));
  const concentrationFailed=concentrationRoll!==undefined&&concentrationRoll+concentrationBonus<concentrationDC;
  const concentrationMessage=concentrationRoll===undefined?'':' Concentration: '+concentrationRoll+' + '+concentrationBonus+' vs DC '+concentrationDC+(concentrationFailed?'; concentration broken.':'; maintained.');
- const finalCombat=concentrationFailed&&campaign.concentration?.spell==='Tasha’s Hideous Laughter'?{...nextCombat,laughterTarget:undefined}:nextCombat;
+ const finalCombat=concentrationFailed&&campaign.concentration?.spell==='Tasha’s Hideous Laughter'?{...nextCombat,laughterTarget:undefined}:concentrationFailed&&campaign.concentration?.spell==='Readied Mind Sliver'?{...nextCombat,readiedAction:undefined}:nextCombat;
  const now=new Date().toISOString();
- return {...campaign,concentration:concentrationFailed?undefined:campaign.concentration,spellEffects:concentrationFailed?(campaign.spellEffects??[]).filter(e=>e.spell!==campaign.concentration?.spell||e.status!=='active'):campaign.spellEffects,familiar:owlDestroyed&&campaign.familiar?{...campaign.familiar,status:'destroyed' as const,hp:0}:campaign.familiar,character:{...character,currentHitPoints:after},combat:finalCombat,updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:detail+concentrationMessage,createdAt:now}]};
+ return {...campaign,concentration:concentrationFailed||!finalCombat.readiedAction&&campaign.concentration?.spell==='Readied Mind Sliver'?undefined:campaign.concentration,spellEffects:concentrationFailed?(campaign.spellEffects??[]).filter(e=>e.spell!==campaign.concentration?.spell||e.status!=='active'):campaign.spellEffects,familiar:owlDestroyed&&campaign.familiar?{...campaign.familiar,status:'destroyed' as const,hp:0}:campaign.familiar,character:{...character,currentHitPoints:after},combat:finalCombat,updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:detail+concentrationMessage,createdAt:now}]};
 }
 
 export function moveTrainingDummy(campaign:Campaign):Campaign {
