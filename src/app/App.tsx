@@ -952,7 +952,7 @@ export function App() {
           {campaign.combat.lastAction==='Dodge'&&<span className="rounded border border-sky-400/60 px-2 py-0.5 text-sky-200">Dodging</span>}
           {campaign.concentration&&<span className="rounded border border-violet-400/60 px-2 py-0.5 text-violet-200">Concentrating: {campaign.concentration.spell}</span>}
           </span>}</span><span>{campaign?.location ?? 'Frontier Village'}</span></div>
-        {campaign?.combat?.status==='initiative-set'&&<div className="mt-2 flex flex-wrap items-center gap-2 text-xs" aria-label="Selected combat target">
+        {campaign?.combat?.status==='initiative-set'&&campaign.combat.selectedEnemy&&<div className="mt-2 flex flex-wrap items-center gap-2 text-xs" aria-label="Selected combat target">
           <span className="text-parchment/55">TARGET</span>
           <strong className="text-parchment">{campaign.combat.selectedEnemy==='second'&&campaign.combat.secondEnemy?campaign.combat.secondEnemy.name:campaign.combat.enemyName}</strong>
           <span className="text-parchment/70">{(()=>{const c=campaign.combat!,second=c.selectedEnemy==='second'&&!!c.secondEnemy;const hp=second?c.secondEnemy!.hp:c.enemyHp??12,max=second?c.secondEnemy!.maxHp:c.enemyMaxHp??12;return hp<=0?'Defeated':hp<=max/2?'Bloodied':'Standing';})()}</span>
