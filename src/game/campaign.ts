@@ -804,7 +804,7 @@ export function resolveDuelEnemyTurn(campaign:Campaign):Campaign {
   const saved=resolveLaughterRepeatSave(campaign);
   const now=new Date().toISOString();const turn=nextActiveTurn(saved.combat!);
   const nextCombat={...saved.combat!,readiedAction:saved.combat!.order?.[turn.index]==='Nighthawk'?undefined:saved.combat!.readiedAction,turnIndex:turn.index,round:turn.round,movementUsed:0,movementAllowance:35,actionUsed:false,bonusActionUsed:false,steadyAim:false,disengaged:false,spellSlotExpendedThisTurn:false,lastAction:undefined,attack:undefined,enemyLastTurn:'Incapacitated by Tasha’s Hideous Laughter; cannot act.'};
-  return {...saved,combat:nextCombat,updatedAt:now,journal:[...saved.journal,{id:crypto.randomUUID(),kind:'system',text:nextCombat.enemyLastTurn,createdAt:now}]};
+  return {...saved,concentration:nextCombat.readiedAction?saved.concentration:saved.concentration?.spell==='Readied Mind Sliver'?undefined:saved.concentration,combat:nextCombat,updatedAt:now,journal:[...saved.journal,{id:crypto.randomUUID(),kind:'system',text:nextCombat.enemyLastTurn,createdAt:now}]};
  }
  if(combat.pendingEnemyShove||combat.pendingEnemyGrapple)throw Error('Resolve the pending Shove or Grapple save first.');
  const currentName=combat.order[combat.turnIndex??0];
