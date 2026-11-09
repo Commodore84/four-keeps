@@ -521,7 +521,7 @@ export function rollPlayerGrappleSave(campaign:Campaign,ability:'str'|'dex'):Cam
  const detail='Enemy Grapple: '+(ability==='str'?'Strength':'Dexterity')+' save d20 '+roll+' '+(modifier>=0?'+ ':'- ')+Math.abs(modifier)+' = '+total+' vs DC 12. '+(passed?'Success: not Grappled.':'Failure: Grappled (Speed 0).');
  const now=new Date().toISOString();
  const nextRound=c.order[0]==='Nighthawk'?c.round+1:c.round;
- return {...campaign,combat:{...c,pendingEnemyGrapple:false,playerGrappled:!passed,lastPlayerGrappleResult:detail,turnIndex:c.order.indexOf('Nighthawk'),round:nextRound,owl:refreshOwlForNighthawkTurn({...c,round:nextRound}),movementUsed:0,actionUsed:false,bonusActionUsed:false,attack:undefined},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:detail,createdAt:now}]};
+ return {...campaign,combat:{...c,pendingEnemyGrapple:false,playerGrappled:!passed,lastPlayerGrappleResult:detail,turnIndex:c.order.indexOf('Nighthawk'),round:nextRound,owl:refreshOwlForNighthawkTurn({...c,round:nextRound}),movementUsed:0,movementAllowance:35,actionUsed:false,bonusActionUsed:false,steadyAim:false,disengaged:false,sneakAttackUsedThisTurn:false,sneakAttackEligible:false,lastAction:undefined,attack:undefined},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:detail,createdAt:now}]};
 }
 export function beginPlayerGrappleEscape(campaign:Campaign):Campaign {
  const c=campaign.combat;
