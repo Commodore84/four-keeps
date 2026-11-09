@@ -186,9 +186,9 @@ describe('True Strike weapon attacks',()=>{
   const spent=dice(15,4,3,2);
   let c=castCombatMagicAction(rig(),'True Strike');
   c=rollDuelAttack(c,'hit');
-  expect(c.combat?.attack?.total).toBe(17); // INT +0, proficiency +2
+  expect(c.combat?.attack?.total).toBe(19); // INT +2, proficiency +2
   c=rollDuelAttack(c,'damage',true);
-  expect(c.combat?.attack?.damage).toBe(9); // d6 4 + INT 0 + Sneak Attack 3+2
+  expect(c.combat?.attack?.damage).toBe(11); // d6 4 + INT 2 + Sneak Attack 3+2
   expect(c.combat?.sneakAttackUsedThisTurn).toBe(true);
   spent();
  });
@@ -202,7 +202,7 @@ describe('True Strike weapon attacks',()=>{
   let c=castCombatMagicAction(rig(5),'True Strike');
   c=rollDuelAttack(c,'hit');
   c=rollDuelAttack(c,'damage',false);
-  expect(c.combat?.attack?.damage).toBe(9);
+  expect(c.combat?.attack?.damage).toBe(11);
   spent();
  });
  it('True Strike preserves a pending weapon attack across backup restoration',()=>{
@@ -210,7 +210,7 @@ describe('True Strike weapon attacks',()=>{
   const restored=parseBackup(JSON.stringify(createBackup(c)));
   expect(restored.combat?.attack?.trueStrike).toBe(true);
   const spent=dice(15);
-  expect(rollDuelAttack(restored,'hit').combat?.attack?.total).toBe(17);
+  expect(rollDuelAttack(restored,'hit').combat?.attack?.total).toBe(19);
   spent();
  });
 });
