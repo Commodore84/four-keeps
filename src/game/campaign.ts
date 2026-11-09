@@ -471,7 +471,6 @@ export function tacticalRoute(combat:NonNullable<Campaign['combat']>,destination
  (!!combat.secondEnemy&&combat.secondEnemy.hp>0&&combat.secondEnemy.position.x===x&&combat.secondEnemy.position.y===y);
  if(blocked(destination.x,destination.y))return null;
  const key=(p:TacticalPoint)=>p.x+','+p.y;
- const key=(p:TacticalPoint)=>p.x+','+p.y;
  const queue:{point:TacticalPoint;cost:number}[]=[{point:start,cost:0}],best=new Map([[key(start),0]]),parents:Record<string,TacticalPoint>={};
  const dirs=[[-1,0],[0,-1],[1,0],[0,1],[-1,-1],[1,-1],[-1,1],[1,1]];
  while(queue.length){
