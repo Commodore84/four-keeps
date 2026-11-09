@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   beginDuel, concludeDuel, newCampaign, quitTrainingEncounter, rollDuelAttack,
-  selectTrainingTarget, takeDuelTurnAction, utilizeCombatItem, resolveDuelEnemyTurn, type Campaign,
+  selectTrainingTarget, takeDuelTurnAction, utilizeCombatItem, takeCombatSkillAction, readyCombatAction, resolveReadiedCombatReaction, resolveDuelEnemyTurn, type Campaign,
 } from './campaign';
 import { createBackup, parseBackup } from './backup';
 import { availableCombatMovement, combatAttackRollPreview } from './combat-ui';
@@ -178,5 +178,48 @@ describe('Utilize combat action',()=>{
   expect(restored.combat?.actionUsed).toBe(true);
   const ended=takeDuelTurnAction(restored,'end');
   expect(ended.combat?.actionUsed).toBe(false);
+ });
+});
+
+describe('2024 Search Study Influence and Ready actions',()=>{
+ for(const [action,skill] of [['Search','Perception'],['Study','Arcana'],['Influence','Persuasion']] as const){
+  it(action+' rolls a skill check and spends exactly one Action',()=>{
+   const consumed=dice(13);
+   const result=takeCombatSkillAction(arena(),action,skill);
+   expect(result.combat?.actionUsed).toBe(true);
+   expect(result.combat?.lastSkillAction).toMatchObject({action,skill,roll:13});
+   expect(result.journal.at(-1)?.text).toMatch(/DM determines/);
+   expect(()=>takeCombatSkillAction(result,action,skill)).toThrow(/Action already used/);
+   consumed();
+  });
+ }
+ it('rejects invalid skill selections and opponent turns without rolling',()=>{
+  expect(()=>takeCombatSkillAction(arena(),'Study','Persuasion')).toThrow(/not a valid/);
+  expect(()=>takeCombatSkillAction(arena({turnIndex:1}),'Search','Perception')).toThrow(/Nighthawk/);
+ });
+ it('Ready records a trigger, consumes Action, persists through backup, and spends Reaction when triggered',()=>{
+  const c=readyCombatAction(arena(),'enemy enters reach','attack with dagger');
+  expect(c.combat?.actionUsed).toBe(true);
+  expect(c.combat?.readiedAction).toMatchObject({trigger:'enemy enters reach',response:'attack with dagger'});
+  const restored=parseBackup(JSON.stringify(createBackup(c)));
+  const enemyTurn=takeDuelTurnAction(restored,'end');
+  expect(enemyTurn.combat?.readiedAction?.response).toBe('attack with dagger');
+  const reacted=resolveReadiedCombatReaction(enemyTurn);
+  expect(reacted.combat?.reactionUsed).toBe(true);
+  expect(reacted.combat?.readiedAction).toBeUndefined();
+  expect(()=>resolveReadiedCombatReaction(reacted)).toThrow(/No readied action/);
+ });
+ it('Ready requires a declaration and an available Action',()=>{
+  expect(()=>readyCombatAction(arena(),'','attack')).toThrow(/requires a trigger/);
+  expect(()=>readyCombatAction(arena({actionUsed:true}),'when approached','attack')).toThrow(/Action already used/);
+  expect(()=>readyCombatAction(arena({turnIndex:1}),'when approached','attack')).toThrow(/Nighthawk/);
+ });
+ it('Ready expires when the next player turn begins',()=>{
+  const c=readyCombatAction(arena(),'enemy moves','duck');
+  const enemy=takeDuelTurnAction(c,'end');
+  const consumed=dice(1,1);
+  const next=resolveDuelEnemyTurn(enemy);
+  expect(next.combat?.readiedAction).toBeUndefined();
+  consumed();
  });
 });
