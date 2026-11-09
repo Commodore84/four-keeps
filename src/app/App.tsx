@@ -73,7 +73,7 @@ function Adventure({ campaign, fullHistory, onToggleHistory }: { campaign: Campa
   const turns = fullHistory ? allTurns : allTurns.slice(-6);
   return <section className="space-y-5" aria-label="Adventure">
     {allTurns.length > 6 && <button type="button" onClick={onToggleHistory} className="w-full rounded-lg border border-gold/30 px-4 py-3 text-sm text-gold">{fullHistory ? "Show recent conversation" : "View full conversation history ("+allTurns.length+" messages)"}</button>}
-    {turns.length === 0 && <div className="scene"><div className="scene-glow"/><div className="absolute bottom-5 left-5 right-5"><p className="eyebrow">The Living World</p><h2 className="font-serif text-3xl">Frontier Village</h2></div></div>}
+    
     {turns.length === 0 && <div className="rounded-xl border border-white/10 bg-panel p-5 space-y-3">
       <p className="eyebrow">Dungeon Master</p>
       <p className="leading-7 text-parchment/85">The road bends toward a frontier village, its lanterns glowing beneath the evening mist. Beyond the tree line, an old keep waits in silence.</p>
