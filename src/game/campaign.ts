@@ -591,6 +591,51 @@ export function resolveReadiedCombatReaction(campaign:Campaign):Campaign {
  const now=new Date().toISOString(),readied=c.readiedAction;
  return {...campaign,combatAdjudication:{id:crypto.randomUUID(),kind:'ready',detail:'Declared trigger: '+readied.trigger+'. Declared response: '+readied.response+'. The Reaction was spent; adjudicate the response without changing attack rolls, damage, HP, or conditions automatically.',createdAt:now},combat:{...c,reactionUsed:true,readiedAction:undefined,lastAction:'Ready reaction'},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:'Ready reaction triggered: '+readied.response+'. Reaction spent; DM adjudicates the declared response.',createdAt:now}]};
 }
+/** Resolve a readied weapon strike as a reaction on another creature's turn.
+ * The trigger is explicitly confirmed by the player; the engine never guesses whether it happened.
+ */
+export function resolveReadiedWeaponAttack(campaign:Campaign,weapon:'dagger'|'throw-dagger'|'shortbow'):Campaign {
+ const c=campaign.combat;
+ if(!c||c.status!=='initiative-set'||!c.readiedAction)throw Error('No readied action to resolve.');
+ if(c.order?.[c.turnIndex??0]==='Nighthawk')throw Error('Ready reaction requires another creature\'s turn.');
+ if(c.reactionUsed)throw Error('Reaction already used.');
+ const p=c.playerPosition??{x:2,y:4},target=c.selectedEnemy==='second'&&c.secondEnemy?c.secondEnemy.position:c.enemyPosition??{x:6,y:4};
+ const distance=5*Math.max(Math.abs(p.x-target.x),Math.abs(p.y-target.y));
+ const second=c.selectedEnemy==='second'&&!!c.secondEnemy;
+ const hp=second?c.secondEnemy!.hp:c.enemyHp??12;
+ if(hp<=0)throw Error('The target has been defeated.');
+ if(weapon==='dagger'&&distance>5)throw Error('Melee dagger requires an adjacent target.');
+ if(weapon==='throw-dagger'&&distance>60)throw Error('Thrown dagger is out of range.');
+ if(weapon==='shortbow'&&distance>320)throw Error('Shortbow is out of range.');
+ if(weapon==='shortbow'&&(c.arrowsRemaining??20)<=0)throw Error('No arrows remaining.');
+ if(weapon!=='shortbow'&&(c.daggersAvailable??2)<=0)throw Error('No daggers remaining.');
+ const ch=campaign.character??prototypeNighthawk;
+ const die=(sides:number)=>crypto.getRandomValues(new Uint32Array(1))[0]%sides+1;
+ const ranged=weapon!=='dagger',disadvantage=ranged&&(distance<=5||distance>(weapon==='shortbow'?80:20));
+ const advantage=!!c.playerHidden||!!c.owl&&c.owl.helpTarget===(second?'second':'first')||(!ranged&&(second?!!c.secondEnemy?.prone:!!c.enemyProne));
+ const useAdvantage=advantage&&!disadvantage,useDisadvantage=disadvantage&&!advantage;
+ const first=die(20),other=useAdvantage||useDisadvantage?die(20):undefined;
+ const rolled=other===undefined?first:useAdvantage?Math.max(first,other):Math.min(first,other);
+ const bonus=abilityModifier(ch.scores.dex)+ch.proficiencyBonus,total=rolled+bonus;
+ const critical=rolled===20,hit=critical||(rolled!==1&&total>=12);
+ const sneak=hit&&!c.sneakAttackUsedThisTurn&&(useAdvantage||!!c.trainingAllyAdjacent&&!useDisadvantage);
+ const weaponDice=hit?Array.from({length:critical?2:1},()=>die(weapon==='shortbow'?6:4)):[];
+ const sneakDice=hit&&sneak?Array.from({length:Math.ceil((ch.level??1)/2)*(critical?2:1)},()=>die(6)):[];
+ const damage=hit?Math.max(0,[...weaponDice,...sneakDice].reduce((a,b)=>a+b,0)+abilityModifier(ch.scores.dex)):0;
+ const stats=c.stats??{damage:0,movement:0,attacks:0,hits:0,criticalHits:0,sneakDamage:0,finishingBlows:0};
+ const now=new Date().toISOString();
+ const detail='Ready reaction ('+weapon+') against '+(second?c.secondEnemy!.name:c.enemyName)+': d20 '+rolled+' + '+bonus+' = '+total+' vs AC 12, '+(hit?'HIT':'MISS')+(critical?' (critical)':'')+'. '+(hit?'Damage '+weaponDice.join('+')+(sneakDice.length?' + Sneak Attack '+sneakDice.join('+'):'')+' + DEX = '+damage+'.':'No damage.')+' Reaction spent.';
+ const next={...c,reactionUsed:true,readiedAction:undefined,lastAction:'Ready: '+weapon,playerHidden:false,sneakAttackUsedThisTurn:c.sneakAttackUsedThisTurn||sneak,
+  arrowsRemaining:weapon==='shortbow'?(c.arrowsRemaining??20)-1:c.arrowsRemaining,
+  daggersAvailable:weapon==='throw-dagger'?(c.daggersAvailable??2)-1:c.daggersAvailable,
+  daggersThrown:weapon==='throw-dagger'?(c.daggersThrown??0)+1:c.daggersThrown,
+  enemyHp:second?c.enemyHp:Math.max(0,hp-damage),
+  secondEnemy:second&&c.secondEnemy?{...c.secondEnemy,hp:Math.max(0,hp-damage)}:c.secondEnemy,
+  owl:c.owl&&c.owl.helpTarget===(second?'second':'first')?{...c.owl,helpTarget:undefined,helpRound:undefined}:c.owl,
+  stats:{...stats,attacks:stats.attacks+1,hits:stats.hits+(hit?1:0),criticalHits:stats.criticalHits+(critical?1:0),damage:stats.damage+damage,sneakDamage:stats.sneakDamage+sneakDice.reduce((a,b)=>a+b,0),finishingBlows:stats.finishingBlows+(hit&&damage>=hp?1:0)}
+ };
+ return {...campaign,combat:next,updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:detail,createdAt:now}]};
+}
 /** Utilize an available consumable during combat; placement effects await DM adjudication. */
 export function utilizeCombatItem(campaign:Campaign,item:'caltrops'|'ballBearings'):Campaign {
  const c=campaign.combat;
