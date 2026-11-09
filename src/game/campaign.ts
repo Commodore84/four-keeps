@@ -720,8 +720,15 @@ export function resolveDuelEnemyTurn(campaign:Campaign):Campaign {
  const nextRound=turn.round;
  const nextOwl=owlDestroyed?undefined:targetOwl&&combat.owl?{...combat.owl,hp:owlAfter??combat.owl.hp}:combat.owl;
  const nextCombat={...combat,owl:followingIndex!==undefined&&combat.order[followingIndex]==='Nighthawk'?refreshOwlForNighthawkTurn({...combat,owl:nextOwl,round:nextRound}):nextOwl,enemyPosition:secondEnemyTurn?combat.enemyPosition:position,secondEnemy:secondEnemyTurn&&combat.secondEnemy?{...combat.secondEnemy,position,prone:false}:combat.secondEnemy,enemyProne:secondEnemyTurn?combat.enemyProne:false,turnIndex:followingIndex,round:nextRound,reactionUsed:false,enemyReactionUsed:secondEnemyTurn?combat.enemyReactionUsed:false,secondEnemyReactionUsed:secondEnemyTurn?false:combat.secondEnemyReactionUsed,movementUsed:0,movementAllowance:35,actionUsed:false,bonusActionUsed:false,steadyAim:false,disengaged:false,sneakAttackUsedThisTurn:false,sneakAttackEligible:false,spellSlotExpendedThisTurn:false,lastAction:undefined,attack:undefined,enemyLastTurn:detail,status:defeated?'completed' as const:combat.status,outcome:defeated?'player-defeated' as const:combat.outcome};
+ const concentrationCheck=!targetOwl&&damage>0&&!!campaign.concentration;
+ const concentrationRoll=concentrationCheck?die(20):undefined;
+ const concentrationBonus=abilityModifier(character.scores.con);
+ const concentrationDC=Math.max(10,Math.floor(damage/2));
+ const concentrationFailed=concentrationRoll!==undefined&&concentrationRoll+concentrationBonus<concentrationDC;
+ const concentrationMessage=concentrationRoll===undefined?'':' Concentration: '+concentrationRoll+' + '+concentrationBonus+' vs DC '+concentrationDC+(concentrationFailed?'; concentration broken.':'; maintained.');
+ const finalCombat=concentrationFailed&&campaign.concentration?.spell==='Tasha’s Hideous Laughter'?{...nextCombat,laughterTarget:undefined}:nextCombat;
  const now=new Date().toISOString();
- return {...campaign,familiar:owlDestroyed&&campaign.familiar?{...campaign.familiar,status:'destroyed' as const,hp:0}:campaign.familiar,character:{...character,currentHitPoints:after},combat:nextCombat,updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:detail,createdAt:now}]};
+ return {...campaign,concentration:concentrationFailed?undefined:campaign.concentration,spellEffects:concentrationFailed?(campaign.spellEffects??[]).filter(e=>e.spell!==campaign.concentration?.spell||e.status!=='active'):campaign.spellEffects,familiar:owlDestroyed&&campaign.familiar?{...campaign.familiar,status:'destroyed' as const,hp:0}:campaign.familiar,character:{...character,currentHitPoints:after},combat:finalCombat,updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:detail+concentrationMessage,createdAt:now}]};
 }
 
 export function moveTrainingDummy(campaign:Campaign):Campaign {
