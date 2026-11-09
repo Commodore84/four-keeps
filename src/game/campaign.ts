@@ -353,7 +353,7 @@ export function searchForNighthawk(campaign:Campaign):Campaign {
  const turn=nextActiveTurn(c);
  const followingIndex=turn.index;
  const nextRound=turn.round;
- return {...campaign,combat:{...c,playerHidden:!found,enemySearchResult:detail,turnIndex:followingIndex,round:nextRound,owl:c.order?.[followingIndex]==='Nighthawk'?refreshOwlForNighthawkTurn({...c,round:nextRound}):c.owl,movementUsed:0,actionUsed:false,bonusActionUsed:false,attack:undefined},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:detail,createdAt:now}]};
+ return {...campaign,combat:{...c,playerHidden:!found,enemySearchResult:detail,turnIndex:followingIndex,round:nextRound,owl:c.order?.[followingIndex]==='Nighthawk'?refreshOwlForNighthawkTurn({...c,round:nextRound}):c.owl,movementUsed:0,movementAllowance:35,actionUsed:false,bonusActionUsed:false,steadyAim:false,disengaged:false,sneakAttackUsedThisTurn:false,sneakAttackEligible:false,lastAction:undefined,attack:undefined},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:detail,createdAt:now}]};
 }
 export type TacticalPoint={x:number;y:number};
 export function tacticalRoute(combat:NonNullable<Campaign['combat']>,destination:TacticalPoint):TacticalPoint[]|null{
@@ -560,13 +560,14 @@ export function rollPlayerShoveSave(campaign:Campaign,ability:'str'|'dex'):Campa
  const detail='Enemy Shove: Nighthawk '+(ability==='str'?'Strength':'Dexterity')+' save d20 '+roll+' '+(modifier>=0?'+ ':'- ')+Math.abs(modifier)+' = '+total+' vs DC '+dc+'. '+(passed?'Success: remains standing.':'Failure: knocked Prone.');
  const now=new Date().toISOString();
  const nextRound=c.order[0]==='Nighthawk'?c.round+1:c.round;
- return {...campaign,combat:{...c,pendingEnemyShove:false,playerProne:passed?!!c.playerProne:true,lastPlayerShoveSave:detail,turnIndex:c.order.indexOf('Nighthawk'),round:nextRound,owl:refreshOwlForNighthawkTurn({...c,round:nextRound}),movementUsed:0,actionUsed:false,bonusActionUsed:false,attack:undefined,enemyProne:false},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:detail,createdAt:now}]};
+ return {...campaign,combat:{...c,pendingEnemyShove:false,playerProne:passed?!!c.playerProne:true,lastPlayerShoveSave:detail,turnIndex:c.order.indexOf('Nighthawk'),round:nextRound,owl:refreshOwlForNighthawkTurn({...c,round:nextRound}),movementUsed:0,movementAllowance:35,actionUsed:false,bonusActionUsed:false,steadyAim:false,disengaged:false,sneakAttackUsedThisTurn:false,sneakAttackEligible:false,lastAction:undefined,attack:undefined,enemyProne:false},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:detail,createdAt:now}]};
 }
 export function standNighthawk(campaign:Campaign):Campaign {
  const c=campaign.combat;
  if(!c||c.order?.[c.turnIndex??0]!=='Nighthawk'||!c.playerProne)throw Error('You must be Prone on your turn to stand.');
  if(c.playerGrappled)throw Error('Grappled: Speed 0. Escape before standing.');
  const cost=15; // Grid standing cost.
+ if(c.steadyAim)throw Error('Steady Aim prevents movement, including standing up.');
  if((c.movementUsed??0)+cost>(c.movementAllowance??35))throw Error('Not enough movement to stand.');
  const now=new Date().toISOString();
  const detail='Nighthawk stands up, spending 15 feet of movement. '+((c.movementAllowance??35)-(c.movementUsed??0)-cost)+' feet remaining.';
@@ -576,7 +577,7 @@ export function resolveDuelEnemyTurn(campaign:Campaign):Campaign {
  const combat=campaign.combat;
  if(!combat||combat.status!=='initiative-set'||!combat.order||combat.order[combat.turnIndex??0]==='Nighthawk')throw Error('It is not the opponent\'s turn.');
  if(combat.opportunity)throw Error('Resolve the opportunity attack before continuing.');
- if(combat.pendingEnemyShove)throw Error('Resolve the pending Shove save first.');
+ if(combat.pendingEnemyShove||combat.pendingEnemyGrapple)throw Error('Resolve the pending Shove or Grapple save first.');
  const currentName=combat.order[combat.turnIndex??0];
  if(currentName===combat.enemyName&&(combat.enemyHp??12)===0||currentName===combat.secondEnemy?.name&&combat.secondEnemy?.hp===0)throw Error('Defeated enemies cannot act.');
  const secondEnemyTurn=currentName===combat.secondEnemy?.name;
