@@ -114,16 +114,16 @@ describe('multi-step encounters and resource resets',()=>{
     consumed();
   });
   it('owl movement and Help reset on the next Nighthawk turn',()=>{
-    const consumed=dice(12);
     let c=arena({enemyPosition:{x:10,y:2}});
     c=moveOwl(c,9,2);
     c=owlHelp(c,'first');
     expect(combat(c).owl?.actionUsed).toBe(true);
+    // Flyby lets the owl retreat before the enemy's turn.
+    c=moveOwl(c,7,4);
     c=takeDuelTurnAction(c,'end');
     c=resolveDuelEnemyTurn(c);
     expect(combat(c).owl?.movementUsed).toBe(0);
     expect(combat(c).owl?.actionUsed).toBe(false);
-    consumed();
   });
 });
 
