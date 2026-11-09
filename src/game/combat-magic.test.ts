@@ -1,5 +1,5 @@
-import {describe,expect,it} from 'vitest';
-import {availableCombatSpells,castCombatMagicAction,newCampaign,takeDuelTurnAction,type Campaign} from './campaign';
+import {describe,expect,it,vi} from 'vitest';
+import {availableCombatSpells,castCombatMagicAction,resolveCombatSpellSave,newCampaign,takeDuelTurnAction,type Campaign} from './campaign';
 import {createBackup,parseBackup} from './backup';
 function encounter():Campaign {
  const base=newCampaign('Arcane Trickster combat','magic-test');
@@ -57,5 +57,59 @@ describe('Arcane Trickster Magic Action',()=>{
   expect(restored.combat?.spellSlotExpendedThisTurn).toBe(true);
   expect(restored.character?.spellSlots?.usedLevel1).toBe(1);
   expect(restored.spellEffects?.at(-1)?.status).toBe('awaiting-adjudication');
+ });
+});
+
+describe('spell saving throw resolution',()=>{
+ function rig(spell:'Mind Sliver'|'Tasha’s Hideous Laughter',second=false){
+  const c=encounter();
+  return {...c,character:{...c.character!,preparedSpells:[...c.character!.preparedSpells!, 'Tasha’s Hideous Laughter']},
+   combat:{...c.combat!,selectedEnemy:second?'second' as const:'first' as const,secondEnemy:second?{name:'Training Dummy 2',initiative:8,position:{x:8,y:2},hp:12,maxHp:12,detected:false}:undefined}};
+ }
+ function dice(...rolls:number[]){
+  let index=0;
+  const spy=vi.spyOn(crypto,'getRandomValues').mockImplementation(((array:Uint32Array)=>{array[0]=rolls[index++]-1;return array;}) as typeof crypto.getRandomValues);
+  return ()=>{expect(index).toBe(rolls.length);spy.mockRestore();};
+ }
+ it('Mind Sliver failed INT save inflicts 1d6 psychic damage',()=>{
+  const consumed=dice(2,5);
+  const c=resolveCombatSpellSave(castCombatMagicAction(rig('Mind Sliver'),'Mind Sliver'));
+  expect(c.combat?.lastSpellSave).toMatchObject({spell:'Mind Sliver',roll:2,success:false,damage:5});
+  expect(c.combat?.enemyHp).toBe(7);
+  expect(c.combat?.pendingSpellSave).toBeUndefined();
+  consumed();
+ });
+ it('successful save prevents Mind Sliver damage',()=>{
+  const consumed=dice(20);
+  const c=resolveCombatSpellSave(castCombatMagicAction(rig('Mind Sliver'),'Mind Sliver'));
+  expect(c.combat?.enemyHp).toBe(12);
+  expect(c.combat?.lastSpellSave?.success).toBe(true);
+  consumed();
+ });
+ it('Hideous Laughter failed WIS save makes the selected enemy Prone',()=>{
+  const consumed=dice(1);
+  const c=resolveCombatSpellSave(castCombatMagicAction(rig('Tasha’s Hideous Laughter',true),'Tasha’s Hideous Laughter'));
+  expect(c.combat?.secondEnemy?.prone).toBe(true);
+  expect(c.combat?.enemyProne).toBeFalsy();
+  expect(c.combat?.lastSpellSave?.target).toBe('Training Dummy 2');
+  consumed();
+ });
+ it('successful Hideous Laughter save does not knock target Prone',()=>{
+  const consumed=dice(20);
+  const c=resolveCombatSpellSave(castCombatMagicAction(rig('Tasha’s Hideous Laughter'),'Tasha’s Hideous Laughter'));
+  expect(c.combat?.enemyProne).toBeFalsy();
+  consumed();
+ });
+ it('spell save pending state survives backup and can resolve afterward',()=>{
+  const consumed=dice(1,3);
+  const c=castCombatMagicAction(rig('Mind Sliver'),'Mind Sliver');
+  const restored=parseBackup(JSON.stringify(createBackup(c)));
+  expect(restored.combat?.pendingSpellSave?.spell).toBe('Mind Sliver');
+  const resolved=resolveCombatSpellSave(restored);
+  expect(resolved.combat?.enemyHp).toBe(9);
+  consumed();
+ });
+ it('rejects saving throw resolution without a pending spell',()=>{
+  expect(()=>resolveCombatSpellSave(encounter())).toThrow(/No spell saving throw/);
  });
 });
