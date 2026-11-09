@@ -217,9 +217,8 @@ describe('2024 Search Study Influence and Ready actions',()=>{
  it('Ready expires when the next player turn begins',()=>{
   const c=readyCombatAction(arena(),'enemy moves','duck');
   const enemy=takeDuelTurnAction(c,'end');
-  const consumed=dice(1,1);
+  vi.spyOn(crypto,'getRandomValues').mockImplementation(((array:Uint32Array)=>{array[0]=0;return array;}) as typeof crypto.getRandomValues);
   const next=resolveDuelEnemyTurn(enemy);
   expect(next.combat?.readiedAction).toBeUndefined();
-  consumed();
  });
 });
