@@ -133,7 +133,7 @@ describe('ongoing spell effects',()=>{
  });
  it('Laughter prevents the affected enemy from taking a normal turn',()=>{
   const c=encounter();
-  const spent=d20(1);
+  const spent=d20(1,1);
   const prepared={...c,character:{...c.character!,preparedSpells:['Tasha’s Hideous Laughter']}};
   const failed=resolveCombatSpellSave(castCombatMagicAction(prepared,'Tasha’s Hideous Laughter'));
   const enemyTurn={...failed,combat:{...failed.combat!,turnIndex:1}};
