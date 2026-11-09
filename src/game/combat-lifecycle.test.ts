@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   beginDuel, concludeDuel, newCampaign, quitTrainingEncounter, rollDuelAttack,
-  selectTrainingTarget, takeDuelTurnAction, utilizeCombatItem, takeCombatSkillAction, readyCombatAction, resolveReadiedCombatReaction, resolveDuelEnemyTurn, type Campaign,
+  selectTrainingTarget, takeDuelTurnAction, utilizeCombatItem, takeCombatSkillAction, readyCombatAction, resolveReadiedCombatReaction, resolveReadiedWeaponAttack, resolveDuelEnemyTurn, type Campaign,
 } from './campaign';
 import { createBackup, parseBackup } from './backup';
 import { availableCombatMovement, combatAttackRollPreview } from './combat-ui';
@@ -230,5 +230,51 @@ describe('2024 Search Study Influence and Ready actions',()=>{
   vi.spyOn(crypto,'getRandomValues').mockImplementation(((array:Uint32Array)=>{array[0]=0;return array;}) as typeof crypto.getRandomValues);
   const next=resolveDuelEnemyTurn(enemy);
   expect(next.combat?.readiedAction).toBeUndefined();
+ });
+});
+
+describe('Ready weapon reactions',()=>{
+ it('hits with a shortbow, spends ammo and reaction, applies damage and persists',()=>{
+  const c=readyCombatAction(arena({enemyPosition:{x:4,y:10}}),'dummy advances','Fire my shortbow','shortbow');
+  const enemy=takeDuelTurnAction(c,'end');
+  const consumed=dice(14,4);
+  const result=resolveReadiedWeaponAttack(enemy,'shortbow');
+  expect(result.combat?.reactionUsed).toBe(true);
+  expect(result.combat?.readiedAction).toBeUndefined();
+  expect(result.combat?.arrowsRemaining).toBe(19);
+  expect(result.combat?.enemyHp).toBeLessThan(12);
+  expect(result.combat?.stats?.hits).toBe(1);
+  expect(parseBackup(JSON.stringify(createBackup(result))).combat?.enemyHp).toBe(result.combat?.enemyHp);
+  expect(()=>resolveReadiedWeaponAttack(result,'shortbow')).toThrow(/No readied action/);
+  consumed();
+ });
+ it('a miss spends the reaction and arrow but deals no damage',()=>{
+  const c=takeDuelTurnAction(readyCombatAction(arena({enemyPosition:{x:4,y:10}}),'moves','Shoot','shortbow'),'end');
+  const consumed=dice(1);
+  const result=resolveReadiedWeaponAttack(c,'shortbow');
+  expect(result.combat?.enemyHp).toBe(12);
+  expect(result.combat?.arrowsRemaining).toBe(19);
+  expect(result.combat?.reactionUsed).toBe(true);
+  consumed();
+ });
+ it('critical hits roll doubled weapon damage dice',()=>{
+  const c=takeDuelTurnAction(readyCombatAction(arena({enemyPosition:{x:4,y:10}}),'moves','Shoot','shortbow'),'end');
+  const consumed=dice(20,3,4);
+  const result=resolveReadiedWeaponAttack(c,'shortbow');
+  expect(result.combat?.stats?.criticalHits).toBe(1);
+  expect(result.combat?.enemyHp).toBeLessThan(12);
+  consumed();
+ });
+ it('cannot swap weapons or bypass mechanical attack with narrative resolver',()=>{
+  const c=takeDuelTurnAction(readyCombatAction(arena(),'moves','Shoot','shortbow'),'end');
+  expect(()=>resolveReadiedWeaponAttack(c,'dagger')).toThrow(/does not match/);
+  expect(()=>resolveReadiedCombatReaction(c)).toThrow(/deterministic weapon/);
+ });
+ it('out of range and missing ammunition do not spend a reaction',()=>{
+  const c=takeDuelTurnAction(readyCombatAction(arena(),'moves','Strike','dagger'),'end');
+  expect(()=>resolveReadiedWeaponAttack(c,'dagger')).toThrow(/adjacent/);
+  expect(c.combat?.reactionUsed).toBe(false);
+  const bow=takeDuelTurnAction(readyCombatAction(arena({arrowsRemaining:0}),'moves','Shoot','shortbow'),'end');
+  expect(()=>resolveReadiedWeaponAttack(bow,'shortbow')).toThrow(/No arrows/);
  });
 });
