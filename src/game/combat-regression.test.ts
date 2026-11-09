@@ -114,7 +114,7 @@ describe('combat regression: attack and damage', () => {
     const c = rollDuelAttack(takeDuelTurnAction(arena(), 'shortbow'), 'hit');
     expect(state(c).attack?.d20).toBeGreaterThanOrEqual(1);
     expect(state(c).attack?.total).toBe((state(c).attack?.d20??0)+5);
-    expect(state(c).arrowsRemaining).toBe(20);
+    expect(state(c).arrowsRemaining).toBe(19);
   });
   it('a thrown dagger is marked thrown and spends the Action', () => {
     const c = takeDuelTurnAction(arena({ enemyPosition: { x: 4, y: 10 } }), 'throw-dagger');
