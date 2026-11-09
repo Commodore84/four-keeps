@@ -1102,9 +1102,9 @@ export function App() {
               {campaign.combat.playerProne&&<span className="rounded-full border border-amber-400/60 px-3 py-1">Prone</span>}
               {campaign.combat.playerGrappled&&<span className="rounded-full border border-amber-400/60 px-3 py-1">Grappled</span>}
               {campaign.combat.lastAction==='Dodge'&&<span className="rounded-full border border-white/30 px-3 py-1">Dodging</span>}
-              {!campaign.combat.playerHidden&&!campaign.combat.playerProne&&!campaign.combat.playerGrappled&&!campaign.combat.lastAction==='Dodge'&&<span className="text-parchment/55">No active conditions</span>}
+              {!campaign.combat.playerHidden&&!campaign.combat.playerProne&&!campaign.combat.playerGrappled&&campaign.combat.lastAction!=='Dodge'&&<span className="text-parchment/55">No active conditions</span>}
             </div>
-            {campaign.combat.hideResult&&<p className="text-xs text-parchment/65" aria-label="Last hide attempt">Last Hide attempt: {campaign.combat.playerHidden?'Succeeded':'Failed'} · details in combat history</p>}
+            {campaign.combat.hideResult&&<p className="text-xs text-parchment/65" aria-label="Last hide attempt">Last Hide attempt recorded · details in combat history</p>}
           </div>}
           <div className="grid grid-cols-2 gap-2" aria-label="2024 D&D actions">
             {([
