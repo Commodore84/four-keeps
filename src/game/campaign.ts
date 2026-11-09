@@ -128,7 +128,7 @@ export const spellRequiresConcentration = (spell: string): boolean => (concentra
 export function endNighthawkConcentration(campaign: Campaign): Campaign {
   if (!campaign.concentration) throw new Error('Not concentrating');
   const now = new Date().toISOString();
-  return {...campaign, concentration:undefined, spellEffects:(campaign.spellEffects??[]).filter(e=>e.spell!==campaign.concentration?.spell || e.status!=='active'), updatedAt:now, journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:'Nighthawk ends concentration on '+campaign.concentration.spell+'.',createdAt:now}]};
+  return {...campaign, combat:campaign.combat&&campaign.concentration.spell==='Tasha’s Hideous Laughter'?{...campaign.combat,laughterTarget:undefined}:campaign.combat, concentration:undefined, spellEffects:(campaign.spellEffects??[]).filter(e=>e.spell!==campaign.concentration?.spell || e.status!=='active'), updatedAt:now, journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:'Nighthawk ends concentration on '+campaign.concentration.spell+'.',createdAt:now}]};
 }
 /** The first combat Magic Action pass handles one-action spells; effects still await DM adjudication. */
 export const combatActionSpells = [
@@ -185,6 +185,19 @@ export function resolveCombatSpellSave(campaign:Campaign):Campaign {
  const now=new Date().toISOString();
  const message=target+' rolls '+roll+(penalty?' - '+penalty:' + 0')+' = '+total+' vs spell save DC '+dc+' for '+pending.spell+': '+(success?'SUCCESS.':'FAILURE.')+(damage?' '+damage+' psychic damage.':'')+(!success&&pending.spell==='Tasha’s Hideous Laughter'?' Target falls Prone; incapacitation and repeat saves await full condition engine.':'')+(bothDown?' Encounter complete.':'');
  return {...campaign,combat:next,updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:message,createdAt:now}]};
+}
+/** End-of-turn Wisdom save to end Tasha's Hideous Laughter on a training dummy. */
+export function resolveLaughterRepeatSave(campaign:Campaign):Campaign {
+ const c=campaign.combat,target=c?.laughterTarget;
+ if(!c||!target||c.status!=='initiative-set')throw Error('No active Hideous Laughter condition.');
+ const ch=campaign.character??prototypeNighthawk;
+ const dc=8+ch.proficiencyBonus+abilityModifier(ch.scores.int);
+ const roll=crypto.getRandomValues(new Uint32Array(1))[0]%20+1;
+ const penalty=c.mindSliverPenalty?.target===target?crypto.getRandomValues(new Uint32Array(1))[0]%4+1:0;
+ const success=roll-penalty>=dc;
+ const next={...c,laughterTarget:success?undefined:target,mindSliverPenalty:penalty?undefined:c.mindSliverPenalty};
+ const now=new Date().toISOString();
+ return {...campaign,combat:next,concentration:success&&campaign.concentration?.spell==='Tasha’s Hideous Laughter'?undefined:campaign.concentration,updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:'Hideous Laughter repeat save: '+roll+(penalty?' - '+penalty:'')+' vs DC '+dc+'. '+(success?'Condition ends.':'Target remains incapacitated.'),createdAt:now}]};
 }
 export function castNighthawkSpell(campaign: Campaign, spell: string, ritual: boolean, familiarComponentsConfirmed = false, target = ''): Campaign {
   const character = campaign.character;
