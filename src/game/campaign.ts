@@ -588,6 +588,7 @@ export function resolveReadiedCombatReaction(campaign:Campaign):Campaign {
  if(!c||c.status!=='initiative-set'||!c.readiedAction)throw Error('No readied action to resolve.');
  if(c.order?.[c.turnIndex??0]==='Nighthawk')throw Error('Ready reaction requires another creature\'s turn.');
  if(c.reactionUsed)throw Error('Reaction already used.');
+ if(c.pendingSpellSave||c.playerOpportunity||c.opportunity||c.pendingEnemyShove||c.pendingEnemyGrapple)throw Error('Resolve the pending combat event before triggering Ready.');
  if(c.readiedAction.weapon)throw Error('Use the deterministic weapon reaction for a readied attack.');
  const now=new Date().toISOString(),readied=c.readiedAction;
  return {...campaign,combatAdjudication:{id:crypto.randomUUID(),kind:'ready',detail:'Declared trigger: '+readied.trigger+'. Declared response: '+readied.response+'. The Reaction was spent; adjudicate the response without changing attack rolls, damage, HP, or conditions automatically.',createdAt:now},combat:{...c,reactionUsed:true,readiedAction:undefined,lastAction:'Ready reaction'},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:'Ready reaction triggered: '+readied.response+'. Reaction spent; DM adjudicates the declared response.',createdAt:now}]};
@@ -600,6 +601,7 @@ export function resolveReadiedWeaponAttack(campaign:Campaign,weapon:'dagger'|'th
  if(!c||c.status!=='initiative-set'||!c.readiedAction)throw Error('No readied action to resolve.');
  if(c.order?.[c.turnIndex??0]==='Nighthawk')throw Error('Ready reaction requires another creature\'s turn.');
  if(c.reactionUsed)throw Error('Reaction already used.');
+ if(c.pendingSpellSave||c.playerOpportunity||c.opportunity||c.pendingEnemyShove||c.pendingEnemyGrapple)throw Error('Resolve the pending combat event before triggering Ready.');
  if(c.readiedAction.weapon!==weapon)throw Error('Weapon does not match the declared Ready response.');
  const p=c.playerPosition??{x:2,y:4},target=c.selectedEnemy==='second'&&c.secondEnemy?c.secondEnemy.position:c.enemyPosition??{x:6,y:4};
  const distance=5*Math.max(Math.abs(p.x-target.x),Math.abs(p.y-target.y));
