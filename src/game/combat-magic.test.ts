@@ -1,5 +1,5 @@
 import {describe,expect,it,vi} from 'vitest';
-import {availableCombatSpells,castCombatMagicAction,resolveCombatSpellSave,resolveLaughterRepeatSave,resolveDuelEnemyTurn,endNighthawkConcentration,newCampaign,takeDuelTurnAction,type Campaign} from './campaign';
+import {availableCombatSpells,castCombatMagicAction,resolveCombatSpellSave,resolveLaughterRepeatSave,rollDuelAttack,resolveDuelEnemyTurn,endNighthawkConcentration,newCampaign,takeDuelTurnAction,type Campaign} from './campaign';
 import {createBackup,parseBackup} from './backup';
 function encounter():Campaign {
  const base=newCampaign('Arcane Trickster combat','magic-test');
@@ -160,5 +160,57 @@ describe('ongoing spell effects',()=>{
   const c=encounter();
   const result=endNighthawkConcentration({...c,combat:{...c.combat!,laughterTarget:'first'},concentration:{spell:'Tasha’s Hideous Laughter',startedAt:'now'}});
   expect(result.combat?.laughterTarget).toBeUndefined();
+ });
+});
+
+describe('True Strike weapon attacks',()=>{
+ function rig(level=3){
+  const c=encounter();
+  return {...c,character:{...c.character!,level,cantrips:[...c.character!.cantrips!,'True Strike']},
+   combat:{...c.combat!,enemyPosition:{x:5,y:10},enemyHp:100,enemyMaxHp:100,trainingAllyAdjacent:true}};
+ }
+ function dice(...rolls:number[]){
+  let index=0;const spy=vi.spyOn(crypto,'getRandomValues').mockImplementation(((array:Uint32Array)=>{if(index>=rolls.length)throw Error('Extra die');array[0]=rolls[index++]-1;return array;}) as typeof crypto.getRandomValues);
+  return ()=>{expect(index).toBe(rolls.length);spy.mockRestore();};
+ }
+ it('True Strike is a level 3 Arcane Trickster cantrip',()=>{
+  expect(availableCombatSpells(rig())).toContain('True Strike');
+ });
+ it('casting creates a pending shortbow attack without consuming a spell slot',()=>{
+  const c=castCombatMagicAction(rig(),'True Strike','Training Dummy','shortbow');
+  expect(c.combat?.actionUsed).toBe(true);
+  expect(c.combat?.attack).toMatchObject({trueStrike:true,weapon:'shortbow',phase:'roll-to-hit'});
+  expect(c.character?.spellSlots?.usedLevel1).toBe(0);
+ });
+ it('uses Intelligence modifier to hit and damage, including Sneak Attack',()=>{
+  const spent=dice(15,4,3,2);
+  let c=castCombatMagicAction(rig(),'True Strike');
+  c=rollDuelAttack(c,'hit');
+  expect(c.combat?.attack?.total).toBe(17); // INT +0, proficiency +2
+  c=rollDuelAttack(c,'damage',true);
+  expect(c.combat?.attack?.damage).toBe(9); // d6 4 + INT 0 + Sneak Attack 3+2
+  expect(c.combat?.sneakAttackUsedThisTurn).toBe(true);
+  spent();
+ });
+ it('dagger True Strike requires an adjacent enemy',()=>{
+  expect(()=>castCombatMagicAction(rig(),'True Strike','','dagger')).toThrow(/adjacent/);
+  const c=rig();const adjacent={...c,combat:{...c.combat!,enemyPosition:{x:3,y:10}}};
+  expect(castCombatMagicAction(adjacent,'True Strike','','dagger').combat?.attack?.weapon).toBe('dagger');
+ });
+ it('True Strike adds radiant damage at level 5',()=>{
+  const spent=dice(15,4,5);
+  let c=castCombatMagicAction(rig(5),'True Strike');
+  c=rollDuelAttack(c,'hit');
+  c=rollDuelAttack(c,'damage',false);
+  expect(c.combat?.attack?.damage).toBe(9);
+  spent();
+ });
+ it('True Strike preserves a pending weapon attack across backup restoration',()=>{
+  const c=castCombatMagicAction(rig(),'True Strike');
+  const restored=parseBackup(JSON.stringify(createBackup(c)));
+  expect(restored.combat?.attack?.trueStrike).toBe(true);
+  const spent=dice(15);
+  expect(rollDuelAttack(restored,'hit').combat?.attack?.total).toBe(17);
+  spent();
  });
 });
