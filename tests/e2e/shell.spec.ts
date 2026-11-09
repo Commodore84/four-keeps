@@ -92,3 +92,18 @@ test('combat replaces persistent DM composer with optional Ask DM and header res
   await page.getByRole('button', { name: 'Ask DM −' }).click();
   await expect(page.locator('#combat-dm-question')).toHaveCount(0);
 });
+
+test('illustrated forest map displays terrain-aligned grid without a legend', async ({ page }) => {
+  await page.goto('/four-keeps/');
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page.getByLabel('New campaign name').fill('Forest map browser test');
+  await page.getByRole('button', { name: 'New', exact: true }).click();
+  await page.getByRole('button', { name: 'Adventure', exact: true }).click();
+  await page.getByRole('button', { name: 'Start encounter training' }).click();
+  await page.getByRole('button', { name: 'Roll initiative (d20 + DEX)' }).click();
+  const grid=page.getByRole('grid', { name: 'Combat movement grid' });
+  await expect(grid).toBeVisible();
+  await expect(grid).toHaveCSS('background-image', /forest-ruins-test\\.svg/);
+  await expect(page.getByText('N = Nighthawk')).toHaveCount(0);
+  await expect(page.getByRole('gridcell', { name: /Square 10, 11; stream terrain/ })).toHaveCount(1);
+});
