@@ -1,5 +1,5 @@
 import {describe,expect,it,vi} from 'vitest';
-import {availableCombatSpells,castCombatMagicAction,resolveCombatSpellSave,resolveLaughterRepeatSave,rollDuelAttack,resolveDuelEnemyTurn,endNighthawkConcentration,newCampaign,takeDuelTurnAction,type Campaign} from './campaign';
+import {availableCombatSpells,castCombatMagicAction,resolveCombatSpellSave,resolveLaughterRepeatSave,resolveLaughterDamageSave,rollDuelAttack,resolveDuelEnemyTurn,endNighthawkConcentration,newCampaign,takeDuelTurnAction,type Campaign} from './campaign';
 import {createBackup,parseBackup} from './backup';
 function encounter():Campaign {
  const base=newCampaign('Arcane Trickster combat','magic-test');
@@ -57,6 +57,48 @@ describe('Arcane Trickster Magic Action',()=>{
   expect(restored.combat?.spellSlotExpendedThisTurn).toBe(true);
   expect(restored.character?.spellSlots?.usedLevel1).toBe(1);
   expect(restored.spellEffects?.at(-1)?.status).toBe('awaiting-adjudication');
+ });
+});
+
+describe('Hideous Laughter damage-triggered saving throws',()=>{
+ const active=()=>{
+  const c=encounter();
+  return {...c,concentration:{spell:'Tasha’s Hideous Laughter',startedAt:'now'},combat:{...c.combat!,laughterTarget:'first' as const,enemyHp:10}};
+ };
+ it('grants advantage and ends incapacitation and concentration on success',()=>{
+  const spy=vi.spyOn(crypto,'getRandomValues');let i=0;
+  spy.mockImplementation(((a:Uint32Array)=>{a[0]=[2,20][i++]-1;return a;}) as typeof crypto.getRandomValues);
+  try{
+   const result=resolveLaughterDamageSave(active(),'first',2);
+   expect(i).toBe(2);
+   expect(result.combat?.laughterTarget).toBeUndefined();
+   expect(result.concentration).toBeUndefined();
+   expect(result.journal.at(-1)?.text).toMatch(/Advantage/);
+  }finally{spy.mockRestore();}
+ });
+ it('keeps incapacitation when both damage-triggered dice fail',()=>{
+  const spy=vi.spyOn(crypto,'getRandomValues');let i=0;
+  spy.mockImplementation(((a:Uint32Array)=>{a[0]=[1,2][i++]-1;return a;}) as typeof crypto.getRandomValues);
+  try{
+   const result=resolveLaughterDamageSave(active(),'first',2);
+   expect(i).toBe(2);
+   expect(result.combat?.laughterTarget).toBe('first');
+   expect(result.concentration?.spell).toBe('Tasha’s Hideous Laughter');
+  }finally{spy.mockRestore();}
+ });
+ it('does not roll for unrelated targets or zero damage',()=>{
+  const spy=vi.spyOn(crypto,'getRandomValues');
+  try{
+   expect(resolveLaughterDamageSave(active(),'second',4).combat?.laughterTarget).toBe('first');
+   expect(resolveLaughterDamageSave(active(),'first',0).combat?.laughterTarget).toBe('first');
+   expect(spy).not.toHaveBeenCalled();
+  }finally{spy.mockRestore();}
+ });
+ it('ends the condition when its target is defeated',()=>{
+  const c=active();
+  const result=resolveLaughterDamageSave({...c,combat:{...c.combat!,enemyHp:0}},'first',10);
+  expect(result.combat?.laughterTarget).toBeUndefined();
+  expect(result.concentration).toBeUndefined();
  });
 });
 
