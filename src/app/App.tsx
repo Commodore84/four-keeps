@@ -584,7 +584,7 @@ export function App() {
   const owlHelpInRange=owlHelpTargetAlive&&!!owlHelpPosition&&!!owlHelpEnemy&&Math.max(Math.abs(owlHelpPosition.x-owlHelpEnemy.x),Math.abs(owlHelpPosition.y-owlHelpEnemy.y))<=1;
   const [selectedWeapon,setSelectedWeapon]=useState<'dagger'|'throw-dagger'|'shortbow'|null>(null);
   const [attackChoice,setAttackChoice]=useState<'weapon'|'shove'|'grapple'>('weapon');
-  const [pendingCombatAction,setPendingCombatAction]=useState<'hide'|'attack'|'dodge'|'steady-aim'|'cunning-dash'|'cunning-disengage'|'disengage'|'dash'|'magic'|'end'|null>(null);
+  const [pendingCombatAction,setPendingCombatAction]=useState<'hide'|'attack'|'dodge'|'steady-aim'|'cunning-dash'|'cunning-disengage'|'disengage'|'dash'|'magic'|'utilize'|'end'|null>(null);
   async function repeatLaughterSave(){
     if(!campaign||saving)return;
     setSaving(true);
