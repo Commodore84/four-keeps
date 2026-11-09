@@ -93,7 +93,9 @@ test('combat replaces persistent DM composer with optional Ask DM and header res
   await expect(page.locator('#combat-dm-question')).toHaveCount(0);
 });
 
-test('illustrated forest map displays terrain-aligned grid without a legend', async ({ page }) => {
+test('illustrated forest map displays terrain-aligned grid without a legend', async ({ page, request }) => {
+  expect((await request.get('/forest-ruins-test.svg')).status()).toBe(200);
+  expect((await request.get('/dragon-sigil.svg')).status()).toBe(200);
   await page.goto('/four-keeps/');
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   await page.getByLabel('New campaign name').fill('Forest map browser test');
