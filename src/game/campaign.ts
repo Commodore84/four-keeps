@@ -1000,6 +1000,7 @@ export function rollDuelAttack(campaign:Campaign,kind:'hit'|'damage',applySneakA
   if(hp===0)next.stats={...next.stats!,finishingBlows:(next.stats?.finishingBlows??0)+1};
   description='Nighthawk '+(next.attack.critical?'CRITICAL HITS ':'hits ')+targetName+' for '+damage+' damage ('+[first,...(second?[second]:[])].join(' + ')+' weapon dice + '+modifier+(next.attack.trueStrike?' INT (True Strike)':' DEX')+(radiantDamage?' + '+radiantDamage+' radiant':'')+(sneakDice?' + '+sneakDamage+' Sneak Attack ('+sneakRolls.join(' + ')+')':'')+'). '+(hp===0?targetName+' collapses, defeated.':hp<=(next.selectedEnemy==='second'&&next.secondEnemy?next.secondEnemy.maxHp:next.enemyMaxHp??12)/2?targetName+' staggers, Bloodied.':targetName+' remains standing.')+(bothDown?' Encounter complete.':'');
   if(hp===0&&!bothDown){next.selectedEnemy=undefined;}
+ }
  const now=new Date().toISOString();
  const result:Campaign={...campaign,equipment:{daggers:next.daggersAvailable??campaign.equipment?.daggers??2,arrows:next.arrowsRemaining??campaign.equipment?.arrows??20,caltrops:campaign.equipment?.caltrops??0,ballBearings:campaign.equipment?.ballBearings??0},combat:next,updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:description,createdAt:now}]};
  return kind==='damage'?resolveLaughterDamageSave(result,combat.selectedEnemy==='second'?'second':'first',next.attack.damage??0):result;
