@@ -861,7 +861,7 @@ export function resolveDuelEnemyTurn(campaign:Campaign):Campaign {
  // Target selection must use the final position: a dummy cannot strike an owl it moved away from.
  const owlInReach=!!combat.owl&&combat.owl.hp>0&&distance(position,combat.owl.position)<=1;
  const targetOwl=owlInReach;
- const standDescription=(standing?'Enemy stands from Prone, spending 15 feet of movement. ':'')+(best.steps?'Moves '+best.steps*5+' feet to ('+(position.x+1)+', '+(position.y+1)+'). ':'')+(!inReach&&!owlInReach?'Cannot reach Nighthawk or Owl; no melee attack. ':'');
+ const standDescription=(standing?'Enemy stands from Prone, spending 15 feet of movement. ':'')+(best.steps?'Moves '+best.steps*5+' feet to ('+(position.x+1)+', '+(position.y+1)+'). ':'')+(!inReach&&!owlInReach?'Cannot reach Nighthawk'+(combat.owl&&combat.owl.hp>0?' or Owl':'')+'; no melee attack. ':'');
 
  const character=campaign.character??prototypeNighthawk;
  const die=(sides:number)=>crypto.getRandomValues(new Uint32Array(1))[0]%sides+1;
