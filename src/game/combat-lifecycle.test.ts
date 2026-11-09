@@ -294,7 +294,7 @@ describe('Ready weapon reactions',()=>{
  });
  it('prone adjacent target grants advantage even with a readied ranged attack; disadvantage cancels it',()=>{
   const c=takeDuelTurnAction(readyCombatAction(arena({enemyPosition:{x:3,y:10},enemyProne:true}),'moves','Shoot','shortbow'),'end');
-  const consumed=dice(19);
+  const consumed=dice(1);
   const result=resolveReadiedWeaponAttack(c,'shortbow');
   expect(result.combat?.enemyHp).toBe(12);
   consumed();
