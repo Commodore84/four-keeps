@@ -29,9 +29,9 @@ test('training encounter starts, rolls initiative, and survives reload', async (
   await page.reload();
   await expect(page.getByRole('button', { name: 'Roll initiative (d20 + DEX)' })).toBeVisible();
   await page.getByRole('button', { name: 'Roll initiative (d20 + DEX)' }).click();
-  await expect(page.getByRole('region', { name: 'Combat turn summary' })).toBeVisible();
+  await expect(page.locator('[aria-label="Combat turn summary"]')).toBeVisible();
   await page.reload();
-  await expect(page.getByRole('region', { name: 'Combat turn summary' })).toBeVisible();
+  await expect(page.locator('[aria-label="Combat turn summary"]')).toBeVisible();
 });
 
 test('navigation preserves unsent draft and a saved campaign after reload', async ({ page }) => {
