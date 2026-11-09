@@ -194,7 +194,26 @@ export function resolveCombatSpellSave(campaign:Campaign):Campaign {
   next.stats={...stats,damage:stats.damage+damage,finishingBlows:stats.finishingBlows+((second?secondEnemy?.hp===0:enemyHp===0)?1:0)};}
  const now=new Date().toISOString();
  const message=target+' rolls '+roll+(penalty?' - '+penalty:' + 0')+' = '+total+' vs spell save DC '+dc+' for '+pending.spell+': '+(success?'SUCCESS.':'FAILURE.')+(damage?' '+damage+' psychic damage.':'')+(!success&&pending.spell==='Tasha’s Hideous Laughter'?' Target falls Prone; incapacitation and repeat saves await full condition engine.':'')+(bothDown?' Encounter complete.':'');
- return {...campaign,combat:next,updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:message,createdAt:now}]};
+ return damage>0?resolveLaughterDamageSave({...campaign,combat:next,updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:message,createdAt:now}]},pending.target,damage):{...campaign,combat:next,updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:message,createdAt:now}]};
+}
+/** A creature affected by Hideous Laughter repeats its Wisdom save with Advantage whenever it takes damage. */
+export function resolveLaughterDamageSave(campaign:Campaign,target:'first'|'second',damage:number):Campaign {
+ const c=campaign.combat;
+ if(!c||c.laughterTarget!==target||damage<=0)return campaign;
+ const hp=target==='second'?c.secondEnemy?.hp:c.enemyHp;
+ if(hp===0){
+  return {...campaign,combat:{...c,laughterTarget:undefined},concentration:campaign.concentration?.spell==='Tasha’s Hideous Laughter'?undefined:campaign.concentration};
+ }
+ const ch=campaign.character??prototypeNighthawk;
+ const dc=8+ch.proficiencyBonus+abilityModifier(ch.scores.int);
+ const die=(sides:number)=>crypto.getRandomValues(new Uint32Array(1))[0]%sides+1;
+ const first=die(20),second=die(20),roll=Math.max(first,second);
+ const penalty=c.mindSliverPenalty?.target===target&&c.round<=c.mindSliverPenalty.expiresRound?die(4):0;
+ const total=roll-penalty,success=total>=dc;
+ const next={...c,laughterTarget:success?undefined:target,mindSliverPenalty:penalty||c.mindSliverPenalty&&c.round>c.mindSliverPenalty.expiresRound?undefined:c.mindSliverPenalty};
+ const now=new Date().toISOString();
+ const name=target==='second'?c.secondEnemy?.name??'Training Dummy 2':c.enemyName;
+ return {...campaign,combat:next,concentration:success&&campaign.concentration?.spell==='Tasha’s Hideous Laughter'?undefined:campaign.concentration,updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:name+' Hideous Laughter damage-triggered Wisdom save with Advantage ('+first+', '+second+')'+(penalty?' - '+penalty:'')+' = '+total+' vs DC '+dc+': '+(success?'success; condition ends.':'failure; remains incapacitated.'),createdAt:now}]};
 }
 /** End-of-turn Wisdom save to end Tasha's Hideous Laughter on a training dummy. */
 export function resolveLaughterRepeatSave(campaign:Campaign):Campaign {
@@ -844,7 +863,8 @@ export function rollDuelAttack(campaign:Campaign,kind:'hit'|'damage',applySneakA
   }
  }
  const now=new Date().toISOString();
- return {...campaign,equipment:{daggers:next.daggersAvailable??campaign.equipment?.daggers??2,arrows:next.arrowsRemaining??campaign.equipment?.arrows??20,caltrops:campaign.equipment?.caltrops??0,ballBearings:campaign.equipment?.ballBearings??0},combat:next,updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:description,createdAt:now}]};
+ const result={...campaign,equipment:{daggers:next.daggersAvailable??campaign.equipment?.daggers??2,arrows:next.arrowsRemaining??campaign.equipment?.arrows??20,caltrops:campaign.equipment?.caltrops??0,ballBearings:campaign.equipment?.ballBearings??0},combat:next,updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:description,createdAt:now}]};
+ return kind==='damage'?resolveLaughterDamageSave(result,next.selectedEnemy==='second'?'second':'first',next.attack.damage??0):result;
 }
 
 export function quitTrainingEncounter(campaign:Campaign):Campaign {
