@@ -43,7 +43,7 @@ describe('encounter victory and targeting',()=>{
     expect(done.equipment?.arrows).toBe(20);
     consumed();
   });
-  it('defeating one of two enemies automatically targets the survivor',()=>{
+  it('defeating one of two enemies clears the target for manual selection',()=>{
     const consumed=dice(18,5);
     const second={name:'Training Dummy 2',initiative:8,position:{x:8,y:2},hp:12,maxHp:12,detected:false};
     let c=arena({enemyHp:1,secondEnemy:second,order:['Nighthawk','Training Dummy','Training Dummy 2']});
@@ -52,7 +52,7 @@ describe('encounter victory and targeting',()=>{
     c=rollDuelAttack(c,'damage',false);
     expect(c.combat?.enemyHp).toBe(0);
     expect(c.combat?.status).toBe('initiative-set');
-    expect(c.combat?.selectedEnemy).toBe('second');
+    expect(c.combat?.selectedEnemy).toBeUndefined();
     expect(()=>selectTrainingTarget(c,'first')).toThrow(/defeated/);
     consumed();
   });
