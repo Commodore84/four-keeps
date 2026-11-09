@@ -1047,17 +1047,36 @@ export function App() {
             <p className="text-sm font-semibold text-gold">Initiative · Round {campaign.combat.round}</p>
             {(()=>{
               const c=campaign.combat!,order=c.order??[],index=c.turnIndex??0;
-              const encounterEntries=campaign.journal.slice(c.journalStartIndex??Math.max(0,campaign.journal.length-1-campaign.journal.slice().reverse().findIndex(entry=>entry.kind==='system'&&entry.text.startsWith('Combat begins:'))));
-              const actions=encounterEntries.filter(entry=>entry.kind==='system'&&!/^(Nighthawk initiative:|Combat begins:)/.test(entry.text));
-              const actorFor=(message:string)=>message.startsWith('Nighthawk hits ')||message.startsWith('Nighthawk moves ')||message.startsWith('Damage to ')||message.startsWith('Opportunity attack dagger')||message.startsWith('Shortbow (')||message.startsWith('Dagger (')||message.startsWith('Thrown dagger (')?'Nighthawk':message.includes('Training Dummy 2 training attack:')||message.startsWith('Training Dummy 2 ')?'Training Dummy 2':message.includes('Training Dummy training attack:')||message.startsWith('Training Dummy ')?'Training Dummy':message.startsWith('Nighthawk ')||message.startsWith('Nighthawk’s ')||message.startsWith("Nighthawk's ")?'Nighthawk':undefined;
-               const lastByActor:Record<string,string>={};
-               for(const entry of actions){const actor=actorFor(entry.text);if(actor)lastByActor[actor]=entry.text;}
+              const encounterEntries=campaign.journal.slice(c.journalStartIndex??0).filter(entry=>entry.kind==='system');
+              const displayName=(name:string)=>name==='Training Dummy'?'Training Dummy 1':name;
+              const summaryFor=(name:string):string=>{
+                const entries=[...encounterEntries].reverse();
+                for(const entry of entries){
+                  const message=entry.text;
+                  if(name==='Nighthawk'){
+                    if(!/^(Shortbow \(|Dagger \(|Thrown dagger \(|Nighthawk hits |Nighthawk misses |Nighthawk takes |Nighthawk uses |Nighthawk casts |Nighthawk hides |Nighthawk fails to hide |Nighthawk dodges |Nighthawk dashes |Nighthawk disengages |Nighthawk shoves |Nighthawk grapples )/.test(message))continue;
+                    if(/^(Shortbow \(|Dagger \(|Thrown dagger \()/.test(message)){
+                      const hit=/\bHIT\b/.test(message),target=message.match(/(?:Training Dummy(?: 2)?)/)?.[0]??c.secondEnemy?.name??c.enemyName;
+                      const damage=message.match(/(?:total damage|Damage):?\s*(\d+)/i)?.[1];
+                      return hit?'Hit '+displayName(target)+(damage?' · '+damage+' dmg':''):'Missed '+displayName(target);
+                    }
+                    return message.replace(/Training Dummy(?! \d)/g,'Training Dummy 1').slice(0,72);
+                  }
+                  const original=name==='Training Dummy'?'Training Dummy':name;
+                  if(!message.startsWith(original+' ')||name==='Training Dummy'&&message.startsWith('Training Dummy 2 '))continue;
+                  if(!/training attack:| attacks | waits out of range| moves | hits | misses /.test(message))continue;
+                  if(/training attack:| attacks /.test(message)){
+                    const hit=/\bHIT\b/.test(message),damage=message.match(/Damage:\s*(\d+)/)?.[1];
+                    return hit?'Hit Nighthawk'+(damage?' · '+damage+' dmg':''):'Missed Nighthawk';
+                  }
+                  return 'Moved';
+                }
+                return '—';
+              };
                const statusFor=(name:string)=>{const hp=name==='Nighthawk'?(campaign.character?.currentHitPoints??campaign.character?.maxHitPoints??10):name===c.secondEnemy?.name?c.secondEnemy.hp:c.enemyHp??12;const max=name==='Nighthawk'?(campaign.character?.maxHitPoints??10):name===c.secondEnemy?.name?c.secondEnemy.maxHp:c.enemyMaxHp??12;return hp<=0?'Defeated':hp<=max/2?'Bloodied':'';};
                const conditionsFor=(name:string)=>name==='Nighthawk'?[c.playerProne?'Prone':'',c.playerGrappled?'Grappled':'',c.playerHidden?'Hidden':'']:name===c.secondEnemy?.name?[c.secondEnemy.prone?'Prone':'',c.secondEnemy.grappled?'Grappled':'']:[c.enemyProne?'Prone':'',c.enemyGrappled?'Grappled':''];
-               const concise=(message:string)=>{const safe=publicCombatText(message);return safe.length>115?safe.slice(0,112).trimEnd()+'…':safe;};
                return <div className="space-y-3 text-sm">
-                 <ol className="space-y-1">{order.map((name,i)=><li key={name} className={`rounded-lg border px-3 py-2 ${statusFor(name)==='Defeated'?'border-white/10 bg-black/30 opacity-60':i===index?'border-gold bg-gold/15':'border-white/15'}`}><div className="flex items-center justify-between gap-2"><span><span className="mr-2 text-parchment/60">{i+1}.</span><strong className={i===index?'text-gold':''}>{name}</strong>{i===index&&<span className="ml-2 text-xs text-gold">CURRENT</span>}</span><span className="flex items-center gap-2">{statusFor(name)==='Bloodied'&&<Droplet aria-label="Bloodied" className="h-3.5 w-3.5 text-red-400" fill="currentColor"/>}{statusFor(name)==='Defeated'&&<span className="text-xs text-red-300">Defeated</span>}<span className="tabular-nums">{name==='Nighthawk'?c.playerInitiative:name===c.secondEnemy?.name?c.secondEnemy.initiative:c.enemyInitiative}</span></span></div>{conditionsFor(name).filter(Boolean).length>0&&<p className="pl-5 text-xs text-amber-200">{conditionsFor(name).filter(Boolean).join(' · ')}</p>}<p className="mt-1 pl-5 text-xs leading-relaxed text-parchment/75">{lastByActor[name]?concise(lastByActor[name]):'No action recorded yet'}</p></li>)}</ol>
-                 <details className="border-t border-white/20 pt-3"><summary className="cursor-pointer text-sm font-semibold text-gold">Full encounter history ({actions.length} events)</summary>{actions.length===0?<p className="mt-2 text-parchment/65">No actions taken yet.</p>:<ol className="mt-3 max-h-72 space-y-2 overflow-y-auto">{actions.map(entry=><li key={entry.id} className="rounded-lg border border-white/15 bg-black/10 p-3"><p className="whitespace-pre-wrap break-words">{entry.kind==='system'?publicCombatText(entry.text):entry.text}</p></li>)}</ol>}</details>
+                 <ol className="space-y-1">{order.map((name,i)=><li key={name} className={`rounded-lg border px-3 py-2 ${statusFor(name)==='Defeated'?'border-white/10 bg-black/30 opacity-60':i===index?'border-gold bg-gold/15':'border-white/15'}`}><div className="flex items-center justify-between gap-2"><span><span className="mr-2 text-parchment/60">{i+1}.</span><strong className={i===index?'text-gold':''}>{displayName(name)}</strong>{i===index&&<span className="ml-2 text-xs text-gold">CURRENT</span>}</span><span className="flex items-center gap-2">{statusFor(name)==='Bloodied'&&<Droplet aria-label="Bloodied" className="h-3.5 w-3.5 text-red-400" fill="currentColor"/>}{statusFor(name)==='Defeated'&&<span className="text-xs text-red-300">Defeated</span>}<span className="tabular-nums">{name==='Nighthawk'?c.playerInitiative:name===c.secondEnemy?.name?c.secondEnemy.initiative:c.enemyInitiative}</span></span></div>{conditionsFor(name).filter(Boolean).length>0&&<p className="pl-5 text-xs text-amber-200">{conditionsFor(name).filter(Boolean).join(' · ')}</p>}<p className="mt-1 pl-5 text-xs leading-relaxed text-parchment/75">{summaryFor(name)}</p></li>)}</ol>
                </div>;
              })()}
           </div>{campaign.combat.order?.[campaign.combat.turnIndex??0]==='Nighthawk' ? <div className="space-y-3">
