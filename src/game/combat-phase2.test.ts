@@ -146,6 +146,46 @@ describe('multi-step encounters and resource resets',()=>{
   });
 });
 
+describe('owl survival and enemy targeting',()=>{
+  it('adjacent owl is struck, destroyed at 0 HP, and marked destroyed on familiar',()=>{
+    const consumed=dice(17,2);
+    const c=arena({turnIndex:1,enemyPosition:{x:3,y:10},
+      owl:{position:{x:3,y:9},hp:1,movementUsed:0,actionUsed:false}});
+    const next=resolveDuelEnemyTurn(c);
+    expect(next.familiar?.status).toBe('destroyed');
+    expect(combat(next).owl).toBeUndefined();
+    expect(next.character?.currentHitPoints).toBe(c.character?.currentHitPoints);
+    expect(next.journal.at(-1)?.text).toContain('Familiar disappears');
+    consumed();
+  });
+  it('a missed attack leaves the owl alive and Nighthawk unharmed',()=>{
+    const consumed=dice(1);
+    const c=arena({turnIndex:1,enemyPosition:{x:3,y:10},
+      owl:{position:{x:3,y:9},hp:1,movementUsed:0,actionUsed:false}});
+    const next=resolveDuelEnemyTurn(c);
+    expect(combat(next).owl?.hp).toBe(1);
+    expect(next.familiar?.status).toBe('active');
+    expect(next.character?.currentHitPoints).toBe(c.character?.currentHitPoints);
+    consumed();
+  });
+  it('an owl adjacent at the start but left behind after enemy movement is not attacked at range',()=>{
+    const c=arena({turnIndex:1,enemyPosition:{x:7,y:7},playerPosition:{x:2,y:10},
+      owl:{position:{x:8,y:8},hp:1,movementUsed:0,actionUsed:false}});
+    const next=resolveDuelEnemyTurn(c);
+    expect(next.familiar?.status).toBe('active');
+    expect(combat(next).owl?.hp).toBe(1);
+    expect(next.character?.currentHitPoints).toBe(c.character?.currentHitPoints);
+  });
+  it('a destroyed owl cannot provide Help on subsequent turns',()=>{
+    const consumed=dice(17,1);
+    const c=arena({turnIndex:1,enemyPosition:{x:3,y:10},
+      owl:{position:{x:3,y:9},hp:1,movementUsed:0,actionUsed:false}});
+    const next=resolveDuelEnemyTurn(c);
+    expect(()=>owlHelp(next,'first')).toThrow();
+    consumed();
+  });
+});
+
 describe('UI selectors agree with the combat rules',()=>{
   it('movement selector shows 0 after Steady Aim in both combat displays',()=>{
     const c=takeDuelTurnAction(arena(),'steady-aim');
