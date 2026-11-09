@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { createBackup, parseBackup } from '../game/backup';
 import { BookOpen, Compass, Droplet, Map, RefreshCw, Send, Settings, Shield, Users } from 'lucide-react';
-import { addExchange, addNote, addRoll, beginDuel, adjustEquipment, rollDuelInitiative, takeDuelTurnAction, utilizeCombatItem, takeCombatSkillAction, readyCombatAction, resolveReadiedCombatReaction, resolveReadiedWeaponAttack, moveDuelToken, moveOwl, owlHelp, owlTurnAction, tacticalRoute, tacticalOpportunityEnemies, enemyHealthDescription, publicCombatText, resolveEnemyOpportunity, moveTrainingDummy, resolveTrainingReaction, rollTrainingReaction, advanceDuelTestEnemyTurn, resolveDuelEnemyTurn, beginEnemyShove, beginEnemyGrapple, rollPlayerGrappleSave, beginPlayerGrappleEscape, rollPlayerGrappleEscape, rollPlayerShoveSave, standNighthawk, rollDuelAttack, shoveTrainingEnemy, hideNighthawk, searchForNighthawk, trainingMapSize, isTrainingPillar, trainingCoverBlocksSight, canNighthawkHide, addSecondTrainingEnemy, selectTrainingTarget, grappleTrainingEnemy, escapeTrainingGrapple, concludeDuel, quitTrainingEncounter, replenishTrainingEquipment, newCampaign, awardExperience, levelUpRogue, levelUpArcaneTrickster, tricksterCantrips, tricksterSpells, isRitualSpell, castNighthawkSpell, castCombatMagicAction, resolveCombatSpellSave, resolveLaughterRepeatSave, availableCombatSpells, takeNighthawkRest, applyNighthawkDamage, minutesUntilLongRestEligible, advanceToLongRestEligibility, endNighthawkConcentration, spellRequiresConcentration, reconcileNighthawkScores, undoNighthawkScoreReconciliation, xpThresholds, type Campaign } from '../game/campaign';
+import { addExchange, addNote, addRoll, beginDuel, adjustEquipment, rollDuelInitiative, takeDuelTurnAction, utilizeCombatItem, takeCombatSkillAction, readyCombatAction, readyCombatMindSliver, resolveReadiedSpellReaction, resolveReadiedCombatReaction, resolveReadiedWeaponAttack, moveDuelToken, moveOwl, owlHelp, owlTurnAction, tacticalRoute, tacticalOpportunityEnemies, enemyHealthDescription, publicCombatText, resolveEnemyOpportunity, moveTrainingDummy, resolveTrainingReaction, rollTrainingReaction, advanceDuelTestEnemyTurn, resolveDuelEnemyTurn, beginEnemyShove, beginEnemyGrapple, rollPlayerGrappleSave, beginPlayerGrappleEscape, rollPlayerGrappleEscape, rollPlayerShoveSave, standNighthawk, rollDuelAttack, shoveTrainingEnemy, hideNighthawk, searchForNighthawk, trainingMapSize, isTrainingPillar, trainingCoverBlocksSight, canNighthawkHide, addSecondTrainingEnemy, selectTrainingTarget, grappleTrainingEnemy, escapeTrainingGrapple, concludeDuel, quitTrainingEncounter, replenishTrainingEquipment, newCampaign, awardExperience, levelUpRogue, levelUpArcaneTrickster, tricksterCantrips, tricksterSpells, isRitualSpell, castNighthawkSpell, castCombatMagicAction, resolveCombatSpellSave, resolveLaughterRepeatSave, availableCombatSpells, takeNighthawkRest, applyNighthawkDamage, minutesUntilLongRestEligible, advanceToLongRestEligibility, endNighthawkConcentration, spellRequiresConcentration, reconcileNighthawkScores, undoNighthawkScoreReconciliation, xpThresholds, type Campaign } from '../game/campaign';
 import { localCampaignStorage } from '../game/storage';
 import { availableCombatMovement, combatHideStatus, combatAttackRollPreview } from '../game/combat-ui';
 import type { View } from '../game/types';
@@ -632,7 +632,7 @@ export function App() {
   }
   const [readyTrigger,setReadyTrigger]=useState('');
   const [readyResponse,setReadyResponse]=useState('');
-  const [readyWeapon,setReadyWeapon]=useState<'narrative'|'dagger'|'throw-dagger'|'shortbow'>('narrative');
+  const [readyWeapon,setReadyWeapon]=useState<'narrative'|'dagger'|'throw-dagger'|'shortbow'|'mind-sliver'>('narrative');
   async function adjudicateCombatWithDM(current:Campaign) {
     const pending=current.combatAdjudication;
     if(!pending)return;
@@ -666,7 +666,7 @@ export function App() {
   async function declareReady(){
     if(!campaign||saving)return;
     setSaving(true);
-    try{const next=readyCombatAction(campaign,readyTrigger,readyWeapon==='narrative'?readyResponse:readyWeapon==='shortbow'?'Fire my shortbow':readyWeapon==='throw-dagger'?'Throw my dagger':'Strike with my dagger',readyWeapon==='narrative'?undefined:readyWeapon);
+    try{const next=readyWeapon==='mind-sliver'?readyCombatMindSliver(campaign,readyTrigger):readyCombatAction(campaign,readyTrigger,readyWeapon==='narrative'?readyResponse:readyWeapon==='shortbow'?'Fire my shortbow':readyWeapon==='throw-dagger'?'Throw my dagger':'Strike with my dagger',readyWeapon==='narrative'?undefined:readyWeapon);
       await localCampaignStorage.save(next);setCampaign(next);setCampaigns(items=>items.map(entry=>entry.id===next.id?next:entry));setPendingCombatAction(null);setNotice(publicCombatText(next.journal.at(-1)!.text));if(next.combatAdjudication)await adjudicateCombatWithDM(next);
     }catch(error){setNotice('Ready: '+String(error));}finally{setSaving(false);}
   }
@@ -674,7 +674,7 @@ export function App() {
     if(!campaign||saving)return;
     setSaving(true);
     try{const weapon=campaign.combat?.readiedAction?.weapon;
-    const next=weapon?resolveReadiedWeaponAttack(campaign,weapon):resolveReadiedCombatReaction(campaign);
+    const next=campaign.combat?.readiedAction?.spell?resolveReadiedSpellReaction(campaign):weapon?resolveReadiedWeaponAttack(campaign,weapon):resolveReadiedCombatReaction(campaign);
       await localCampaignStorage.save(next);setCampaign(next);setCampaigns(items=>items.map(entry=>entry.id===next.id?next:entry));setNotice(publicCombatText(next.journal.at(-1)!.text));
     }catch(error){setNotice('Ready: '+String(error));}finally{setSaving(false);}
   }
@@ -1058,7 +1058,7 @@ export function App() {
             {campaign.combat.attack.phase==='resolved' && <p className="text-xs text-parchment/75">Attack resolved. Continue with any remaining movement or Bonus Action below, or use End Turn when ready.</p>}
           </div>}
           {campaign.combatAdjudication&&<div className="rounded border border-gold/60 p-3 space-y-2 text-sm"><p>Pending DM adjudication: {campaign.combatAdjudication.kind==='skill'?'skill check':'Ready reaction'}</p><button type="button" disabled={saving||!accessCode} className="rounded border border-gold p-2 disabled:opacity-35" onClick={()=>void retryCombatAdjudication()}>Retry DM adjudication</button>{!accessCode&&<p>Enter the game access code to request DM narration.</p>}</div>}
-          {campaign.combat.readiedAction&&<div className="rounded border border-gold/60 p-3 space-y-2 text-sm"><p>Readied: if {campaign.combat.readiedAction.trigger}, then {campaign.combat.readiedAction.response}</p><button type="button" disabled={saving||campaign.combat.order?.[campaign.combat.turnIndex??0]==='Nighthawk'||!!campaign.combat.reactionUsed} className="rounded border border-gold p-2 disabled:opacity-35" onClick={()=>void triggerReady()}>Confirm trigger · {campaign.combat.readiedAction.weapon?'Roll weapon attack':'Spend Reaction'}</button></div>}
+          {campaign.combat.readiedAction&&<div className="rounded border border-gold/60 p-3 space-y-2 text-sm"><p>Readied: if {campaign.combat.readiedAction.trigger}, then {campaign.combat.readiedAction.response}</p><button type="button" disabled={saving||campaign.combat.order?.[campaign.combat.turnIndex??0]==='Nighthawk'||!!campaign.combat.reactionUsed} className="rounded border border-gold p-2 disabled:opacity-35" onClick={()=>void triggerReady()}>Confirm trigger · {campaign.combat.readiedAction.weapon?'Roll weapon attack':campaign.combat.readiedAction.spell?'Release spell':'Spend Reaction'}</button></div>}
           {campaign.combat.lastAction && <p className="rounded-lg border border-gold/60 bg-gold/10 p-3 text-sm">Last action: <strong>{campaign.combat.lastAction}</strong> (confirmed)</p>}
           {activeCombatToken==='nighthawk'&&<p className="text-xs text-parchment/75" role="status">Action: {campaign.combat!.actionUsed||!!campaign.combat!.attack?'Spent':'Available'} · Bonus Action: {campaign.combat!.bonusActionUsed?'Spent':'Available'}</p>}
           <div className="grid grid-cols-2 gap-2" aria-label="2024 D&D actions">
@@ -1089,10 +1089,10 @@ export function App() {
           </div>}
           {pendingCombatAction==='ready'&&<div className="rounded-lg border border-gold bg-gold/10 p-3 space-y-2" role="region" aria-label="Declare Ready action">
             <p className="font-semibold">Ready · Declare trigger and response</p>
-            <p className="text-xs text-parchment/70">Spends your Action. You can spend your Reaction when the trigger occurs before your next turn. Weapon attacks resolve hit and damage automatically. Custom responses require DM adjudication. Readied spells need separate casting and concentration support and are not yet mechanically available.</p>
+            <p className="text-xs text-parchment/70">Spends your Action. You can spend your Reaction when the trigger occurs before your next turn. Weapon attacks resolve hit and damage automatically. Custom responses require DM adjudication. Mind Sliver can be held with concentration and released on the trigger. Other spells are not yet mechanically available.</p>
             <input className="w-full rounded border border-white/30 bg-transparent p-2" maxLength={240} placeholder="Trigger: when the dummy approaches..." value={readyTrigger} onChange={e=>setReadyTrigger(e.target.value)}/>
             <label className="block text-xs">Readied response</label>
-            <select className="w-full rounded border border-white/30 bg-ink p-2" value={readyWeapon} onChange={e=>setReadyWeapon(e.target.value as typeof readyWeapon)}><option value="narrative">Custom non-spell response (DM adjudication)</option><option value="dagger">Dagger melee attack</option><option value="throw-dagger">Thrown dagger attack</option><option value="shortbow">Shortbow attack</option></select>
+            <select className="w-full rounded border border-white/30 bg-ink p-2" value={readyWeapon} onChange={e=>setReadyWeapon(e.target.value as typeof readyWeapon)}><option value="narrative">Custom non-spell response (DM adjudication)</option><option value="dagger">Dagger melee attack</option><option value="throw-dagger">Thrown dagger attack</option><option value="shortbow">Shortbow attack</option>{availableCombatSpells(campaign).includes("Mind Sliver")&&<option value="mind-sliver">Mind Sliver (cast now, hold concentration)</option>}</select>
             {readyWeapon==='narrative'&&<input className="w-full rounded border border-white/30 bg-transparent p-2" maxLength={240} placeholder="Response: I throw my dagger..." value={readyResponse} onChange={e=>setReadyResponse(e.target.value)}/>}
             <button type="button" disabled={saving||!readyTrigger.trim()||(readyWeapon==='narrative'&&!readyResponse.trim())} className="w-full rounded border border-gold p-2 disabled:opacity-35" onClick={()=>void declareReady()}>Ready Action</button>
             <button type="button" className="text-xs underline" onClick={()=>setPendingCombatAction(null)}>Cancel</button>
