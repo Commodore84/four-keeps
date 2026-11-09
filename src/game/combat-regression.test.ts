@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  canNighthawkHide, hideNighthawk, moveDuelToken, moveOwl, newCampaign,
+  beginDuel, rollDuelInitiative, canNighthawkHide, hideNighthawk, moveDuelToken, moveOwl, newCampaign,
   owlHelp, rollDuelAttack, resolveDuelEnemyTurn, takeDuelTurnAction, trainingCoverBlocksSight,
   type Campaign,
 } from './campaign';
@@ -226,5 +226,20 @@ describe('combat regression: enemy turns', () => {
     const after = resolveDuelEnemyTurn(before);
     expect(after.character!.currentHitPoints).toBe(before.character!.currentHitPoints);
     expect(after.journal.at(-1)?.text).toContain('Owl');
+  });
+});
+
+describe('training encounter equipment reset', () => {
+  it('starts each new training encounter with 20 arrows and 2 daggers regardless of prior equipment', () => {
+    const campaign = newCampaign('Equipment reset test', 'equipment-reset');
+    const depleted = { ...campaign, equipment: { ...campaign.equipment!, arrows: 0, daggers: 0 } };
+    const first = rollDuelInitiative(beginDuel(depleted, 'Training Dummy'));
+    expect(first.combat?.arrowsRemaining).toBe(20);
+    expect(first.combat?.daggersAvailable).toBe(2);
+    const nextCampaign = { ...first, combat: undefined };
+    const second = rollDuelInitiative(beginDuel(nextCampaign, 'Training Dummy'));
+    expect(second.combat?.arrowsRemaining).toBe(20);
+    expect(second.combat?.daggersAvailable).toBe(2);
+    expect(second.combat?.daggersThrown).toBe(0);
   });
 });
