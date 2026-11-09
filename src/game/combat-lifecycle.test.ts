@@ -188,6 +188,7 @@ describe('2024 Search Study Influence and Ready actions',()=>{
    const result=takeCombatSkillAction(arena(),action,skill);
    expect(result.combat?.actionUsed).toBe(true);
    expect(result.combat?.lastSkillAction).toMatchObject({action,skill,roll:13});
+   expect(result.combatAdjudication).toMatchObject({kind:'skill'});
    expect(result.journal.at(-1)?.text).toMatch(/DM determines/);
    expect(()=>takeCombatSkillAction(result,action,skill)).toThrow(/Action already used/);
    consumed();
@@ -214,6 +215,8 @@ describe('2024 Search Study Influence and Ready actions',()=>{
   const reacted=resolveReadiedCombatReaction(enemyTurn);
   expect(reacted.combat?.reactionUsed).toBe(true);
   expect(reacted.combat?.readiedAction).toBeUndefined();
+  expect(reacted.combatAdjudication).toMatchObject({kind:'ready'});
+  expect(parseBackup(JSON.stringify(createBackup(reacted))).combatAdjudication?.detail).toMatch(/attack with dagger/);
   expect(()=>resolveReadiedCombatReaction(reacted)).toThrow(/No readied action/);
  });
  it('Ready requires a declaration and an available Action',()=>{
