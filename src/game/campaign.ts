@@ -11,6 +11,7 @@ export interface Campaign {
   createdAt: string;
   updatedAt: string;
   journal: JournalEntry[];
+  combatAdjudication?: {id:string;kind:'skill'|'ready';detail:string;createdAt:string};
   worldFacts?: string[];
   world?: WorldState;
   character?: CharacterStats;
@@ -570,7 +571,7 @@ export function takeCombatSkillAction(campaign:Campaign,action:'Search'|'Study'|
  const roll=crypto.getRandomValues(new Uint32Array(1))[0]%20+1,total=roll+bonus;
  const description=action+' · '+skill+' d20 '+roll+(bonus<0?' - '+Math.abs(bonus):' + '+bonus)+' = '+total+'. DM determines difficulty and outcome; no automatic information or NPC response is assumed.';
  const now=new Date().toISOString();
- return {...campaign,combat:{...c,actionUsed:true,lastAction:action,lastSkillAction:{action,skill,roll,total,description}},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:description,createdAt:now}]};
+ return {...campaign,combatAdjudication:{id:crypto.randomUUID(),kind:'skill',detail:description,createdAt:now},combat:{...c,actionUsed:true,lastAction:action,lastSkillAction:{action,skill,roll,total,description}},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:description,createdAt:now}]};
 }
 
 /** Ready spends an Action now; a reaction can later be spent when the declared trigger occurs. */
@@ -588,7 +589,7 @@ export function resolveReadiedCombatReaction(campaign:Campaign):Campaign {
  if(c.order?.[c.turnIndex??0]==='Nighthawk')throw Error('Ready reaction requires another creature\'s turn.');
  if(c.reactionUsed)throw Error('Reaction already used.');
  const now=new Date().toISOString(),readied=c.readiedAction;
- return {...campaign,combat:{...c,reactionUsed:true,readiedAction:undefined,lastAction:'Ready reaction'},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:'Ready reaction triggered: '+readied.response+'. Reaction spent; DM adjudicates the declared response.',createdAt:now}]};
+ return {...campaign,combatAdjudication:{id:crypto.randomUUID(),kind:'ready',detail:'Declared trigger: '+readied.trigger+'. Declared response: '+readied.response+'. The Reaction was spent; adjudicate the response without changing attack rolls, damage, HP, or conditions automatically.',createdAt:now},combat:{...c,reactionUsed:true,readiedAction:undefined,lastAction:'Ready reaction'},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:'Ready reaction triggered: '+readied.response+'. Reaction spent; DM adjudicates the declared response.',createdAt:now}]};
 }
 /** Utilize an available consumable during combat; placement effects await DM adjudication. */
 export function utilizeCombatItem(campaign:Campaign,item:'caltrops'|'ballBearings'):Campaign {
