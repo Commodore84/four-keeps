@@ -274,6 +274,38 @@ describe('Ready weapon reactions',()=>{
   const c=takeDuelTurnAction(readyCombatAction(arena({pendingEnemyGrapple:true}),'moves','Shoot','shortbow'),'end');
   expect(()=>resolveReadiedWeaponAttack(c,'shortbow')).toThrow(/pending combat event/);
  });
+ it('a lethal readied strike completes combat and permits concluding the encounter',()=>{
+  const c=takeDuelTurnAction(readyCombatAction(arena({enemyHp:1,enemyPosition:{x:4,y:10}}),'moves','Shoot','shortbow'),'end');
+  const consumed=dice(18,4);
+  const result=resolveReadiedWeaponAttack(c,'shortbow');
+  expect(result.combat?.enemyHp).toBe(0);
+  expect(result.combat?.status).toBe('completed');
+  expect(result.combat?.outcome).toBe('nonlethal-victory');
+  expect(concludeDuel(result).combat).toBeUndefined();
+  consumed();
+ });
+ it('a prone enemy at range imposes disadvantage on a readied bow shot',()=>{
+  const c=takeDuelTurnAction(readyCombatAction(arena({enemyPosition:{x:5,y:10},enemyProne:true}),'moves','Shoot','shortbow'),'end');
+  const consumed=dice(19,2);
+  const result=resolveReadiedWeaponAttack(c,'shortbow');
+  expect(result.combat?.enemyHp).toBe(12);
+  expect(result.combat?.stats?.hits).toBe(0);
+  consumed();
+ });
+ it('prone adjacent target grants advantage even with a readied ranged attack; disadvantage cancels it',()=>{
+  const c=takeDuelTurnAction(readyCombatAction(arena({enemyPosition:{x:3,y:10},enemyProne:true}),'moves','Shoot','shortbow'),'end');
+  const consumed=dice(19);
+  const result=resolveReadiedWeaponAttack(c,'shortbow');
+  expect(result.combat?.enemyHp).toBe(12);
+  consumed();
+ });
+ it('a readied attack never grants Sneak Attack when disadvantage remains',()=>{
+  const c=takeDuelTurnAction(readyCombatAction(arena({enemyPosition:{x:5,y:10},trainingAllyAdjacent:true,enemyProne:true}),'moves','Shoot','shortbow'),'end');
+  const consumed=dice(19,17,3);
+  const result=resolveReadiedWeaponAttack(c,'shortbow');
+  expect(result.combat?.stats?.sneakDamage).toBe(0);
+  consumed();
+ });
  it('out of range and missing ammunition do not spend a reaction',()=>{
   const c=takeDuelTurnAction(readyCombatAction(arena(),'moves','Strike','dagger'),'end');
   expect(()=>resolveReadiedWeaponAttack(c,'dagger')).toThrow(/adjacent/);
