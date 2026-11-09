@@ -24,16 +24,26 @@ async function transact<T>(mode: IDBTransactionMode, execute: (store: IDBObjectS
   const db = await openDatabase();
   return new Promise<T>((resolve, reject) => {
     let settled = false;
-    const fail = (error: Error) => { if (!settled) { settled = true; reject(error); } };
-    const done = (value: T) => { if (!settled) { settled = true; resolve(value); } };
+    let resultReady = false;
+    let transactionComplete = false;
+    let result: T;
+    const fail = (error: Error) => { if (!settled) { settled = true; db.close(); reject(error); } };
+    const finish = () => {
+      if (!settled && resultReady && transactionComplete) {
+        settled = true;
+        db.close();
+        resolve(result);
+      }
+    };
+    const done = (value: T) => { result = value; resultReady = true; finish(); };
     try {
       const tx = db.transaction(STORE, mode);
       const store = tx.objectStore(STORE);
+      tx.oncomplete = () => { transactionComplete = true; finish(); };
       tx.onabort = () => fail(tx.error ?? new Error('Local save transaction aborted'));
       tx.onerror = () => fail(tx.error ?? new Error('Local save transaction failed'));
       execute(store, done, fail);
     } catch (error) { fail(error instanceof Error ? error : new Error(String(error))); }
-    // Connection closes after this operation settles; requests are transaction-scoped.
   });
 }
 function requestResult<T>(request: IDBRequest<T>, resolve: (value: T) => void, reject: (error: Error) => void) {
