@@ -4,7 +4,7 @@ import {createBackup,parseBackup} from './backup';
 function encounter():Campaign {
  const base=newCampaign('Arcane Trickster combat','magic-test');
  return {...base,character:{...base.character!,level:3,subclass:'Arcane Trickster',cantrips:['Mage Hand','Minor Illusion','Mind Sliver'],preparedSpells:['Disguise Self','Silent Image','Find Familiar'],spellSlots:{level1:2,usedLevel1:0}},
- combat:{status:'initiative-set',enemyName:'Training Dummy',enemyInitiative:10,playerInitiative:20,round:1,order:['Nighthawk','Training Dummy'],turnIndex:0,enemyHp:12,enemyMaxHp:12,playerPosition:{x:2,y:10},enemyPosition:{x:10,y:2},movementAllowance:35}};
+ combat:{status:'initiative-set',selectedEnemy:'first',enemyName:'Training Dummy',enemyInitiative:10,playerInitiative:20,round:1,order:['Nighthawk','Training Dummy'],turnIndex:0,enemyHp:12,enemyMaxHp:12,playerPosition:{x:2,y:10},enemyPosition:{x:10,y:2},movementAllowance:35}};
 }
 describe('Arcane Trickster Magic Action',()=>{
  it('only enables combat-action spells, excluding one-hour Find Familiar',()=>{
