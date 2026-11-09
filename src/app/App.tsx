@@ -179,8 +179,23 @@ function Party({ campaign, onRoll, onSaveRoll, onAwardXP, onLevelUp, onLevelThre
         <div><p className="eyebrow">Arcane Trickster</p><h3 className="mt-1 font-serif text-2xl">Spells</h3><p className="mt-1 text-xs text-parchment/65">INT spellcasting · Save DC {8+stats.proficiencyBonus+abilityModifier(stats.scores.int)} · Spell attack {signed(stats.proficiencyBonus+abilityModifier(stats.scores.int))}</p></div>
         <div className="rounded-xl border border-gold/30 bg-ink/40 p-4"><div className="flex items-center justify-between gap-3"><h4 className="font-semibold">Level 1 spell slots</h4><span className="font-semibold tabular-nums text-gold">{Math.max(0,(stats.spellSlots?.level1??2)-(stats.spellSlots?.usedLevel1??0))} / {stats.spellSlots?.level1??2} available</span></div>
         <div className="mt-3 flex gap-3" role="img" aria-label={Math.max(0,(stats.spellSlots?.level1??2)-(stats.spellSlots?.usedLevel1??0))+' of '+(stats.spellSlots?.level1??2)+' level 1 spell slots available'}>{Array.from({length:stats.spellSlots?.level1??2},(_,i)=><div key={i} className={i<(stats.spellSlots?.level1??2)-(stats.spellSlots?.usedLevel1??0)?'h-4 flex-1 rounded-full border border-gold bg-gold':'h-4 flex-1 rounded-full border border-white/35 bg-transparent'}/>)}</div><p className="mt-2 text-xs text-parchment/60">Filled = available · Outline = spent. Cantrips and ritual casting do not spend slots.</p></div>
-        <div><h4 className="font-semibold">Cantrips <span className="text-xs font-normal text-parchment/60">Level 0 · unlimited</span></h4><div className="mt-2 space-y-2">{(stats.cantrips??[]).map(spell=><button type="button" key={spell} onClick={()=>setSelectedSpell(spell)} className="flex w-full items-center justify-between rounded-lg border border-white/15 p-3 text-left text-sm"><span>{spell}</span><span className="text-xs text-parchment/60">Details</span></button>)}</div></div>
-        <div><h4 className="font-semibold">Level 1 spells</h4><div className="mt-2 space-y-2">{(stats.preparedSpells??[]).map(spell=><button type="button" key={spell} onClick={()=>setSelectedSpell(spell)} className="flex w-full items-center justify-between rounded-lg border border-white/15 p-3 text-left text-sm"><span>{spell}{isRitualSpell(spell)?' · Ritual':''}</span><span className="text-xs text-parchment/60">Details</span></button>)}</div></div>
+        {([['Cantrips',stats.cantrips??[]],['Level 1 Spells',stats.preparedSpells??[]]] as const).map(([group,spells])=><div key={group} className="space-y-2">
+          <h4 className="font-semibold">{group} <span className="text-xs font-normal text-parchment/60">{group==='Cantrips'?'Level 0 · unlimited':'Prepared spells'}</span></h4>
+          {spells.length===0&&<p className="text-sm text-parchment/55">No spells recorded.</p>}
+          {spells.map(spell=><div key={spell} className="overflow-hidden rounded-xl border border-white/15 bg-ink/30">
+            <button type="button" aria-expanded={selectedSpell===spell} onClick={()=>setSelectedSpell(selectedSpell===spell?null:spell)} className="w-full p-3 text-left">
+              <span className="flex items-center justify-between gap-2"><strong className="text-sm">{spell}</strong><span className="text-xs text-gold">{selectedSpell===spell?'Hide details':'Show details'}</span></span>
+              <span className="mt-2 block text-xs text-parchment/65">{group==='Cantrips'?'Cantrip':'Level 1'} · {isRitualSpell(spell)?'Ritual · ':''}{spellRequiresConcentration(spell)?'Concentration · ':''}Casting time / range / duration: see details</span>
+            </button>
+            {selectedSpell===spell&&<div className="space-y-3 border-t border-gold/25 p-3">
+              <p className="text-sm leading-6">{spellSummaries[spell]??'Detailed rules are not yet recorded for this spell.'}</p>
+              <p className="text-xs text-parchment/60">Components and complete spell metadata are not yet stored. Verify casting requirements during Adventure.</p>
+              {spellRequiresConcentration(spell)&&<p className="text-xs text-gold">Requires concentration. Casting replaces any existing concentration.</p>}
+              {isRitualSpell(spell)&&<p className="text-xs text-gold">Ritual casting adds 10 minutes and spends no spell slot.</p>}
+              <p className="text-xs text-parchment/60">Use the Adventure screen to cast and resolve this spell.</p>
+            </div>}
+          </div>)}
+        </div>)}
         {campaign?.concentration && <p className="rounded-lg border border-gold/25 p-3 text-sm">Concentrating: {campaign.concentration.spell} <button type="button" disabled={saving} className="ml-2 underline text-gold" onClick={onEndConcentration}>End</button></p>}
         {(campaign?.spellEffects?.filter(e=>e.status==='awaiting-adjudication').length??0)>0 && <p className="text-xs text-parchment/60">Pending spell effects: {campaign?.spellEffects?.filter(e=>e.status==='awaiting-adjudication').length} awaiting DM adjudication.</p>}
         <p className="text-xs text-parchment/60">Cast spells in Adventure with your target and intended effect. Tap a spell here to view its description.</p>
