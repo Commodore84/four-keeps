@@ -944,7 +944,7 @@ export function advanceDuelTestEnemyTurn(campaign:Campaign):Campaign {
  if(combat.opportunity)throw Error('Resolve the opportunity attack first.');
  const now=new Date().toISOString();
  const nextRound=combat.order[0]==='Nighthawk'?combat.round+1:combat.round;
- return {...campaign,combat:{...combat,turnIndex:combat.order.indexOf('Nighthawk'),round:nextRound,movementUsed:0,actionUsed:false,bonusActionUsed:false,lastAction:undefined,attack:undefined},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:'TEST ONLY: '+combat.enemyName+' turn skipped without an attack, damage, or other effect. Nighthawk can act again.',createdAt:now}]};
+ return {...campaign,concentration:campaign.concentration?.spell==='Readied Mind Sliver'?undefined:campaign.concentration,combat:{...combat,readiedAction:undefined,turnIndex:combat.order.indexOf('Nighthawk'),round:nextRound,movementUsed:0,actionUsed:false,bonusActionUsed:false,lastAction:undefined,attack:undefined},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:'TEST ONLY: '+combat.enemyName+' turn skipped without an attack, damage, or other effect. Nighthawk can act again.',createdAt:now}]};
 }
 
 export function rollDuelAttack(campaign:Campaign,kind:'hit'|'damage',applySneakAttack?:boolean):Campaign {
