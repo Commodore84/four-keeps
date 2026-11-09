@@ -26,7 +26,7 @@ export interface Campaign {
   xpAwards?: { id: string; amount: number; reason: string }[];
   levelOneSnapshot?: { character: CharacterStats; xp: number; xpAwards: { id: string; amount: number; reason: string }[] };
   encounterRecaps?: {id:string;date:string;outcome:string;rounds:number;damage:number;movement:number;attacks:number;hits:number;criticalHits:number;sneakDamage:number;finishingBlows:number}[];
-  combat?: { owl?:{position:{x:number;y:number};hp:number;movementUsed:number;actionUsed:boolean;helpTarget?:'first'|'second';helpRound?:number}; stats?:{damage:number;movement:number;attacks:number;hits:number;criticalHits:number;sneakDamage:number;finishingBlows:number}; journalStartIndex?:number; status:'awaiting-initiative'|'initiative-set'|'completed'; enemyName:string; enemyInitiative:number; selectedEnemy?:'first'|'second'; secondEnemy?:{name:string;initiative:number;position:{x:number;y:number};hp:number;maxHp:number;detected:boolean;prone?:boolean;grappled?:boolean}; playerInitiative?:number; round:number; order?:string[]; turnIndex?:number; movementUsed?:number; actionUsed?:boolean; bonusActionUsed?:boolean; spellSlotExpendedThisTurn?:boolean; lastAction?:string; arrowsRemaining?:number; daggersAvailable?:number; daggersThrown?:number; reactionUsed?:boolean; enemyReactionUsed?:boolean; secondEnemyReactionUsed?:boolean; playerOpportunity?:{route?:{x:number;y:number}[];routeIndex?:number;remainingEnemyIds?:('first'|'second')[];enemyId?:'first'|'second';from:{x:number;y:number};to:{x:number;y:number};cost:number;phase:'roll-to-hit'|'roll-damage'|'resolved';d20?:number;total?:number;hit?:boolean;damage?:number;critical?:boolean}; reactionAttack?:{phase:'roll-to-hit'|'roll-damage'|'resolved';d20?:number;total?:number;hit?:boolean;critical?:boolean;damage?:number}; opportunity?:{from:{x:number;y:number};to:{x:number;y:number}}; attack?:{weapon?:'dagger'|'shortbow'; thrown?:boolean; disadvantage?:boolean; phase:'roll-to-hit'|'roll-damage'|'resolved'; d20?:number; firstD20?:number; total?:number; hit?:boolean; critical?:boolean; damage?:number; weaponDamageRolls?:number[]; sneakAttackRolls?:number[]; sneakAttackDamage?:number; advantage?:boolean; secondD20?:number}; steadyAim?:boolean; movementAllowance?:number; disengaged?:boolean; enemyHp?:number; enemyMaxHp?:number; outcome?:'nonlethal-victory'|'player-defeated'; enemyLastTurn?:string; trainingStartingHp?:number; playerPosition?:{x:number;y:number}; enemyPosition?:{x:number;y:number}; trainingAllyAdjacent?:boolean; enemyProne?:boolean; enemyGrappled?:boolean; lastGrappleResult?:string; playerProne?:boolean; playerGrappled?:boolean; playerHidden?:boolean; hideRoll?:number; hideTotal?:number; hideResult?:string; enemySearchResult?:string; pendingEnemyGrapple?:boolean; pendingPlayerEscape?:boolean; lastPlayerGrappleResult?:string; pendingEnemyShove?:boolean; lastPlayerShoveSave?:string; lastShoveSave?:{passed:boolean;dc:number;outcome:'prone'|'push';effectApplied:boolean}; sneakAttackUsedThisTurn?:boolean; sneakAttackEligible?:boolean };
+  combat?: { owl?:{position:{x:number;y:number};hp:number;movementUsed:number;actionUsed:boolean;helpTarget?:'first'|'second';helpRound?:number}; stats?:{damage:number;movement:number;attacks:number;hits:number;criticalHits:number;sneakDamage:number;finishingBlows:number}; journalStartIndex?:number; status:'awaiting-initiative'|'initiative-set'|'completed'; enemyName:string; enemyInitiative:number; selectedEnemy?:'first'|'second'; secondEnemy?:{name:string;initiative:number;position:{x:number;y:number};hp:number;maxHp:number;detected:boolean;prone?:boolean;grappled?:boolean}; playerInitiative?:number; round:number; order?:string[]; turnIndex?:number; movementUsed?:number; actionUsed?:boolean; bonusActionUsed?:boolean; spellSlotExpendedThisTurn?:boolean; pendingSpellSave?:{spell:'Mind Sliver'|'Tasha’s Hideous Laughter';target:'first'|'second'}; lastSpellSave?:{spell:string;target:string;roll:number;total:number;dc:number;success:boolean;damage?:number}; lastAction?:string; arrowsRemaining?:number; daggersAvailable?:number; daggersThrown?:number; reactionUsed?:boolean; enemyReactionUsed?:boolean; secondEnemyReactionUsed?:boolean; playerOpportunity?:{route?:{x:number;y:number}[];routeIndex?:number;remainingEnemyIds?:('first'|'second')[];enemyId?:'first'|'second';from:{x:number;y:number};to:{x:number;y:number};cost:number;phase:'roll-to-hit'|'roll-damage'|'resolved';d20?:number;total?:number;hit?:boolean;damage?:number;critical?:boolean}; reactionAttack?:{phase:'roll-to-hit'|'roll-damage'|'resolved';d20?:number;total?:number;hit?:boolean;critical?:boolean;damage?:number}; opportunity?:{from:{x:number;y:number};to:{x:number;y:number}}; attack?:{weapon?:'dagger'|'shortbow'; thrown?:boolean; disadvantage?:boolean; phase:'roll-to-hit'|'roll-damage'|'resolved'; d20?:number; firstD20?:number; total?:number; hit?:boolean; critical?:boolean; damage?:number; weaponDamageRolls?:number[]; sneakAttackRolls?:number[]; sneakAttackDamage?:number; advantage?:boolean; secondD20?:number}; steadyAim?:boolean; movementAllowance?:number; disengaged?:boolean; enemyHp?:number; enemyMaxHp?:number; outcome?:'nonlethal-victory'|'player-defeated'; enemyLastTurn?:string; trainingStartingHp?:number; playerPosition?:{x:number;y:number}; enemyPosition?:{x:number;y:number}; trainingAllyAdjacent?:boolean; enemyProne?:boolean; enemyGrappled?:boolean; lastGrappleResult?:string; playerProne?:boolean; playerGrappled?:boolean; playerHidden?:boolean; hideRoll?:number; hideTotal?:number; hideResult?:string; enemySearchResult?:string; pendingEnemyGrapple?:boolean; pendingPlayerEscape?:boolean; lastPlayerGrappleResult?:string; pendingEnemyShove?:boolean; lastPlayerShoveSave?:string; lastShoveSave?:{passed:boolean;dc:number;outcome:'prone'|'push';effectApplied:boolean}; sneakAttackUsedThisTurn?:boolean; sneakAttackEligible?:boolean };
   pendingAftermath?: { opponent: string; playerDefeated: boolean };
   pendingCheck?: { skill: string; mode: 'normal' | 'advantage' | 'disadvantage'; reason: string; token: string; dice?: number[] };
 }
@@ -147,13 +147,41 @@ export function castCombatMagicAction(campaign:Campaign,spell:string,target=''):
  const c=campaign.combat;
  if(!c||c.status!=='initiative-set'||c.order?.[c.turnIndex??0]!=='Nighthawk')throw Error('Magic Action requires Nighthawk’s turn.');
  if(c.actionUsed||c.attack)throw Error('Action already used this turn.');
- if(c.pendingPlayerEscape||c.playerOpportunity||c.opportunity||c.pendingEnemyShove||c.pendingEnemyGrapple)throw Error('Resolve the pending combat event first.');
+ if(c.pendingSpellSave||c.pendingPlayerEscape||c.playerOpportunity||c.opportunity||c.pendingEnemyShove||c.pendingEnemyGrapple)throw Error('Resolve the pending combat event first.');
  if(!availableCombatSpells(campaign).includes(spell))throw Error('Spell is not available as a combat Magic Action.');
  const isCantrip=campaign.character?.cantrips?.includes(spell)??false;
  if(!isCantrip&&c.spellSlotExpendedThisTurn)throw Error('Only one spell slot may be expended per turn.');
  const cast=castNighthawkSpell(campaign,spell,false,false,target);
+ const saveSpell=spell==='Mind Sliver'||spell==='Tasha’s Hideous Laughter';
+ const targetId=c.selectedEnemy==='second'?'second':'first';
+ if(saveSpell&&(targetId==='second'?(c.secondEnemy?.hp??0)<=0:(c.enemyHp??12)<=0))throw Error('Spell requires a living enemy target.');
  const now=new Date().toISOString();
- return {...cast,combat:{...c,actionUsed:true,spellSlotExpendedThisTurn:!!c.spellSlotExpendedThisTurn||!isCantrip,lastAction:'Magic: '+spell},updatedAt:now};
+ return {...cast,combat:{...c,actionUsed:true,spellSlotExpendedThisTurn:!!c.spellSlotExpendedThisTurn||!isCantrip,lastAction:'Magic: '+spell,pendingSpellSave:saveSpell?{spell:spell as 'Mind Sliver'|'Tasha’s Hideous Laughter',target:targetId}:undefined},updatedAt:now};
+}
+/** Resolve a spell saving throw with the training dummy's +0 Intelligence/Wisdom save. */
+export function resolveCombatSpellSave(campaign:Campaign):Campaign {
+ const c=campaign.combat,pending=c?.pendingSpellSave;
+ if(!c||!pending||c.status!=='initiative-set')throw Error('No spell saving throw pending.');
+ const ch=campaign.character??prototypeNighthawk;
+ const dc=8+ch.proficiencyBonus+abilityModifier(ch.scores.int);
+ const roll=crypto.getRandomValues(new Uint32Array(1))[0]%20+1;
+ const total=roll; // Training dummy: INT +0, WIS +0.
+ const success=total>=dc;
+ const damage=pending.spell==='Mind Sliver'&&!success?crypto.getRandomValues(new Uint32Array(1))[0]%6+1:0;
+ const target=pending.target==='second'?c.secondEnemy?.name??'Training Dummy 2':c.enemyName;
+ const second=pending.target==='second';
+ const enemyHp=second?c.enemyHp:Math.max(0,(c.enemyHp??12)-damage);
+ const secondEnemy=second&&c.secondEnemy?{...c.secondEnemy,hp:Math.max(0,c.secondEnemy.hp-damage),prone:!success&&pending.spell==='Tasha’s Hideous Laughter'?true:c.secondEnemy.prone}:c.secondEnemy;
+ const firstProne=!second&&!success&&pending.spell==='Tasha’s Hideous Laughter'?true:c.enemyProne;
+ const bothDown=(enemyHp??12)===0&&(!secondEnemy||secondEnemy.hp===0);
+ const next={...c,enemyHp,secondEnemy,enemyProne:firstProne,pendingSpellSave:undefined,
+  lastSpellSave:{spell:pending.spell,target,roll,total,dc,success,damage},
+  status:bothDown?'completed' as const:c.status,outcome:bothDown?'nonlethal-victory' as const:c.outcome};
+ if(damage>0){const stats=c.stats??{damage:0,movement:0,attacks:0,hits:0,criticalHits:0,sneakDamage:0,finishingBlows:0};
+  next.stats={...stats,damage:stats.damage+damage,finishingBlows:stats.finishingBlows+(second?secondEnemy?.hp===0:enemyHp===0?1:0)};}
+ const now=new Date().toISOString();
+ const message=target+' rolls '+roll+' + 0 = '+total+' vs spell save DC '+dc+' for '+pending.spell+': '+(success?'SUCCESS.':'FAILURE.')+(damage?' '+damage+' psychic damage.':'')+(!success&&pending.spell==='Tasha’s Hideous Laughter'?' Target falls Prone; incapacitation and repeat saves await full condition engine.':'')+(bothDown?' Encounter complete.':'');
+ return {...campaign,combat:next,updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:message,createdAt:now}]};
 }
 export function castNighthawkSpell(campaign: Campaign, spell: string, ritual: boolean, familiarComponentsConfirmed = false, target = ''): Campaign {
   const character = campaign.character;
@@ -602,6 +630,7 @@ export function resolveDuelEnemyTurn(campaign:Campaign):Campaign {
  const combat=campaign.combat;
  if(!combat||combat.status!=='initiative-set'||!combat.order||combat.order[combat.turnIndex??0]==='Nighthawk')throw Error('It is not the opponent\'s turn.');
  if(combat.opportunity)throw Error('Resolve the opportunity attack before continuing.');
+ if(combat.pendingSpellSave)throw Error('Resolve the pending spell saving throw first.');
  if(combat.pendingEnemyShove||combat.pendingEnemyGrapple)throw Error('Resolve the pending Shove or Grapple save first.');
  const currentName=combat.order[combat.turnIndex??0];
  if(currentName===combat.enemyName&&(combat.enemyHp??12)===0||currentName===combat.secondEnemy?.name&&combat.secondEnemy?.hp===0)throw Error('Defeated enemies cannot act.');
