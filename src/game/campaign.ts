@@ -1,4 +1,4 @@
-import { prototypeNighthawk, abilityModifier, type CharacterStats, type Skill } from './checks';
+import { prototypeNighthawk, abilityModifier, type CharacterStats, type Skill, skillAbility } from './checks';
 import { emptyWorld, mergeWorld, normalizeWorld, type WorldState } from './world';
 export interface JournalEntry { id: string; text: string; createdAt: string; kind: 'note' | 'system' | 'player' | 'dm' }
 export interface Campaign {
@@ -566,7 +566,7 @@ export function takeCombatSkillAction(campaign:Campaign,action:'Search'|'Study'|
  const rule=skills[action];
  if(!rule.options.includes(skill))throw Error(skill+' is not a valid '+action+' skill.');
  const ch=campaign.character??prototypeNighthawk;
- const bonus=abilityModifier(ch.scores[rule.ability])+ch.proficiencyBonus*(ch.expertiseSkills?.includes(skill)?2:ch.proficientSkills?.includes(skill)?1:0);
+ const bonus=abilityModifier(ch.scores[skillAbility[skill]])+ch.proficiencyBonus*(ch.expertiseSkills?.includes(skill)?2:ch.proficientSkills?.includes(skill)?1:0);
  const roll=crypto.getRandomValues(new Uint32Array(1))[0]%20+1,total=roll+bonus;
  const description=action+' · '+skill+' d20 '+roll+(bonus<0?' - '+Math.abs(bonus):' + '+bonus)+' = '+total+'. DM determines difficulty and outcome; no automatic information or NPC response is assumed.';
  const now=new Date().toISOString();
