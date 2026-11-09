@@ -102,13 +102,13 @@ function Party({ campaign, onRoll, onSaveRoll, onAwardXP, onLevelUp, onLevelThre
   const signed = (value: number) => (value >= 0 ? '+' : '') + value;
   return <section className="space-y-4"><div className="flex items-center gap-3"><Shield className="text-gold"/><h2 className="font-serif text-2xl">Player Character</h2></div>
     <section aria-label="Player character overview" className="rounded-xl border border-gold/40 bg-panel p-4 space-y-3">
-      <div><p className="text-xs uppercase tracking-widest text-gold">Character sheet</p><h3 className="font-serif text-2xl">Nighthawk</h3><p className="text-xs text-parchment/65">Wood Elf · Rogue {stats.level>=3?'(Arcane Trickster)':''} · Level {stats.level}</p></div>
+      <div><p className="text-xs uppercase tracking-widest text-gold">Character sheet</p><h3 className="font-serif text-2xl">Nighthawk</h3><p className="text-xs text-parchment/65">Wood Elf · Rogue {(stats.level??1)>=3?'(Arcane Trickster)':''} · Level {stats.level??1}</p></div>
       <div className="grid grid-cols-2 gap-2 text-sm">
         <div className="rounded-lg border border-white/15 p-3"><p className="text-xs text-parchment/60">Hit Points</p><strong className="text-lg tabular-nums">{stats.currentHitPoints??stats.maxHitPoints??10} / {stats.maxHitPoints??10}</strong></div>
         <div className="rounded-lg border border-white/15 p-3"><p className="text-xs text-parchment/60">Armor Class</p><strong className="text-lg">{stats.armorClass??14}</strong></div>
         <div className="rounded-lg border border-white/15 p-3"><p className="text-xs text-parchment/60">Speed</p><strong className="text-lg">{stats.speed??35} ft</strong></div>
-        <div className="rounded-lg border border-white/15 p-3"><p className="text-xs text-parchment/60">Hit Dice</p><strong className="text-lg">{campaign?.hitDiceRemaining??stats.level} / {stats.level} d8</strong></div>
-        {stats.level>=3&&<div className="rounded-lg border border-white/15 p-3"><p className="text-xs text-parchment/60">Level 1 spell slots</p><strong className="text-lg">{Math.max(0,(stats.spellSlots?.level1??2)-(stats.spellSlots?.usedLevel1??0))} / {stats.spellSlots?.level1??2}</strong></div>}
+        <div className="rounded-lg border border-white/15 p-3"><p className="text-xs text-parchment/60">Hit Dice</p><strong className="text-lg">{campaign?.hitDiceRemaining??stats.level??1} / {stats.level??1} d8</strong></div>
+        {(stats.level??1)>=3&&<div className="rounded-lg border border-white/15 p-3"><p className="text-xs text-parchment/60">Level 1 spell slots</p><strong className="text-lg">{Math.max(0,(stats.spellSlots?.level1??2)-(stats.spellSlots?.usedLevel1??0))} / {stats.spellSlots?.level1??2}</strong></div>}
         <div className="rounded-lg border border-white/15 p-3"><p className="text-xs text-parchment/60">Proficiency</p><strong className="text-lg">+{stats.proficiencyBonus}</strong></div>
       </div>
       <div className="text-xs text-parchment/70">XP: {campaign?.xp??0} · Passive Perception: {passivePerception(stats)}</div>
