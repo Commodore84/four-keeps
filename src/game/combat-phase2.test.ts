@@ -113,6 +113,25 @@ describe('multi-step encounters and resource resets',()=>{
     expect(combat(c).bonusActionUsed).toBe(true);
     consumed();
   });
+  it('two enemies each take a turn before the next player round',()=>{
+    let c=arena({
+      order:['Nighthawk','Training Dummy','Training Dummy 2'],turnIndex:0,
+      enemyPosition:{x:10,y:2},
+      secondEnemy:{name:'Training Dummy 2',initiative:8,position:{x:10,y:4},hp:12,maxHp:12,detected:false},
+    });
+    c=takeDuelTurnAction(c,'cunning-dash');
+    c=takeDuelTurnAction(c,'end');
+    expect(combat(c).turnIndex).toBe(1);
+    c=resolveDuelEnemyTurn(c);
+    expect(combat(c).turnIndex).toBe(2);
+    expect(combat(c).round).toBe(1);
+    c=resolveDuelEnemyTurn(c);
+    expect(combat(c).turnIndex).toBe(0);
+    expect(combat(c).round).toBe(2);
+    expect(combat(c).movementAllowance).toBe(35);
+    expect(availableCombatMovement(combat(c))).toBe(35);
+    expect(combat(c).owl?.actionUsed).toBe(false);
+  });
   it('owl movement and Help reset on the next Nighthawk turn',()=>{
     let c=arena({enemyPosition:{x:10,y:2}});
     c=moveOwl(c,9,2);
