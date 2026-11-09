@@ -103,7 +103,7 @@ test('illustrated forest map displays terrain-aligned grid without a legend', as
   await page.getByRole('button', { name: 'Roll initiative (d20 + DEX)' }).click();
   const grid=page.getByRole('grid', { name: 'Combat movement grid' });
   await expect(grid).toBeVisible();
-  await expect(grid).toHaveCSS('background-image', /forest-ruins-test\\.svg/);
+  await expect(grid).toHaveCSS('background-image', /forest-ruins-test/);
   await expect(page.getByText('N = Nighthawk')).toHaveCount(0);
   await expect(page.getByRole('gridcell', { name: /Square 10, 11; stream terrain/ })).toHaveCount(1);
 });
