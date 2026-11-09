@@ -572,7 +572,6 @@ export function standNighthawk(campaign:Campaign):Campaign {
  const detail='Nighthawk stands up, spending 15 feet of movement. '+((c.movementAllowance??35)-(c.movementUsed??0)-cost)+' feet remaining.';
  return {...campaign,combat:{...c,playerProne:false,movementUsed:(c.movementUsed??0)+cost},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:detail,createdAt:now}]};
 }
-function distanceToOwl(a:{x:number;y:number},b:{x:number;y:number}):number{return Math.max(Math.abs(a.x-b.x),Math.abs(a.y-b.y));}
 export function resolveDuelEnemyTurn(campaign:Campaign):Campaign {
  const combat=campaign.combat;
  if(!combat||combat.status!=='initiative-set'||!combat.order||combat.order[combat.turnIndex??0]==='Nighthawk')throw Error('It is not the opponent\'s turn.');
