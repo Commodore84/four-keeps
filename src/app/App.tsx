@@ -6,7 +6,7 @@ import { localCampaignStorage } from '../game/storage';
 import { availableCombatMovement, combatHideStatus, combatAttackRollPreview } from '../game/combat-ui';
 import type { View } from '../game/types';
 import { emptyWorld } from '../game/world';
-import { prototypeNighthawk, abilities, abilityModifier, skillAbility, skillModifier, savingThrowModifier, passivePerception, rogueSneakAttackDice, rollCheck, describeCheck, type Skill, type RollMode } from '../game/checks';
+import { prototypeNighthawk, abilities, abilityModifier, skillAbility, skillModifier, savingThrowModifier, rogueSneakAttackDice, rollCheck, describeCheck, type Skill, type RollMode } from '../game/checks';
 
 const spellSummaries: Record<string,string> = {
   "Acid Splash": "Hurl acid at a creature; it makes a Dexterity saving throw or takes acid damage.",
