@@ -101,9 +101,15 @@ function Party({ campaign, onRoll, onSaveRoll, onAwardXP, onLevelUp, onLevelThre
   const lastRoll = campaign?.journal.filter(entry => entry.kind === 'system' && (entry.text.startsWith('Nighthawk rolled ') || entry.text.startsWith('Nighthawk · '))).at(-1);
   const signed = (value: number) => (value >= 0 ? '+' : '') + value;
   return <section className="space-y-4"><div className="flex items-center gap-3"><Shield className="text-gold"/><h2 className="font-serif text-2xl">Player Character</h2></div>
-    <section aria-label="Character identity" className="rounded-2xl border border-gold/40 bg-panel p-4 space-y-3">
-      <div><p className="text-xs uppercase tracking-widest text-gold">Character sheet</p><h3 className="font-serif text-3xl">Nighthawk</h3><p className="mt-1 text-sm text-parchment/65">Wood Elf · Rogue {(stats.level??1)>=3?'(Arcane Trickster)':''} · Level {stats.level??1}</p></div>
-      <div aria-label="Experience toward next level"><div className="flex items-center justify-between gap-2 text-sm"><span>Level {stats.level??1}</span><span className="tabular-nums">{campaign?.xp??0} / {(stats.level??1)>=20?'MAX':xpThresholds[Math.min(stats.level??1,19)]} XP</span></div><div className="mt-2 h-2 overflow-hidden rounded-full bg-ink"><div className="h-full rounded-full bg-gold" style={{width: (stats.level??1)>=20?'100%':Math.min(100,Math.max(0,100*((campaign?.xp??0)-(xpThresholds[Math.max(0,(stats.level??1)-1)]??0))/Math.max(1,xpThresholds[Math.min(stats.level??1,19)]-(xpThresholds[Math.max(0,(stats.level??1)-1)]??0))))+'%'}}/></div></div>
+    <section aria-label="Character identity" className="rounded-2xl border border-gold/40 bg-panel p-4">
+      <p className="text-xs uppercase tracking-widest text-gold">Character sheet</p>
+      <div className="mt-2 flex items-center justify-between gap-4">
+        <div className="min-w-0 flex-1"><h3 className="font-serif text-3xl">Nighthawk</h3><p className="mt-1 text-sm text-parchment/65">Wood Elf · Rogue {(stats.level??1)>=3?'(Arcane Trickster)':''}</p></div>
+        <div className="flex min-w-[42%] items-center gap-3" aria-label="Experience toward next level">
+          <div className="flex h-14 w-12 shrink-0 flex-col items-center justify-center rounded-xl border-2 border-gold text-gold"><span className="text-[10px] font-semibold uppercase">Lv</span><strong className="text-xl leading-5">{stats.level??1}</strong></div>
+          <div className="min-w-0 flex-1"><p className="mb-1 whitespace-nowrap text-xs tabular-nums">{campaign?.xp??0} / {(stats.level??1)>=20?'MAX':xpThresholds[Math.min(stats.level??1,19)]} XP</p><div className="h-2 overflow-hidden rounded-full bg-ink"><div className="h-full rounded-full bg-gold" style={{width:(stats.level??1)>=20?'100%':Math.min(100,Math.max(0,100*((campaign?.xp??0)-(xpThresholds[Math.max(0,(stats.level??1)-1)]??0))/Math.max(1,xpThresholds[Math.min(stats.level??1,19)]-(xpThresholds[Math.max(0,(stats.level??1)-1)]??0))))+'%'}}/></div></div></div>
+        </div>
+      </div>
     </section>
     <section aria-label="Combat and vital statistics" className="rounded-2xl border border-white/15 bg-panel p-4 space-y-4">
       <h3 className="text-xs font-bold uppercase tracking-widest text-gold">Combat &amp; Vital Statistics</h3>
@@ -117,7 +123,7 @@ function Party({ campaign, onRoll, onSaveRoll, onAwardXP, onLevelUp, onLevelThre
         <p className="text-xs text-parchment/55">Spend Hit Dice during a DM-approved Short Rest; recover spent dice on Long Rests.</p>
       </div>
       <div className="grid grid-cols-2 gap-2">
-        <div className="rounded-xl border border-white/10 p-3 space-y-2"><h4 className="text-xs font-semibold uppercase tracking-wide">Death Saves</h4><p className="text-xs text-parchment/65">Success ○ ○ ○</p><p className="text-xs text-parchment/65">Failure ○ ○ ○</p><p className="text-[11px] text-parchment/50">Tracking not yet implemented</p></div>
+        <div className="rounded-xl border border-white/10 p-3 space-y-2"><h4 className="text-xs font-semibold uppercase tracking-wide">Death Saves</h4><div className="grid grid-cols-[3.5rem_1fr] items-center gap-y-2 text-xs text-parchment/65"><span>Success</span><span className="flex justify-end gap-2" aria-label="Three success markers">○ ○ ○</span><span>Failure</span><span className="flex justify-end gap-2" aria-label="Three failure markers">○ ○ ○</span></div><p className="text-[11px] text-parchment/50">Tracking not yet implemented</p></div>
         <div className="rounded-xl border border-white/10 p-3 space-y-2"><h4 className="text-xs font-semibold uppercase tracking-wide">Heroic Inspiration</h4><p className="text-xs text-parchment/65">○ Not tracked</p><p className="text-[11px] text-parchment/50">No editable placeholder</p></div>
       </div>
       {campaign?.combat&&<p className="border-t border-white/10 pt-3 text-xs text-parchment/70">Active conditions: {[campaign.combat.playerHidden?'Hidden':null,campaign.combat.playerProne?'Prone':null,campaign.combat.playerGrappled?'Grappled':null,campaign.combat.lastAction==='Dodge'?'Dodging':null].filter(Boolean).join(', ')||'None'}</p>}
