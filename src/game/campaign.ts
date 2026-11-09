@@ -1,4 +1,4 @@
-import { prototypeNighthawk, abilityModifier, type CharacterStats } from './checks';
+import { prototypeNighthawk, abilityModifier, type CharacterStats, type Skill } from './checks';
 import { emptyWorld, mergeWorld, normalizeWorld, type WorldState } from './world';
 export interface JournalEntry { id: string; text: string; createdAt: string; kind: 'note' | 'system' | 'player' | 'dm' }
 export interface Campaign {
@@ -554,7 +554,7 @@ export function resolveEnemyOpportunity(campaign:Campaign,kind:'hit'|'damage'|'f
 }
 
 /** Official 2024 exploration/social actions. The check is rolled; its narrative outcome is for the DM to adjudicate. */
-export function takeCombatSkillAction(campaign:Campaign,action:'Search'|'Study'|'Influence',skill:string):Campaign {
+export function takeCombatSkillAction(campaign:Campaign,action:'Search'|'Study'|'Influence',skill:Skill):Campaign {
  const c=campaign.combat;
  if(!c||c.status!=='initiative-set'||c.order?.[c.turnIndex??0]!=='Nighthawk')throw Error(action+' requires Nighthawk\'s turn.');
  if(c.actionUsed||c.attack)throw Error('Action already used this turn.');
