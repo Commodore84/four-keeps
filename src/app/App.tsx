@@ -108,7 +108,6 @@ function Party({ campaign, onRoll, onSaveRoll, onAwardXP, onLevelUp, onLevelThre
         <div className="flex min-w-[42%] items-center gap-3" aria-label="Experience toward next level">
           <div className="flex h-14 w-12 shrink-0 flex-col items-center justify-center rounded-xl border-2 border-gold text-gold"><span className="text-[10px] font-semibold uppercase">Lv</span><strong className="text-xl leading-5">{stats.level??1}</strong></div>
           <div className="min-w-0 flex-1"><p className="mb-1 whitespace-nowrap text-xs tabular-nums">{campaign?.xp??0} / {(stats.level??1)>=20?'MAX':xpThresholds[Math.min(stats.level??1,19)]} XP</p><div className="h-2 overflow-hidden rounded-full bg-ink"><div className="h-full rounded-full bg-gold" style={{width:(stats.level??1)>=20?'100%':Math.min(100,Math.max(0,100*((campaign?.xp??0)-(xpThresholds[Math.max(0,(stats.level??1)-1)]??0))/Math.max(1,xpThresholds[Math.min(stats.level??1,19)]-(xpThresholds[Math.max(0,(stats.level??1)-1)]??0))))+'%'}}/></div></div></div>
-        </div>
       </div>
     </section>
     <section aria-label="Combat and vital statistics" className="rounded-2xl border border-white/15 bg-panel p-4 space-y-4">
