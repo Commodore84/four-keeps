@@ -175,7 +175,7 @@ export function resolveCombatSpellSave(campaign:Campaign):Campaign {
  const ch=campaign.character??prototypeNighthawk;
  const dc=8+ch.proficiencyBonus+abilityModifier(ch.scores.int);
  const roll=crypto.getRandomValues(new Uint32Array(1))[0]%20+1;
- const penalty=c.mindSliverPenalty?.target===pending.target?crypto.getRandomValues(new Uint32Array(1))[0]%4+1:0;
+ const penalty=c.mindSliverPenalty?.target===pending.target&&c.round<=c.mindSliverPenalty.expiresRound?crypto.getRandomValues(new Uint32Array(1))[0]%4+1:0;
  const total=roll-penalty; // Training dummy: INT +0, WIS +0.
  const success=total>=dc;
  const damage=pending.spell==='Mind Sliver'&&!success?crypto.getRandomValues(new Uint32Array(1))[0]%6+1:0;
@@ -186,7 +186,7 @@ export function resolveCombatSpellSave(campaign:Campaign):Campaign {
  const firstProne=!second&&!success&&pending.spell==='Tasha’s Hideous Laughter'?true:c.enemyProne;
  const bothDown=(enemyHp??12)===0&&(!secondEnemy||secondEnemy.hp===0);
  const next={...c,enemyHp,secondEnemy,enemyProne:firstProne,pendingSpellSave:undefined,
-  mindSliverPenalty:pending.spell==='Mind Sliver'&&!success?{target:pending.target,expiresRound:c.round+1}:penalty?undefined:c.mindSliverPenalty,
+  mindSliverPenalty:pending.spell==='Mind Sliver'&&!success?{target:pending.target,expiresRound:c.round+1}:penalty||c.mindSliverPenalty&&c.round>c.mindSliverPenalty.expiresRound?undefined:c.mindSliverPenalty,
   laughterTarget:pending.spell==='Tasha’s Hideous Laughter'&&!success?pending.target:c.laughterTarget,
   lastSpellSave:{spell:pending.spell,target,roll,total,dc,success,damage},
   status:bothDown?'completed' as const:c.status,outcome:bothDown?'nonlethal-victory' as const:c.outcome};
@@ -203,9 +203,9 @@ export function resolveLaughterRepeatSave(campaign:Campaign):Campaign {
  const ch=campaign.character??prototypeNighthawk;
  const dc=8+ch.proficiencyBonus+abilityModifier(ch.scores.int);
  const roll=crypto.getRandomValues(new Uint32Array(1))[0]%20+1;
- const penalty=c.mindSliverPenalty?.target===target?crypto.getRandomValues(new Uint32Array(1))[0]%4+1:0;
+ const penalty=c.mindSliverPenalty?.target===target&&c.round<=c.mindSliverPenalty.expiresRound?crypto.getRandomValues(new Uint32Array(1))[0]%4+1:0;
  const success=roll-penalty>=dc;
- const next={...c,laughterTarget:success?undefined:target,mindSliverPenalty:penalty?undefined:c.mindSliverPenalty};
+ const next={...c,laughterTarget:success?undefined:target,mindSliverPenalty:penalty||c.mindSliverPenalty&&c.round>c.mindSliverPenalty.expiresRound?undefined:c.mindSliverPenalty};
  const now=new Date().toISOString();
  return {...campaign,combat:next,concentration:success&&campaign.concentration?.spell==='Tasha’s Hideous Laughter'?undefined:campaign.concentration,updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:'Hideous Laughter repeat save: '+roll+(penalty?' - '+penalty:'')+' vs DC '+dc+'. '+(success?'Condition ends.':'Target remains incapacitated.'),createdAt:now}]};
 }
@@ -658,9 +658,10 @@ export function resolveDuelEnemyTurn(campaign:Campaign):Campaign {
  if(combat.opportunity)throw Error('Resolve the opportunity attack before continuing.');
  if(combat.pendingSpellSave)throw Error('Resolve the pending spell saving throw first.');
  if(combat.laughterTarget===(combat.order[combat.turnIndex??0]===combat.secondEnemy?.name?'second':'first')){
-  const now=new Date().toISOString();const turn=nextActiveTurn(combat);
-  const nextCombat={...combat,turnIndex:turn.index,round:turn.round,movementUsed:0,movementAllowance:35,actionUsed:false,bonusActionUsed:false,steadyAim:false,disengaged:false,spellSlotExpendedThisTurn:false,lastAction:undefined,attack:undefined,enemyLastTurn:'Incapacitated by Tasha’s Hideous Laughter; cannot act.'};
-  return {...campaign,combat:nextCombat,updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:nextCombat.enemyLastTurn,createdAt:now}]};
+  const saved=resolveLaughterRepeatSave(campaign);
+  const now=new Date().toISOString();const turn=nextActiveTurn(saved.combat!);
+  const nextCombat={...saved.combat!,turnIndex:turn.index,round:turn.round,movementUsed:0,movementAllowance:35,actionUsed:false,bonusActionUsed:false,steadyAim:false,disengaged:false,spellSlotExpendedThisTurn:false,lastAction:undefined,attack:undefined,enemyLastTurn:'Incapacitated by Tasha’s Hideous Laughter; cannot act.'};
+  return {...saved,combat:nextCombat,updatedAt:now,journal:[...saved.journal,{id:crypto.randomUUID(),kind:'system',text:nextCombat.enemyLastTurn,createdAt:now}]};
  }
  if(combat.pendingEnemyShove||combat.pendingEnemyGrapple)throw Error('Resolve the pending Shove or Grapple save first.');
  const currentName=combat.order[combat.turnIndex??0];
