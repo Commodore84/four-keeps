@@ -1113,7 +1113,6 @@ export function App() {
             </div>;})()}
             
           </div>
-          {campaign.combat.steadyAim && <p className="rounded-lg border border-gold/60 bg-gold/10 p-3 text-sm">Steady Aim active: roll two d20s on your next attack this turn and use the higher result. Sneak Attack applies on a qualifying hit. You cannot move this turn.</p>}
           {campaign.combat.attack && <div className="space-y-2 rounded-lg border border-gold/60 p-3">
             {campaign.combat.attack.phase==='resolved'?<div className="space-y-1">
               <p className="font-semibold">{campaign.combat.attack.hit?'Hit':'Miss'} · {(campaign.combat.attack.target==='second'?'Training Dummy 2':'Training Dummy 1')}{campaign.combat.attack.hit&&campaign.combat.attack.damage!==undefined?' · '+campaign.combat.attack.damage+' dmg':''}</p>
