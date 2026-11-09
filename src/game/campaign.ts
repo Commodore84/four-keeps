@@ -434,7 +434,11 @@ export function addSecondTrainingEnemy(campaign:Campaign):Campaign {
  const now=new Date().toISOString();
  return {...campaign,combat:{...c,secondEnemy:second,selectedEnemy:'first' as const,order,turnIndex:order.indexOf(current),playerHidden:c.playerHidden&&trainingCoverBlocksSight(c.playerPosition??{x:2,y:4},second.position)},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:'Second training dummy joins at (11, 3). Initiative '+roll+'. Each enemy now has a separate turn; Hide requires blocked sight from both.',createdAt:now}]};
 }
-export function canNighthawkHide(c:NonNullable<Campaign['combat']>):boolean {const p=c.playerPosition??{x:2,y:4};return ((c.enemyHp??12)<=0||trainingCoverBlocksSight(p,c.enemyPosition??{x:6,y:4}))&&(!c.secondEnemy||c.secondEnemy.hp<=0||trainingCoverBlocksSight(p,c.secondEnemy.position));}
+export function canNighthawkHide(c:NonNullable<Campaign['combat']>):boolean {
+ const p=c.playerPosition??{x:2,y:4};
+ const concealed=(enemy:{x:number;y:number})=>trainingCoverBlocksSight(p,enemy)||(trainingTerrain(p.x,p.y)==='brush'&&Math.max(Math.abs(p.x-enemy.x),Math.abs(p.y-enemy.y))>1);
+ return ((c.enemyHp??12)<=0||concealed(c.enemyPosition??{x:6,y:4}))&&(!c.secondEnemy||c.secondEnemy.hp<=0||concealed(c.secondEnemy.position));
+}
 export function hideNighthawk(campaign:Campaign,actionType:'action'|'bonus'='bonus'):Campaign {
  const c=campaign.combat;
  if(!c||c.status!=='initiative-set'||c.order?.[c.turnIndex??0]!=='Nighthawk')throw Error('Hide requires your turn.');
