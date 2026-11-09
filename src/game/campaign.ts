@@ -351,6 +351,15 @@ export function rollDuelInitiative(campaign:Campaign):Campaign {
 export const trainingCover={x:6,y:6};
 export const trainingMapSize=13;
 export const trainingPillars=[trainingCover,{x:4,y:4},{x:8,y:4},{x:4,y:8},{x:8,y:8}];
+export type TrainingTerrain='open'|'brush'|'stream'|'wall';
+export function trainingTerrain(x:number,y:number):TrainingTerrain{
+ if(isTrainingPillar(x,y))return 'wall';
+ if((y===9||y===10)&&x>=6&&x<=11 || y===8&&x>=8&&x<=10)return 'stream';
+ if((x>=1&&x<=3&&y>=3&&y<=5)||(x>=5&&x<=7&&y>=7&&y<=8)||(x>=9&&x<=11&&y>=1&&y<=2))return 'brush';
+ return 'open';
+}
+export const trainingStepCost=(x:number,y:number)=>trainingTerrain(x,y)==='brush'||trainingTerrain(x,y)==='stream'?10:5;
+export const trainingRouteCost=(route:{x:number;y:number}[])=>route.slice(1).reduce((sum,p)=>sum+trainingStepCost(p.x,p.y),0);
 export const isTrainingPillar=(x:number,y:number)=>trainingPillars.some(p=>p.x===x&&p.y===y);
 export function trainingCoverBlocksSight(p:{x:number;y:number},e:{x:number;y:number}):boolean {
  const dx=e.x-p.x,dy=e.y-p.y;
@@ -462,12 +471,20 @@ export function tacticalRoute(combat:NonNullable<Campaign['combat']>,destination
  (!!combat.secondEnemy&&combat.secondEnemy.hp>0&&combat.secondEnemy.position.x===x&&combat.secondEnemy.position.y===y);
  if(blocked(destination.x,destination.y))return null;
  const key=(p:TacticalPoint)=>p.x+','+p.y;
- const queue:TacticalPoint[]=[start],seen=new Set([key(start)]),parents:Record<string,TacticalPoint>={};
+ const key=(p:TacticalPoint)=>p.x+','+p.y;
+ const queue:{point:TacticalPoint;cost:number}[]=[{point:start,cost:0}],best=new Map([[key(start),0]]),parents:Record<string,TacticalPoint>={};
  const dirs=[[-1,0],[0,-1],[1,0],[0,1],[-1,-1],[1,-1],[-1,1],[1,1]];
- for(let i=0;i<queue.length;i++){const p=queue[i];if(p.x===destination.x&&p.y===destination.y){const path=[p];while(key(path[0])!==key(start))path.unshift(parents[key(path[0])]);return path;}
-  for(const [dx,dy] of dirs){const x=p.x+dx,y=p.y+dy;if(blocked(x,y)||seen.has(x+','+y))continue;
+ while(queue.length){
+  queue.sort((a,b)=>a.cost-b.cost);
+  const current=queue.shift()!,p=current.point;
+  if(current.cost!==best.get(key(p)))continue;
+  if(p.x===destination.x&&p.y===destination.y){const path=[p];while(key(path[0])!==key(start))path.unshift(parents[key(path[0])]);return path;}
+  for(const [dx,dy] of dirs){
+   const x=p.x+dx,y=p.y+dy;if(blocked(x,y))continue;
    if(dx&&dy&&(blocked(p.x+dx,p.y)||blocked(p.x,p.y+dy)))continue;
-   const next={x,y};seen.add(key(next));parents[key(next)]=p;queue.push(next);
+   const next={x,y},k=key(next),cost=current.cost+trainingStepCost(x,y);
+   if(cost>=(best.get(k)??Infinity))continue;
+   best.set(k,cost);parents[k]=p;queue.push({point:next,cost});
   }
  }
  return null;
@@ -494,7 +511,7 @@ export function moveDuelToken(campaign:Campaign,x:number,y:number):Campaign {
  if(x===enemy.x&&y===enemy.y||combat.secondEnemy?.hp&&x===combat.secondEnemy.position.x&&y===combat.secondEnemy.position.y)throw Error('That square is occupied by an opponent.');
  if(isTrainingPillar(x,y))throw Error('Stone pillar blocks that square.');
  const route=tacticalRoute(combat,{x,y});if(!route)throw Error('No unobstructed route to that square.');
- const cost=(route.length-1)*5;
+ const cost=trainingRouteCost(route);
  if(cost===0)throw Error('Choose another square.');
  const used=combat.movementUsed??0,allowance=combat.movementAllowance??35;
  if(used+cost>allowance)throw Error('Not enough movement remaining for the route.');
@@ -513,10 +530,10 @@ function advanceTacticalMovement(campaign:Campaign,route:TacticalPoint[],startIn
  for(let i=startIndex+1;i<route.length;i++){
   const to=route[i],provoker=combat.disengaged?undefined:reactions.find(e=>e.available&&adjacent(position,e.pos)&&!adjacent(to,e.pos));
   if(provoker){
-   const updated:NonNullable<Campaign['combat']>={...combat,playerPosition:position,movementUsed:(combat.movementUsed??0)+travelled,stats:{...(combat.stats??{damage:0,movement:0,attacks:0,hits:0,criticalHits:0,sneakDamage:0,finishingBlows:0}),movement:(combat.stats?.movement??0)+travelled},playerOpportunity:{enemyId:provoker.id,route,routeIndex:i-1,from:position,to:route[route.length-1],cost:(route.length-i)*5,phase:'roll-to-hit'}};
+   const updated:NonNullable<Campaign['combat']>={...combat,playerPosition:position,movementUsed:(combat.movementUsed??0)+travelled,stats:{...(combat.stats??{damage:0,movement:0,attacks:0,hits:0,criticalHits:0,sneakDamage:0,finishingBlows:0}),movement:(combat.stats?.movement??0)+travelled},playerOpportunity:{enemyId:provoker.id,route,routeIndex:i-1,from:position,to:route[route.length-1],cost:trainingRouteCost(route.slice(i-1)),phase:'roll-to-hit'}};
    return {...campaign,combat:updated,updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:'Nighthawk moves '+travelled+' feet and stops at square ('+(position.x+1)+','+(position.y+1)+'). Enemy '+(provoker.id==='second'?'2':'1')+' makes an Opportunity Attack before Nighthawk leaves its reach.',createdAt:now}]};
   }
-  position=to;travelled+=5;
+  position=to;travelled+=trainingStepCost(to.x,to.y);
  }
  const updated:NonNullable<Campaign['combat']>={...combat,playerPosition:position,playerHidden:combat.playerHidden&&trainingCoverBlocksSight(position,enemy)&&(!combat.secondEnemy||trainingCoverBlocksSight(position,combat.secondEnemy.position)),movementUsed:(combat.movementUsed??0)+travelled,stats:{...(combat.stats??{damage:0,movement:0,attacks:0,hits:0,criticalHits:0,sneakDamage:0,finishingBlows:0}),movement:(combat.stats?.movement??0)+travelled},playerOpportunity:undefined};
  return {...campaign,combat:updated,updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:'Nighthawk moves '+travelled+' feet to ('+(position.x+1)+','+(position.y+1)+'). '+updated.movementUsed+'/'+(combat.movementAllowance??35)+' feet used.',createdAt:now}]};
