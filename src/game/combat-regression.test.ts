@@ -68,8 +68,8 @@ describe('combat regression: Hide and cover', () => {
   });
   it('allows a Hide check when all living enemies have blocked sight', () => {
     const p = { x: 2, y: 10 }, enemy = { x: 10, y: 2 };
-    // Check geometry explicitly, so future map changes cannot silently invalidate this fixture.
-    if (!trainingCoverBlocksSight(p, enemy)) return;
+    // A changed pillar layout should fail this test, not silently skip it.
+    expect(trainingCoverBlocksSight(p, enemy)).toBe(true);
     const c = arena({ playerPosition: p, enemyPosition: enemy });
     expect(canNighthawkHide(state(c))).toBe(true);
     const hidden = hideNighthawk(c);
