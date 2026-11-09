@@ -74,3 +74,21 @@ test('campaign deletion requires confirmation and preserves other campaigns', as
   await page.reload();
   await expect(page.getByText('No campaign selected')).toBeVisible();
 });
+
+test('combat replaces persistent DM composer with optional Ask DM and header resources', async ({ page }) => {
+  await page.goto('/four-keeps/');
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page.getByLabel('New campaign name').fill('Combat UI regression');
+  await page.getByRole('button', { name: 'New', exact: true }).click();
+  await page.getByRole('button', { name: 'Adventure', exact: true }).click();
+  await page.getByRole('button', { name: 'Start encounter training' }).click();
+  await expect(page.getByLabel('Message the Dungeon Master')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Roll initiative (d20 + DEX)' }).click();
+  await expect(page.getByLabel('Combat resources')).toBeVisible();
+  await expect(page.getByText('Last action:', { exact: false })).toHaveCount(0);
+  await expect(page.getByLabel('Message the Dungeon Master')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Ask DM +' }).click();
+  await expect(page.getByLabel('combat-dm-question')).toBeVisible();
+  await page.getByRole('button', { name: 'Ask DM −' }).click();
+  await expect(page.getByLabel('combat-dm-question')).toHaveCount(0);
+});
