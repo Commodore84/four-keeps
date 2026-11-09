@@ -270,6 +270,10 @@ describe('Ready weapon reactions',()=>{
   expect(()=>resolveReadiedWeaponAttack(c,'dagger')).toThrow(/does not match/);
   expect(()=>resolveReadiedCombatReaction(c)).toThrow(/deterministic weapon/);
  });
+ it('waits for unresolved combat events before a Ready reaction',()=>{
+  const c=takeDuelTurnAction(readyCombatAction(arena({pendingEnemyGrapple:true}),'moves','Shoot','shortbow'),'end');
+  expect(()=>resolveReadiedWeaponAttack(c,'shortbow')).toThrow(/pending combat event/);
+ });
  it('out of range and missing ammunition do not spend a reaction',()=>{
   const c=takeDuelTurnAction(readyCombatAction(arena(),'moves','Strike','dagger'),'end');
   expect(()=>resolveReadiedWeaponAttack(c,'dagger')).toThrow(/adjacent/);
