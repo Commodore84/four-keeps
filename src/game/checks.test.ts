@@ -15,7 +15,7 @@ describe('deterministic skill checks', () => {
     const result = rollCheck(prototypeNighthawk,'Investigation','normal',()=>0.999);
     expect(result.dice).toEqual([20]);
     expect(result.total).toBe(26);
-    expect(describeCheck(result)).toContain('Outcome not determined');
+    expect(describeCheck(result)).toContain('Outcome awaits DM adjudication');
   });
   it('rejects out of range dice', () => {
     expect(()=>resolveCheck(prototypeNighthawk,'Stealth','normal',[21])).toThrow();
