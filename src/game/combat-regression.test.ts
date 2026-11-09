@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   canNighthawkHide, hideNighthawk, moveDuelToken, moveOwl, newCampaign,
-  owlHelp, rollDuelAttack, takeDuelTurnAction, trainingCoverBlocksSight,
+  owlHelp, rollDuelAttack, resolveDuelEnemyTurn, takeDuelTurnAction, trainingCoverBlocksSight,
   type Campaign,
 } from './campaign';
 
@@ -128,5 +128,103 @@ describe('combat regression: attack and damage', () => {
     expect(state(next).attack?.critical).toBe(true);
     expect(state(next).attack?.weaponDamageRolls).toHaveLength(2);
     expect(state(next).attack?.damage).toBe((state(next).attack?.weaponDamageRolls??[]).reduce((a,b)=>a+b,0)+3);
+  });
+});
+
+describe('combat regression: Sneak Attack eligibility and damage', () => {
+  function resolvedAttack(overrides: Partial<NonNullable<NonNullable<Campaign['combat']>['attack']>> = {}, combatOverrides: Partial<NonNullable<Campaign['combat']>> = {}): Campaign {
+    return arena({
+      enemyHp: 100, enemyMaxHp: 100,
+      attack: { phase: 'roll-damage', weapon: 'shortbow', hit: true, d20: 15, firstD20: 15, total: 20, critical: false, ...overrides },
+      sneakAttackEligible: true, actionUsed: true, ...combatOverrides,
+    });
+  }
+  it('advantage enables Sneak Attack on a successful hit', () => {
+    const c = takeDuelTurnAction(arena({ steadyAim: true, bonusActionUsed: true }), 'shortbow');
+    const hit = rollDuelAttack(c, 'hit');
+    if (state(hit).attack?.hit) expect(state(hit).sneakAttackEligible).toBe(true);
+    expect(state(hit).attack?.advantage).toBe(true);
+  });
+  it('an adjacent ally permits Sneak Attack without advantage on a hit', () => {
+    const hit = rollDuelAttack(takeDuelTurnAction(arena({ trainingAllyAdjacent: true }), 'shortbow'), 'hit');
+    if (state(hit).attack?.hit) expect(state(hit).sneakAttackEligible).toBe(true);
+  });
+  it('disadvantage prevents ally-based Sneak Attack', () => {
+    const c = arena({ trainingAllyAdjacent: true, playerPosition: { x: 9, y: 2 } });
+    const hit = rollDuelAttack(takeDuelTurnAction(c, 'shortbow'), 'hit');
+    expect(state(hit).attack?.disadvantage).toBe(true);
+    expect(state(hit).sneakAttackEligible).toBe(false);
+  });
+  it('a normal hit without ally or advantage is not Sneak Attack eligible', () => {
+    const hit = rollDuelAttack(takeDuelTurnAction(arena(), 'shortbow'), 'hit');
+    expect(state(hit).sneakAttackEligible).toBe(false);
+  });
+  it('Sneak Attack damage is included exactly once with Dexterity modifier', () => {
+    const result = rollDuelAttack(resolvedAttack(), 'damage', true);
+    const attack = state(result).attack!;
+    expect(attack.weaponDamageRolls).toHaveLength(1);
+    expect(attack.sneakAttackRolls).toHaveLength(1);
+    expect(attack.sneakAttackDamage).toBe(attack.sneakAttackRolls!.reduce((a,b)=>a+b,0));
+    expect(attack.damage).toBe(attack.weaponDamageRolls![0]+3+attack.sneakAttackDamage!);
+    expect(state(result).stats?.sneakDamage).toBe(attack.sneakAttackDamage);
+    expect(state(result).sneakAttackUsedThisTurn).toBe(true);
+  });
+  it('a critical hit doubles weapon and Sneak Attack dice, not DEX modifier', () => {
+    const result = rollDuelAttack(resolvedAttack({ critical: true, d20: 20, firstD20: 20, total: 25 }), 'damage', true);
+    const attack = state(result).attack!;
+    expect(attack.weaponDamageRolls).toHaveLength(2);
+    expect(attack.sneakAttackRolls).toHaveLength(2);
+    expect(attack.damage).toBe(
+      attack.weaponDamageRolls!.reduce((a,b)=>a+b,0)+
+      attack.sneakAttackRolls!.reduce((a,b)=>a+b,0)+3,
+    );
+  });
+  it('Sneak Attack cannot be applied when ineligible or already used', () => {
+    expect(() => rollDuelAttack(resolvedAttack({}, { sneakAttackEligible: false }), 'damage', true)).toThrow(/not eligible/);
+    const hit = rollDuelAttack(takeDuelTurnAction(arena({ sneakAttackUsedThisTurn: true, steadyAim: true }), 'shortbow'), 'hit');
+    expect(state(hit).sneakAttackEligible).toBe(false);
+  });
+  it('a successful damage roll reduces target HP by the exact damage amount', () => {
+    const result = rollDuelAttack(resolvedAttack(), 'damage', false);
+    expect(state(result).enemyHp).toBe(100-state(result).attack!.damage!);
+    expect(state(result).stats?.damage).toBe(state(result).attack?.damage);
+    expect(state(result).attack?.sneakAttackRolls).toEqual([]);
+  });
+});
+
+describe('combat regression: enemy turns', () => {
+  function enemyTurn(overrides: Partial<NonNullable<Campaign['combat']>> = {}): Campaign {
+    return arena({
+      order: ['Nighthawk', 'Training Dummy'], turnIndex: 1,
+      playerPosition: { x: 2, y: 10 }, enemyPosition: { x: 10, y: 2 },
+      owl: undefined, ...overrides,
+    });
+  }
+  it('a distant dummy moves no more than 10 feet and cannot attack out of range', () => {
+    const before = enemyTurn();
+    const after = resolveDuelEnemyTurn(before);
+    const p = state(after).enemyPosition!, origin = state(before).enemyPosition!;
+    expect(Math.max(Math.abs(p.x-origin.x),Math.abs(p.y-origin.y))).toBeLessThanOrEqual(2);
+    expect(after.character?.currentHitPoints).toBe(before.character?.currentHitPoints);
+    expect(state(after).turnIndex).toBe(0);
+  });
+  it('an adjacent dummy makes a nonlethal attack and returns control to Nighthawk', () => {
+    const before = enemyTurn({ enemyPosition: { x: 3, y: 10 } });
+    const after = resolveDuelEnemyTurn(before);
+    expect(after.character!.currentHitPoints).toBeLessThanOrEqual(before.character!.currentHitPoints!);
+    expect(after.character!.currentHitPoints).toBeGreaterThanOrEqual(0);
+    expect(state(after).turnIndex).toBe(0);
+  });
+  it('a defeated dummy cannot take its turn', () => {
+    expect(() => resolveDuelEnemyTurn(enemyTurn({ enemyHp: 0 }))).toThrow(/Defeated enemies/);
+  });
+  it('an enemy cannot act during Nighthawk turn', () => {
+    expect(() => resolveDuelEnemyTurn(arena())).toThrow(/opponent's turn/);
+  });
+  it('a dummy targets an adjacent owl and leaves Nighthawk HP unchanged', () => {
+    const before = enemyTurn({ owl: { position: { x: 10, y: 3 }, hp: 1, movementUsed: 0, actionUsed: false } });
+    const after = resolveDuelEnemyTurn(before);
+    expect(after.character!.currentHitPoints).toBe(before.character!.currentHitPoints);
+    expect(after.journal.at(-1)?.text).toContain('Owl');
   });
 });
