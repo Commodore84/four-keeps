@@ -1,5 +1,5 @@
 import {describe,expect,it,vi} from 'vitest';
-import {availableCombatSpells,castCombatMagicAction,resolveCombatSpellSave,newCampaign,takeDuelTurnAction,type Campaign} from './campaign';
+import {availableCombatSpells,castCombatMagicAction,resolveCombatSpellSave,resolveLaughterRepeatSave,resolveDuelEnemyTurn,endNighthawkConcentration,newCampaign,takeDuelTurnAction,type Campaign} from './campaign';
 import {createBackup,parseBackup} from './backup';
 function encounter():Campaign {
  const base=newCampaign('Arcane Trickster combat','magic-test');
@@ -111,5 +111,54 @@ describe('spell saving throw resolution',()=>{
  });
  it('rejects saving throw resolution without a pending spell',()=>{
   expect(()=>resolveCombatSpellSave(encounter())).toThrow(/No spell saving throw/);
+ });
+});
+
+describe('ongoing spell effects',()=>{
+ function d20(...rolls:number[]){
+  let index=0;
+  const spy=vi.spyOn(crypto,'getRandomValues').mockImplementation(((array:Uint32Array)=>{array[0]=rolls[index++]-1;return array;}) as typeof crypto.getRandomValues);
+  return ()=>{expect(index).toBe(rolls.length);spy.mockRestore();};
+ }
+ it('failed Mind Sliver gives a d4 penalty to the next save then consumes it',()=>{
+  const c=encounter();
+  const spent=d20(1,2,13,4);
+  const first=resolveCombatSpellSave(castCombatMagicAction(c,'Mind Sliver'));
+  expect(first.combat?.mindSliverPenalty?.target).toBe('first');
+  const next={...first,combat:{...first.combat!,pendingSpellSave:{spell:'Mind Sliver' as const,target:'first' as const}}};
+  const result=resolveCombatSpellSave(next);
+  expect(result.combat?.lastSpellSave?.total).toBe(9);
+  expect(result.combat?.mindSliverPenalty).toBeUndefined();
+  spent();
+ });
+ it('Laughter prevents the affected enemy from taking a normal turn',()=>{
+  const c=encounter();
+  const spent=d20(1);
+  const prepared={...c,character:{...c.character!,preparedSpells:['Tasha’s Hideous Laughter']}};
+  const failed=resolveCombatSpellSave(castCombatMagicAction(prepared,'Tasha’s Hideous Laughter'));
+  const enemyTurn={...failed,combat:{...failed.combat!,turnIndex:1}};
+  const skipped=resolveDuelEnemyTurn(enemyTurn);
+  expect(skipped.combat?.enemyLastTurn).toContain('Incapacitated');
+  expect(skipped.combat?.turnIndex).toBe(0);
+  spent();
+ });
+ it('successful repeat save ends Laughter',()=>{
+  const c=encounter();
+  const spent=d20(20);
+  const result=resolveLaughterRepeatSave({...c,combat:{...c.combat!,laughterTarget:'first'},concentration:{spell:'Tasha’s Hideous Laughter',startedAt:'now'}});
+  expect(result.combat?.laughterTarget).toBeUndefined();
+  expect(result.concentration).toBeUndefined();
+  spent();
+ });
+ it('failed repeat save keeps incapacitation',()=>{
+  const c=encounter();const spent=d20(1);
+  const result=resolveLaughterRepeatSave({...c,combat:{...c.combat!,laughterTarget:'first'}});
+  expect(result.combat?.laughterTarget).toBe('first');
+  spent();
+ });
+ it('ending concentration removes incapacitation',()=>{
+  const c=encounter();
+  const result=endNighthawkConcentration({...c,combat:{...c.combat!,laughterTarget:'first'},concentration:{spell:'Tasha’s Hideous Laughter',startedAt:'now'}});
+  expect(result.combat?.laughterTarget).toBeUndefined();
  });
 });
