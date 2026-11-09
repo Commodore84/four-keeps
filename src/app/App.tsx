@@ -666,7 +666,7 @@ export function App() {
   async function declareReady(){
     if(!campaign||saving)return;
     setSaving(true);
-    try{const next=readyWeapon==='mind-sliver'?readyCombatMindSliver(campaign,readyTrigger):readyCombatAction(campaign,readyTrigger,readyWeapon==='narrative'?readyResponse:readyWeapon==='shortbow'?'Fire my shortbow':readyWeapon==='throw-dagger'?'Throw my dagger':'Strike with my dagger',readyWeapon==='narrative'||readyWeapon==='mind-sliver'?undefined:readyWeapon);
+    try{const next=readyWeapon==='mind-sliver'?readyCombatMindSliver(campaign,readyTrigger):readyCombatAction(campaign,readyTrigger,readyWeapon==='narrative'?readyResponse:readyWeapon==='shortbow'?'Fire my shortbow':readyWeapon==='throw-dagger'?'Throw my dagger':'Strike with my dagger',readyWeapon==='narrative'?undefined:readyWeapon);
       await localCampaignStorage.save(next);setCampaign(next);setCampaigns(items=>items.map(entry=>entry.id===next.id?next:entry));setPendingCombatAction(null);setNotice(publicCombatText(next.journal.at(-1)!.text));if(next.combatAdjudication)await adjudicateCombatWithDM(next);
     }catch(error){setNotice('Ready: '+String(error));}finally{setSaving(false);}
   }
