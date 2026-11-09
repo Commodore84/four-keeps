@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   beginDuel, concludeDuel, newCampaign, quitTrainingEncounter, rollDuelAttack,
-  selectTrainingTarget, takeDuelTurnAction, utilizeCombatItem, takeCombatSkillAction, readyCombatAction, readyCombatMindSliver, resolveReadiedSpellReaction, resolveReadiedCombatReaction, resolveReadiedWeaponAttack, resolveDuelEnemyTurn, type Campaign,
+  selectTrainingTarget, takeDuelTurnAction, utilizeCombatItem, takeCombatSkillAction, readyCombatAction, readyCombatMindSliver, resolveReadiedSpellReaction, resolveReadiedCombatReaction, resolveReadiedWeaponAttack, resolveDuelEnemyTurn, resolveCombatSpellSave, advanceDuelTestEnemyTurn, type Campaign,
 } from './campaign';
 import { createBackup, parseBackup } from './backup';
 import { availableCombatMovement, combatAttackRollPreview } from './combat-ui';
@@ -330,6 +330,30 @@ describe('Readied Mind Sliver spell',()=>{
   expect(released.combat?.pendingSpellSave).toMatchObject({spell:'Mind Sliver',target:'first'});
   expect(released.concentration).toBeUndefined();
   expect(released.combat?.readiedAction).toBeUndefined();
+ });
+ it('the released spell resolves a saving throw and persists damage',()=>{
+  const c=takeDuelTurnAction(readyCombatMindSliver(spellArena(),'dummy moves'),'end');
+  const released=resolveReadiedSpellReaction(c);
+  const consumed=dice(1,5);
+  const resolved=resolveCombatSpellSave(released);
+  expect(resolved.combat?.pendingSpellSave).toBeUndefined();
+  expect(resolved.combat?.lastSpellSave?.success).toBe(false);
+  expect(resolved.combat?.lastSpellSave?.damage).toBe(5);
+  expect(resolved.combat?.enemyHp).toBe(7);
+  consumed();
+ });
+ it('held spell expires on a normal enemy turn without triggering',()=>{
+  const c=takeDuelTurnAction(readyCombatMindSliver(spellArena(),'dummy moves'),'end');
+  vi.spyOn(crypto,'getRandomValues').mockImplementation(((array:Uint32Array)=>{array[0]=0;return array;}) as typeof crypto.getRandomValues);
+  const next=resolveDuelEnemyTurn(c);
+  expect(next.combat?.readiedAction).toBeUndefined();
+  expect(next.concentration).toBeUndefined();
+ });
+ it('test-only enemy turn skip also expires a held spell',()=>{
+  const c=takeDuelTurnAction(readyCombatMindSliver(spellArena(),'dummy moves'),'end');
+  const next=advanceDuelTestEnemyTurn(c);
+  expect(next.combat?.readiedAction).toBeUndefined();
+  expect(next.concentration).toBeUndefined();
  });
  it('rejects existing concentration and wrong-turn releases',()=>{
   const c=spellArena();
