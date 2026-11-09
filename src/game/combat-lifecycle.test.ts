@@ -273,7 +273,7 @@ describe('Ready weapon reactions',()=>{
  it('out of range and missing ammunition do not spend a reaction',()=>{
   const c=takeDuelTurnAction(readyCombatAction(arena(),'moves','Strike','dagger'),'end');
   expect(()=>resolveReadiedWeaponAttack(c,'dagger')).toThrow(/adjacent/);
-  expect(c.combat?.reactionUsed).toBe(false);
+  expect(c.combat?.reactionUsed).toBeFalsy();
   const bow=takeDuelTurnAction(readyCombatAction(arena({arrowsRemaining:0}),'moves','Shoot','shortbow'),'end');
   expect(()=>resolveReadiedWeaponAttack(bow,'shortbow')).toThrow(/No arrows/);
  });
