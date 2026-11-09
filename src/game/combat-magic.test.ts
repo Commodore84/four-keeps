@@ -150,6 +150,23 @@ describe('ongoing spell effects',()=>{
   expect(result.concentration).toBeUndefined();
   spent();
  });
+ it('expired Mind Sliver penalty is ignored and cleared',()=>{
+  const c=encounter();const spent=d20(12);
+  const prepared={...c,combat:{...c.combat!,round:4,mindSliverPenalty:{target:'first' as const,expiresRound:2},pendingSpellSave:{spell:'Tasha’s Hideous Laughter' as const,target:'first' as const}}};
+  const result=resolveCombatSpellSave(prepared);
+  expect(result.combat?.lastSpellSave?.total).toBe(12);
+  expect(result.combat?.mindSliverPenalty).toBeUndefined();
+  spent();
+ });
+ it('incapacitated enemy makes its repeat save automatically at turn end',()=>{
+  const c=encounter();const spent=d20(20);
+  const prepared={...c,combat:{...c.combat!,turnIndex:1,laughterTarget:'first' as const},concentration:{spell:'Tasha’s Hideous Laughter',startedAt:'now'}};
+  const result=resolveDuelEnemyTurn(prepared);
+  expect(result.combat?.laughterTarget).toBeUndefined();
+  expect(result.concentration).toBeUndefined();
+  expect(result.combat?.turnIndex).toBe(0);
+  spent();
+ });
  it('failed repeat save keeps incapacitation',()=>{
   const c=encounter();const spent=d20(1);
   const result=resolveLaughterRepeatSave({...c,combat:{...c.combat!,laughterTarget:'first'}});
