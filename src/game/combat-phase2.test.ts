@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   newCampaign, takeDuelTurnAction, rollDuelAttack, resolveDuelEnemyTurn,
-  owlHelp, moveOwl, moveDuelToken, canNighthawkHide, type Campaign,
+  owlHelp, moveOwl, moveDuelToken, canNighthawkHide, standNighthawk, beginEnemyShove, rollPlayerShoveSave, beginEnemyGrapple, rollPlayerGrappleSave, beginPlayerGrappleEscape, rollPlayerGrappleEscape, resolveEnemyOpportunity, type Campaign,
 } from './campaign';
 import { availableCombatMovement, combatHideStatus, combatAttackRollPreview } from './combat-ui';
 
@@ -224,5 +224,83 @@ describe('UI selectors agree with the combat rules',()=>{
     const c=combat(arena({owl:{position:{x:9,y:2},hp:1,movementUsed:0,actionUsed:true,helpTarget:'first'}}));
     expect(combatAttackRollPreview(c,'shortbow')).toBe('Advantage');
     expect(combatAttackRollPreview({...c,selectedEnemy:'second'},'shortbow')).toBe('Normal roll');
+  });
+});
+
+describe('conditions and reactions across turns',()=>{
+  it('standing from Prone costs 15 feet and preserves the Action',()=>{
+    const c=standNighthawk(arena({playerProne:true}));
+    expect(combat(c).playerProne).toBe(false);
+    expect(availableCombatMovement(combat(c))).toBe(20);
+    expect(combat(c).actionUsed).toBeFalsy();
+  });
+  it('Grappled prevents movement and standing while allowing an attack',()=>{
+    const c=arena({playerGrappled:true,playerProne:true});
+    expect(()=>moveDuelToken(c,3,10)).toThrow(/Grappled/);
+    expect(()=>standNighthawk(c)).toThrow(/Grappled/);
+    expect(takeDuelTurnAction(c,'shortbow').combat?.actionUsed).toBe(true);
+  });
+  it('Steady Aim prevents standing from Prone',()=>{
+    expect(()=>standNighthawk(arena({playerProne:true,steadyAim:true}))).toThrow(/Steady Aim/);
+  });
+  it('Disengage prevents opportunity attacks when leaving enemy reach',()=>{
+    let c=arena({enemyPosition:{x:3,y:10}});
+    c=takeDuelTurnAction(c,'cunning-disengage');
+    c=moveDuelToken(c,1,10);
+    expect(combat(c).playerOpportunity).toBeUndefined();
+    expect(combat(c).playerPosition).toEqual({x:1,y:10});
+  });
+  it('leaving melee without Disengage triggers an enemy reaction and resumes after a miss',()=>{
+    const consumed=dice(1);
+    let c=moveDuelToken(arena({enemyPosition:{x:3,y:10}}),1,10);
+    expect(combat(c).playerOpportunity?.phase).toBe('roll-to-hit');
+    c=resolveEnemyOpportunity(c,'hit');
+    expect(combat(c).playerOpportunity?.hit).toBe(false);
+    c=resolveEnemyOpportunity(c,'finish');
+    expect(combat(c).playerOpportunity).toBeUndefined();
+    expect(combat(c).enemyReactionUsed).toBe(true);
+    expect(combat(c).playerPosition).toEqual({x:1,y:10});
+    consumed();
+  });
+  it('failed enemy Shove save causes Prone and restores turn resources',()=>{
+    const consumed=dice(1);
+    let c=arena({turnIndex:1,enemyPosition:{x:3,y:10},movementAllowance:70,steadyAim:true,bonusActionUsed:true,sneakAttackUsedThisTurn:true});
+    c=beginEnemyShove(c);
+    c=rollPlayerShoveSave(c,'dex');
+    expect(combat(c).playerProne).toBe(true);
+    expect(combat(c).turnIndex).toBe(0);
+    expect(combat(c).movementAllowance).toBe(35);
+    expect(combat(c).steadyAim).toBe(false);
+    expect(combat(c).sneakAttackUsedThisTurn).toBe(false);
+    consumed();
+  });
+  it('failed Grapple save reduces speed to zero and escape consumes Action',()=>{
+    const consumed=dice(1,20);
+    let c=arena({turnIndex:1,enemyPosition:{x:3,y:10},movementAllowance:70,steadyAim:true});
+    c=beginEnemyGrapple(c);
+    c=rollPlayerGrappleSave(c,'dex');
+    expect(combat(c).playerGrappled).toBe(true);
+    expect(availableCombatMovement(combat(c))).toBe(0);
+    expect(combat(c).movementAllowance).toBe(35);
+    c=beginPlayerGrappleEscape(c);
+    c=rollPlayerGrappleEscape(c,'dex');
+    expect(combat(c).playerGrappled).toBe(false);
+    expect(combat(c).actionUsed).toBe(true);
+    expect(availableCombatMovement(combat(c))).toBe(35);
+    consumed();
+  });
+  it('enemy turn cannot bypass an unresolved Grapple save',()=>{
+    const c=beginEnemyGrapple(arena({turnIndex:1,enemyPosition:{x:3,y:10}}));
+    expect(()=>resolveDuelEnemyTurn(c)).toThrow(/pending Shove or Grapple/);
+  });
+  it('Dodge forces disadvantage on an adjacent enemy attack',()=>{
+    const consumed=dice(19,1);
+    let c=arena({enemyPosition:{x:3,y:10},owl:undefined});
+    c=takeDuelTurnAction(c,'dodge');
+    c=takeDuelTurnAction(c,'end');
+    c=resolveDuelEnemyTurn(c);
+    expect(c.character?.currentHitPoints).toBe(arena().character?.currentHitPoints);
+    expect(combat(c).enemyLastTurn).toContain('disadvantage');
+    consumed();
   });
 });
