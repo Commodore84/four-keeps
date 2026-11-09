@@ -178,7 +178,7 @@ export function resolveCombatSpellSave(campaign:Campaign):Campaign {
   lastSpellSave:{spell:pending.spell,target,roll,total,dc,success,damage},
   status:bothDown?'completed' as const:c.status,outcome:bothDown?'nonlethal-victory' as const:c.outcome};
  if(damage>0){const stats=c.stats??{damage:0,movement:0,attacks:0,hits:0,criticalHits:0,sneakDamage:0,finishingBlows:0};
-  next.stats={...stats,damage:stats.damage+damage,finishingBlows:stats.finishingBlows+(second?secondEnemy?.hp===0:enemyHp===0?1:0)};}
+  next.stats={...stats,damage:stats.damage+damage,finishingBlows:stats.finishingBlows+((second?secondEnemy?.hp===0:enemyHp===0)?1:0)};}
  const now=new Date().toISOString();
  const message=target+' rolls '+roll+' + 0 = '+total+' vs spell save DC '+dc+' for '+pending.spell+': '+(success?'SUCCESS.':'FAILURE.')+(damage?' '+damage+' psychic damage.':'')+(!success&&pending.spell==='Tasha’s Hideous Laughter'?' Target falls Prone; incapacitation and repeat saves await full condition engine.':'')+(bothDown?' Encounter complete.':'');
  return {...campaign,combat:next,updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:message,createdAt:now}]};
