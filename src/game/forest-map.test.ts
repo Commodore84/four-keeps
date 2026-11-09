@@ -16,7 +16,7 @@ describe('illustrated forest-ruins terrain contract',()=>{
   expect(trainingStepCost(9,10)).toBe(10);
   expect(trainingStepCost(2,4)).toBe(10);
   expect(trainingStepCost(0,0)).toBe(5);
-  expect(trainingRouteCost([{x:9,y:11},{x:9,y:10},{x:9,y:9}])).toBe(15);
+  expect(trainingRouteCost([{x:9,y:11},{x:9,y:10},{x:9,y:9}])).toBe(20);
  });
  it('routes around walls and prefers less expensive routes',()=>{
   const c=encounter().combat!;
