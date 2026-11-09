@@ -863,7 +863,7 @@ export function rollDuelAttack(campaign:Campaign,kind:'hit'|'damage',applySneakA
   }
  }
  const now=new Date().toISOString();
- const result={...campaign,equipment:{daggers:next.daggersAvailable??campaign.equipment?.daggers??2,arrows:next.arrowsRemaining??campaign.equipment?.arrows??20,caltrops:campaign.equipment?.caltrops??0,ballBearings:campaign.equipment?.ballBearings??0},combat:next,updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:description,createdAt:now}]};
+ const result:Campaign={...campaign,equipment:{daggers:next.daggersAvailable??campaign.equipment?.daggers??2,arrows:next.arrowsRemaining??campaign.equipment?.arrows??20,caltrops:campaign.equipment?.caltrops??0,ballBearings:campaign.equipment?.ballBearings??0},combat:next,updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:description,createdAt:now}]};
  return kind==='damage'?resolveLaughterDamageSave(result,combat.selectedEnemy==='second'?'second':'first',next.attack.damage??0):result;
 }
 
