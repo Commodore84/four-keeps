@@ -32,6 +32,11 @@ describe('illustrated forest-ruins terrain contract',()=>{
   const moved=moveDuelToken(c,7,10);
   expect(moved.combat!.movementUsed).toBe(cost);
  });
+ it('allows dense brush concealment at distance but not when adjacent',()=>{
+  const c=encounter().combat!;
+  expect(canNighthawkHide({...c,playerPosition:{x:2,y:4},enemyPosition:{x:10,y:4}})).toBe(true);
+  expect(canNighthawkHide({...c,playerPosition:{x:2,y:4},enemyPosition:{x:3,y:4}})).toBe(false);
+ });
  it('keeps stone obstacles authoritative for hide sight checks',()=>{
   expect(trainingCoverBlocksSight({x:3,y:4},{x:5,y:4})).toBe(true);
   expect(canNighthawkHide({...encounter().combat!,playerPosition:{x:3,y:4},enemyPosition:{x:5,y:4}})).toBe(true);
