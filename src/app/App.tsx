@@ -1101,8 +1101,8 @@ export function App() {
               {campaign.combat.playerHidden&&<span className="rounded-full border border-emerald-400/60 bg-emerald-950/50 px-3 py-1 text-emerald-200" title="Hidden: the Invisible condition from Hide applies until you are found or reveal yourself">◉ Hidden</span>}
               {campaign.combat.playerProne&&<span className="rounded-full border border-amber-400/60 px-3 py-1">Prone</span>}
               {campaign.combat.playerGrappled&&<span className="rounded-full border border-amber-400/60 px-3 py-1">Grappled</span>}
-              {campaign.combat.dodging&&<span className="rounded-full border border-white/30 px-3 py-1">Dodging</span>}
-              {!campaign.combat.playerHidden&&!campaign.combat.playerProne&&!campaign.combat.playerGrappled&&!campaign.combat.dodging&&<span className="text-parchment/55">No active conditions</span>}
+              {campaign.combat.lastAction==='Dodge'&&<span className="rounded-full border border-white/30 px-3 py-1">Dodging</span>}
+              {!campaign.combat.playerHidden&&!campaign.combat.playerProne&&!campaign.combat.playerGrappled&&!campaign.combat.lastAction==='Dodge'&&<span className="text-parchment/55">No active conditions</span>}
             </div>
             {campaign.combat.hideResult&&<p className="text-xs text-parchment/65" aria-label="Last hide attempt">Last Hide attempt: {campaign.combat.playerHidden?'Succeeded':'Failed'} · details in combat history</p>}
           </div>}
