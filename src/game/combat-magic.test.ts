@@ -60,6 +60,32 @@ describe('Arcane Trickster Magic Action',()=>{
  });
 });
 
+describe('Nighthawk concentration damage checks',()=>{
+ const combatRig=()=>{
+  const c=encounter();
+  return {...c,concentration:{spell:'Tasha’s Hideous Laughter',startedAt:'now'},combat:{...c.combat!,order:['Training Dummy','Nighthawk'],turnIndex:0,playerPosition:{x:2,y:4},enemyPosition:{x:3,y:4}}};
+ };
+ it('breaks concentration when the Constitution save fails',()=>{
+  const spy=vi.spyOn(crypto,'getRandomValues');let i=0;
+  spy.mockImplementation(((a:Uint32Array)=>{a[0]=[15,1,1][i++]-1;return a;}) as typeof crypto.getRandomValues);
+  try{
+   const result=resolveDuelEnemyTurn(combatRig());
+   expect(result.character?.currentHitPoints).toBeLessThan(encounter().character!.currentHitPoints!);
+   expect(result.concentration).toBeUndefined();
+   expect(result.journal.at(-1)?.text).toMatch(/concentration broken/);
+  }finally{spy.mockRestore();}
+ });
+ it('maintains concentration when the Constitution save succeeds',()=>{
+  const spy=vi.spyOn(crypto,'getRandomValues');let i=0;
+  spy.mockImplementation(((a:Uint32Array)=>{a[0]=[15,1,20][i++]-1;return a;}) as typeof crypto.getRandomValues);
+  try{
+   const result=resolveDuelEnemyTurn(combatRig());
+   expect(result.concentration?.spell).toBe('Tasha’s Hideous Laughter');
+   expect(result.journal.at(-1)?.text).toMatch(/maintained/);
+  }finally{spy.mockRestore();}
+ });
+});
+
 describe('Hideous Laughter damage-triggered saving throws',()=>{
  const active=()=>{
   const c=encounter();
