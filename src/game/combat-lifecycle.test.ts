@@ -197,7 +197,7 @@ describe('2024 Search Study Influence and Ready actions',()=>{
   const consumed=dice(10);
   const c=arena();
   const result=takeCombatSkillAction(c,'Search','Investigation');
-  expect(result.combat?.lastSkillAction?.total).toBe(10+Math.floor(((c.character?.scores.int??10)-10)/2)+(c.character?.proficientSkills.includes('Investigation')?c.character.proficiencyBonus:0));
+  expect(result.combat?.lastSkillAction?.total).toBe(10+Math.floor(((c.character?.scores.int??10)-10)/2)+(c.character?.expertiseSkills?.includes('Investigation')?2*c.character.proficiencyBonus:c.character?.proficientSkills.includes('Investigation')?c.character.proficiencyBonus:0));
   consumed();
  });
  it('rejects invalid skill selections and opponent turns without rolling',()=>{
