@@ -61,7 +61,7 @@ describe('Arcane Trickster Magic Action',()=>{
 });
 
 describe('spell saving throw resolution',()=>{
- function rig(spell:'Mind Sliver'|'Tasha’s Hideous Laughter',second=false){
+ function rig(_spell:'Mind Sliver'|'Tasha’s Hideous Laughter',second=false){
   const c=encounter();
   return {...c,character:{...c.character!,preparedSpells:[...c.character!.preparedSpells!, 'Tasha’s Hideous Laughter']},
    combat:{...c.combat!,selectedEnemy:second?'second' as const:'first' as const,secondEnemy:second?{name:'Training Dummy 2',initiative:8,position:{x:8,y:2},hp:12,maxHp:12,detected:false}:undefined}};
