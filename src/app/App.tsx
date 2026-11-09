@@ -611,7 +611,7 @@ export function App() {
     try {
       const c=campaign.combat!;
       const target=c.selectedEnemy==='second'?c.secondEnemy?.name:c.enemyName;
-      const next=castCombatMagicAction(campaign,spell,target??'');
+      const next=castCombatMagicAction(campaign,spell,target??'',selectedWeapon==='dagger'?'dagger':'shortbow');
       await localCampaignStorage.save(next);
       setCampaign(next);setCampaigns(items=>items.map(item=>item.id===next.id?next:item));
       setPendingCombatAction(null);
@@ -1015,6 +1015,8 @@ export function App() {
  <p className="font-semibold">Magic Action · Choose a spell</p>
  <p className="text-xs text-parchment/70">Uses your Action. Spell effects are recorded for DM adjudication; attacks and saves are not automatically resolved yet.</p>
  <p className="text-xs text-gold">Level 1 slots: {Math.max(0,(campaign.character?.spellSlots?.level1??0)-(campaign.character?.spellSlots?.usedLevel1??0))} remaining</p>
+ <div className="grid grid-cols-1 gap-2">{availableCombatSpells(campaign).includes('True Strike')&&<div className="flex gap-2 text-xs"><span>True Strike weapon:</span>{(['shortbow','dagger'] as const).map(w=><button type="button" key={w} className={`rounded border px-2 py-1 ${(selectedWeapon??'shortbow')===w?'border-gold':'border-white/30'}`} onClick={()=>setSelectedWeapon(w)}>{w==='shortbow'?'Shortbow':'Dagger'}</button>)}</div>}
+ <p className="text-xs text-parchment/70">True Strike creates a weapon attack. Roll to hit and damage using the normal attack controls.</p>
  <div className="grid grid-cols-1 gap-2">{availableCombatSpells(campaign).map(spell=>{const cantrip=campaign.character?.cantrips?.includes(spell)??false;const noSlots=!cantrip&&(campaign.character?.spellSlots?.usedLevel1??0)>=(campaign.character?.spellSlots?.level1??0);return <button type="button" key={spell} disabled={saving||noSlots} className="rounded-lg border border-white/30 p-2.5 text-left disabled:opacity-35" onClick={()=>void castEncounterSpell(spell)}><span className="font-semibold">{spell}</span><span className="block text-xs text-parchment/65">{cantrip?'Cantrip · no slot':'Level 1 · spends one slot'} · {spellSummaries[spell]??'Effect awaits DM adjudication'}</span></button>;})}</div>
  <button type="button" className="text-xs underline" onClick={()=>setPendingCombatAction(null)}>Cancel</button>
  </div>}
