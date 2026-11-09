@@ -343,7 +343,7 @@ export function rollDuelInitiative(campaign:Campaign):Campaign {
   const second=secondRoll===undefined?undefined:{name:'Training Dummy 2',initiative:secondRoll,position:{x:10,y:2},hp:12,maxHp:12,detected:false};
   const order=[{name:'Nighthawk',initiative:total},{name:combat.enemyName,initiative:combat.enemyInitiative},...(second?[{name:second.name,initiative:second.initiative}]:[])].sort((a,b)=>b.initiative-a.initiative).map(x=>x.name);
   const now=new Date().toISOString();
-  return {...campaign,combat:{...combat,status:'initiative-set',playerInitiative:total,secondEnemy:second,selectedEnemy:'first',order,turnIndex:0,owl:(campaign.character?.level??1)>=3&&campaign.familiar&&campaign.familiar.status!=='destroyed'&&campaign.familiar.status!=='dismissed'?{position:{x:2,y:10},hp:campaign.familiar.hp??1,movementUsed:0,actionUsed:false}:undefined,reactionUsed:false,movementUsed:0,actionUsed:false,bonusActionUsed:false,enemyHp:12,enemyMaxHp:12,arrowsRemaining:combat.enemyName==='Training Dummy'?20:campaign.equipment?.arrows??20,daggersAvailable:combat.enemyName==='Training Dummy'?2:campaign.equipment?.daggers??2,daggersThrown:0,playerPosition:{x:2,y:10},enemyPosition:{x:10,y:10}},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:'Nighthawk initiative: d20 '+roll+' + DEX '+modifier+' = '+total+'. '+combat.enemyName+': '+combat.enemyInitiative+'. Turn order: '+order.join(' → ')+'.',createdAt:now}]};
+  return {...campaign,combat:{...combat,status:'initiative-set',playerInitiative:total,secondEnemy:second,selectedEnemy:undefined,order,turnIndex:0,owl:(campaign.character?.level??1)>=3&&campaign.familiar&&campaign.familiar.status!=='destroyed'&&campaign.familiar.status!=='dismissed'?{position:{x:2,y:10},hp:campaign.familiar.hp??1,movementUsed:0,actionUsed:false}:undefined,reactionUsed:false,movementUsed:0,actionUsed:false,bonusActionUsed:false,enemyHp:12,enemyMaxHp:12,arrowsRemaining:combat.enemyName==='Training Dummy'?20:campaign.equipment?.arrows??20,daggersAvailable:combat.enemyName==='Training Dummy'?2:campaign.equipment?.daggers??2,daggersThrown:0,playerPosition:{x:2,y:10},enemyPosition:{x:10,y:10}},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:'Nighthawk initiative: d20 '+roll+' + DEX '+modifier+' = '+total+'. '+combat.enemyName+': '+combat.enemyInitiative+'. Turn order: '+order.join(' → ')+'.',createdAt:now}]};
 }
 
 // A fixed stone pillar for the first cover/Hide encounter. Line of sight is blocked
@@ -432,7 +432,7 @@ export function addSecondTrainingEnemy(campaign:Campaign):Campaign {
  const order=[{name:'Nighthawk',initiative:c.playerInitiative??0},{name:c.enemyName,initiative:c.enemyInitiative},{name:second.name,initiative:roll}].sort((a,b)=>b.initiative-a.initiative).map(a=>a.name);
  const current=c.order?.[c.turnIndex??0]??'Nighthawk';
  const now=new Date().toISOString();
- return {...campaign,combat:{...c,secondEnemy:second,selectedEnemy:'first' as const,order,turnIndex:order.indexOf(current),playerHidden:c.playerHidden&&trainingCoverBlocksSight(c.playerPosition??{x:2,y:4},second.position)},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:'Second training dummy joins at (11, 3). Initiative '+roll+'. Each enemy now has a separate turn; Hide requires blocked sight from both.',createdAt:now}]};
+ return {...campaign,combat:{...c,secondEnemy:second,selectedEnemy:undefined,order,turnIndex:order.indexOf(current),playerHidden:c.playerHidden&&trainingCoverBlocksSight(c.playerPosition??{x:2,y:4},second.position)},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:'Second training dummy joins at (11, 3). Initiative '+roll+'. Each enemy now has a separate turn; Hide requires blocked sight from both.',createdAt:now}]};
 }
 export function canNighthawkHide(c:NonNullable<Campaign['combat']>):boolean {
  const p=c.playerPosition??{x:2,y:4};
@@ -730,6 +730,7 @@ export function takeDuelTurnAction(campaign:Campaign, action:'move'|'attack'|'th
    if(action==='disengage'){next.lastAction='Disengage';next.disengaged=true;description='Nighthawk takes the Disengage action.';}
    if(action==='dodge'){next.lastAction='Dodge';description='Nighthawk takes the Dodge action.';}
    if(action==='attack'||action==='throw-dagger'||action==='shortbow'){
+    if(!next.selectedEnemy)throw Error('Select an enemy on the map before attacking.');
     const p=next.playerPosition??{x:1,y:3},e=next.selectedEnemy==='second'&&next.secondEnemy?next.secondEnemy.position:next.enemyPosition??{x:5,y:3};
     const distance=5*Math.max(Math.abs(p.x-e.x),Math.abs(p.y-e.y));
     const thrown=action==='throw-dagger',bow=action==='shortbow';
@@ -998,16 +999,7 @@ export function rollDuelAttack(campaign:Campaign,kind:'hit'|'damage',applySneakA
   const hp=next.selectedEnemy==='second'&&next.secondEnemy?next.secondEnemy.hp:next.enemyHp??12;
   if(hp===0)next.stats={...next.stats!,finishingBlows:(next.stats?.finishingBlows??0)+1};
   description='Nighthawk '+(next.attack.critical?'CRITICAL HITS ':'hits ')+targetName+' for '+damage+' damage ('+[first,...(second?[second]:[])].join(' + ')+' weapon dice + '+modifier+(next.attack.trueStrike?' INT (True Strike)':' DEX')+(radiantDamage?' + '+radiantDamage+' radiant':'')+(sneakDice?' + '+sneakDamage+' Sneak Attack ('+sneakRolls.join(' + ')+')':'')+'). '+(hp===0?targetName+' collapses, defeated.':hp<=(next.selectedEnemy==='second'&&next.secondEnemy?next.secondEnemy.maxHp:next.enemyMaxHp??12)/2?targetName+' staggers, Bloodied.':targetName+' remains standing.')+(bothDown?' Encounter complete.':'');
-  if(hp===0&&!bothDown){
-    const survivors:[('first'|'second'),{x:number;y:number}][]=[];
-    if((next.enemyHp??12)>0)survivors.push(['first',next.enemyPosition??{x:6,y:4}]);
-    if(next.secondEnemy&&next.secondEnemy.hp>0)survivors.push(['second',next.secondEnemy.position]);
-    const player=next.playerPosition??{x:2,y:4};
-    survivors.sort((a,b)=>Math.max(Math.abs(a[1].x-player.x),Math.abs(a[1].y-player.y))-Math.max(Math.abs(b[1].x-player.x),Math.abs(b[1].y-player.y))||(next.order??[]).indexOf(a[0]==='first'?next.enemyName:next.secondEnemy!.name)-(next.order??[]).indexOf(b[0]==='first'?next.enemyName:next.secondEnemy!.name));
-    next.selectedEnemy=survivors[0][0];
-    description+=' Now targeting '+(next.selectedEnemy==='first'?next.enemyName:next.secondEnemy!.name)+'.';
-  }
- }
+  if(hp===0&&!bothDown){next.selectedEnemy=undefined;}
  const now=new Date().toISOString();
  const result:Campaign={...campaign,equipment:{daggers:next.daggersAvailable??campaign.equipment?.daggers??2,arrows:next.arrowsRemaining??campaign.equipment?.arrows??20,caltrops:campaign.equipment?.caltrops??0,ballBearings:campaign.equipment?.ballBearings??0},combat:next,updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:description,createdAt:now}]};
  return kind==='damage'?resolveLaughterDamageSave(result,combat.selectedEnemy==='second'?'second':'first',next.attack.damage??0):result;
