@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   beginDuel, concludeDuel, newCampaign, quitTrainingEncounter, rollDuelAttack,
-  selectTrainingTarget, takeDuelTurnAction, resolveDuelEnemyTurn, type Campaign,
+  selectTrainingTarget, takeDuelTurnAction, utilizeCombatItem, resolveDuelEnemyTurn, type Campaign,
 } from './campaign';
 import { createBackup, parseBackup } from './backup';
 import { availableCombatMovement, combatAttackRollPreview } from './combat-ui';
@@ -144,4 +144,39 @@ describe('combat persistence and recovery',()=>{
     expect(c.combat?.turnIndex).toBe(0);
     expect(availableCombatMovement(c.combat!)).toBe(35);
   });
+});
+
+describe('Utilize combat action',()=>{
+ it('consumes one caltrops unit, spends Action and logs DM adjudication',()=>{
+  const c=arena();const supplied={...c,equipment:{daggers:2,arrows:20,caltrops:2,ballBearings:1}};
+  const result=utilizeCombatItem(supplied,'caltrops');
+  expect(result.equipment?.caltrops).toBe(1);
+  expect(result.equipment?.ballBearings).toBe(1);
+  expect(result.combat?.actionUsed).toBe(true);
+  expect(result.combat?.lastAction).toBe('Utilize: Caltrops');
+  expect(result.journal.at(-1)?.text).toMatch(/DM adjudication/);
+  expect(()=>takeDuelTurnAction(result,'dodge')).toThrow(/Action already used/);
+ });
+ it('uses ball bearings without changing unrelated equipment',()=>{
+  const c=arena();const result=utilizeCombatItem({...c,equipment:{daggers:2,arrows:20,caltrops:1,ballBearings:2}},'ballBearings');
+  expect(result.equipment).toMatchObject({daggers:2,arrows:20,caltrops:1,ballBearings:1});
+ });
+ it('rejects unavailable items without consuming an Action',()=>{
+  const c=arena();expect(()=>utilizeCombatItem(c,'caltrops')).toThrow(/No caltrops/);
+  expect(c.combat?.actionUsed).toBeFalsy();
+ });
+ it('rejects spent Actions and opponent turns',()=>{
+  const c=arena();const supplied={...c,equipment:{daggers:2,arrows:20,caltrops:1,ballBearings:1}};
+  expect(()=>utilizeCombatItem({...supplied,combat:{...c.combat!,actionUsed:true}},'caltrops')).toThrow(/Action already used/);
+  expect(()=>utilizeCombatItem({...supplied,combat:{...c.combat!,turnIndex:1}},'caltrops')).toThrow(/Nighthawk/);
+ });
+ it('preserves deployed item expenditure through backup and restores Action next turn',()=>{
+  const c=arena();const supplied={...c,equipment:{daggers:2,arrows:20,caltrops:1,ballBearings:1}};
+  const used=utilizeCombatItem(supplied,'ballBearings');
+  const restored=parseBackup(JSON.stringify(createBackup(used)));
+  expect(restored.equipment?.ballBearings).toBe(0);
+  expect(restored.combat?.actionUsed).toBe(true);
+  const ended=takeDuelTurnAction(restored,'end');
+  expect(ended.combat?.actionUsed).toBe(false);
+ });
 });
