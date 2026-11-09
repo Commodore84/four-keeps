@@ -244,6 +244,7 @@ export function App() {
   const [notice, setNotice] = useState('');
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [campaign, setCampaign] = useState<Campaign | null>(null);
+  const [deleteCampaignId, setDeleteCampaignId] = useState<string | null>(null);
   const [newTitle, setNewTitle] = useState('The Forgotten Keep');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -277,6 +278,21 @@ export function App() {
       setCampaigns((items) => [next, ...items]);
       setNotice('Campaign saved on this device.');
     } catch (error) { setNotice('Could not save campaign: ' + String(error)); }
+    finally { setSaving(false); }
+  }
+
+  async function deleteSelectedCampaign() {
+    if (saving || loading || !campaign || deleteCampaignId !== campaign.id) return;
+    const removedId = campaign.id;
+    setSaving(true);
+    try {
+      await localCampaignStorage.remove(removedId);
+      const remaining = campaigns.filter(item => item.id !== removedId);
+      setCampaigns(remaining);
+      setCampaign(remaining[0] ?? null);
+      setDeleteCampaignId(null);
+      setNotice('Campaign deleted from this device.');
+    } catch (error) { setNotice('Could not delete campaign: ' + String(error)); }
     finally { setSaving(false); }
   }
 
@@ -920,9 +936,18 @@ export function App() {
         <section className="mb-5 rounded-xl border border-gold/25 bg-panel p-4 space-y-3" aria-label="Local campaigns">
           <div className="flex items-center justify-between"><h2 className="font-serif text-lg">Local campaigns</h2><span className="text-xs text-parchment/55">{loading ? 'Loading…' : 'Saved on this device'}</span></div>
           {campaigns.length > 0 && <label className="block text-xs text-parchment/70">Active campaign
-            <select value={campaign?.id ?? ''} onChange={(event) => { setCampaign(campaigns.find((item) => item.id === event.target.value) ?? null); setNotice(''); }} className="mt-1 w-full rounded-lg border border-white/20 bg-ink p-3 text-parchment">
+            <select value={campaign?.id ?? ''} onChange={(event) => { setCampaign(campaigns.find((item) => item.id === event.target.value) ?? null); setDeleteCampaignId(null); setNotice(''); }} className="mt-1 w-full rounded-lg border border-white/20 bg-ink p-3 text-parchment">
               {campaigns.map((item) => <option key={item.id} value={item.id}>{item.title}</option>)}
             </select></label>}
+          {campaign && <div className="space-y-2">
+            {deleteCampaignId === campaign.id ? <div className="rounded-lg border border-red-400/60 p-3 space-y-3" role="group" aria-label="Confirm campaign deletion">
+              <p className="text-sm">Permanently delete <strong>{campaign.title}</strong> from this device? This cannot be undone unless you have exported a backup.</p>
+              <div className="flex gap-2">
+                <button type="button" disabled={saving} onClick={() => void deleteSelectedCampaign()} className="rounded-lg bg-red-700 px-3 py-2 text-sm font-semibold text-white disabled:opacity-40">Confirm delete</button>
+                <button type="button" disabled={saving} onClick={() => setDeleteCampaignId(null)} className="rounded-lg border border-white/30 px-3 py-2 text-sm">Cancel</button>
+              </div>
+            </div> : <button type="button" disabled={saving || loading} onClick={() => setDeleteCampaignId(campaign.id)} className="rounded-lg border border-red-400/50 px-3 py-2 text-sm text-red-200 disabled:opacity-40">Delete selected campaign</button>}
+          </div>}
           <div className="flex gap-2">
             <label className="sr-only" htmlFor="campaign-title">New campaign name</label>
             <input id="campaign-title" value={newTitle} onChange={(event) => setNewTitle(event.target.value)} placeholder="Campaign name" className="min-w-0 flex-1 rounded-lg border border-white/20 bg-ink px-3 py-2 text-base"/>
