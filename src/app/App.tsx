@@ -675,7 +675,7 @@ export function App() {
     setSaving(true);
     try{const weapon=campaign.combat?.readiedAction?.weapon;
     const next=campaign.combat?.readiedAction?.spell?resolveReadiedSpellReaction(campaign):weapon?resolveReadiedWeaponAttack(campaign,weapon):resolveReadiedCombatReaction(campaign);
-      await localCampaignStorage.save(next);setCampaign(next);setCampaigns(items=>items.map(entry=>entry.id===next.id?next:entry));setNotice(publicCombatText(next.journal.at(-1)!.text));
+      await localCampaignStorage.save(next);setCampaign(next);setCampaigns(items=>items.map(entry=>entry.id===next.id?next:entry));setNotice(publicCombatText(next.journal.at(-1)!.text));if(next.combatAdjudication)await adjudicateCombatWithDM(next);
     }catch(error){setNotice('Ready: '+String(error));}finally{setSaving(false);}
   }
   async function useCombatItem(item:'caltrops'|'ballBearings') {
