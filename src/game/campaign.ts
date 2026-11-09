@@ -583,8 +583,6 @@ export function resolveDuelEnemyTurn(campaign:Campaign):Campaign {
  const secondEnemyTurn=currentName===combat.secondEnemy?.name;
  const startingPosition=secondEnemyTurn?combat.secondEnemy!.position:combat.enemyPosition??{x:6,y:4};
  const playerPosition=combat.playerPosition??{x:2,y:4};
- const owlAtStart=combat.owl?.hp&&distanceToOwl(combat.owl.position,startingPosition)<=1;
- const targetOwl=!!owlAtStart;
  const otherPosition=secondEnemyTurn?(combat.enemyHp??12)>0?combat.enemyPosition:undefined:combat.secondEnemy&&combat.secondEnemy.hp>0?combat.secondEnemy.position:undefined;
  const distance=(a:{x:number;y:number},b:{x:number;y:number})=>Math.max(Math.abs(a.x-b.x),Math.abs(a.y-b.y));
  const isBlocked=(p:{x:number;y:number})=>p.x<0||p.x>=trainingMapSize||p.y<0||p.y>=trainingMapSize||isTrainingPillar(p.x,p.y)||p.x===playerPosition.x&&p.y===playerPosition.y||!!otherPosition&&p.x===otherPosition.x&&p.y===otherPosition.y;
@@ -608,7 +606,10 @@ export function resolveDuelEnemyTurn(campaign:Campaign):Campaign {
  }
  position=best.pos;
  const inReach=distance(position,playerPosition)<=1;
- const standDescription=(standing?'Enemy stands from Prone, spending 15 feet of movement. ':'')+(best.steps?'Moves '+best.steps*5+' feet to ('+(position.x+1)+', '+(position.y+1)+'). ':'')+(!inReach?'Cannot reach Nighthawk; no melee attack. ':'');
+ // Target selection must use the final position: a dummy cannot strike an owl it moved away from.
+ const owlInReach=!!combat.owl&&combat.owl.hp>0&&distance(position,combat.owl.position)<=1;
+ const targetOwl=owlInReach;
+ const standDescription=(standing?'Enemy stands from Prone, spending 15 feet of movement. ':'')+(best.steps?'Moves '+best.steps*5+' feet to ('+(position.x+1)+', '+(position.y+1)+'). ':'')+(!inReach&&!owlInReach?'Cannot reach Nighthawk or Owl; no melee attack. ':'');
 
  const character=campaign.character??prototypeNighthawk;
  const die=(sides:number)=>crypto.getRandomValues(new Uint32Array(1))[0]%sides+1;
