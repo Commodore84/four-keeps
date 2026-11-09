@@ -122,10 +122,10 @@ describe('ongoing spell effects',()=>{
  }
  it('failed Mind Sliver gives a d4 penalty to the next save then consumes it',()=>{
   const c=encounter();
-  const spent=d20(1,2,13,4,3);
+  const spent=d20(1,2,13,4);
   const first=resolveCombatSpellSave(castCombatMagicAction(c,'Mind Sliver'));
   expect(first.combat?.mindSliverPenalty?.target).toBe('first');
-  const next={...first,combat:{...first.combat!,pendingSpellSave:{spell:'Mind Sliver' as const,target:'first' as const}}};
+  const next={...first,combat:{...first.combat!,pendingSpellSave:{spell:'Tasha’s Hideous Laughter' as const,target:'first' as const}}};
   const result=resolveCombatSpellSave(next);
   expect(result.combat?.lastSpellSave?.total).toBe(9);
   expect(result.combat?.mindSliverPenalty).toBeUndefined();
