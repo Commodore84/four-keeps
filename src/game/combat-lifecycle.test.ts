@@ -1,0 +1,147 @@
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import {
+  beginDuel, concludeDuel, newCampaign, quitTrainingEncounter, rollDuelAttack,
+  selectTrainingTarget, takeDuelTurnAction, resolveDuelEnemyTurn, type Campaign,
+} from './campaign';
+import { createBackup, parseBackup } from './backup';
+import { availableCombatMovement, combatAttackRollPreview } from './combat-ui';
+
+type Combat = NonNullable<Campaign['combat']>;
+function arena(overrides:Partial<Combat>={}):Campaign {
+  const c=newCampaign('Lifecycle test','lifecycle');
+  return {...c,combat:{
+    status:'initiative-set',enemyName:'Training Dummy',enemyInitiative:10,
+    playerInitiative:20,round:1,order:['Nighthawk','Training Dummy'],
+    turnIndex:0,playerPosition:{x:2,y:10},enemyPosition:{x:10,y:2},
+    enemyHp:12,enemyMaxHp:12,movementUsed:0,movementAllowance:35,
+    arrowsRemaining:20,daggersAvailable:2,selectedEnemy:'first',...overrides,
+  }};
+}
+function dice(...rolls:number[]) {
+  let index=0;
+  vi.spyOn(crypto,'getRandomValues').mockImplementation(((array:Uint32Array)=>{
+    if(index>=rolls.length)throw Error('Unexpected random roll');
+    array[0]=rolls[index++]-1;return array;
+  }) as typeof crypto.getRandomValues);
+  return ()=>expect(index).toBe(rolls.length);
+}
+afterEach(()=>vi.restoreAllMocks());
+
+describe('encounter victory and targeting',()=>{
+  it('finishing the only enemy completes victory and permits conclusion',()=>{
+    const consumed=dice(18,6);
+    let c=arena({enemyHp:1});
+    c=takeDuelTurnAction(c,'shortbow');
+    c=rollDuelAttack(c,'hit');
+    c=rollDuelAttack(c,'damage',false);
+    expect(c.combat?.enemyHp).toBe(0);
+    expect(c.combat?.status).toBe('completed');
+    expect(c.combat?.outcome).toBe('nonlethal-victory');
+    const done=concludeDuel(c);
+    expect(done.combat).toBeUndefined();
+    expect(done.character?.currentHitPoints).toBe(done.character?.maxHitPoints);
+    expect(done.equipment?.arrows).toBe(20);
+    consumed();
+  });
+  it('defeating one of two enemies automatically targets the survivor',()=>{
+    const consumed=dice(18,5);
+    const second={name:'Training Dummy 2',initiative:8,position:{x:8,y:2},hp:12,maxHp:12,detected:false};
+    let c=arena({enemyHp:1,secondEnemy:second,order:['Nighthawk','Training Dummy','Training Dummy 2']});
+    c=takeDuelTurnAction(c,'shortbow');
+    c=rollDuelAttack(c,'hit');
+    c=rollDuelAttack(c,'damage',false);
+    expect(c.combat?.enemyHp).toBe(0);
+    expect(c.combat?.status).toBe('initiative-set');
+    expect(c.combat?.selectedEnemy).toBe('second');
+    expect(()=>selectTrainingTarget(c,'first')).toThrow(/defeated/);
+    consumed();
+  });
+  it('conclusion is blocked while any opponent survives',()=>{
+    const second={name:'Training Dummy 2',initiative:8,position:{x:8,y:2},hp:12,maxHp:12,detected:false};
+    expect(()=>concludeDuel(arena({enemyHp:0,secondEnemy:second}))).toThrow(/not ended/);
+  });
+  it('defeating the second opponent also completes the encounter',()=>{
+    const consumed=dice(18,6);
+    const second={name:'Training Dummy 2',initiative:8,position:{x:8,y:2},hp:1,maxHp:12,detected:false};
+    let c=arena({enemyHp:0,secondEnemy:second,selectedEnemy:'second',
+      order:['Nighthawk','Training Dummy','Training Dummy 2']});
+    c=takeDuelTurnAction(c,'shortbow');
+    c=rollDuelAttack(c,'hit');
+    c=rollDuelAttack(c,'damage',false);
+    expect(c.combat?.status).toBe('completed');
+    expect(c.combat?.secondEnemy?.hp).toBe(0);
+    expect(concludeDuel(c).combat).toBeUndefined();
+    consumed();
+  });
+});
+
+describe('defeat and encounter reset',()=>{
+  it('enemy defeat can be concluded and restores training HP',()=>{
+    const consumed=dice(20,2,2);
+    const c=arena({turnIndex:1,enemyPosition:{x:3,y:10},owl:undefined});
+    const low={...c,character:{...c.character!,currentHitPoints:1}};
+    const defeated=resolveDuelEnemyTurn(low);
+    expect(defeated.combat?.status).toBe('completed');
+    expect(defeated.combat?.outcome).toBe('player-defeated');
+    expect(defeated.character?.currentHitPoints).toBe(0);
+    const done=concludeDuel(defeated);
+    expect(done.combat).toBeUndefined();
+    expect(done.character?.currentHitPoints).toBe(done.character?.maxHitPoints);
+    consumed();
+  });
+  it('quit resets an unfinished encounter, equipment and HP',()=>{
+    const c=arena({arrowsRemaining:4,daggersAvailable:0,daggersThrown:2});
+    const damaged={...c,character:{...c.character!,currentHitPoints:2},
+      equipment:{daggers:0,arrows:4,caltrops:5,ballBearings:7}};
+    const done=quitTrainingEncounter(damaged);
+    expect(done.combat).toBeUndefined();
+    expect(done.character?.currentHitPoints).toBe(done.character?.maxHitPoints);
+    expect(done.equipment).toEqual({daggers:2,arrows:20,caltrops:5,ballBearings:7});
+  });
+  it('a new training encounter starts cleanly after resetting the previous one',()=>{
+    const c=quitTrainingEncounter(arena({arrowsRemaining:0,enemyHp:1}));
+    const consumed=dice(12);
+    const restarted=beginDuel(c,'Training Dummy');
+    expect(restarted.combat?.status).toBe('awaiting-initiative');
+    expect(restarted.combat?.round).toBe(1);
+    expect(restarted.combat?.enemyHp).toBeUndefined();
+    consumed();
+  });
+});
+
+describe('combat persistence and recovery',()=>{
+  it('backup round-trip preserves a pending attack and permits finishing it',()=>{
+    const consumed=dice(16,5);
+    let c=takeDuelTurnAction(arena(),'shortbow');
+    c=rollDuelAttack(c,'hit');
+    expect(c.combat?.attack?.phase).toBe('roll-damage');
+    const backup=createBackup(c,'2026-11-09T00:00:00Z');
+    const restored=parseBackup(JSON.stringify(backup));
+    expect(restored.combat).toEqual(c.combat);
+    expect(restored.journal).toEqual(c.journal);
+    const finished=rollDuelAttack(restored,'damage',false);
+    expect(finished.combat?.attack?.phase).toBe('resolved');
+    consumed();
+  });
+  it('JSON reload preserves spent resources, target, and attack preview',()=>{
+    const second={name:'Training Dummy 2',initiative:8,position:{x:8,y:2},hp:12,maxHp:12,detected:false};
+    let c=arena({secondEnemy:second,order:['Nighthawk','Training Dummy','Training Dummy 2']});
+    c=selectTrainingTarget(c,'second');
+    c=takeDuelTurnAction(c,'steady-aim');
+    const restored=JSON.parse(JSON.stringify(c)) as Campaign;
+    expect(restored.combat).toEqual(c.combat);
+    expect(restored.combat?.selectedEnemy).toBe('second');
+    expect(availableCombatMovement(restored.combat!)).toBe(0);
+    expect(combatAttackRollPreview(restored.combat!,'shortbow')).toBe('Advantage');
+    expect(restored.combat?.bonusActionUsed).toBe(true);
+  });
+  it('a resumed encounter keeps initiative order and progresses into the next round',()=>{
+    let c=takeDuelTurnAction(arena(),'steady-aim');
+    c=parseBackup(JSON.stringify(createBackup(c)));
+    c=takeDuelTurnAction(c,'end');
+    c=resolveDuelEnemyTurn(c);
+    expect(c.combat?.round).toBe(2);
+    expect(c.combat?.turnIndex).toBe(0);
+    expect(availableCombatMovement(c.combat!)).toBe(35);
+  });
+});
