@@ -88,7 +88,7 @@ test('combat replaces persistent DM composer with optional Ask DM and header res
   await expect(page.getByText('Last action:', { exact: false })).toHaveCount(0);
   await expect(page.getByLabel('Message the Dungeon Master')).toHaveCount(0);
   await page.getByRole('button', { name: 'Ask DM +' }).click();
-  await expect(page.getByLabel('combat-dm-question')).toBeVisible();
+  await expect(page.locator('#combat-dm-question')).toBeVisible();
   await page.getByRole('button', { name: 'Ask DM −' }).click();
-  await expect(page.getByLabel('combat-dm-question')).toHaveCount(0);
+  await expect(page.locator('#combat-dm-question')).toHaveCount(0);
 });
