@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   beginDuel, concludeDuel, newCampaign, quitTrainingEncounter, rollDuelAttack,
-  selectTrainingTarget, takeDuelTurnAction, utilizeCombatItem, takeCombatSkillAction, readyCombatAction, resolveReadiedCombatReaction, resolveReadiedWeaponAttack, resolveDuelEnemyTurn, type Campaign,
+  selectTrainingTarget, takeDuelTurnAction, utilizeCombatItem, takeCombatSkillAction, readyCombatAction, readyCombatMindSliver, resolveReadiedSpellReaction, resolveReadiedCombatReaction, resolveReadiedWeaponAttack, resolveDuelEnemyTurn, type Campaign,
 } from './campaign';
 import { createBackup, parseBackup } from './backup';
 import { availableCombatMovement, combatAttackRollPreview } from './combat-ui';
@@ -280,5 +280,28 @@ describe('Ready weapon reactions',()=>{
   expect(c.combat?.reactionUsed).toBeFalsy();
   const bow=takeDuelTurnAction(readyCombatAction(arena({arrowsRemaining:0}),'moves','Shoot','shortbow'),'end');
   expect(()=>resolveReadiedWeaponAttack(bow,'shortbow')).toThrow(/No arrows/);
+ });
+});
+
+describe('Readied Mind Sliver spell',()=>{
+ function spellArena(){
+  const c=arena({enemyPosition:{x:4,y:10}});
+  return {...c,character:{...c.character!,level:3,subclass:'Arcane Trickster' as const,cantrips:['Mind Sliver']}};
+ }
+ it('casts at Ready declaration, holds concentration, and releases via reaction and pending save',()=>{
+  const c=readyCombatMindSliver(spellArena(),'dummy moves');
+  expect(c.combat?.actionUsed).toBe(true);
+  expect(c.concentration?.spell).toBe('Readied Mind Sliver');
+  const enemy=takeDuelTurnAction(c,'end');
+  const released=resolveReadiedSpellReaction(enemy);
+  expect(released.combat?.reactionUsed).toBe(true);
+  expect(released.combat?.pendingSpellSave).toMatchObject({spell:'Mind Sliver',target:'first'});
+  expect(released.concentration).toBeUndefined();
+  expect(released.combat?.readiedAction).toBeUndefined();
+ });
+ it('rejects existing concentration and wrong-turn releases',()=>{
+  const c=spellArena();
+  expect(()=>readyCombatMindSliver({...c,concentration:{spell:'Other',startedAt:'now'}},'moves')).toThrow(/existing concentration/);
+  expect(()=>resolveReadiedSpellReaction(readyCombatMindSliver(c,'moves'))).toThrow(/another turn/);
  });
 });
