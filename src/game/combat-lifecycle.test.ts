@@ -193,6 +193,13 @@ describe('2024 Search Study Influence and Ready actions',()=>{
    consumed();
   });
  }
+ it('Search Investigation uses Intelligence, not Wisdom',()=>{
+  const consumed=dice(10);
+  const c=arena();
+  const result=takeCombatSkillAction(c,'Search','Investigation');
+  expect(result.combat?.lastSkillAction?.total).toBe(10+Math.floor(((c.character?.scores.int??10)-10)/2));
+  consumed();
+ });
  it('rejects invalid skill selections and opponent turns without rolling',()=>{
   expect(()=>takeCombatSkillAction(arena(),'Study','Persuasion')).toThrow(/not a valid/);
   expect(()=>takeCombatSkillAction(arena({turnIndex:1}),'Search','Perception')).toThrow(/Nighthawk/);
