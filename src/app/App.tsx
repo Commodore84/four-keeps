@@ -632,18 +632,41 @@ export function App() {
   }
   const [readyTrigger,setReadyTrigger]=useState('');
   const [readyResponse,setReadyResponse]=useState('');
+  async function adjudicateCombatWithDM(current:Campaign) {
+    const pending=current.combatAdjudication;
+    if(!pending)return;
+    if(!accessCode){setNotice('Combat action saved. Enter your DM access code to adjudicate its consequences.');return;}
+    setNotice('Combat action saved. The DM is adjudicating the consequences…');
+    try{
+      const history=current.journal.filter(e=>e.kind==='player'||e.kind==='dm').slice(-12).map(e=>({role:e.kind==='player'?'user':'assistant',content:e.text}));
+      const response=await fetch('/api/dm',{method:'POST',headers:{'Content-Type':'application/json','x-four-keeps-access':accessCode},
+        body:JSON.stringify({message:'Resolve the recorded combat action.',combatAdjudication:{kind:pending.kind,detail:pending.detail},character:current.character??prototypeNighthawk,
+          gameState:{combat:current.combat??null,familiar:current.familiar??null,concentration:current.concentration??null,spellEffects:(current.spellEffects??[]).slice(-12),recentEvents:current.journal.filter(e=>e.kind==='system').slice(-8).map(e=>e.text)},
+          history,worldFacts:current.worldFacts??[],world:current.world??emptyWorld()})});
+      const result:{narration?:string;newFacts?:string[];worldUpdates?:unknown;error?:string}=await response.json();
+      if(!response.ok||!result.narration)throw Error(result.error??'DM adjudication failed');
+      const updated=addExchange(current,pending.detail,result.narration,new Date().toISOString(),result.newFacts??[],result.worldUpdates);
+      const next={...updated,combatAdjudication:undefined};
+      await localCampaignStorage.save(next);setCampaign(next);setCampaigns(items=>items.map(entry=>entry.id===next.id?next:entry));
+      setNotice('Combat consequences narrated and saved to the persistent world.');
+    }catch(error){setNotice('Combat action saved, but DM adjudication failed: '+String(error)+'. Use Retry DM adjudication to continue.');}
+  }
+  async function retryCombatAdjudication(){
+    if(!campaign?.combatAdjudication||saving)return;
+    setSaving(true);try{await adjudicateCombatWithDM(campaign);}finally{setSaving(false);}
+  }
   async function skillCombatAction(action:'Search'|'Study'|'Influence',skill:Parameters<typeof takeCombatSkillAction>[2]){
     if(!campaign||saving)return;
     setSaving(true);
     try{const next=takeCombatSkillAction(campaign,action,skill);
-      await localCampaignStorage.save(next);setCampaign(next);setCampaigns(items=>items.map(entry=>entry.id===next.id?next:entry));setPendingCombatAction(null);setNotice(publicCombatText(next.journal.at(-1)!.text));
+      await localCampaignStorage.save(next);setCampaign(next);setCampaigns(items=>items.map(entry=>entry.id===next.id?next:entry));setPendingCombatAction(null);setNotice(publicCombatText(next.journal.at(-1)!.text));await adjudicateCombatWithDM(next);
     }catch(error){setNotice(action+': '+String(error));}finally{setSaving(false);}
   }
   async function declareReady(){
     if(!campaign||saving)return;
     setSaving(true);
     try{const next=readyCombatAction(campaign,readyTrigger,readyResponse);
-      await localCampaignStorage.save(next);setCampaign(next);setCampaigns(items=>items.map(entry=>entry.id===next.id?next:entry));setPendingCombatAction(null);setNotice(publicCombatText(next.journal.at(-1)!.text));
+      await localCampaignStorage.save(next);setCampaign(next);setCampaigns(items=>items.map(entry=>entry.id===next.id?next:entry));setPendingCombatAction(null);setNotice(publicCombatText(next.journal.at(-1)!.text));await adjudicateCombatWithDM(next);
     }catch(error){setNotice('Ready: '+String(error));}finally{setSaving(false);}
   }
   async function triggerReady(){
@@ -1032,6 +1055,7 @@ export function App() {
             </div>}
             {campaign.combat.attack.phase==='resolved' && <p className="text-xs text-parchment/75">Attack resolved. Continue with any remaining movement or Bonus Action below, or use End Turn when ready.</p>}
           </div>}
+          {campaign.combatAdjudication&&<div className="rounded border border-gold/60 p-3 space-y-2 text-sm"><p>Pending DM adjudication: {campaign.combatAdjudication.kind==='skill'?'skill check':'Ready reaction'}</p><button type="button" disabled={saving||!accessCode} className="rounded border border-gold p-2 disabled:opacity-35" onClick={()=>void retryCombatAdjudication()}>Retry DM adjudication</button>{!accessCode&&<p>Enter the game access code to request DM narration.</p>}</div>}
           {campaign.combat.readiedAction&&<div className="rounded border border-gold/60 p-3 space-y-2 text-sm"><p>Readied: if {campaign.combat.readiedAction.trigger}, then {campaign.combat.readiedAction.response}</p><button type="button" disabled={saving||campaign.combat.order?.[campaign.combat.turnIndex??0]==='Nighthawk'||!!campaign.combat.reactionUsed} className="rounded border border-gold p-2 disabled:opacity-35" onClick={()=>void triggerReady()}>Trigger Ready · Spend Reaction</button></div>}
           {campaign.combat.lastAction && <p className="rounded-lg border border-gold/60 bg-gold/10 p-3 text-sm">Last action: <strong>{campaign.combat.lastAction}</strong> (confirmed)</p>}
           {activeCombatToken==='nighthawk'&&<p className="text-xs text-parchment/75" role="status">Action: {campaign.combat!.actionUsed||!!campaign.combat!.attack?'Spent':'Available'} · Bonus Action: {campaign.combat!.bonusActionUsed?'Spent':'Available'}</p>}
