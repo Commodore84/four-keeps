@@ -553,6 +553,18 @@ export function resolveEnemyOpportunity(campaign:Campaign,kind:'hit'|'damage'|'f
  return {...campaign,character,combat:next,updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:detail,createdAt:now}]};
 }
 
+/** Utilize an available consumable during combat; placement effects await DM adjudication. */
+export function utilizeCombatItem(campaign:Campaign,item:'caltrops'|'ballBearings'):Campaign {
+ const c=campaign.combat;
+ if(!c||c.status!=='initiative-set'||c.order?.[c.turnIndex??0]!=='Nighthawk')throw Error('Utilize requires Nighthawk\'s active combat turn.');
+ if(c.actionUsed||c.attack)throw Error('Action already used this turn.');
+ const equipment=campaign.equipment??{daggers:2,arrows:20,caltrops:0,ballBearings:0};
+ if(equipment[item]<=0)throw Error('No '+(item==='caltrops'?'caltrops':'ball bearings')+' available.');
+ const now=new Date().toISOString(),name=item==='caltrops'?'Caltrops':'Ball Bearings';
+ const message='Nighthawk uses Utilize to deploy '+name+'. One unit consumed. Placement and terrain effects await DM adjudication.';
+ return {...campaign,equipment:{...equipment,[item]:equipment[item]-1},combat:{...c,actionUsed:true,lastAction:'Utilize: '+name},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:message,createdAt:now}]};
+}
+
 export function takeDuelTurnAction(campaign:Campaign, action:'move'|'attack'|'throw-dagger'|'shortbow'|'dash'|'disengage'|'dodge'|'steady-aim'|'cunning-dash'|'cunning-disengage'|'end'):Campaign {
  const combat=campaign.combat;
  if(!combat||combat.status!=='initiative-set'||!combat.order)throw Error('Initiative must be completed first.');
