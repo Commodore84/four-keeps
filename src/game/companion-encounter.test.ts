@@ -1,7 +1,7 @@
 import {describe,it,expect} from 'vitest';
 import {newCampaign,registerSubclassActor,chooseSubclassResistance} from './campaign';
 import {initialSubclassCombatState} from './subclassCombatRules';
-import {startCompanionEncounter,moveCompanion,endCompanionTurn,damageCompanion,conditionCompanion,finishCompanionEncounter} from './companionEncounter';
+import {startCompanionEncounter,moveCompanion,endCompanionTurn,damageCompanion,conditionCompanion,finishCompanionEncounter,attackCompanion,setCompanionSpeed} from './companionEncounter';
 const build=()=>{
  let c=newCampaign('Companion test');
  c=registerSubclassActor(c,'paladin',initialSubclassCombatState('paladin','paladin-devotion',7,3));
@@ -12,6 +12,34 @@ const build=()=>{
 };
 const start=()=>startCompanionEncounter(build(),{paladin:15,druid:12,fiend:9},{paladin:{x:0,y:0},druid:{x:1,y:0},fiend:{x:5,y:5}},{paladin:30,druid:22,fiend:25});
 describe('isolated companion encounter vertical slice',()=>{
+ it('tracks cumulative movement and resets budget on next turn',()=>{
+  let c=start();
+  c=moveCompanion(c,'paladin',0,3);
+  expect(c.companionEncounter?.participants.paladin.movementSpentFeet).toBe(15);
+  expect(()=>moveCompanion(c,'paladin',0,7)).toThrow();
+  c=endCompanionTurn(c,'paladin');
+  c=endCompanionTurn(c,'druid');
+  c=endCompanionTurn(c,'fiend');
+  expect(c.companionEncounter?.participants.paladin.movementSpentFeet).toBe(0);
+  c=setCompanionSpeed(c,'paladin',35);
+  expect(c.companionEncounter?.participants.paladin.speedFeet).toBe(35);
+ });
+ it('resolves manual attack rolls, natural one/twenty, damage resistance and action usage',()=>{
+  let c=start();
+  c=attackCompanion(c,'paladin','druid',15,3,16,11,2,'Cold');
+  expect(c.companionEncounter?.participants.druid.hp).toBe(16);
+  expect(c.companionEncounter?.participants.paladin.actionUsed).toBe(true);
+  expect(()=>attackCompanion(c,'paladin','fiend',20,0,30,10,0,'Fire')).toThrow('Action already used');
+  c=endCompanionTurn(c,'paladin');
+  c=attackCompanion(c,'druid','fiend',1,30,5,10,0,'Fire');
+  expect(c.companionEncounter?.participants.fiend.hp).toBe(25);
+  c=endCompanionTurn(c,'druid');
+  c=attackCompanion(c,'fiend','paladin',20,-5,40,12,2,'Fire');
+  expect(c.companionEncounter?.participants.paladin.hp).toBe(16);
+  expect(c.companionEncounter?.log.at(-1)).toContain('critical hit');
+  expect(c.combat).toEqual(start().combat);
+ });
+
  it('sorts initiative, advances turn and round and preserves original Rogue combat',()=>{
   const c=start();
   expect(c.companionEncounter?.order).toEqual(['paladin','druid','fiend']);
