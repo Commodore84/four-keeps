@@ -39,17 +39,105 @@ const WARLOCK_PATRON_FEATURES:Record<string,Record<number,[string,string]>>={
  Fiend:{3:['Dark One’s Blessing','When a nearby hostile creature drops to zero Hit Points, gain Temporary Hit Points based on Charisma and Warlock level.'],6:['Dark One’s Own Luck','Improve a failed ability check or saving throw with an additional die, subject to limited uses.'],10:['Fiendish Resilience','Choose a damage resistance that can be changed under the feature’s rules.'],14:['Hurl Through Hell','After hitting a creature, temporarily banish it through a terrifying extraplanar experience and potentially deal psychic damage.']},
  'Great Old One':{3:['Awakened Mind and Psychic Spells','Gain telepathic communication and alter certain Warlock spells to express psychic influence; your patron spell list broadens mental and alien magic.'],6:['Clairvoyant Combatant','Turn telepathic connection into an offensive or defensive advantage against a linked creature.'],10:['Eldritch Hex','Improve the pressure your Hex places on a target and deepen your psychic influence.'],14:['Create Thrall','Use powerful mental magic to dominate or bind another creature under the feature’s restrictions.']}
 };
+const CLASS_FEATURE_EXPLANATIONS:Record<string,string>={
+'Extra Attack':'When you take the Attack action, make additional weapon attacks according to your class progression. This increases your reliable martial output without spending a spell slot.',
+'Ability Score Improvement':'At this level you can choose a feat for which you qualify, including Ability Score Improvement. The forecast models provisional ability increases but does not yet apply other feat mechanics.',
+'Epic Boon':'Choose a qualifying Epic Boon feat. This high-level benefit is a real character choice; its exact effects are not included in the projected statistics.',
+'Feral Instinct':'Your battle-hardened senses help you act quickly when combat begins, making it harder for enemies to catch you unprepared.',
+'Brutal Strike':'Trade away part of Reckless Attack’s accuracy benefit to add damage and a tactical effect to a Strength-based attack while raging.',
+'Relentless Rage':'Your Rage can keep you standing after damage would otherwise reduce you to zero Hit Points, subject to a Constitution saving throw.',
+'Persistent Rage':'Your Rage becomes easier to maintain through difficult encounters and supports sustained frontline pressure.',
+'Indomitable Might':'Your extraordinary physical strength improves the reliability of Strength ability checks.',
+'Primal Champion':'Your physical potential increases beyond ordinary mortal limits, dramatically improving Strength and Constitution.',
+'Font of Inspiration':'Bardic Inspiration becomes easier to recover, allowing you to support allies more consistently between rests.',
+'Countercharm':'Use your performance and magic to help creatures resist or recover from certain mental effects.',
+'Expertise':'Double your Proficiency Bonus for selected skill proficiencies, improving the reliability of those skills.',
+'Magical Secrets':'Broaden your Bard spell options by choosing spells from other class lists according to the feature’s restrictions.',
+'Sear Undead':'Your Channel Divinity gains an offensive effect against undead creatures you turn.',
+'Blessed Strikes':'Enhance either weapon attacks or cantrip damage with divine power, depending on the option selected.',
+'Divine Intervention':'Call upon your deity for extraordinary magical aid, within the feature’s stated limitations.',
+'Improved Blessed Strikes':'Your selected Blessed Strikes benefit grows stronger at higher Cleric levels.',
+'Greater Divine Intervention':'Your divine connection enables a more powerful form of intervention with significant limitations on reuse.',
+'Wild Resurgence':'Exchange spellcasting resources and Wild Shape uses to regain flexibility when one resource runs low.',
+'Elemental Fury':'Choose a nature-themed offensive benefit that improves weapon or cantrip damage.',
+'Elemental Fury Improvement':'Your selected Elemental Fury option becomes more effective at higher levels.',
+'Beast Spells':'Cast spells while using Wild Shape, expanding what you can do while transformed.',
+'Archdruid':'Your mastery of Wild Shape and nature magic greatly improves resource availability.',
+'Tactical Master':'Apply tactical Weapon Mastery properties to eligible attacks for greater battlefield control.',
+'Studied Attacks':'Learn from missed attacks, improving the accuracy of your next attempt against the same target.',
+'Action Surge Improvement':'Your signature extra-action resource becomes available more often.',
+'Stunning Strike':'Spend Focus to attempt to stun a target hit by your Unarmed Strike, subject to its saving throw.',
+'Empowered Strikes':'Your Unarmed Strikes overcome certain defenses and improve their damage potential.',
+'Evasion':'Avoid or reduce damage from effects that allow Dexterity saving throws, depending on the outcome.',
+'Heightened Focus':'Your Focus-powered combat techniques improve and offer additional tactical options.',
+'Deflect Energy':'Your defensive reaction becomes useful against more kinds of incoming damage.',
+'Disciplined Survivor':'Your discipline improves saving throws and your ability to withstand dangerous effects.',
+'Superior Defense':'Spend Focus for a potent short-lived defensive state.',
+'Body and Mind':'Your mastery of body and spirit increases key ability scores beyond ordinary limits.',
+'Faithful Steed':'Gain access to a magical mount through your Paladin spellcasting.',
+'Aura of Protection':'You and nearby allies gain a bonus to saving throws based on your Charisma modifier while within your aura.',
+'Abjure Foes':'Channel divine power to disrupt and frighten enemies, limiting their options in combat.',
+'Aura of Courage':'Your presence helps protect nearby allies from fear.',
+'Restoring Touch':'Use Lay on Hands to remove additional harmful conditions.',
+'Aura Expansion':'Your Paladin auras protect a wider area.',
+'Roving':'Your movement improves, helping you traverse varied terrain.',
+'Tireless':'Gain restorative resilience and reduce the effects of exhaustion.',
+'Relentless Hunter':'Maintain your signature hunting magic more reliably under pressure.',
+'Nature’s Veil':'Use primal magic to become harder for enemies to perceive.',
+'Precise Hunter':'Improve the accuracy of attacks against your chosen quarry.',
+'Feral Senses':'Your senses help you fight enemies you cannot see.',
+'Foe Slayer':'Your expertise at pursuing marked enemies reaches its highest level.',
+'Cunning Strike':'Trade some Sneak Attack damage dice for a tactical effect on a qualifying hit.',
+'Uncanny Dodge':'Use your reaction to reduce damage from an attack you can perceive.',
+'Reliable Talent':'Treat low d20 results as more reliable when making checks with skills or tools in which you are proficient.',
+'Improved Cunning Strike':'Use additional Cunning Strike options as your precision improves.',
+'Devious Strikes':'Unlock more powerful Sneak Attack tradeoffs that hinder enemies.',
+'Slippery Mind':'Gain stronger mental resilience and saving throw proficiency.',
+'Elusive':'Make it harder for enemies to gain advantage on attacks against you.',
+'Stroke of Luck':'Turn a crucial failed attempt into a success within the feature’s limits.',
+'Sorcerous Restoration':'Regain a portion of your magical resource pool when you rest.',
+'Sorcery Incarnate':'Improve the flexibility of Metamagic while your innate magic is active.',
+'Metamagic':'Learn additional ways to alter spells using Sorcery Points, such as changing their range, timing, or targets.',
+'Arcane Apotheosis':'Your innate magical power reaches its peak, making your signature spell-altering techniques more efficient.',
+'Memorize Spell':'Adjust one prepared Wizard spell after a Short Rest, giving your spellbook greater day-to-day flexibility.',
+'Spellcasting Progression':'Your spellcasting advances, unlocking stronger spells and additional spell slots according to the Wizard progression table.',
+'Spell Mastery':'Choose eligible low-level spells that you can cast repeatedly without expending slots under the feature’s rules.',
+'Signature Spells':'Choose favored higher-level spells that are always prepared and can be cast without a slot a limited number of times.',
+'Fast Movement':'Your movement speed increases while you meet the feature’s armor restrictions.',
+'Two Extra Attacks':'You can make three attacks when you take the Attack action.',
+'Three Extra Attacks':'You can make four attacks when you take the Attack action.',
+'Superior Inspiration':'Recover Bardic Inspiration when you would otherwise begin a fight without it.',
+'Words of Creation':'Your mastery of Bard magic enables extraordinary high-level spellcasting.'
+};
+function classMilestoneDescription(name:string):string{
+ const parts=name.split(' and ');
+ const details=parts.map(part=>CLASS_FEATURE_EXPLANATIONS[part]??'This class feature changes your available actions, resources, or defenses; its numerical effects still require rules-engine support.');
+ return details.join(' ');
+}
+const SUBCLASS_TIER_GUIDE:Record<string,string[]>={
+barbarian:['Your chosen primal path changes how Rage affects combat, protection, or movement.','Your path strengthens its distinctive combat and exploration benefits.','A further primal-path feature expands your tactical or defensive options.','Your path reaches its defining high-level expression.'],
+bard:['Your college grants a distinctive use for Bardic Inspiration and a new performance identity.','Your college deepens its signature support, combat, or enchantment abilities.','Your college grants a major high-level ability built around its specialty.'],
+cleric:['Your domain grants divine spells and a Channel Divinity-related specialty.','Your domain expands its divine protection, healing, or offensive powers.','Your domain unlocks its highest-level defining benefit.'],
+druid:['Your circle transforms how you use Wild Shape, nature magic, or terrain.','Your circle strengthens its core nature-magic specialty.','Your circle grants a further combat or exploration improvement.','Your circle unlocks a major high-level nature feature.'],
+fighter:['Your archetype grants a distinct combat system or technique.','Your archetype develops new tactical or magical capabilities.','Your archetype improves its signature combat style.','Your archetype grants another advanced combat option.','Your archetype reaches its final defining feature.'],
+monk:['Your tradition grants a specialized way to spend Focus and fight.','Your tradition expands its distinctive techniques.','Your tradition grants a powerful advanced technique.','Your tradition reaches its signature high-level mastery.'],
+paladin:['Your oath grants oath spells and a Channel Divinity option.','Your oath grants an aura or other protective presence.','Your oath expands its supernatural combat and support benefits.','Your oath grants a powerful temporary transformation or capstone.'],
+ranger:['Your archetype grants specialized hunting, companion, or supernatural abilities.','Your archetype improves its survival and combat techniques.','Your archetype grants a more advanced signature ability.','Your archetype reaches its highest-level hunting specialty.'],
+rogue:['Your archetype changes how you use skills, Sneak Attack, or special resources.','Your archetype deepens its infiltration or combat techniques.','Your archetype grants an advanced specialty feature.','Your archetype reaches its defining high-level trick.'],
+sorcerer:['Your origin grants bonus spells and a distinctive magical benefit.','Your origin develops its supernatural resilience or manipulation.','Your origin grants a powerful new magical expression.','Your origin reaches its highest-level signature ability.'],
+wizard:['Your school grants a distinctive approach to preparing and using spells.','Your school improves its specialized magic.','Your school grants a powerful spellcasting feature.','Your school reaches its advanced mastery.']
+};
 const SUBCLASS_LEVELS:Record<string,number[]>={bard:[3,6,14],cleric:[3,6,17],druid:[3,6,10,14],fighter:[3,7,10,15,18],monk:[3,6,11,17],paladin:[3,7,15,20],ranger:[3,7,11,15],rogue:[3,9,13,17],sorcerer:[3,6,14,18],warlock:[3,6,10,14],wizard:[3,6,10,14],barbarian:[3,6,10,14]};
 export function progressionFeatures(classId:string,level:number,subclassName?:string):AdvancementFeature[]{
  const features:AdvancementFeature[]=[];
  if(classId==='warlock')features.push(...WARLOCK.filter(x=>x.level===level));
  else{
   const name=CLASS_MILESTONES[classId]?.[level];
-  if(name)features.push({level,name,description:'Class milestone at this level. The exact mechanical benefits and any choices require the full class rules entry before being applied to the projected statistics.',source:'class'});
+  if(name)features.push({level,name,description:classMilestoneDescription(name),source:'class'});
   if([4,8,12,16].includes(level)&&!features.some(x=>x.name==='Ability Score Improvement'))features.push({level,name:'Ability Score Improvement',description:'Choose a qualifying feat or an ability score increase; this forecast can model a provisional ability increase.',source:'class'});
   if(level===19)features.push({level,name:'Epic Boon',description:'Choose an eligible Epic Boon feat at level 19. Its effects are not included in the current projection.',source:'class'});
  }
- if(subclassName&&SUBCLASS_LEVELS[classId]?.includes(level)){const specific=classId==='warlock'?WARLOCK_PATRON_FEATURES[subclassName]?.[level]:undefined;features.push({level,name:specific?.[0]??subclassName+' feature',description:specific?.[1]??'A subclass feature is unlocked at this level. Specific effects are not yet included in projected statistics and must be confirmed against the subclass rules.',source:'subclass'});}
+ if(subclassName&&SUBCLASS_LEVELS[classId]?.includes(level)){const specific=classId==='warlock'?WARLOCK_PATRON_FEATURES[subclassName]?.[level]:undefined;features.push({level,name:specific?.[0]??subclassName+' feature',description:specific?.[1]??(SUBCLASS_TIER_GUIDE[classId]?.[SUBCLASS_LEVELS[classId].indexOf(level)]??'This subclass grants an additional specialty feature.')+' This is a thematic preview, not a complete mechanical rule; the exact effect is not yet included in projected statistics.',source:'subclass'});}
  return features;
 }
 export function mysticArcanumLevel(warlockLevel:number):number[]{return [11,13,15,17].filter(l=>warlockLevel>=l).map(l=>6+(l-11)/2)}
