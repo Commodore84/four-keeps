@@ -235,3 +235,21 @@ test('all Warlock subclass options are readable without selecting one at level o
  await expect(section.getByText('Great Old One',{exact:true})).toBeVisible();
  await expect(section.getByText(/you will choose a subclass when you reach level 3/)).toBeVisible();
 });
+
+test('future-level forecast grows sequentially and saves subclass plans',async ({page})=>{
+ const now='2026-11-10T00:00:00.000Z';
+ const draft={schemaVersion:1,id:'forecast-browser',status:'draft',rules:{edition:'2024',allowCompatibleLegacy:true},step:'forecast',identity:{name:'Forecast Warlock',pronouns:'',appearance:'',personality:'',backstory:'',portrait:null},selections:{speciesId:'human',backgroundId:'sage',classId:'warlock',classChoices:{}},createdAt:now,updatedAt:now};
+ await page.addInitScript(value=>{if(!localStorage.getItem('four-keeps-character-drafts-v1'))localStorage.setItem('four-keeps-character-drafts-v1',JSON.stringify([value]));},draft);
+ await page.goto('/four-keeps/');
+ await page.getByRole('button',{name:'My Characters'}).click();
+ await page.getByRole('button',{name:/Forecast Warlock/}).click();
+ await expect(page.getByRole('button',{name:'See level 2'})).toBeVisible();
+ await page.getByRole('button',{name:'See level 2'}).click();
+ await page.getByLabel('Level 2 notes').fill('Practice invocations');
+ await page.getByRole('button',{name:'See level 3'}).click();
+ await page.getByLabel('Planned subclass').selectOption('warlock-archfey');
+ await expect(page.getByText(/A patron from the Feywild/)).toBeVisible();
+ await page.reload();
+ await expect(page.getByLabel('Planned subclass')).toHaveValue('warlock-archfey');
+ await expect(page.getByLabel('Level 2 notes')).toHaveValue('Practice invocations');
+});
