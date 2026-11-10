@@ -64,7 +64,7 @@ export function conditionCompanion(campaign:Campaign,targetId:string,condition:'
  const auraActive=!!source&&source.subclassId==='paladin-devotion'&&source.level>=7&&!!aura&&aura.hp>0;
  const withinDevotionAura=auraActive&&Math.max(Math.abs(aura!.x-actor.x),Math.abs(aura!.y-actor.y))<=2;
  const ownAura=campaign.subclassActors?.[targetId]?.subclassId==='paladin-devotion'&&campaign.subclassActors[targetId].level>=7&&actor.hp>0;
- const permitted=adjudicateSubclassActorCondition(campaign,targetId,condition,{auraActive:auraActive||ownAura,withinDevotionAura:withinDevotionAura||ownAura});
+ const permitted=!(condition==='Charmed'&&(withinDevotionAura||ownAura))&&adjudicateSubclassActorCondition(campaign,targetId,condition,{auraActive:ownAura,withinDevotionAura:ownAura});
  if(!permitted)return save(campaign,{...battle,log:[...battle.log,targetId+' is immune to '+condition]});
  return save(campaign,{...battle,participants:{...battle.participants,[targetId]:{...actor,conditions:[...new Set([...actor.conditions,condition])]}},log:[...battle.log,targetId+' gained '+condition]});
 }
