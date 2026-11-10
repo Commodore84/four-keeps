@@ -372,7 +372,7 @@ test('companion encounter initiative, turn, resistance and persistence stay isol
  await panel.getByLabel('Initiative druid').fill('12');
  await panel.getByRole('button',{name:'Start companion encounter'}).click();
  await expect(panel).toContainText('Active turn: paladin');
- await panel.getByLabel('Companion target').selectOption('druid');
+ await panel.getByLabel('Companion target',{exact:true}).selectOption('druid');
  await panel.getByLabel('Companion damage',{exact:true}).fill('11');
  await panel.getByLabel('Companion damage type').selectOption('Cold');
  await panel.getByRole('button',{name:'Apply damage'}).click();
@@ -407,7 +407,7 @@ test('companion attack consumes action and movement budget persists across reloa
  await panel.getByLabel('Move Y').fill('2');
  await panel.getByRole('button',{name:'Move active actor'}).click();
  await expect(panel).toContainText('movement 20/30 ft');
- await panel.getByLabel('Companion target').selectOption('fiend');
+ await panel.getByLabel('Companion target',{exact:true}).selectOption('fiend');
  await panel.getByLabel('Companion attack d20').fill('15');
  await panel.getByLabel('Companion attack modifier').fill('3');
  await panel.getByLabel('Companion target AC').fill('14');
