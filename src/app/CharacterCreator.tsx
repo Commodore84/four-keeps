@@ -1,3 +1,4 @@
+import {emptyForecast,extendForecast,forecastForClass,updateLevelPlan,validateForecast,type AdvancementForecast} from '../game/creationForecast';
 import {subclassesForClass} from '../game/creationSubclasses';
 import {SPECIES_TRAITS,LINEAGE_DETAILS,ORIGIN_FEATS,CLASS_OVERVIEW,CLASS_FEATURE_DETAILS,CHOICE_DETAILS,SKILL_DETAILS,choiceExplanation} from '../game/creationRulesGuide';
 import {INVOCATION_DETAILS} from '../game/creationInvocationInfo';
@@ -12,7 +13,7 @@ import { CLASSES, classChoices, classSummary, reconcileChoices, setChoice, spell
 import { availableSpecies, availableBackgrounds, validateOrigins, originBenefits } from '../game/creationOrigins';
 import { useEffect, useState } from 'react';
 
-export type CreationStep = 'identity'|'origins'|'class'|'abilities'|'equipment'|'spells'|'review';
+export type CreationStep = 'identity'|'origins'|'class'|'abilities'|'equipment'|'spells'|'review'|'forecast';
 export interface CharacterDraft {
   schemaVersion: 1;
   id: string;
@@ -21,13 +22,14 @@ export interface CharacterDraft {
   step: CreationStep;
   identity: { name: string; pronouns: string; appearance: string; personality: string; backstory: string; portrait: null|string };
   selections: { speciesId?: string; lineageId?: string; backgroundId?: string; classId?: string; classChoices?: ChoiceSelections; abilities?: AbilityDraft; equipment?: EquipmentDraft; magic?: MagicDraft; originMagic?: OriginMagicDraft };
+  forecast?: AdvancementForecast;
   createdAt: string;
   updatedAt: string;
 }
 export const CREATION_STEPS: {id:CreationStep;label:string}[] = [
   {id:'identity',label:'Identity'}, {id:'origins',label:'Origins'}, {id:'class',label:'Class'},
   {id:'abilities',label:'Abilities'}, {id:'equipment',label:'Equipment'},
-  {id:'spells',label:'Spells & Features'}, {id:'review',label:'Review'}
+  {id:'spells',label:'Spells & Features'}, {id:'review',label:'Review'}, {id:'forecast',label:'Future Levels'}
 ];
 const KEY='four-keeps-character-drafts-v1';
 export function validateIdentity(draft:CharacterDraft):string[] {
@@ -67,12 +69,13 @@ export function CharacterCreator(){
     if(!draft)return;
     update({selections:{...draft.selections,...patch}});
   }
-  function chooseClass(classId:string){if(!draft)return;updateSelections({classId,classChoices:{},magic:emptyMagic()});}
+  function chooseClass(classId:string){if(!draft)return;update({selections:{...draft.selections,classId,classChoices:{},magic:emptyMagic()},forecast:emptyForecast()});}
   function toggleClassChoice(definition:ChoiceDefinition,value:string){
     if(!draft?.selections.classId)return;
     const next=setChoice(draft.selections.classChoices??{},definition,value);
     updateSelections({classChoices:reconcileChoices(classChoices(draft.selections.classId,next['class-skills']??[]),next)});
   }
+  function updateForecast(next:AdvancementForecast){update({forecast:next});}
   function updateOriginMagic(next:OriginMagicDraft){updateSelections({originMagic:next});}
   function updateMagic(next:MagicDraft){updateSelections({magic:next});}
   function updateEquipment(next:EquipmentDraft){updateSelections({equipment:next});}
@@ -96,7 +99,7 @@ export function CharacterCreator(){
     {!draft?<><button type="button" className="rounded-lg bg-gold px-4 py-2 font-semibold text-ink" onClick={()=>{const next=createCharacterDraft();persist([next,...drafts]);setSelected(next.id);}}>Create character</button>
       {drafts.length>0&&<div className="space-y-2"><h4 className="font-semibold">Unfinished characters</h4>{drafts.map(item=><button key={item.id} type="button" onClick={()=>setSelected(item.id)} className="block w-full rounded-lg border border-white/20 p-3 text-left">{item.identity.name||'Unnamed character'} <span className="text-xs text-parchment/60">· Resume draft</span></button>)}</div>}</>:
     <><div className="flex items-center justify-between gap-2"><strong>{draft.identity.name||'Unnamed character'}</strong><button type="button" onClick={()=>setSelected(null)} className="rounded-lg border border-white/25 px-3 py-2 text-sm">All characters</button></div>
-      <nav aria-label="Character creation steps" className="grid grid-cols-2 gap-2 sm:grid-cols-4">{CREATION_STEPS.map((step,index)=><button type="button" key={step.id} disabled={index>6||index===1&&validateIdentity(draft).length>0||index>=2&&(validateIdentity(draft).length>0||validateOrigins(draft.selections,draft.rules.allowCompatibleLegacy).length>0)||index>=3&&validateClassAgainstBackground(draft.selections.classId,draft.selections.classChoices??{},availableBackgrounds(draft.rules.allowCompatibleLegacy).find(b=>b.id===draft.selections.backgroundId)?.skills??[]).length>0||index>=4&&validateAbilityDraft(draft.selections.abilities??emptyAbilityDraft(),availableBackgrounds(draft.rules.allowCompatibleLegacy).find(b=>b.id===draft.selections.backgroundId)?.abilities??[]).length>0||index>=5&&equipmentErrors(draft.selections.equipment??emptyEquipment(),draft.selections.classId??'',draft.selections.backgroundId??'',totalScores(draft.selections.abilities??emptyAbilityDraft())).length>0||index===6&&(validateMagic(draft.selections.classId??'',draft.selections.magic??emptyMagic()).length>0||validateOriginMagic(draft.selections.backgroundId??'',draft.selections.originMagic??emptyOriginMagic()).length>0)} onClick={()=>update({step:step.id})} className={`rounded-lg border px-2 py-2 text-left text-sm ${draft.step===step.id?'border-gold text-gold':'border-white/20'} disabled:opacity-40`}>{index+1}. {step.label}</button>)}</nav>
+      <nav aria-label="Character creation steps" className="grid grid-cols-2 gap-2 sm:grid-cols-4">{CREATION_STEPS.map((step,index)=><button type="button" key={step.id} disabled={index>7||index===1&&validateIdentity(draft).length>0||index>=2&&(validateIdentity(draft).length>0||validateOrigins(draft.selections,draft.rules.allowCompatibleLegacy).length>0)||index>=3&&validateClassAgainstBackground(draft.selections.classId,draft.selections.classChoices??{},availableBackgrounds(draft.rules.allowCompatibleLegacy).find(b=>b.id===draft.selections.backgroundId)?.skills??[]).length>0||index>=4&&validateAbilityDraft(draft.selections.abilities??emptyAbilityDraft(),availableBackgrounds(draft.rules.allowCompatibleLegacy).find(b=>b.id===draft.selections.backgroundId)?.abilities??[]).length>0||index>=5&&equipmentErrors(draft.selections.equipment??emptyEquipment(),draft.selections.classId??'',draft.selections.backgroundId??'',totalScores(draft.selections.abilities??emptyAbilityDraft())).length>0||index>=6&&(validateMagic(draft.selections.classId??'',draft.selections.magic??emptyMagic()).length>0||validateOriginMagic(draft.selections.backgroundId??'',draft.selections.originMagic??emptyOriginMagic()).length>0)} onClick={()=>update({step:step.id})} className={`rounded-lg border px-2 py-2 text-left text-sm ${draft.step===step.id?'border-gold text-gold':'border-white/20'} disabled:opacity-40`}>{index+1}. {step.label}</button>)}</nav>
       {draft.step==='identity'?<div className="space-y-3">
         <p className="text-sm text-parchment/65">Tell us about your adventurer. Only the name is required.</p>
         {(['name','pronouns','appearance','personality','backstory'] as const).map(field=><label key={field} className="block space-y-1"><span className="block text-sm capitalize">{field}{field==='name'?' *':''}</span>{field==='name'||field==='pronouns'?<input className="w-full rounded-lg border border-white/20 bg-ink p-2" value={draft.identity[field]} onChange={e=>updateIdentity(field,e.target.value)}/>:<textarea className="w-full rounded-lg border border-white/20 bg-ink p-2" rows={2} value={draft.identity[field]} onChange={e=>updateIdentity(field,e.target.value)}/>}</label>)}
@@ -224,7 +227,7 @@ export function CharacterCreator(){
             {errors.length?<p role="status" className="text-sm text-amber-200">{errors.join(' ')}</p>:<p role="status" className="text-sm text-emerald-300">Level-one spell choices valid and saved.</p>}
             <div className="flex gap-2"><button type="button" onClick={()=>update({step:'equipment'})} className="rounded-lg border border-white/25 px-3 py-2">Back to equipment</button><button type="button" disabled={errors.length>0} onClick={()=>update({step:"review"})} className="rounded-lg bg-gold px-3 py-2 text-ink disabled:opacity-40">Continue to review</button></div>
           </div>})()}
-      </div>:<div className="space-y-4" aria-label="Character review">
+      </div>:draft.step==='review'?<div className="space-y-4" aria-label="Character review">
         <h4 className="font-serif text-lg">Review Character</h4>
         {(()=>{const result=reviewCharacter(draft);const errors=reviewErrors(draft);return <div className="space-y-3">
           <section className="rounded-lg border border-gold/30 p-3"><h5 className="font-serif text-xl">{result.name}</h5><p>{result.origins.species} {result.origins.lineage?'· '+result.origins.lineage:''} · {result.origins.background} · Level {result.level} {result.className}</p><p className="text-sm">HP {result.hitPoints} · AC {result.armorClass} · Initiative {result.initiative>=0?'+':''}{result.initiative} · Proficiency +{result.proficiencyBonus} · Speed {result.origins.speed} ft.</p></section>
@@ -233,7 +236,25 @@ export function CharacterCreator(){
           <section className="rounded-lg border border-white/20 p-3 text-sm"><h5 className="font-semibold">Equipment</h5><p>{result.equipment.map(i=>i.quantity+' × '+i.name).join(', ')||'None'} · {result.remainingGold.toFixed(2)} GP remaining</p></section>
           <section className="rounded-lg border border-white/20 p-3 text-sm"><h5 className="font-semibold">Magic</h5><p>Cantrips: {result.spells.cantrips.join(', ')||'None'}</p><p>Prepared: {result.spells.prepared.join(', ')||'None'}</p>{result.spells.spellbook.length>0&&<p>Spellbook: {result.spells.spellbook.join(', ')}</p>}{result.spells.invocations.length>0&&<p>Invocations: {result.spells.invocations.join(', ')}</p>}{result.spells.innate.length>0&&<p>Species magic: {result.spells.innate.join(', ')}</p>}{result.spells.originCantrips.length>0&&<p>Magic Initiate cantrips: {result.spells.originCantrips.join(', ')}</p>}{result.spells.originSpell&&<p>Magic Initiate spell: {result.spells.originSpell}</p>}</section>
           {errors.length>0?<p role="alert" className="text-amber-200">Character incomplete: {errors.join(' ')}</p>:<p role="status" className="text-emerald-300">All implemented level-one creation steps are valid. Character remains a saved draft.</p>}
-          <div className="flex gap-2"><button type="button" onClick={()=>update({step:'spells'})} className="rounded-lg border border-white/25 px-3 py-2">Back to spells</button><button type="button" disabled className="rounded-lg bg-gold px-3 py-2 text-ink opacity-40">Enter adventure (future integration)</button></div>
+          <div className="flex flex-wrap gap-2"><button type="button" onClick={()=>update({step:'spells'})} className="rounded-lg border border-white/25 px-3 py-2">Back to spells</button><button type="button" onClick={()=>update({step:'forecast'})} className="rounded-lg bg-gold px-3 py-2 text-ink">Explore future levels</button><button type="button" disabled className="rounded-lg border border-white/25 px-3 py-2 opacity-40">Enter adventure (future integration)</button></div>
+        </div>})()}
+      </div>:<div className="space-y-4" aria-label="Character advancement forecast">
+        {(()=>{const forecast=draft.forecast??emptyForecast();const levels=forecastForClass(draft.selections.classId??'',forecast);const className=classSummary(draft.selections.classId??'')?.name??'Character';return <div className="space-y-4">
+          <div><h4 className="font-serif text-lg">Your Future Character</h4><p className="text-sm text-parchment/75">Plan how {draft.identity.name||'your character'} might develop as a {className}. These are ideas, not locked-in choices. Leveling up during the campaign will ask you to confirm your actual decisions.</p></div>
+          <div className="rounded-lg border border-gold/30 p-3"><p className="font-semibold">Level 1 — your current character</p><p className="text-sm text-parchment/75">Your completed character-builder selections remain unchanged by this forecast.</p></div>
+          {levels.map(({level,plan,features,subclass,subclassChoices,abilityImprovement})=><section key={level} className="space-y-3 rounded-lg border border-white/20 p-3">
+            <h5 className="font-serif text-lg text-gold">Level {level}</h5>
+            {features.length>0?<div className="space-y-1">{features.map(name=><p key={name} className="text-sm"><strong>{name}</strong><span className="block text-xs text-parchment/70">{CLASS_FEATURE_DETAILS[name]??'This feature needs a complete verified mechanical rules entry before campaign-level implementation.'}</span></p>)}</div>:<p className="text-xs text-parchment/65">The class feature schedule for this level is not yet complete; this does not mean no features are gained.</p>}
+            {level===3&&<fieldset className="space-y-2"><legend className="font-semibold">Which subclass might you choose?</legend><select aria-label="Planned subclass" value={plan.subclassId??''} onChange={e=>updateForecast(updateLevelPlan(forecast,3,{subclassId:e.target.value||undefined}))} className="w-full rounded border border-white/25 bg-ink p-2"><option value="">Undecided</option>{subclassChoices.map(option=><option key={option.id} value={option.id}>{option.name}</option>)}</select>{subclass&&<p className="text-sm leading-relaxed text-parchment/80">{subclass.description}</p>}</fieldset>}
+            {level>3&&subclass&&<p className="text-xs text-parchment/70">Planned subclass: {subclass.name}. Subclass-specific features at this level still require rules implementation.</p>}
+            {abilityImprovement&&<label className="block text-sm">Ability score or feat idea<textarea aria-label={`Level ${level} ability or feat plan`} value={plan.abilityPlan??''} onChange={e=>updateForecast(updateLevelPlan(forecast,level,{abilityPlan:e.target.value}))} rows={2} placeholder="Which abilities or feats might you improve?" className="mt-1 w-full rounded border border-white/25 bg-ink p-2"/></label>}
+            <label className="block text-sm">Spells, invocations, or other choices to explore<textarea aria-label={`Level ${level} magic plan`} value={plan.spellPlan??''} onChange={e=>updateForecast(updateLevelPlan(forecast,level,{spellPlan:e.target.value}))} rows={2} placeholder="Optional ideas; not yet mechanically applied" className="mt-1 w-full rounded border border-white/25 bg-ink p-2"/></label>
+            <label className="block text-sm">Other plans and character goals<textarea aria-label={`Level ${level} notes`} value={plan.notes??''} onChange={e=>updateForecast(updateLevelPlan(forecast,level,{notes:e.target.value}))} rows={2} placeholder="What would you like this character to become?" className="mt-1 w-full rounded border border-white/25 bg-ink p-2"/></label>
+          </section>)}
+          {validateForecast(draft.selections.classId??'',forecast).map(message=><p key={message} role="alert" className="text-amber-200">{message}</p>)}
+          {forecast.targetLevel<20?<button type="button" onClick={()=>updateForecast(extendForecast(forecast))} className="w-full rounded-lg bg-gold px-4 py-3 font-semibold text-ink">See level {forecast.targetLevel+1}</button>:<p className="text-sm text-parchment/75">Level 20 reached. Your forecast is saved with this character draft.</p>}
+          <button type="button" onClick={()=>update({step:'review'})} className="rounded-lg border border-white/25 px-3 py-2">Back to level-one review</button>
+          <p className="text-xs text-parchment/60">Forecasts are saved locally with this draft, do not modify level-one stats, and do not apply any choices to a campaign.</p>
         </div>})()}
       </div>}
       <AskDM key={draft.id} draft={draft} initialQuestion={dmQuestion}/>
