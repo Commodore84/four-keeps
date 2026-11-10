@@ -27,7 +27,7 @@ describe('curated higher-level spell gating',()=>{
   expect(contains('warlock',17,'Foresight')).toBe(true);
  });
  it('rejects early high-level spell selections',()=>{
-  const fireball=forecastSpellOptions('wizard',5).find(spell=>spell.name==='Fireball')!;
+  const fireball=forecastSpellOptions('wizard',undefined,5).find(spell=>spell.name==='Fireball')!;
   expect(toggleForecastSpell(emptyForecast(),'wizard',4,fireball.id)).toEqual(emptyForecast());
   const forecast=toggleForecastSpell(emptyForecast(),'wizard',5,fireball.id);
   expect(plannedLevel(forecast,5).plannedSpellIds).toContain(fireball.id);
