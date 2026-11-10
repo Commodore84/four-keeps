@@ -189,7 +189,7 @@ function forecastOrdinaryReplacementWarnings(classId:string,forecast:Advancement
   }
   if(!owned.has(from))warnings.push('Level '+plan.level+': original spell is not in the level-one prepared spells or earlier active forecast selections.');
   if(owned.has(to))warnings.push('Level '+plan.level+': replacement spell is already among the active prepared spells.');
-  if(alwaysPreparedSubclassSpells(subclassId,plan.level).some(name=>[...SPELLS,...HIGHER_LEVEL_FORECAST_SPELLS].some(spell=>spell.id===from&&spell.name===name)))warnings.push('Level '+plan.level+': an always-prepared subclass spell cannot be replaced.');
+  if(allAlwaysPreparedSpells(classId,subclassId,plan.level,landTerrainAtLevel(forecast,plan.level)).some(name=>[...SPELLS,...HIGHER_LEVEL_FORECAST_SPELLS].some(spell=>spell.id===from&&spell.name===name)))warnings.push('Level '+plan.level+': an always-prepared subclass spell cannot be replaced.');
  }
  return warnings;
 }
