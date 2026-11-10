@@ -71,6 +71,31 @@ function pathRoute(battle:CompanionEncounter,from:Cell,to:Cell,actorId:string):C
  }
  throw Error('No unobstructed path to destination');
 }
+/** Read-only tactical preview; uses the same BFS route and threat rules as
+ * movement. Invalid squares report a reason rather than changing campaign state.
+ */
+export function previewCompanionMovement(campaign:Campaign,actorId:string,x:number,y:number):{
+ path:Cell[];costFeet:number;remainingFeet:number;availableFeet:number;
+ opportunityAttackerIds:string[];firstThreatEdge?:{from:Cell;to:Cell};error?:string
+}{
+ const battle=campaign.companionEncounter,actor=battle?.participants[actorId];
+ const empty={path:[] as Cell[],costFeet:0,remainingFeet:0,availableFeet:0,opportunityAttackerIds:[] as string[]};
+ if(!battle||battle.status!=='active'||!actor)return {...empty,error:'No active actor'};
+ const availableFeet=Math.max(0,actor.speedFeet+actor.dashFeet-actor.movementSpentFeet);
+ const initial={...empty,availableFeet,remainingFeet:availableFeet};
+ if(battle.order[battle.turnIndex]!==actorId)return {...initial,error:'Not the active turn'};
+ if(battle.pendingOpportunity?.moverId===actorId&&battle.pendingOpportunity.attackerIds.length)return {...initial,error:'Resolve pending opportunity reactions'};
+ if(actor.hp<=0||actor.conditions.some(c=>IMMOBILE.includes(c)))return {...initial,error:'Actor cannot move'};
+ if(!valid({x,y}))return {...initial,error:'Destination outside encounter grid'};
+ try{
+  const path=pathRoute(battle,actor,{x,y},actorId);
+  const costFeet=(path.length-1)*5*(actor.conditions.includes('Prone')?2:1);
+  const edges=path.slice(1).map((to,i)=>({from:path[i],to,attackers:companionOpportunityCandidates(battle,actorId,path[i],to)}));
+  const first=edges.find(e=>e.attackers.length>0);
+  const opportunityAttackerIds=[...new Set(edges.flatMap(e=>e.attackers))];
+  return {path,costFeet,availableFeet,remainingFeet:Math.max(0,availableFeet-costFeet),opportunityAttackerIds,...(first?{firstThreatEdge:{from:first.from,to:first.to}}:{}),...(costFeet>availableFeet?{error:'Insufficient movement'}:{})};
+ }catch(error){return {...initial,error:error instanceof Error?error.message:String(error)}}
+}
 export function setCompanionObstacles(campaign:Campaign,obstacles:Cell[]):Campaign{
  const battle=encounter(campaign);
  if(obstacles.length>120||obstacles.some(p=>!valid(p))||new Set(obstacles.map(key)).size!==obstacles.length)throw Error('Invalid obstacle coordinates');
