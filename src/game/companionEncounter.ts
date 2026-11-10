@@ -19,6 +19,8 @@ export interface CompanionEncounter {
  pendingOpportunity?:{moverId:string;attackerIds:string[];from:{x:number;y:number};to:{x:number;y:number}};
  /** Thrown weapons awaiting DM-confirmed post-encounter recovery. */
  thrownWeaponsPendingRecovery?:Record<string,number>;
+ /** Ammunition expended from verified inventory, awaiting DM-confirmed recovery. */
+ ammunitionPendingRecovery?:Record<string,number>;
  log:string[];
 }
 function encounter(campaign:Campaign):CompanionEncounter{
@@ -293,6 +295,7 @@ export function moveCompanion(campaign:Campaign,actorId:string,x:number,y:number
 }
 export function endCompanionTurn(campaign:Campaign,actorId:string):Campaign{
  const battle=activeActor(campaign,actorId);
+ if(battle.pendingOpportunity?.moverId===actorId&&battle.pendingOpportunity.attackerIds.length)throw Error('Pending opportunity reactions require DM adjudication');
  const next=(battle.turnIndex+1)%battle.order.length;
  const nextId=battle.order[next];const outgoing=battle.participants[actorId];const participants={...battle.participants,[actorId]:{...outgoing,disengaged:false}};participants[nextId]={...participants[nextId],movementSpentFeet:0,actionUsed:false,bonusActionUsed:false,dashFeet:0,disengaged:false,dodging:false,reactionUsed:false};return save(campaign,{...battle,participants,turnIndex:next,round:battle.round+(next===0?1:0),log:[...battle.log,actorId+' ended turn']});
 }
@@ -628,8 +631,29 @@ export function attackCompanionWithVerifiedStats(campaign:Campaign,attackerId:st
  if(ammoName&&equipmentAvailable+ledgerAvailable<1)throw Error('Insufficient campaign ammunition');
  const result=attackCompanion(campaign,attackerId,targetId,roll,attackModifier,targetAC,damageRoll,damageModifier,damageType,rangeFeet,secondD20);
  if(!ammoName)return result;
- if(equipmentAvailable>0)return spendUnifiedNighthawkInventory(result,'arrows',1);
- return spendUnifiedNighthawkInventory(result,ammoName,1);
+ const source=equipmentAvailable>0?'arrows':ammoName;
+ const spent=spendUnifiedNighthawkInventory(result,source,1);
+ const current=spent.companionEncounter!;
+ return save(spent,{...current,ammunitionPendingRecovery:{...current.ammunitionPendingRecovery,[source]:(current.ammunitionPendingRecovery?.[source]??0)+1},log:[...current.log,'Spent '+source+' awaiting DM ammunition reconciliation']});
+}
+/** Reconcile DM-confirmed recoverable ammunition. Never restores more
+ * than the quantity expended by verified attacks in this encounter.
+ */
+export function recoverEncounterAmmunition(campaign:Campaign,item:string,quantity:number):Campaign{
+ const battle=encounter(campaign);
+ if(battle.mode!=='unified'||!Number.isInteger(quantity)||quantity<1||quantity>(battle.ammunitionPendingRecovery?.[item]??0))throw Error('Invalid ammunition recovery');
+ const updated=save(campaign,{...battle,ammunitionPendingRecovery:{...battle.ammunitionPendingRecovery,[item]:battle.ammunitionPendingRecovery![item]-quantity},log:[...battle.log,'DM recovered '+quantity+' '+item]});
+ if(item==='arrows'){
+  if(!updated.equipment)throw Error('Missing arrow inventory');
+  return {...updated,equipment:{...updated.equipment,arrows:updated.equipment.arrows+quantity}};
+ }
+ const ledger=updated.inventoryLedger;
+ if(!ledger)throw Error('Missing ammunition inventory ledger');
+ const index=ledger.gear.findIndex(g=>g.name===item);
+ const gear=[...ledger.gear];
+ if(index>=0)gear[index]={...gear[index],quantity:gear[index].quantity+quantity};
+ else gear.push({name:item,quantity});
+ return {...updated,inventoryLedger:{...ledger,gear}};
 }
 /** An explicitly declared thrown attack removes the verified weapon from inventory.
  * Ordinary melee attacks do not spend a weapon; recovered weapons must be
