@@ -500,10 +500,19 @@ export function attackCompanionWithVerifiedStats(campaign:Campaign,attackerId:st
  const targetAC=targetId==='nighthawk'&&battle.mode==='unified'?nighthawkEquippedDefense(campaign)?.armorClass:target.armorClass;
  if(attackModifier===undefined||damageModifier===undefined||targetAC===undefined||targetAC===null)throw Error('Verified attack or defense statistics unavailable');
  const weapon=equipped?ITEMS.find(item=>item.id===equipped.weaponId):undefined;
- const ammo=weapon?.properties?.some(p=>p.startsWith('Ammunition'))&&equipped?.weaponId==='shortbow'?'arrows':null;
- if(ammo&&(!campaign.equipment||campaign.equipment.arrows<1))throw Error('Insufficient campaign ammunition');
+ const ammunitionWeapon=!!weapon?.properties?.some(p=>p.startsWith('Ammunition'));
+ const ammoName=equipped?.weaponId==='shortbow'||equipped?.weaponId==='longbow'?'Arrows':
+  ['light-crossbow','heavy-crossbow','hand-crossbow'].includes(equipped?.weaponId??'')?'Crossbow Bolts':
+  equipped?.weaponId==='sling'?'Sling Bullets':null;
+ if(ammunitionWeapon&&!ammoName)throw Error('Equipped ammunition weapon has no verified ammunition mapping');
+ const ammoKey=ammoName==='Arrows'?'arrows':null;
+ const equipmentAvailable=ammoKey?(campaign.equipment?.arrows??0):0;
+ const ledgerAvailable=ammoName?(campaign.inventoryLedger?.gear.find(g=>g.name===ammoName)?.quantity??0):0;
+ if(ammoName&&equipmentAvailable+ledgerAvailable<1)throw Error('Insufficient campaign ammunition');
  const result=attackCompanion(campaign,attackerId,targetId,roll,attackModifier,targetAC,damageRoll,damageModifier,damageType,rangeFeet,secondD20);
- return ammo?spendUnifiedNighthawkInventory(result,ammo,1):result;
+ if(!ammoName)return result;
+ if(equipmentAvailable>0)return spendUnifiedNighthawkInventory(result,'arrows',1);
+ return spendUnifiedNighthawkInventory(result,ammoName,1);
 }
 export function useCompanionAction(campaign:Campaign,actorId:string,choice:'Dash'|'Disengage'|'Dodge'|'Help'|'Search'|'Study'|'Influence'|'Ready'|'Utilize'):Campaign{
  const battle=activeActor(campaign,actorId),actor=battle.participants[actorId];
