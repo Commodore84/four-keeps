@@ -33,3 +33,23 @@ export function spellStats(classId:string,scores:Scores):{dc:number;attack:numbe
  const ability=modifier(scores[progression.ability]);
  return {dc:8+2+ability,attack:2+ability,slots:progression.slots};
 }
+
+export interface OriginMagicDraft {cantrips:string[];spell:string|null;ability:'Int'|'Wis'|'Cha'}
+export const emptyOriginMagic=():OriginMagicDraft=>({cantrips:[],spell:null,ability:'Int'});
+export function magicInitiateClass(backgroundId:string):string|null{
+ return ({acolyte:'cleric',guide:'druid',sage:'wizard'} as Record<string,string>)[backgroundId]??null;
+}
+export function innateOriginSpells(speciesId:string,lineageId?:string):string[]{
+ const fixed:Record<string,string[]>={'aasimar':['light'],'drow':['dancing-lights'],'high-elf':['prestidigitation'],'wood-elf':['druidcraft'],'forest-gnome':['minor-illusion','speak-with-animals'],'rock-gnome':['mending','prestidigitation'],'abyssal':['poison-spray'],'chthonic':['chill-touch'],'infernal':['fire-bolt']};
+ return [...(fixed[speciesId]??[]),...(fixed[lineageId??'']??[])];
+}
+export function validateOriginMagic(backgroundId:string,origin:OriginMagicDraft):string[]{
+ const cls=magicInitiateClass(backgroundId);
+ if(!cls)return origin.cantrips.length||origin.spell?['Magic Initiate choices are only available with an eligible background.']:[];
+ const cantrips=spellOptions(cls,0).map(s=>s.id),spells=spellOptions(cls,1).map(s=>s.id);
+ const errors:string[]=[];
+ if(origin.cantrips.length!==2||new Set(origin.cantrips).size!==2||!origin.cantrips.every(id=>cantrips.includes(id)))errors.push('Select two legal Magic Initiate cantrips.');
+ if(!origin.spell||!spells.includes(origin.spell))errors.push('Select one legal Magic Initiate level-one spell.');
+ if(!['Int','Wis','Cha'].includes(origin.ability))errors.push('Choose a valid Magic Initiate spellcasting ability.');
+ return errors;
+}
