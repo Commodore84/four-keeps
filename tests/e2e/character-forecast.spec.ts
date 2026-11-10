@@ -24,6 +24,11 @@ test('forecast level selector and automatic spells are rendered for a saved Pala
  await expect(page.getByLabel('Character advancement forecast')).toBeVisible();
  await expect(page.getByText('Your Future Character')).toBeVisible();
  await expect(page.getByText(/Find Steed/).first()).toBeVisible();
+ await page.reload();
+ await page.getByRole('button',{name:'My Characters'}).click();
+ await page.getByRole('button',{name:/Forecast Test Paladin/}).click();
+ await expect(page.getByLabel('Planned subclass')).toHaveValue('paladin-devotion');
+ await expect(page.getByText(/Find Steed/).first()).toBeVisible();
 });
 
 test('forecast UI changes Druid terrain and displays the resulting always-prepared spells',async({page})=>{
