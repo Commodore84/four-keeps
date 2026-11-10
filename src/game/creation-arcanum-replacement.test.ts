@@ -1,6 +1,17 @@
 import {describe,it,expect} from 'vitest';
-import {emptyForecast,forecastSpellOptions,toggleForecastSpell,plannedLevel,forecastReplacementWarnings,forecastArcanumReplacementWarnings,updateLevelPlan} from './creationForecast';
+import {emptyForecast,forecastSpellOptions,toggleForecastSpell,plannedLevel,forecastReplacementWarnings,forecastArcanumReplacementWarnings,activeMysticArcanumAtLevel,updateLevelPlan} from './creationForecast';
 describe('Mystic Arcanum and stateful replacement regression',()=>{
+ it('shows the active replacement spell rather than the retired Arcanum',()=>{
+  const spells=forecastSpellOptions('warlock',undefined,13).filter(spell=>spell.level===6);
+  if(spells.length<2)return;
+  let forecast=toggleForecastSpell(emptyForecast(),'warlock',11,spells[0].id);
+  expect(activeMysticArcanumAtLevel(forecast,11)).toContain(spells[0].id);
+  forecast=updateLevelPlan(forecast,12,{arcanumReplacementFromId:spells[0].id,arcanumReplacementToId:spells[1].id});
+  expect(activeMysticArcanumAtLevel(forecast,12)).toContain(spells[1].id);
+  expect(activeMysticArcanumAtLevel(forecast,12)).not.toContain(spells[0].id);
+  expect(activeMysticArcanumAtLevel(forecast,11)).toContain(spells[0].id);
+ });
+
  it('rejects replacing a spell with one already prepared even when forecast levels are unordered',()=>{
   const spells=forecastSpellOptions('bard',undefined,5).filter(spell=>spell.level===1);
   if(spells.length<3)return;
