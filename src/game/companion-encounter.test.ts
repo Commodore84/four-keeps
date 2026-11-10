@@ -1,7 +1,7 @@
 import {describe,it,expect} from 'vitest';
 import {newCampaign,registerSubclassActor,chooseSubclassResistance} from './campaign';
 import {initialSubclassCombatState} from './subclassCombatRules';
-import {startCompanionEncounter,moveCompanion,endCompanionTurn,damageCompanion,conditionCompanion,finishCompanionEncounter,attackCompanion,setCompanionSpeed ,useCompanionAction,setCompanionObstacles,companionLineOfSight,companionOpportunityAttackEligible,setCompanionCover,companionCoverStatus,companionPartySnapshot,startUnifiedEncounter,synchronizeNighthawkHitPoints,recordCompanionReaction,removeCompanionCondition,nighthawkEncounterStatistics,useCompanionBonusAction,setCompanionConcentration,companionConcentrationSaveDC,resolveCompanionConcentrationSave,setCompanionConsumable,spendCompanionConsumable,spendUnifiedNighthawkSpellSlot,resolveCompanionOpportunityAttack,nighthawkEncounterInventory,companionOpportunityCandidates,spendUnifiedNighthawkInventory,setCompanionTactics,applyCompanionCondition,nighthawkEquipmentReferences,addCompanionEnemy,companionConditionEffects,setNighthawkEncounterLoadout,resolveCompanionSavingThrow} from './companionEncounter';
+import {startCompanionEncounter,moveCompanion,endCompanionTurn,damageCompanion,conditionCompanion,finishCompanionEncounter,attackCompanion,setCompanionSpeed ,useCompanionAction,setCompanionObstacles,companionLineOfSight,companionOpportunityAttackEligible,setCompanionCover,companionCoverStatus,companionPartySnapshot,startUnifiedEncounter,synchronizeNighthawkHitPoints,recordCompanionReaction,removeCompanionCondition,nighthawkEncounterStatistics,useCompanionBonusAction,setCompanionConcentration,companionConcentrationSaveDC,resolveCompanionConcentrationSave,setCompanionConsumable,spendCompanionConsumable,spendUnifiedNighthawkSpellSlot,resolveCompanionOpportunityAttack,nighthawkEncounterInventory,companionOpportunityCandidates,spendUnifiedNighthawkInventory,setCompanionTactics,applyCompanionCondition,nighthawkEquipmentReferences,addCompanionEnemy,companionConditionEffects,setNighthawkEncounterLoadout,resolveCompanionSavingThrow,nighthawkEquippedAttack,nighthawkEquippedDefense,standCompanionFromProne} from './companionEncounter';
 const build=()=>{
  let c=newCampaign('Companion test');
  c=registerSubclassActor(c,'paladin',initialSubclassCombatState('paladin','paladin-devotion',7,3));
@@ -12,6 +12,26 @@ const build=()=>{
 };
 const start=()=>startCompanionEncounter(build(),{paladin:15,druid:12,fiend:9},{paladin:{x:0,y:0},druid:{x:1,y:0},fiend:{x:5,y:5}},{paladin:30,druid:22,fiend:25});
 describe('isolated companion encounter vertical slice',()=>{
+ it('derives verified Rogue dagger attacks and equipped leather armor without changing legacy combat',()=>{
+  const base=build();
+  const c=startUnifiedEncounter({...base,equipment:{daggers:2,arrows:0,caltrops:0,ballBearings:0},inventoryLedger:{currency:{CP:0,SP:0,EP:0,GP:0,PP:0},gear:[{name:'Leather Armor',quantity:1}]}},{nighthawk:20,paladin:10},{nighthawk:{x:0,y:2},paladin:{x:0,y:0}},{paladin:20});
+  expect(nighthawkEquippedAttack(c)).toBeNull();
+  const dagger=setNighthawkEncounterLoadout(c,'weaponId','dagger');
+  expect(nighthawkEquippedAttack(dagger)).toMatchObject({damageDice:'1d4 piercing',attackModifier:5,damageModifier:3,proficient:true});
+  const armor=setNighthawkEncounterLoadout(dagger,'armorId','leather-armor');
+  expect(nighthawkEquippedDefense(armor)).toMatchObject({armorClass:14,source:'verified-loadout'});
+  expect(armor.combat).toEqual(base.combat);
+ });
+ it('charges double movement for crawling and half speed to stand from prone',()=>{
+  let c=applyCompanionCondition(start(),'paladin','Prone');
+  c=moveCompanion(c,'paladin',0,1);
+  expect(c.companionEncounter?.participants.paladin.movementSpentFeet).toBe(10);
+  c=standCompanionFromProne(c,'paladin');
+  expect(c.companionEncounter?.participants.paladin.movementSpentFeet).toBe(25);
+  expect(c.companionEncounter?.participants.paladin.conditions).not.toContain('Prone');
+  expect(()=>standCompanionFromProne(c,'paladin')).toThrow('not prone');
+ });
+
  it('uses prone advantage at five feet and disadvantage beyond five feet',()=>{
   let c=applyCompanionCondition(start(),'druid','Prone');
   expect(()=>attackCompanion(c,'paladin','druid',5,0,12,4,0,'Fire',5)).toThrow('second d20');
