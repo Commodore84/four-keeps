@@ -101,3 +101,25 @@ test('Mystic Arcanum replacement controls save selected existing and replacement
  await expect(page.getByLabel('Level 12 Mystic Arcanum to replace')).toHaveValue(oldId!);
  await expect(page.getByLabel('Level 12 Mystic Arcanum replacement')).toHaveValue(newId!);
 });
+
+test('level-ten Land forecast displays deterministic terrain resistance and Poisoned immunity',async({page})=>{
+ await page.goto('/four-keeps/');
+ await page.evaluate(()=>localStorage.setItem('four-keeps-character-drafts-v1',JSON.stringify([{schemaVersion:1,id:'land-defense',status:'draft',rules:{edition:'2024',allowCompatibleLegacy:false},identity:{name:'Land Defense Druid'},selections:{classId:'druid'},step:'forecast',forecast:{targetLevel:10,levels:[{level:3,subclassId:'druid-land',landTerrain:'arid'}]},createdAt:'2026-11-10T00:00:00.000Z',updatedAt:'2026-11-10T00:00:00.000Z'}])));
+ await page.reload();
+ await page.getByRole('button',{name:'My Characters'}).click();
+ await page.getByRole('button',{name:/Land Defense Druid/}).click();
+ const sheet=page.getByLabel('Level 10 projected character sheet');
+ await expect(sheet).toContainText('Condition immunity: Poisoned');
+ await expect(sheet).toContainText('Damage resistance: Fire');
+ await page.getByLabel('Level 10 Circle of the Land terrain').selectOption('polar');
+ await expect(sheet).toContainText('Damage resistance: Cold');
+ await expect(sheet).not.toContainText('Damage resistance: Fire');
+});
+test('level-six Fiend forecast displays Charisma-based Dark One’s Own Luck uses',async({page})=>{
+ await page.goto('/four-keeps/');
+ await page.evaluate(()=>localStorage.setItem('four-keeps-character-drafts-v1',JSON.stringify([{schemaVersion:1,id:'fiend-luck',status:'draft',rules:{edition:'2024',allowCompatibleLegacy:false},identity:{name:'Fiend Luck Warlock'},selections:{classId:'warlock'},step:'forecast',forecast:{targetLevel:6,levels:[{level:3,subclassId:'warlock-fiend'}]},createdAt:'2026-11-10T00:00:00.000Z',updatedAt:'2026-11-10T00:00:00.000Z'}])));
+ await page.reload();
+ await page.getByRole('button',{name:'My Characters'}).click();
+ await page.getByRole('button',{name:/Fiend Luck Warlock/}).click();
+ await expect(page.getByLabel('Level 6 projected character sheet')).toContainText('Dark One’s Own Luck');
+});
