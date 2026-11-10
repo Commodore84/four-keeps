@@ -364,6 +364,7 @@ function WorldMap({campaign}:{campaign:Campaign|null}) {
 }
 export function App() {
   const [activeView, setActiveView] = useState<View>('adventure');
+  const [portalScreen,setPortalScreen] = useState<'home'|'characters'|'campaigns'|'new'|'help'|'adventure'>('home');
   const [fullHistory, setFullHistory] = useState(false);
   const [draft, setDraft] = useState('');
   const [askDMOpen, setAskDMOpen] = useState(false);
@@ -419,6 +420,8 @@ export function App() {
       setCampaign(next);
       setCampaigns((items) => [next, ...items]);
       setNotice('Campaign saved on this device.');
+      setActiveView('adventure');
+      setPortalScreen('adventure');
     } catch (error) { setNotice('Could not save campaign: ' + String(error)); }
     finally { setSaving(false); }
   }
@@ -1066,11 +1069,52 @@ export function App() {
     finally { setSaving(false); if (importInput.current) importInput.current.value = ''; }
   }
 
-  const content = { adventure: campaign?.combat && campaign.combat.status!=='completed' ? null : <Adventure campaign={campaign} fullHistory={fullHistory} onToggleHistory={() => setFullHistory(value => !value)}/>, party: <Party campaign={campaign} saving={saving} onRoll={(skill,mode) => void saveSkillRoll(skill,mode)} onSaveRoll={(ability,mode) => void saveSavingThrow(ability,mode)} onAwardXP={(amount,reason) => void updateProgress('award',amount,reason)} onLevelUp={hp => void updateProgress('level',hp)} onLevelThree={(hp,cantrips,spells) => void updateProgress('level3',hp,'',cantrips,spells)} onReconcile={() => void updateProgress('reconcile')} onUndoReconcile={() => void updateProgress('undoReconcile')} onRestore={() => void updateProgress('restore')} onCastSpell={(spell,ritual,components,target)=>void castSpell(spell,ritual,components,target)} onEndConcentration={()=>void endConcentration()} onAdjustEquipment={(item,delta)=>void changeEquipment(item,delta)} onUpdateInventory={ledger=>void updateInventoryLedger(ledger)}/>, journal: <Journal campaign={campaign}/>, map: <WorldMap campaign={campaign}/>, settings: <section className="space-y-4"><h2 className="font-serif text-2xl">Settings</h2><p className="text-sm text-parchment/60">Manage campaigns, backups, and Dungeon Master access below.</p><CharacterCreator/></section> };
+  const content = { adventure: campaign?.combat && campaign.combat.status!=='completed' ? null : <Adventure campaign={campaign} fullHistory={fullHistory} onToggleHistory={() => setFullHistory(value => !value)}/>, party: <Party campaign={campaign} saving={saving} onRoll={(skill,mode) => void saveSkillRoll(skill,mode)} onSaveRoll={(ability,mode) => void saveSavingThrow(ability,mode)} onAwardXP={(amount,reason) => void updateProgress('award',amount,reason)} onLevelUp={hp => void updateProgress('level',hp)} onLevelThree={(hp,cantrips,spells) => void updateProgress('level3',hp,'',cantrips,spells)} onReconcile={() => void updateProgress('reconcile')} onUndoReconcile={() => void updateProgress('undoReconcile')} onRestore={() => void updateProgress('restore')} onCastSpell={(spell,ritual,components,target)=>void castSpell(spell,ritual,components,target)} onEndConcentration={()=>void endConcentration()} onAdjustEquipment={(item,delta)=>void changeEquipment(item,delta)} onUpdateInventory={ledger=>void updateInventoryLedger(ledger)}/>, journal: <Journal campaign={campaign}/>, map: <WorldMap campaign={campaign}/>, settings: <section className="space-y-4"><h2 className="font-serif text-2xl">Settings</h2><p className="text-sm text-parchment/60">Manage campaigns, backups, and Dungeon Master access below.</p></section> };
+  if(portalScreen!=='adventure')return <div className="min-h-dvh bg-ink text-parchment">
+    <div className="mx-auto min-h-dvh w-full max-w-3xl space-y-5 px-5 pb-12 pt-[max(2rem,env(safe-area-inset-top))]">
+      <header className="flex flex-col items-center gap-2 border-b border-gold/20 pb-6">
+        <img src="/four-keeps-approved.webp" alt="Four Keeps" className="h-auto w-full max-w-[min(80vw,360px)] object-contain" style={{filter:"url(#four-keeps-transparent-key)"}}/>
+        <h1 className="sr-only">Four Keeps</h1>
+        <p className="text-sm text-parchment/65">Your story begins here</p>
+      </header>
+      {portalScreen!=='home'&&<button type="button" className="rounded-lg border border-white/25 px-3 py-2 text-sm" onClick={()=>setPortalScreen('home')}>← Home</button>}
+      {portalScreen==='home'&&<div className="space-y-4" aria-label="Four Keeps landing page">
+        <button type="button" disabled={!campaign||loading} onClick={()=>{setActiveView('adventure');setPortalScreen('adventure');}} className="block w-full rounded-xl border border-gold/40 bg-panel p-5 text-left disabled:opacity-45">
+          <span className="flex items-center gap-2 font-serif text-xl"><Swords size={21}/>Continue Adventure</span>
+          <span className="mt-1 block text-sm text-parchment/65">{campaign?campaign.title:'No saved adventure selected'}</span>
+        </button>
+        <div className="grid grid-cols-2 gap-3">
+          <button type="button" onClick={()=>setPortalScreen('new')} className="rounded-xl border border-white/20 bg-panel p-4 text-left"><Compass className="mb-3 text-gold"/><strong className="block">New Adventure</strong><span className="text-xs text-parchment/60">Start a campaign</span></button>
+          <button type="button" onClick={()=>setPortalScreen('characters')} className="rounded-xl border border-white/20 bg-panel p-4 text-left"><UserRound className="mb-3 text-gold"/><strong className="block">My Characters</strong><span className="text-xs text-parchment/60">Create and manage</span></button>
+          <button type="button" onClick={()=>setPortalScreen('campaigns')} className="rounded-xl border border-white/20 bg-panel p-4 text-left"><BookOpen className="mb-3 text-gold"/><strong className="block">My Campaigns</strong><span className="text-xs text-parchment/60">Saved adventures</span></button>
+          <div aria-disabled="true" className="rounded-xl border border-white/10 bg-panel/50 p-4 opacity-50"><Users className="mb-3 text-gold"/><strong className="block">Join Adventure</strong><span className="text-xs">Multiplayer · Coming later</span></div>
+        </div>
+        <div className="flex justify-center gap-5 pt-3 text-sm">
+          <button type="button" onClick={()=>{setActiveView('settings');setPortalScreen('adventure');}} className="flex items-center gap-2 text-parchment/75"><Settings size={17}/>Settings</button>
+          <button type="button" onClick={()=>setPortalScreen('help')} className="flex items-center gap-2 text-parchment/75"><BookOpen size={17}/>Help</button>
+        </div>
+      </div>}
+      {portalScreen==='characters'&&<div className="space-y-3"><h2 className="font-serif text-2xl">My Characters</h2><CharacterCreator/></div>}
+      {portalScreen==='new'&&<section className="space-y-4 rounded-xl border border-white/20 bg-panel p-4">
+        <h2 className="font-serif text-2xl">New Adventure</h2>
+        <p className="text-sm text-parchment/65">Campaigns currently start with the prototype character. Selecting a created character for a campaign is planned for a later milestone.</p>
+        <label className="block space-y-2 text-sm">Campaign name<input value={newTitle} onChange={event=>setNewTitle(event.target.value)} className="w-full rounded-lg border border-white/20 bg-ink p-3" placeholder="Campaign name"/></label>
+        <button type="button" disabled={saving||loading||!newTitle.trim()} onClick={()=>void createCampaign()} className="rounded-lg bg-gold px-4 py-3 font-semibold text-ink disabled:opacity-40">Create campaign</button>
+      </section>}
+      {portalScreen==='campaigns'&&<section className="space-y-3"><h2 className="font-serif text-2xl">My Campaigns</h2>
+        {loading&&<p>Loading saved campaigns…</p>}
+        {!loading&&campaigns.length===0&&<p className="text-sm text-parchment/65">No campaigns saved on this device.</p>}
+        {campaigns.map(item=><button key={item.id} type="button" onClick={()=>{setCampaign(item);setActiveView('adventure');setPortalScreen('adventure');}} className="block w-full rounded-xl border border-white/20 bg-panel p-4 text-left"><strong className="block">{item.title}</strong><span className="text-xs text-parchment/60">Resume adventure</span></button>)}
+        <button type="button" onClick={()=>setPortalScreen('new')} className="rounded-lg border border-gold/40 px-4 py-2 text-gold">New adventure</button>
+      </section>}
+      {portalScreen==='help'&&<section className="space-y-3"><h2 className="font-serif text-2xl">Help</h2><p className="text-sm text-parchment/75">Create a character in My Characters. Start or resume a saved campaign through New Adventure or My Campaigns. Campaigns and character drafts are saved locally on this device; export campaign backups from Settings.</p><p className="text-sm text-parchment/60">Additional rules reference and tutorials are planned.</p></section>}
+      {notice&&<p role="status" className="text-sm text-gold">{notice}</p>}
+    </div>
+  </div>;
   return <div className="min-h-dvh bg-ink text-parchment">
     <div className={activeView==='map'?"mx-auto flex h-dvh w-full max-w-3xl flex-col overflow-hidden":"mx-auto flex min-h-dvh w-full max-w-3xl flex-col"}>
       <header className="sticky top-0 z-20 border-b border-white/10 bg-ink/95 px-5 pb-4 pt-[max(1.2rem,env(safe-area-inset-top))] backdrop-blur">
-        <div className="flex items-center justify-between gap-3"><div><div className="flex items-center gap-2"><h1><svg width="0" height="0" aria-hidden="true" className="absolute"><defs><filter id="four-keeps-transparent-key" colorInterpolationFilters="sRGB"><feColorMatrix type="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  2 2 2 0 -0.5"/></filter></defs></svg><img src="/four-keeps-approved.webp" alt="Four Keeps" className="h-auto w-full max-w-[min(70vw,340px)] object-contain object-left" style={{filter:"url(#four-keeps-transparent-key)"}} /></h1></div></div><span className="rounded-full border border-gold/30 px-3 py-1 text-xs text-gold">Prototype</span></div>
+        <div className="flex items-center justify-between gap-3"><div><div className="flex items-center gap-2"><button type="button" aria-label="Home" onClick={()=>setPortalScreen("home")} className="rounded-lg border border-white/20 p-2 text-gold"><Compass size={19}/></button><h1><svg width="0" height="0" aria-hidden="true" className="absolute"><defs><filter id="four-keeps-transparent-key" colorInterpolationFilters="sRGB"><feColorMatrix type="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  2 2 2 0 -0.5"/></filter></defs></svg><img src="/four-keeps-approved.webp" alt="Four Keeps" className="h-auto w-full max-w-[min(70vw,340px)] object-contain object-left" style={{filter:"url(#four-keeps-transparent-key)"}} /></h1></div></div><span className="rounded-full border border-gold/30 px-3 py-1 text-xs text-gold">Prototype</span></div>
         <div className="mt-3 flex items-center justify-between text-xs text-parchment/60"><span className="flex flex-wrap items-center gap-2">{campaign?.combat&&<UserRound size={15} className="text-emerald-300" aria-label="Player token"/>}{campaign?.title ?? 'No campaign selected'}{campaign?.combat?.owl&&(campaign.character?.level??1)>=3&&campaign.familiar?.status!=='dismissed'&&campaign.familiar?.status!=='destroyed'&&<Bird size={15} className="text-sky-300" aria-label="Familiar token"/>}{campaign?.combat&&<span className="ml-2 inline-flex flex-wrap gap-1 align-middle" aria-label="Active player statuses">
           {campaign.combat.playerHidden&&<span className="rounded border border-emerald-400/60 px-2 py-0.5 text-emerald-300" title="Hidden from Hide; ends when discovered or revealed">◉ Hidden</span>}
           {campaign.combat.playerProne&&<span className="rounded border border-amber-400/60 px-2 py-0.5 text-amber-200">Prone</span>}
