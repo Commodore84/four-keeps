@@ -1,6 +1,6 @@
 import {useState} from 'react';
 import type {Campaign} from '../game/campaign';
-import {startCompanionEncounter,moveCompanion,endCompanionTurn,damageCompanion,conditionCompanion,finishCompanionEncounter,attackCompanion,setCompanionSpeed ,useCompanionAction} from '../game/companionEncounter';
+import {startCompanionEncounter,moveCompanion,endCompanionTurn,damageCompanion,conditionCompanion,finishCompanionEncounter,attackCompanion,setCompanionSpeed ,useCompanionAction,setCompanionObstacles,companionOpportunityAttackEligible} from '../game/companionEncounter';
 import type {DamageType} from '../game/subclassCombatRules';
 export function CompanionEncounterPanel({campaign,saving,onChange}:{campaign:Campaign;saving:boolean;onChange:(next:Campaign,message:string)=>void}){
  const [rolls,setRolls]=useState<Record<string,string>>({});
