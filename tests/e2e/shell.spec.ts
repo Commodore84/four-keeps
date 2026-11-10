@@ -1018,20 +1018,21 @@ test('validated character draft becomes a persistent campaign without replacing 
  await page.getByLabel('Starting character').selectOption('valid-rogue-draft');
  await page.getByLabel('Campaign name').fill('Raven Campaign');
  await page.getByRole('button',{name:'Create campaign'}).click();
- await expect(page.getByLabel('Adventure',{exact:true})).toContainText('Raven begins a new adventure');
+ await page.getByLabel('Adventure session',{exact:true}).getByRole('button',{name:'Start frontier adventure'}).click();
+ await expect(page.getByLabel('Adventure session status')).toContainText('Raven');
  await page.reload();
  await page.getByRole('button',{name:'Continue Adventure'}).click();
- await expect(page.getByLabel('Adventure',{exact:true})).toContainText('Raven begins a new adventure');
+ await expect(page.getByLabel('Adventure session status')).toContainText('Raven');
  await page.getByRole('button',{name:'Settings',exact:true}).click();
  await page.getByLabel('New campaign name').fill('Legacy Nighthawk');
  await page.getByRole('button',{name:'New',exact:true}).click();
  await page.getByRole('button',{name:'Adventure',exact:true}).click();
- await expect(page.getByLabel('Adventure',{exact:true})).not.toContainText('Raven begins a new adventure');
+ await expect(page.getByLabel('Adventure session',{exact:true})).not.toContainText('Raven');
 });
 
 test('adventure DM request carries authoritative location and interaction context without legacy auto-combat',async({page})=>{
  await page.goto('/four-keeps/');
- await page.evaluate(()=>localStorage.setItem('four-keeps-access-code','browser-test-code'));
+ await page.evaluate(()=>{localStorage.setItem('four-keeps-access-code','browser-test-code');localStorage.setItem('four-keeps-dm-mode','on');});
  await page.reload();
  await page.getByRole('button',{name:'Settings',exact:true}).click();
  await page.getByLabel('New campaign name').fill('DM scene integration');
