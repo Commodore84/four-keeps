@@ -8,6 +8,9 @@ export interface ProjectedLevel {
  spellSlots:{spellLevel:number;count:number}[];pactSlotLevel:number|null;spellAttack:number|null;spellSaveDC:number|null;
  subclassName:string|null;criticalHitMinimum:number;unarmoredArmorClass:number|null;subclassBonuses:string[];subclassResources:{name:string;maximum:number;recovery:string}[];improvementLevels:number[];mysticArcanumLevels:number[];assumptions:string[];
 }
+const THIRD_CASTER_SLOTS:readonly number[][]=[
+ [],[],[],[2],[3],[3],[3],[4,2],[4,2],[4,2],[4,3],[4,3],[4,3],[4,3,2],[4,3,2],[4,3,2],[4,3,3],[4,3,3],[4,3,3],[4,3,3,1],[4,3,3,1]
+];
 const fullCasters=new Set(['bard','cleric','druid','sorcerer','wizard']);
 const halfCasters=new Set(['paladin','ranger']);
 export function forecastImprovementLevels(classId:string):number[]{return classId==='fighter'?[4,6,8,12,14,16]:classId==='rogue'?[4,8,10,12,16]:[4,8,12,16]}
@@ -31,13 +34,14 @@ export function projectCharacterLevel(classId:string,baseScores:Scores,forecast:
  for(let l=2;l<=safeLevel;l++)hitPoints+=Math.max(1,Math.floor(firstDie/2)+1+conMod);
  hitPoints=Math.max(safeLevel,hitPoints);
  const spellcasting=spellcastingAtLevel(classId,safeLevel);
- const slots=spellcasting?.slots??[];
+ const selected=plannedLevel(forecast,3).subclassId;
+ const thirdCaster=safeLevel>=3&&((classId==='rogue'&&selected==='rogue-arcane-trickster')||(classId==='fighter'&&selected==='fighter-eldritch-knight'));
+ const slots=thirdCaster?THIRD_CASTER_SLOTS[safeLevel]:spellcasting?.slots??[];
  const pactSlotLevel=spellcasting?.kind==='pact'?Math.min(5,Math.ceil(safeLevel/2)):null;
  const spellSlots=slots.map((count,index)=>({spellLevel:pactSlotLevel??index+1,count})).filter(x=>x.count>0);
- const spellAbility=spellcasting?.ability;
+ const spellAbility=thirdCaster?'Int':spellcasting?.ability;
  const spellAttack=spellAbility?proficiencyBonus+modifier(scores[spellAbility]):null;
  const spellSaveDC=spellAttack===null?null:8+spellAttack;
- const selected=plannedLevel(forecast,3).subclassId;
  const subclassName=safeLevel>=3?subclassesForClass(classId).find(x=>x.id===selected)?.name??null:null;
  const subclassBonuses:string[]=[];
  const subclassResources:{name:string;maximum:number;recovery:string}[]=[];
@@ -51,7 +55,7 @@ export function projectCharacterLevel(classId:string,baseScores:Scores,forecast:
  if(unarmoredArmorClass!==null){hitPoints+=safeLevel;subclassBonuses.push('Draconic Resilience: +'+safeLevel+' maximum HP; unarmored AC '+unarmoredArmorClass)}
  assumptions.push('HP assumes fixed average hit-die increases; no rolled HP or additional feat effects');
  if(fullCasters.has(classId)||halfCasters.has(classId)||classId==='warlock')assumptions.push('Spell slots are class-only; no multiclassing, items, or special recovery effects');
- if(classId==='rogue'||classId==='fighter')assumptions.push('Subclass spellcasting is not yet included in the projection');
+ if(thirdCaster)assumptions.push('Subclass spell slots are projected; spell selections, cantrips and casting components remain unimplemented');
  return {level:safeLevel,proficiencyBonus,hitPoints,hitPointsLabel:'Estimated HP',scores,modifiers,spellSlots,pactSlotLevel,spellAttack,spellSaveDC,subclassName,criticalHitMinimum,unarmoredArmorClass,subclassBonuses,subclassResources,improvementLevels,mysticArcanumLevels:classId==='warlock'?mysticArcanumLevel(safeLevel):[],assumptions};
 }
 export function applyAbilityIncrease(forecast:AdvancementForecast,level:number,ability:Ability,delta:-1|1):AdvancementForecast{
