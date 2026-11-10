@@ -1014,19 +1014,19 @@ test('validated character draft becomes a persistent campaign without replacing 
   localStorage.setItem('four-keeps-character-drafts-v1',JSON.stringify([draft]));
  });
  await page.reload();
- await page.getByRole('button',{name:'New Adventure',exact:true}).click();
+ await page.getByRole('button',{name:'New Adventure'}).click();
  await page.getByLabel('Starting character').selectOption('valid-rogue-draft');
  await page.getByLabel('Campaign name').fill('Raven Campaign');
  await page.getByRole('button',{name:'Create campaign'}).click();
- await expect(page.getByLabel('Adventure')).toContainText('Raven begins a new adventure');
+ await expect(page.getByLabel('Adventure',{exact:true})).toContainText('Raven begins a new adventure');
  await page.reload();
  await page.getByRole('button',{name:'Continue Adventure'}).click();
- await expect(page.getByLabel('Adventure')).toContainText('Raven begins a new adventure');
+ await expect(page.getByLabel('Adventure',{exact:true})).toContainText('Raven begins a new adventure');
  await page.getByRole('button',{name:'Settings',exact:true}).click();
  await page.getByLabel('New campaign name').fill('Legacy Nighthawk');
  await page.getByRole('button',{name:'New',exact:true}).click();
  await page.getByRole('button',{name:'Adventure',exact:true}).click();
- await expect(page.getByLabel('Adventure')).not.toContainText('Raven begins a new adventure');
+ await expect(page.getByLabel('Adventure',{exact:true})).not.toContainText('Raven begins a new adventure');
 });
 
 test('adventure DM request carries authoritative location and interaction context without legacy auto-combat',async({page})=>{
@@ -1048,12 +1048,12 @@ test('adventure DM request carries authoritative location and interaction contex
  });
  await page.getByLabel('Message the Dungeon Master').fill('What can I see from the crossroads?');
  await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
- await expect(page.getByLabel('Adventure')).toContainText('The crossroads remain quiet.');
+ await expect(page.getByLabel('Adventure',{exact:true})).toContainText('The crossroads remain quiet.');
  expect(request?.gameState?.adventureSession?.site).toBe('crossroads');
  expect(request?.gameState?.adventureSession?.interactions?.[0]?.choice).toBe('speak-watchkeeper');
  expect(request?.gameState?.location).toBe('Old Crossroads');
  await expect(page.getByRole('button',{name:'Roll initiative (d20 + DEX)'})).toHaveCount(0);
  await page.reload();
  await page.getByRole('button',{name:'Continue Adventure'}).click();
- await expect(page.getByLabel('Adventure')).toContainText('The crossroads remain quiet.');
+ await expect(page.getByLabel('Adventure',{exact:true})).toContainText('The crossroads remain quiet.');
 });
