@@ -13,12 +13,12 @@ describe('subclass named feature coverage',()=>{
     expect(entry.name.length,subclass.id+' '+entry.level).toBeGreaterThan(4);
     expect(subclassFeatureAt(subclass.id,entry.level)).toEqual(entry);
     expect(progressionFeatures(subclass.classId,entry.level,subclass.name).some(f=>f.source==='subclass'&&f.name===entry.name)).toBe(true);
-    expect(entry.appliedToProjection).toBe(false);
+    if(entry.appliedToProjection)expect(entry.confidence).toBe('verified-mechanics');
    }
   }
  });
  it('never claims unverified feature mechanics are calculated',()=>{
-  expect(subclassFeatureCoverage().verified).toBe(0);
-  expect(SUBCLASS_FEATURES.every(f=>f.confidence==='preview-needs-verification')).toBe(true);
+  expect(subclassFeatureCoverage().verified).toBeGreaterThan(0);
+  expect(SUBCLASS_FEATURES.filter(f=>f.confidence==='preview-needs-verification').every(f=>!f.appliedToProjection)).toBe(true);
  });
 });
