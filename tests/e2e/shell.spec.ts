@@ -520,3 +520,29 @@ test('companion mobile quick movement spends five feet and respects arena bounds
  await panel.getByRole('button',{name:'Move North'}).click();
  await expect(panel.getByRole('status')).toContainText('outside 20×20 arena');
 });
+
+test('opt-in unified Nighthawk encounter shares initiative and survives reload',async({page})=>{
+ await page.goto('/four-keeps/');
+ await page.getByRole('button',{name:'Settings',exact:true}).click();
+ await page.getByLabel('New campaign name').fill('Unified party browser');
+ await page.getByRole('button',{name:'New',exact:true}).click();
+ await page.getByRole('button',{name:'Adventure',exact:true}).click();
+ await page.getByRole('button',{name:'Player',exact:true}).click();
+ const manager=page.getByLabel('Subclass actor manager');
+ await manager.getByLabel('New subclass actor ID').fill('paladin');
+ await manager.getByRole('button',{name:'Register subclass actor'}).click();
+ const panel=page.getByLabel('Companion encounter');
+ await panel.getByLabel('Include Nighthawk in unified encounter').check();
+ await panel.getByLabel('Initiative nighthawk').fill('20');
+ await panel.getByLabel('Initiative paladin').fill('10');
+ await panel.getByRole('button',{name:'Start companion encounter'}).click();
+ await expect(panel).toContainText('Active turn: Nighthawk');
+ await expect(panel).toContainText('Nighthawk: 10/10 HP');
+ await panel.getByRole('button',{name:'Move South'}).click();
+ await expect(panel).toContainText('Nighthawk: 10/10 HP · (0,3)');
+ await page.reload();
+ await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await page.getByRole('button',{name:'Player',exact:true}).click();
+ await expect(page.getByLabel('Companion encounter')).toContainText('Active turn: Nighthawk');
+ await expect(page.getByLabel('Companion encounter')).toContainText('Nighthawk: 10/10 HP · (0,3)');
+});
