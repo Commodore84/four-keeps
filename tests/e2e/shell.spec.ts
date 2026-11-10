@@ -711,3 +711,27 @@ test('enemy actor with DM-supplied combat statistics persists after reload',asyn
  await page.getByRole('button',{name:'Player',exact:true}).click();
  await expect(page.getByLabel('Companion encounter')).toContainText('goblin1');
 });
+
+test('prone standing consumes movement and persists across reload',async({page})=>{
+ await page.goto('/four-keeps/');
+ await page.getByRole('button',{name:'Settings',exact:true}).click();
+ await page.getByLabel('New campaign name').fill('Prone lifecycle browser');
+ await page.getByRole('button',{name:'New',exact:true}).click();
+ await page.getByRole('button',{name:'Adventure',exact:true}).click();
+ await page.getByRole('button',{name:'Player',exact:true}).click();
+ const manager=page.getByLabel('Subclass actor manager');
+ await manager.getByLabel('New subclass actor ID').fill('paladin');
+ await manager.getByRole('button',{name:'Register subclass actor'}).click();
+ const panel=page.getByLabel('Companion encounter');
+ await panel.getByRole('button',{name:'Start companion encounter'}).click();
+ await panel.getByLabel('Expanded encounter condition').selectOption('Prone');
+ await panel.getByRole('button',{name:'Apply DM condition'}).click();
+ await expect(panel.getByRole('button',{name:'Stand from prone'})).toBeVisible();
+ await panel.getByRole('button',{name:'Stand from prone'}).click();
+ await expect(panel).toContainText('movement 15/30 ft');
+ await expect(panel.getByRole('button',{name:'Stand from prone'})).toHaveCount(0);
+ await page.reload();
+ await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await page.getByRole('button',{name:'Player',exact:true}).click();
+ await expect(page.getByLabel('Companion encounter')).toContainText('movement 15/30 ft');
+});
