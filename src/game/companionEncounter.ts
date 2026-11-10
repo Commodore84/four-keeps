@@ -9,6 +9,7 @@ export interface CompanionEncounter {
  turnIndex:number;
  order:string[];
  participants:Record<string,{x:number;y:number;hp:number;maxHp:number;initiative:number;conditions:('Charmed'|'Poisoned')[];speedFeet:number;movementSpentFeet:number;actionUsed:boolean;bonusActionUsed:boolean;dashFeet:number;disengaged:boolean;dodging:boolean}>;
+ obstacles?:{x:number;y:number}[];
  log:string[];
 }
 function encounter(campaign:Campaign):CompanionEncounter{
