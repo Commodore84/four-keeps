@@ -135,3 +135,21 @@ test('landing page routes and character draft survive reload', async ({page})=>{
  await page.getByRole('button',{name:'Help'}).click();
  await expect(page.getByRole('heading',{name:'Help'})).toBeVisible();
 });
+
+test('wizard spellbook and prepared choices persist after reload', async ({page})=>{
+ const now='2026-11-09T00:00:00.000Z';
+ const draft={schemaVersion:1,id:'spell-browser-test',status:'draft',rules:{edition:'2024',allowCompatibleLegacy:true},step:'spells',identity:{name:'Spell Browser Hero',pronouns:'',appearance:'',personality:'',backstory:'',portrait:null},selections:{speciesId:'human',backgroundId:'sage',classId:'wizard',classChoices:{'class-skills':['Arcana','Investigation']},abilities:{method:'standard',base:{Str:8,Dex:14,Con:13,Int:15,Wis:12,Cha:10},bonusMode:'two-one',bonuses:{Int:2,Wis:1},rolls:[],rollDice:[]},equipment:{classPackage:0,backgroundPackage:0,purchases:{},equipped:{weapons:[]}}},createdAt:now,updatedAt:now};
+ await page.addInitScript((value)=>localStorage.setItem('four-keeps-character-drafts-v1',JSON.stringify([value])),draft);
+ await page.goto('/four-keeps/');
+ await page.getByRole('button',{name:'My Characters'}).click();
+ await page.getByRole('button',{name:/Spell Browser Hero/}).click();
+ await expect(page.getByLabel('Spells and features')).toBeVisible();
+ for(const name of ['Fire Bolt','Mage Hand','Minor Illusion'])await page.getByRole('group',{name:/Cantrips/}).getByText(name,{exact:true}).click();
+ for(const name of ['Alarm','Burning Hands','Charm Person','Detect Magic','Find Familiar','Magic Missile'])await page.getByRole('group',{name:/Wizard spellbook/}).getByText(name,{exact:true}).click();
+ for(const name of ['Alarm','Burning Hands','Charm Person','Detect Magic'])await page.getByRole('group',{name:/Prepared from spellbook/}).getByText(name,{exact:true}).click();
+ await expect(page.getByText('Level-one spell choices valid and saved.')).toBeVisible();
+ await page.reload();
+ await page.getByRole('button',{name:'My Characters'}).click();
+ await page.getByRole('button',{name:/Spell Browser Hero/}).click();
+ await expect(page.getByText('Level-one spell choices valid and saved.')).toBeVisible();
+});
