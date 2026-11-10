@@ -245,6 +245,25 @@ export function nighthawkEncounterInventory(campaign:Campaign){
  const gear=(campaign.inventoryLedger?.gear??[]).filter(item=>Number.isInteger(item.quantity)&&item.quantity>=0).map(item=>({name:item.name,quantity:item.quantity}));
  return {gear,ammunition:{arrows:campaign.equipment?.arrows??null},weapons:{daggers:campaign.equipment?.daggers??null},supplies:{caltrops:campaign.equipment?.caltrops??null,ballBearings:campaign.equipment?.ballBearings??null},authoritativeSource:'campaign' as const};
 }
+/** Explicit campaign-authoritative inventory expenditure. Never touches prototype combat.
+ * This records consumption only; any attack or item action must be adjudicated separately.
+ */
+export function spendUnifiedNighthawkInventory(campaign:Campaign,item:string,quantity=1):Campaign{
+ const battle=encounter(campaign);
+ if(battle.mode!=='unified'||!battle.participants.nighthawk)throw Error('Unified Nighthawk encounter required');
+ if(!Number.isInteger(quantity)||quantity<1||quantity>100||!item.trim())throw Error('Invalid inventory expenditure');
+ const name=item.trim();
+ const equipmentKey=({arrows:'arrows',daggers:'daggers',caltrops:'caltrops',ballBearings:'ballBearings'} as Record<string,'arrows'|'daggers'|'caltrops'|'ballBearings'>)[name];
+ if(equipmentKey){
+  const available=campaign.equipment?.[equipmentKey];
+  if(available===undefined||available<quantity)throw Error('Insufficient campaign equipment');
+  return {...save(campaign,{...battle,log:[...battle.log,'Nighthawk spent '+quantity+' '+name+' from campaign equipment']}),equipment:{...campaign.equipment!,[equipmentKey]:available-quantity}};
+ }
+ const gear=campaign.inventoryLedger?.gear;
+ const index=gear?.findIndex(entry=>entry.name===name);
+ if(index===undefined||index<0||!gear||gear[index].quantity<quantity)throw Error('Insufficient campaign inventory');
+ return {...save(campaign,{...battle,log:[...battle.log,'Nighthawk spent '+quantity+' '+name+' from campaign inventory']}),inventoryLedger:{...campaign.inventoryLedger!,gear:gear.map((entry,i)=>i===index?{...entry,quantity:entry.quantity-quantity}:entry)}};
+}
 export function spendUnifiedNighthawkSpellSlot(campaign:Campaign,spell:string):Campaign{
  const battle=activeActor(campaign,'nighthawk'),actor=battle.participants.nighthawk;
  const character=campaign.character,slots=character?.spellSlots;
