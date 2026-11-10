@@ -82,7 +82,7 @@ export function CharacterCreator(){
         {(['name','pronouns','appearance','personality','backstory'] as const).map(field=><label key={field} className="block space-y-1"><span className="block text-sm capitalize">{field}{field==='name'?' *':''}</span>{field==='name'||field==='pronouns'?<input className="w-full rounded-lg border border-white/20 bg-ink p-2" value={draft.identity[field]} onChange={e=>updateIdentity(field,e.target.value)}/>:<textarea className="w-full rounded-lg border border-white/20 bg-ink p-2" rows={2} value={draft.identity[field]} onChange={e=>updateIdentity(field,e.target.value)}/>}</label>)}
         <p className="text-xs text-parchment/60">Portrait and guided AI interview will be added in a later milestone.</p>
         <button type="button" disabled={validateIdentity(draft).length>0} onClick={()=>update({step:'origins'})} className="rounded-lg bg-gold px-4 py-2 font-semibold text-ink disabled:opacity-40">Continue to origins</button>
-      </div>:<div className="space-y-4" aria-label="Origins selection">
+      </div>:draft.step==="origins"?<div className="space-y-4" aria-label="Origins selection">
         <h4 className="font-serif text-lg">Species & Background</h4>
         <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={draft.rules.allowCompatibleLegacy} onChange={e=>updateRules(e.target.checked)}/>Allow compatible legacy rules</label>
         <p className="text-xs text-parchment/60">2024 Player's Handbook options are available. Legacy options will appear only after their rules have been reviewed and added to the catalog.</p>
