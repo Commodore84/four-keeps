@@ -840,3 +840,27 @@ test('DM-rolled enemy move and attack resolves and persists after reload',async(
  await page.getByRole('button',{name:'Player',exact:true}).click();
  await expect(page.getByLabel('Companion encounter')).toContainText('nighthawk: 5/10 HP');
 });
+
+test('mobile tactical grid selects a square and persists movement after reload',async({page})=>{
+ await page.setViewportSize({width:390,height:844});
+ await page.goto('/four-keeps/');
+ await page.getByRole('button',{name:'Settings',exact:true}).click();
+ await page.getByLabel('New campaign name').fill('Tactical grid persistence');
+ await page.getByRole('button',{name:'New',exact:true}).click();
+ await page.getByRole('button',{name:'Adventure',exact:true}).click();
+ await page.getByRole('button',{name:'Player',exact:true}).click();
+ const manager=page.getByLabel('Subclass actor manager');
+ await manager.getByLabel('New subclass actor ID').fill('paladin');
+ await manager.getByRole('button',{name:'Register subclass actor'}).click();
+ const panel=page.getByLabel('Companion encounter');
+ await panel.getByRole('button',{name:'Start companion encounter'}).click();
+ await panel.getByRole('button',{name:'Show tactical grid'}).click();
+ await expect(panel.getByLabel('Tactical grid')).toBeVisible();
+ await panel.getByRole('button',{name:'Grid square 1,0'}).click();
+ await panel.getByRole('button',{name:'Confirm grid move'}).click();
+ await expect(panel).toContainText('paladin: 20/20 HP · (1,0)');
+ await page.reload();
+ await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await page.getByRole('button',{name:'Player',exact:true}).click();
+ await expect(page.getByLabel('Companion encounter')).toContainText('paladin: 20/20 HP · (1,0)');
+});
