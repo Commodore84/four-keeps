@@ -12,6 +12,19 @@ const build=()=>{
 };
 const start=()=>startCompanionEncounter(build(),{paladin:15,druid:12,fiend:9},{paladin:{x:0,y:0},druid:{x:1,y:0},fiend:{x:5,y:5}},{paladin:30,druid:22,fiend:25});
 describe('isolated companion encounter vertical slice',()=>{
+ it('reconciles expended ammunition after completing an encounter without changing legacy combat',()=>{
+  const base=build();
+  let c=startUnifiedEncounter({...base,equipment:{daggers:0,arrows:2,caltrops:0,ballBearings:0},inventoryLedger:{currency:{CP:0,SP:0,EP:0,GP:0,PP:0},gear:[{name:'Shortbow',quantity:1}]}},{nighthawk:20,paladin:10},{nighthawk:{x:0,y:2},paladin:{x:0,y:0}},{paladin:20});
+  c=addCompanionEnemy(c,'goblin1',15,{x:2,y:2},12,13,4);
+  c=setNighthawkEncounterLoadout(c,'weaponId','shortbow');
+  c=attackCompanionWithVerifiedStats(c,'nighthawk','goblin1',15,2,'Piercing',80);
+  c=finishCompanionEncounter(c);
+  c=recoverEncounterAmmunition(c,'arrows',1);
+  expect(c.companionEncounter?.status).toBe('completed');
+  expect(c.equipment?.arrows).toBe(2);
+  expect(c.combat).toEqual(base.combat);
+ });
+
  it('reconciles only previously spent verified arrows and persists ledger state',()=>{
   const base=build();
   let c=startUnifiedEncounter({...base,equipment:{daggers:0,arrows:2,caltrops:0,ballBearings:0},inventoryLedger:{currency:{CP:0,SP:0,EP:0,GP:0,PP:0},gear:[{name:'Shortbow',quantity:1}]}},{nighthawk:20,paladin:10},{nighthawk:{x:0,y:2},paladin:{x:0,y:0}},{paladin:20});
