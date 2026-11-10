@@ -13,6 +13,7 @@ export interface CompanionEncounter {
  participants:Record<string,{x:number;y:number;hp:number;maxHp:number;initiative:number;conditions:('Charmed'|'Poisoned')[];speedFeet:number;movementSpentFeet:number;actionUsed:boolean;bonusActionUsed:boolean;dashFeet:number;disengaged:boolean;dodging:boolean;reactionUsed?:boolean;concentratingOn?:string;consumables?:Record<string,number>}>;
  obstacles?:{x:number;y:number}[];
  cover?:{x:number;y:number}[];
+ pendingOpportunity?:{moverId:string;attackerIds:string[];from:{x:number;y:number};to:{x:number;y:number}};
  log:string[];
 }
 function encounter(campaign:Campaign):CompanionEncounter{
@@ -126,15 +127,23 @@ export function startUnifiedEncounter(campaign:Campaign,initiative:Record<string
  const order=Object.keys(participants).sort((a,b)=>participants[b].initiative-participants[a].initiative||a.localeCompare(b));
  return save(campaign,{...battle,mode:'unified',participants,order,log:['Unified encounter started; Nighthawk prototype combat preserved.']});
 }
+/** Potential reach exits only: the DM confirms hostility, actual reach and trigger. */
+export function companionOpportunityCandidates(battle:CompanionEncounter,moverId:string,from:Cell,to:Cell):string[]{
+ const mover=battle.participants[moverId];
+ if(!mover||mover.disengaged)return [];
+ const adjacent=(a:Cell,b:Cell)=>Math.max(Math.abs(a.x-b.x),Math.abs(a.y-b.y))<=1;
+ return Object.entries(battle.participants).filter(([id,actor])=>id!==moverId&&actor.hp>0&&!actor.reactionUsed&&adjacent(actor,from)&&!adjacent(actor,to)).map(([id])=>id);
+}
 export function moveCompanion(campaign:Campaign,actorId:string,x:number,y:number):Campaign{
  const battle=activeActor(campaign,actorId),actor=battle.participants[actorId];
  if(actor.hp<=0)throw Error('Actor at zero HP cannot move');
  if(!valid({x,y}))throw Error('Destination outside 20×20 arena');
  if(Object.entries(battle.participants).some(([id,p])=>id!==actorId&&p.hp>0&&p.x===x&&p.y===y))throw Error('Square occupied');
  const steps=pathSteps(battle,actor,{x,y},actorId);
+ const candidates=companionOpportunityCandidates(battle,actorId,actor,{x,y});
  if(steps*5>actor.speedFeet+actor.dashFeet-actor.movementSpentFeet)throw Error('Move exceeds remaining movement');
  if(Object.entries(battle.participants).some(([id,p])=>id!==actorId&&p.hp>0&&p.x===x&&p.y===y))throw Error('Square occupied');
- return save(campaign,{...battle,participants:{...battle.participants,[actorId]:{...actor,x,y,movementSpentFeet:actor.movementSpentFeet+steps*5}},log:[...battle.log,actorId+' moved to '+x+','+y]});
+ return save(campaign,{...battle,participants:{...battle.participants,[actorId]:{...actor,x,y,movementSpentFeet:actor.movementSpentFeet+steps*5}},pendingOpportunity:candidates.length?{moverId:actorId,attackerIds:candidates,from:{x:actor.x,y:actor.y},to:{x,y}}:undefined,log:[...battle.log,actorId+' moved to '+x+','+y+(candidates.length?' · potential opportunity attackers: '+candidates.join(', '):'')]});
 }
 export function endCompanionTurn(campaign:Campaign,actorId:string):Campaign{
  const battle=activeActor(campaign,actorId);
@@ -253,6 +262,7 @@ export function resolveCompanionOpportunityAttack(campaign:Campaign,attackerId:s
  if(!attacker||!target||attackerId===targetId||attacker.hp<=0||target.hp<=0||attacker.reactionUsed)throw Error('Opportunity reaction unavailable');
  if(!Number.isInteger(roll)||roll<1||roll>20||![modifier,targetAC,damage,damageModifier].every(Number.isInteger)||targetAC<1||damage<0)throw Error('Invalid opportunity attack adjudication');
  if(target.disengaged)throw Error('Disengage prevents opportunity attack');
+ if(battle.pendingOpportunity&&(!battle.pendingOpportunity.attackerIds.includes(attackerId)||battle.pendingOpportunity.moverId!==targetId))throw Error('Attacker not in pending opportunity candidates');
  if(!companionLineOfSight(battle,attacker,target))throw Error('Opportunity target not visible');
  const hit=roll===20||(roll!==1&&roll+modifier>=targetAC);
  const raw=hit?Math.max(0,damage+damageModifier):0;
