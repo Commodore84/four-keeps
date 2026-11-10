@@ -12,6 +12,37 @@ const build=()=>{
 };
 const start=()=>startCompanionEncounter(build(),{paladin:15,druid:12,fiend:9},{paladin:{x:0,y:0},druid:{x:1,y:0},fiend:{x:5,y:5}},{paladin:30,druid:22,fiend:25});
 describe('isolated companion encounter vertical slice',()=>{
+ it('routes around solid obstacles and rejects occupied obstacle squares',()=>{
+  let c=start();
+  expect(()=>setCompanionObstacles(c,[{x:0,y:0}])).toThrow('overlaps');
+  c=setCompanionObstacles(c,[{x:0,y:1},{x:1,y:1},{x:2,y:1}]);
+  expect(()=>moveCompanion(c,'paladin',0,2)).toThrow('remaining movement');
+  expect(c.companionEncounter?.participants.paladin.movementSpentFeet).toBe(0);
+  expect(c.combat).toEqual(start().combat);
+ });
+ it('blocks line of sight through a solid obstacle and persists map geometry',()=>{
+  let c=start();
+  c=setCompanionObstacles(c,[{x:3,y:3}]);
+  expect(companionLineOfSight(c.companionEncounter!,{x:0,y:0},{x:5,y:5})).toBe(false);
+  expect(()=>attackCompanion(c,'paladin','fiend',20,0,10,10,0,'Fire',100)).toThrow('Line of sight');
+  expect(JSON.parse(JSON.stringify(c)).companionEncounter.obstacles).toEqual([{x:3,y:3}]);
+ });
+ it('Dodge requires two rolls and uses the lower result; Disengage suppresses opportunity attacks',()=>{
+  let c=start();
+  c=endCompanionTurn(c,'paladin');
+  c=useCompanionAction(c,'druid','Dodge');
+  c=endCompanionTurn(c,'druid');
+  c=endCompanionTurn(c,'fiend');
+  expect(()=>attackCompanion(c,'paladin','druid',20,0,15,10,0,'Fire',10)).toThrow('second d20');
+  c=attackCompanion(c,'paladin','druid',20,0,15,10,0,'Fire',10,4);
+  expect(c.companionEncounter?.participants.druid.hp).toBe(22);
+  c=endCompanionTurn(c,'paladin');
+  c=endCompanionTurn(c,'druid');
+  c=useCompanionAction(c,'fiend','Disengage');
+  expect(companionOpportunityAttackEligible(c,'fiend')).toBe(false);
+  expect(c.companionEncounter?.participants.fiend.disengaged).toBe(true);
+ });
+
  it('uses diagonal grid movement and validates declared attack range',()=>{
   let c=start();
   c=moveCompanion(c,'paladin',2,2);
