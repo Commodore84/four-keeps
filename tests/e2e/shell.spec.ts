@@ -176,3 +176,20 @@ test('point buy begins at eight and blocks overspending',async ({page})=>{
  await page.getByRole('button',{name:/Point Buy Hero/}).click();
  await expect(page.getByText(/Points remaining:/)).toContainText('2 / 27');
 });
+
+test('Ask DM sees current character selections and responds in creation flow',async ({page})=>{
+ const now='2026-11-10T00:00:00.000Z';
+ const draft={schemaVersion:1,id:'ask-dm-test',status:'draft',rules:{edition:'2024',allowCompatibleLegacy:true},step:'identity',identity:{name:'Nighthawk',pronouns:'',appearance:'',personality:'',backstory:'',portrait:null},selections:{speciesId:'elf',lineageId:'wood-elf',classId:'rogue',backgroundId:'sage'},createdAt:now,updatedAt:now};
+ await page.addInitScript(value=>{if(!localStorage.getItem('four-keeps-character-drafts-v1'))localStorage.setItem('four-keeps-character-drafts-v1',JSON.stringify([value]));},draft);
+ let sent:unknown;
+ await page.route('**/api/ask-dm',async route=>{sent=route.request().postDataJSON();await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({answer:'For your wood elf Rogue, Dexterity is central to attacks and stealth.'})});});
+ await page.goto('/four-keeps/');
+ await page.getByRole('button',{name:'My Characters'}).click();
+ await page.getByRole('button',{name:/Nighthawk/}).click();
+ await expect(page.getByLabel('Ask DM')).toBeVisible();
+ await page.getByLabel('Your question').fill('Which ability matters most?');
+ await page.getByRole('button',{name:'Ask DM',exact:true}).click();
+ await expect(page.getByText(/Dexterity is central/)).toBeVisible();
+ expect((sent as {draft:{identity:{name:string};selections:{classId:string}}}).draft.identity.name).toBe('Nighthawk');
+ expect((sent as {draft:{identity:{name:string};selections:{classId:string}}}).draft.selections.classId).toBe('rogue');
+});
