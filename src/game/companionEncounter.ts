@@ -146,7 +146,8 @@ export function damageCompanion(campaign:Campaign,targetId:string,amount:number,
  if(!actor||!Number.isInteger(amount)||amount<0||amount>1000)throw Error('Invalid damage target or amount');
  const taken=targetId==='nighthawk'&&battle.mode==='unified'?amount:adjudicateSubclassActorDamage(campaign,targetId,amount,type);
  const hp=Math.max(0,actor.hp-taken);
- return save(campaign,{...battle,participants:{...battle.participants,[targetId]:{...actor,hp}},log:[...battle.log,targetId+' took '+taken+' '+type+' damage'+(taken!==amount?' (resisted)':'')]});
+ const concentrationNote=actor.concentratingOn&&taken>0?' Concentration save required (DC '+companionConcentrationSaveDC(taken)+')'+(hp===0?'; concentration ends at 0 HP':''):'';
+ return save(campaign,{...battle,participants:{...battle.participants,[targetId]:{...actor,hp,concentratingOn:hp===0?undefined:actor.concentratingOn}},log:[...battle.log,targetId+' took '+taken+' '+type+' damage'+(taken!==amount?' (resisted)':'')+concentrationNote]});
 }
 export function conditionCompanion(campaign:Campaign,targetId:string,condition:'Charmed'|'Poisoned',auraSourceId?:string):Campaign{
  const battle=encounter(campaign),actor=battle.participants[targetId];
