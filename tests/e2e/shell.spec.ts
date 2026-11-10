@@ -501,3 +501,22 @@ test('companion cover annotations persist and keep Nighthawk separate',async({pa
  await page.getByRole('button',{name:'Player',exact:true}).click();
  await expect(page.getByLabel('Companion cover')).toContainText('(3,3)');
 });
+
+test('companion mobile quick movement spends five feet and respects arena bounds',async({page})=>{
+ await page.goto('/four-keeps/');
+ await page.getByRole('button',{name:'Settings',exact:true}).click();
+ await page.getByLabel('New campaign name').fill('Quick movement browser');
+ await page.getByRole('button',{name:'New',exact:true}).click();
+ await page.getByRole('button',{name:'Adventure',exact:true}).click();
+ await page.getByRole('button',{name:'Player',exact:true}).click();
+ const manager=page.getByLabel('Subclass actor manager');
+ await manager.getByLabel('New subclass actor ID').fill('paladin');
+ await manager.getByRole('button',{name:'Register subclass actor'}).click();
+ const panel=page.getByLabel('Companion encounter');
+ await panel.getByRole('button',{name:'Start companion encounter'}).click();
+ await panel.getByRole('button',{name:'Move East'}).click();
+ await expect(panel).toContainText('paladin: 20/20 HP · (1,0)');
+ await expect(panel).toContainText('movement 25/30 ft');
+ await panel.getByRole('button',{name:'Move North'}).click();
+ await expect(panel.getByRole('status')).toContainText('outside 20×20 arena');
+});
