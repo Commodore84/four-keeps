@@ -12,6 +12,30 @@ const build=()=>{
 };
 const start=()=>startCompanionEncounter(build(),{paladin:15,druid:12,fiend:9},{paladin:{x:0,y:0},druid:{x:1,y:0},fiend:{x:5,y:5}},{paladin:30,druid:22,fiend:25});
 describe('isolated companion encounter vertical slice',()=>{
+ it('uses diagonal grid movement and validates declared attack range',()=>{
+  let c=start();
+  c=moveCompanion(c,'paladin',2,2);
+  expect(c.companionEncounter?.participants.paladin.movementSpentFeet).toBe(10);
+  expect(()=>attackCompanion(c,'paladin','fiend',15,3,12,8,0,'Fire',10)).toThrow('outside declared');
+  expect(c.companionEncounter?.participants.paladin.actionUsed).toBe(false);
+  c=attackCompanion(c,'paladin','fiend',15,3,12,8,0,'Fire',15);
+  expect(c.companionEncounter?.participants.fiend.hp).toBe(21);
+ });
+ it('Dash adds movement and consumes action; other choices track without invented benefits',()=>{
+  let c=start();
+  c=useCompanionAction(c,'paladin','Dash');
+  expect(c.companionEncounter?.participants.paladin.dashFeet).toBe(30);
+  expect(()=>attackCompanion(c,'paladin','fiend',15,0,10,8,0,'Fire',100)).toThrow('Action already used');
+  c=moveCompanion(c,'paladin',0,9);
+  expect(c.companionEncounter?.participants.paladin.movementSpentFeet).toBe(45);
+  c=endCompanionTurn(c,'paladin');
+  c=useCompanionAction(c,'druid','Help');
+  expect(c.companionEncounter?.log.at(-1)).toContain('requires DM adjudication');
+  c=endCompanionTurn(c,'druid');
+  c=endCompanionTurn(c,'fiend');
+  expect(c.companionEncounter?.participants.paladin.dashFeet).toBe(0);
+ });
+
  it('tracks cumulative movement and resets budget on next turn',()=>{
   let c=start();
   c=moveCompanion(c,'paladin',0,3);
