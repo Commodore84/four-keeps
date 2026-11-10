@@ -40,6 +40,11 @@ test('forecast UI changes Druid terrain and displays the resulting always-prepar
  await page.getByLabel('Level 5 Circle of the Land terrain').selectOption('polar');
  await expect(page.getByLabel('Level 5 Circle of the Land terrain')).toHaveValue('polar');
  await expect(page.getByText(/Sleet Storm/).first()).toBeVisible();
+ await page.reload();
+ await page.getByRole('button',{name:'My Characters'}).click();
+ await page.getByRole('button',{name:/Terrain Druid/}).click();
+ await expect(page.getByLabel('Level 3 Circle of the Land terrain')).toHaveValue('arid');
+ await expect(page.getByLabel('Level 5 Circle of the Land terrain')).toHaveValue('polar');
 });
 test('forecast UI displays Warlock Mystic Arcanum replacement selectors',async({page})=>{
  await page.goto('/four-keeps/');
