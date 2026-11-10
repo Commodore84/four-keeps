@@ -1,7 +1,7 @@
 import {describe,it,expect} from 'vitest';
 import {newCampaign,registerSubclassActor,chooseSubclassResistance} from './campaign';
 import {initialSubclassCombatState} from './subclassCombatRules';
-import {startCompanionEncounter,moveCompanion,endCompanionTurn,damageCompanion,conditionCompanion,finishCompanionEncounter,attackCompanion,setCompanionSpeed ,useCompanionAction,setCompanionObstacles,companionLineOfSight,companionOpportunityAttackEligible,setCompanionCover,companionCoverStatus,companionPartySnapshot,startUnifiedEncounter,synchronizeNighthawkHitPoints,recordCompanionReaction,removeCompanionCondition,nighthawkEncounterStatistics,useCompanionBonusAction,setCompanionConcentration,companionConcentrationSaveDC,resolveCompanionConcentrationSave,setCompanionConsumable,spendCompanionConsumable,spendUnifiedNighthawkSpellSlot,resolveCompanionOpportunityAttack,nighthawkEncounterInventory,companionOpportunityCandidates,spendUnifiedNighthawkInventory,setCompanionTactics,applyCompanionCondition,nighthawkEquipmentReferences,addCompanionEnemy,companionConditionEffects,setNighthawkEncounterLoadout,resolveCompanionSavingThrow,nighthawkEquippedAttack,nighthawkEquippedDefense,standCompanionFromProne,attackCompanionWithVerifiedStats,resolveCompanionDeathSave,healCompanion,configureEnemyTactic,previewEnemyTurn,refreshNighthawkEncounterStatistics,executeEnemyMovementTurn,stabilizeCompanion,recoverStableCompanion,attackWithThrownEquippedWeapon,executeEnemyMoveAndAttackTurn,executeEnemyAttackTurn,dismissEnemyOpportunityReactions,recoverEncounterThrownWeapons,recoverEncounterAmmunition,resumeEnemyInterruptedMovement} from './companionEncounter';
+import {startCompanionEncounter,moveCompanion,endCompanionTurn,damageCompanion,conditionCompanion,finishCompanionEncounter,attackCompanion,setCompanionSpeed ,useCompanionAction,setCompanionObstacles,companionLineOfSight,companionOpportunityAttackEligible,setCompanionCover,companionCoverStatus,companionPartySnapshot,startUnifiedEncounter,synchronizeNighthawkHitPoints,recordCompanionReaction,removeCompanionCondition,nighthawkEncounterStatistics,useCompanionBonusAction,setCompanionConcentration,companionConcentrationSaveDC,resolveCompanionConcentrationSave,setCompanionConsumable,spendCompanionConsumable,spendUnifiedNighthawkSpellSlot,resolveCompanionOpportunityAttack,nighthawkEncounterInventory,companionOpportunityCandidates,spendUnifiedNighthawkInventory,setCompanionTactics,applyCompanionCondition,nighthawkEquipmentReferences,addCompanionEnemy,companionConditionEffects,setNighthawkEncounterLoadout,resolveCompanionSavingThrow,nighthawkEquippedAttack,nighthawkEquippedDefense,standCompanionFromProne,attackCompanionWithVerifiedStats,resolveCompanionDeathSave,healCompanion,configureEnemyTactic,previewEnemyTurn,refreshNighthawkEncounterStatistics,executeEnemyMovementTurn,stabilizeCompanion,recoverStableCompanion,attackWithThrownEquippedWeapon,executeEnemyMoveAndAttackTurn,executeEnemyAttackTurn,dismissEnemyOpportunityReactions,recoverEncounterThrownWeapons,recoverEncounterAmmunition,resumeEnemyInterruptedMovement,configureEnemyRangedAttack,executeEnemyRangedAttackTurn} from './companionEncounter';
 const build=()=>{
  let c=newCampaign('Companion test');
  c=registerSubclassActor(c,'paladin',initialSubclassCombatState('paladin','paladin-devotion',7,3));
@@ -12,6 +12,20 @@ const build=()=>{
 };
 const start=()=>startCompanionEncounter(build(),{paladin:15,druid:12,fiend:9},{paladin:{x:0,y:0},druid:{x:1,y:0},fiend:{x:5,y:5}},{paladin:30,druid:22,fiend:25});
 describe('isolated companion encounter vertical slice',()=>{
+ it('requires verified ranged profile and uses DM-supplied rolls for enemy ranged attack',()=>{
+  const base=build();
+  let c=startUnifiedEncounter(base,{nighthawk:20,paladin:10},{nighthawk:{x:0,y:8},paladin:{x:0,y:0}},{paladin:20});
+  c=addCompanionEnemy(c,'archer1',15,{x:6,y:8},12,13,4,30,5,2,'1d6 piercing');
+  c=endCompanionTurn(c,'nighthawk');
+  expect(()=>executeEnemyRangedAttackTurn(c,'archer1','nighthawk',16,4,'Piercing')).toThrow('Verified hostile ranged');
+  c=configureEnemyRangedAttack(c,'archer1',60);
+  c=executeEnemyRangedAttackTurn(c,'archer1','nighthawk',16,4,'Piercing');
+  expect(c.companionEncounter?.participants.nighthawk.hp).toBe(4);
+  expect(c.companionEncounter?.order[c.companionEncounter.turnIndex]).toBe('paladin');
+  expect(c.combat).toEqual(base.combat);
+  expect(JSON.parse(JSON.stringify(c)).companionEncounter.participants.archer1.rangedAttackFeet).toBe(60);
+ });
+
  it('interrupts enemy movement at exact reach-exit square, survives serialization and resumes after declined reaction',()=>{
   const base=build();
   let c=startUnifiedEncounter(base,{nighthawk:20,paladin:10},{nighthawk:{x:7,y:0},paladin:{x:1,y:1}},{paladin:20});
