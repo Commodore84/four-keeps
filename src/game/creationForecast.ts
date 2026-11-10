@@ -4,8 +4,21 @@ import {SPELLS} from './creationMagic';
 import {HIGHER_LEVEL_FORECAST_SPELLS} from './creationHigherSpellCatalog';
 import {spellcastingAtLevel} from './creationClasses';
 import {subclassesForClass} from './creationSubclasses';
-export interface LevelPlan {level:number;subclassId?:string;abilityPlan?:string;abilityIncreases?:Partial<Record<Ability,number>>;featPlan?:string;spellPlan?:string;plannedSpellIds?:string[];notes?:string}
+export interface LevelPlan {level:number;subclassId?:string;abilityPlan?:string;abilityIncreases?:Partial<Record<Ability,number>>;featPlan?:string;spellPlan?:string;plannedSpellIds?:string[];replacementSpellId?:string;replacementWithSpellId?:string;notes?:string}
 export interface AdvancementForecast {targetLevel:number;levels:LevelPlan[]}
+export type SpellAcquisitionMode='spellbook'|'prepared'|'pact-prepared'|'subclass';
+export interface ForecastSpellPolicy {mode:SpellAcquisitionMode;canReplaceOnLevelUp:boolean;replacementLimit:number;description:string}
+const PREPARATION_POLICIES:Record<string,ForecastSpellPolicy>={
+ wizard:{mode:'spellbook',canReplaceOnLevelUp:false,replacementLimit:0,description:'Two Wizard spells are added to your spellbook on each Wizard level. Preparing spells and copying spells are separate choices.'},
+ bard:{mode:'prepared',canReplaceOnLevelUp:true,replacementLimit:1,description:'Bard prepared-spell progression is separate from a once-per-level replacement of one Bard spell.'},
+ sorcerer:{mode:'prepared',canReplaceOnLevelUp:true,replacementLimit:1,description:'Sorcerer prepared-spell progression is separate from a once-per-level replacement of one Sorcerer spell.'},
+ cleric:{mode:'prepared',canReplaceOnLevelUp:true,replacementLimit:1,description:'Clerics can replace one prepared Cleric spell after a Long Rest; level-up selections are not a permanent learned-spell list.'},
+ druid:{mode:'prepared',canReplaceOnLevelUp:true,replacementLimit:1,description:'Druids can replace one prepared Druid spell after a Long Rest; level-up selections are not a permanent learned-spell list.'},
+ paladin:{mode:'prepared',canReplaceOnLevelUp:true,replacementLimit:1,description:'Paladins can replace one prepared Paladin spell after a Long Rest; level-up selections are not a permanent learned-spell list.'},
+ ranger:{mode:'prepared',canReplaceOnLevelUp:true,replacementLimit:1,description:'Rangers can replace one prepared Ranger spell after a Long Rest; level-up selections are not a permanent learned-spell list.'},
+ warlock:{mode:'pact-prepared',canReplaceOnLevelUp:true,replacementLimit:1,description:'Warlock Pact Magic prepared spells, spell replacement, and Mystic Arcanum choices are distinct.'}
+};
+export function forecastSpellPolicy(classId:string):ForecastSpellPolicy|null{return PREPARATION_POLICIES[classId]??null;}
 export const LEVEL_CAP=20;
 export function emptyForecast():AdvancementForecast{return {targetLevel:1,levels:[]}}
 export function plannedLevel(forecast:AdvancementForecast,level:number):LevelPlan{return forecast.levels.find(p=>p.level===level)??{level}}
@@ -31,7 +44,7 @@ export function validateForecast(classId:string,forecast:AdvancementForecast):st
  const options=subclassesForClass(classId);
  const subclassId=plannedLevel(forecast,3).subclassId;
  const errors=subclassId&&!options.some(s=>s.id===subclassId)?['Planned subclass does not belong to the current class.']:[];
- return [...errors,...forecastSpellWarnings(classId,forecast)];
+ return [...errors,...forecastSpellWarnings(classId,forecast),...forecastReplacementWarnings(classId,forecast)];
 }
 
 /** Curated, incomplete spell catalog. Forecast selections are not prepared spells. */
@@ -88,6 +101,24 @@ export function forecastSpellWarnings(classId:string,forecast:AdvancementForecas
    warnings.push(...forecastSpellSelectionWarnings(classId,{...forecast,levels:forecast.levels.map(p=>p.level===plan.level?{...p,plannedSpellIds:(p.plannedSpellIds??[]).filter(x=>x!==id)}:p)},plan.level,id));
    seen.add(id);
   }
+ }
+ return warnings;
+}
+
+/** Replacement intent is recorded independently; it never mutates prepared spells. */
+export function forecastReplacementWarnings(classId:string,forecast:AdvancementForecast):string[]{
+ const policy=forecastSpellPolicy(classId);
+ const warnings:string[]=[];
+ for(const plan of forecast.levels){
+  const from=plan.replacementSpellId,to=plan.replacementWithSpellId;
+  if(!from&&!to)continue;
+  if(!policy?.canReplaceOnLevelUp){warnings.push('Level '+plan.level+': this class has no supported forecast spell-replacement operation.');continue;}
+  if(!from||!to){warnings.push('Level '+plan.level+': choose both the spell to replace and its replacement.');continue;}
+  if(from===to){warnings.push('Level '+plan.level+': replacement must be a different spell.');continue;}
+  const subclassId=plannedLevel(forecast,3).subclassId;
+  const options=forecastSpellOptions(classId,subclassId,plan.level);
+  if(!options.some(spell=>spell.id===to&&spell.level>0))warnings.push('Level '+plan.level+': replacement spell is not eligible for this class and level.');
+  if(![...SPELLS,...HIGHER_LEVEL_FORECAST_SPELLS].some(spell=>spell.id===from))warnings.push('Level '+plan.level+': original spell is not in the curated catalog.');
  }
  return warnings;
 }
