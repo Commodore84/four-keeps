@@ -1,3 +1,4 @@
+import { ITEMS, ITEM_BY_ID, CLASS_PACKAGES, BACKGROUND_PACKAGES, emptyEquipment, inventory, remainingCp, buy, armorClass, attackBonus, weaponTrained, armorTrained, equipmentErrors, carryingWeight, carryingCapacity, type EquipmentDraft } from '../game/creationEquipment';
 import { ABILITIES, STANDARD_ARRAY, POINT_COSTS, emptyAbilityDraft, pointCost, rollSet, totalScores, modifier, validateAbilityDraft, type AbilityDraft } from '../game/creationAbilities';
 import { CLASSES, classChoices, classSummary, reconcileChoices, setChoice, spellcastingAtLevel, validateClassAgainstBackground, type ChoiceSelections, type ChoiceDefinition } from '../game/creationClasses';
 import { availableSpecies, availableBackgrounds, validateOrigins, originBenefits } from '../game/creationOrigins';
@@ -11,7 +12,7 @@ export interface CharacterDraft {
   rules: { edition: '2024'; allowCompatibleLegacy: boolean };
   step: CreationStep;
   identity: { name: string; pronouns: string; appearance: string; personality: string; backstory: string; portrait: null|string };
-  selections: { speciesId?: string; lineageId?: string; backgroundId?: string; classId?: string; classChoices?: ChoiceSelections; abilities?: AbilityDraft };
+  selections: { speciesId?: string; lineageId?: string; backgroundId?: string; classId?: string; classChoices?: ChoiceSelections; abilities?: AbilityDraft; equipment?: EquipmentDraft };
   createdAt: string;
   updatedAt: string;
 }
@@ -63,6 +64,7 @@ export function CharacterCreator(){
     const next=setChoice(draft.selections.classChoices??{},definition,value);
     updateSelections({classChoices:reconcileChoices(classChoices(draft.selections.classId,next['class-skills']??[]),next)});
   }
+  function updateEquipment(next:EquipmentDraft){updateSelections({equipment:next});}
   function updateAbilities(next:AbilityDraft){updateSelections({abilities:next});}
   function rollAbilities(){
     const random=()=>{const bytes=new Uint32Array(1);crypto.getRandomValues(bytes);return bytes[0]/4294967296;};
@@ -83,7 +85,7 @@ export function CharacterCreator(){
     {!draft?<><button type="button" className="rounded-lg bg-gold px-4 py-2 font-semibold text-ink" onClick={()=>{const next=createCharacterDraft();persist([next,...drafts]);setSelected(next.id);}}>Create character</button>
       {drafts.length>0&&<div className="space-y-2"><h4 className="font-semibold">Unfinished characters</h4>{drafts.map(item=><button key={item.id} type="button" onClick={()=>setSelected(item.id)} className="block w-full rounded-lg border border-white/20 p-3 text-left">{item.identity.name||'Unnamed character'} <span className="text-xs text-parchment/60">· Resume draft</span></button>)}</div>}</>:
     <><div className="flex items-center justify-between gap-2"><strong>{draft.identity.name||'Unnamed character'}</strong><button type="button" onClick={()=>setSelected(null)} className="rounded-lg border border-white/25 px-3 py-2 text-sm">All characters</button></div>
-      <nav aria-label="Character creation steps" className="grid grid-cols-2 gap-2 sm:grid-cols-4">{CREATION_STEPS.map((step,index)=><button type="button" key={step.id} disabled={index>3||index===1&&validateIdentity(draft).length>0||index>=2&&(validateIdentity(draft).length>0||validateOrigins(draft.selections,draft.rules.allowCompatibleLegacy).length>0)||index===3&&validateClassAgainstBackground(draft.selections.classId,draft.selections.classChoices??{},availableBackgrounds(draft.rules.allowCompatibleLegacy).find(b=>b.id===draft.selections.backgroundId)?.skills??[]).length>0} onClick={()=>update({step:step.id})} className={`rounded-lg border px-2 py-2 text-left text-sm ${draft.step===step.id?'border-gold text-gold':'border-white/20'} disabled:opacity-40`}>{index+1}. {step.label}</button>)}</nav>
+      <nav aria-label="Character creation steps" className="grid grid-cols-2 gap-2 sm:grid-cols-4">{CREATION_STEPS.map((step,index)=><button type="button" key={step.id} disabled={index>4||index===1&&validateIdentity(draft).length>0||index>=2&&(validateIdentity(draft).length>0||validateOrigins(draft.selections,draft.rules.allowCompatibleLegacy).length>0)||index>=3&&validateClassAgainstBackground(draft.selections.classId,draft.selections.classChoices??{},availableBackgrounds(draft.rules.allowCompatibleLegacy).find(b=>b.id===draft.selections.backgroundId)?.skills??[]).length>0} onClick={()=>update({step:step.id})} className={`rounded-lg border px-2 py-2 text-left text-sm ${draft.step===step.id?'border-gold text-gold':'border-white/20'} disabled:opacity-40`}>{index+1}. {step.label}</button>)}</nav>
       {draft.step==='identity'?<div className="space-y-3">
         <p className="text-sm text-parchment/65">Tell us about your adventurer. Only the name is required.</p>
         {(['name','pronouns','appearance','personality','backstory'] as const).map(field=><label key={field} className="block space-y-1"><span className="block text-sm capitalize">{field}{field==='name'?' *':''}</span>{field==='name'||field==='pronouns'?<input className="w-full rounded-lg border border-white/20 bg-ink p-2" value={draft.identity[field]} onChange={e=>updateIdentity(field,e.target.value)}/>:<textarea className="w-full rounded-lg border border-white/20 bg-ink p-2" rows={2} value={draft.identity[field]} onChange={e=>updateIdentity(field,e.target.value)}/>}</label>)}
@@ -122,7 +124,7 @@ export function CharacterCreator(){
           {validateClassAgainstBackground(cls.id,selections,availableBackgrounds(draft.rules.allowCompatibleLegacy).find(b=>b.id===draft.selections.backgroundId)?.skills??[]).length>0?<p role="status" className="text-sm text-amber-200">{validateClassAgainstBackground(cls.id,selections,availableBackgrounds(draft.rules.allowCompatibleLegacy).find(b=>b.id===draft.selections.backgroundId)?.skills??[]).join(' ')}</p>:<p role="status" className="text-sm text-emerald-300">Class choices valid and saved.</p>}
           </div>})()}
         <div className="flex gap-2"><button type="button" onClick={()=>update({step:'origins'})} className="rounded-lg border border-white/25 px-3 py-2">Back to origins</button><button type="button" disabled={validateClassAgainstBackground(draft.selections.classId,draft.selections.classChoices??{},availableBackgrounds(draft.rules.allowCompatibleLegacy).find(b=>b.id===draft.selections.backgroundId)?.skills??[]).length>0} onClick={()=>update({step:'abilities'})} className="rounded-lg bg-gold px-3 py-2 text-ink disabled:opacity-40">Continue to abilities</button></div>
-      </div>:<div className="space-y-4" aria-label="Ability scores">
+      </div>:draft.step==='abilities'?<div className="space-y-4" aria-label="Ability scores">
         <h4 className="font-serif text-lg">Ability Scores</h4>
         {(()=>{const abilities=draft.selections.abilities??emptyAbilityDraft();
           const background=availableBackgrounds(draft.rules.allowCompatibleLegacy).find(b=>b.id===draft.selections.backgroundId);
@@ -144,7 +146,44 @@ export function CharacterCreator(){
             </div>)}</div>
             <fieldset className="space-y-2"><legend className="font-semibold">Background increase ({background?.name??'choose a background'})</legend><div className="flex flex-wrap gap-2">{(['two-one','one-one-one'] as const).map(mode=><button type="button" key={mode} aria-pressed={abilities.bonusMode===mode} onClick={()=>updateAbilities({...abilities,bonusMode:mode,bonuses:{}})} className={'rounded border px-3 py-2 text-sm '+(abilities.bonusMode===mode?'border-gold':'border-white/20')}>{mode==='two-one'?'+2 / +1':'+1 / +1 / +1'}</button>)}</div><p className="text-xs text-parchment/60">Eligible abilities: {allowed.join(', ')}. Each bonus must go to a different ability.</p></fieldset>
             {errors.length>0?<p role="status" className="text-sm text-amber-200">{errors.join(' ')}</p>:<p role="status" className="text-sm text-emerald-300">Ability scores valid and saved.</p>}
-            <div className="flex gap-2"><button type="button" onClick={()=>update({step:'class'})} className="rounded-lg border border-white/25 px-3 py-2">Back to class</button><button type="button" disabled className="rounded-lg bg-gold px-3 py-2 text-ink opacity-40">Continue to equipment (next phase)</button></div>
+            <div className="flex gap-2"><button type="button" onClick={()=>update({step:'class'})} className="rounded-lg border border-white/25 px-3 py-2">Back to class</button><button type="button" disabled={errors.length>0} onClick={()=>update({step:'equipment'})} className="rounded-lg bg-gold px-3 py-2 text-ink disabled:opacity-40">Continue to equipment</button></div>
+          </div>})()}
+      </div>:<div className="space-y-4" aria-label="Starting equipment">
+        <h4 className="font-serif text-lg">Starting Equipment</h4>
+        {(()=>{const classId=draft.selections.classId??'';const backgroundId=draft.selections.backgroundId??'';
+          const eq=draft.selections.equipment??emptyEquipment();
+          const scores=totalScores(draft.selections.abilities??emptyAbilityDraft());
+          const owned=inventory(eq,classId,backgroundId);
+          const funds=remainingCp(eq,classId,backgroundId);
+          const errors=equipmentErrors(eq,classId,backgroundId,scores);
+          const setPackage=(key:'classPackage'|'backgroundPackage',index:number)=>updateEquipment({...eq,[key]:index,purchases:{},equipped:{weapons:[]}});
+          const equip=(id:string,category:'weapon'|'armor'|'shield')=>{
+            if(category==='weapon'){const weapons=eq.equipped.weapons.includes(id)?eq.equipped.weapons.filter(x=>x!==id):[...eq.equipped.weapons,id].slice(-2);updateEquipment({...eq,equipped:{...eq.equipped,weapons}});}
+            else updateEquipment({...eq,equipped:{...eq.equipped,[category]:eq.equipped[category]===id?undefined:id}});
+          };
+          return <div className="space-y-4">
+            {([['Class equipment',CLASS_PACKAGES[classId]??[],'classPackage'],['Background equipment',BACKGROUND_PACKAGES[backgroundId]??[],'backgroundPackage']] as const).map(([label,packages,key])=><fieldset key={key} className="space-y-2 rounded-lg border border-white/20 p-3"><legend className="font-semibold">{label}</legend>{packages.map((p,i)=><label key={i} className="flex items-start gap-2 rounded border border-white/15 p-2 text-sm"><input type="radio" name={key} checked={eq[key]===i} onChange={()=>setPackage(key,i)}/><span><strong>{p.label}</strong> — {p.gold} GP{Object.keys(p.items).length>0?' + '+Object.entries(p.items).map(([id,n])=>n+' × '+(ITEM_BY_ID[id]?.name??id)).join(', '):' to spend'}</span></label>)}</fieldset>)}
+            <section className="space-y-2 rounded-lg border border-gold/30 p-3">
+              <h5 className="font-semibold">Currency and carrying capacity</h5>
+              <p className="text-sm">Remaining: <strong>{(funds/100).toFixed(2)} GP</strong> · Carrying {(carryingWeight(eq,classId,backgroundId)).toFixed(1)} / {carryingCapacity(scores)} lb.</p>
+              <p className="text-xs text-parchment/65">Class and background funds combine. Purchases use exact copper-piece accounting.</p>
+            </section>
+            <section className="space-y-2"><h5 className="font-semibold">Shop — 2024 equipment</h5>
+              <div className="max-h-72 space-y-1 overflow-y-auto rounded-lg border border-white/20 p-2">{ITEMS.map(item=><div key={item.id} className="flex items-center justify-between gap-2 border-b border-white/10 py-2 text-sm"><div><strong>{item.name}</strong><span className="block text-xs text-parchment/60">{item.category} · {(item.costCp/100).toFixed(2)} GP · {item.weight} lb.{item.damage?' · '+item.damage:''}{item.properties?.length?' · '+item.properties.join(', '):''}</span></div><button type="button" disabled={eq.classPackage===null||eq.backgroundPackage===null||funds<item.costCp} onClick={()=>updateEquipment(buy(eq,classId,backgroundId,item.id))} className="shrink-0 rounded border border-gold/40 px-2 py-1 text-gold disabled:opacity-30">Buy</button></div>)}</div>
+            </section>
+            <section className="space-y-2"><h5 className="font-semibold">Inventory and equipment</h5>
+              {Object.entries(owned).filter(([,n])=>n>0).length===0?<p className="text-sm text-parchment/60">Choose starting packages to receive equipment.</p>:Object.entries(owned).filter(([,n])=>n>0).map(([id,n])=>{const item=ITEM_BY_ID[id];if(!item)return <p key={id} className="text-amber-200">Unknown item: {id}</p>;
+                const equipable=item.category==='weapon'||item.category==='armor'||item.category==='shield';
+                const equipped=item.category==='weapon'?eq.equipped.weapons.includes(id):item.category==='armor'?eq.equipped.armor===id:eq.equipped.shield===id;
+                const trained=item.category==='weapon'?weaponTrained(classId,item):armorTrained(classId,item);
+                return <div key={id} className="flex items-center justify-between gap-2 rounded border border-white/15 p-2 text-sm"><span>{n} × {item.name}{equipable&&!trained?<span className="block text-xs text-amber-200">Not proficient/trained</span>:null}</span>{equipable&&<button type="button" aria-pressed={equipped} onClick={()=>equip(id,item.category as 'weapon'|'armor'|'shield')} className={'rounded border px-2 py-1 '+(equipped?'border-gold text-gold':'border-white/20')}>{equipped?'Unequip':'Equip'}</button>}</div>})}
+            </section>
+            <section className="space-y-2 rounded-lg border border-gold/30 p-3"><h5 className="font-semibold">Combat statistics</h5><p className="text-sm">Armor Class: <strong>{armorClass(eq,classId,backgroundId,scores)}</strong></p>
+              {eq.equipped.weapons.map(id=>{const item=ITEM_BY_ID[id];return item?<p key={id} className="text-sm">{item.name}: attack {(attackBonus(classId,item,scores)>=0?'+':'')+attackBonus(classId,item,scores)} · {item.damage} · {item.mastery} mastery</p>:null})}
+              <p className="text-xs text-parchment/60">Armor training, shield training, weapon proficiency, and Strength requirements are checked below. Additional class feature modifiers will be integrated later.</p>
+            </section>
+            {errors.length?<p role="status" className="text-sm text-amber-200">{errors.join(' ')}</p>:<p role="status" className="text-sm text-emerald-300">Equipment selections valid and saved.</p>}
+            <div className="flex gap-2"><button type="button" onClick={()=>update({step:'abilities'})} className="rounded-lg border border-white/25 px-3 py-2">Back to abilities</button><button type="button" disabled className="rounded-lg bg-gold px-3 py-2 text-ink opacity-40">Continue to spells (next phase)</button></div>
           </div>})()}
       </div>}
       <p className="text-xs text-parchment/55">Draft only · not attached to a campaign · cannot enter play until all required choices are valid</p>
