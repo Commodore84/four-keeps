@@ -150,7 +150,7 @@ export function forecastReplacementWarnings(classId:string,forecast:AdvancementF
 function forecastOrdinaryReplacementWarnings(classId:string,forecast:AdvancementForecast,initialPreparedSpellIds:readonly string[]=[]):string[]{
  const policy=forecastSpellPolicy(classId);
  const warnings:string[]=[];
- for(const plan of forecast.levels){
+ for(const plan of [...forecast.levels].sort((a,b)=>a.level-b.level)){
   const from=plan.replacementSpellId,to=plan.replacementWithSpellId;
   if(!from&&!to)continue;
   if(!policy||classId==='wizard'){warnings.push('Level '+plan.level+': Wizard spellbook preparation changes are handled after a Long Rest, not by this level-up replacement planner.');continue;}
@@ -167,6 +167,8 @@ function forecastOrdinaryReplacementWarnings(classId:string,forecast:Advancement
    if(prior.replacementSpellId&&prior.replacementWithSpellId&&owned.has(prior.replacementSpellId)){owned.delete(prior.replacementSpellId);owned.add(prior.replacementWithSpellId);}
   }
   if(!owned.has(from))warnings.push('Level '+plan.level+': original spell is not in the level-one prepared spells or earlier active forecast selections.');
+  if(owned.has(to))warnings.push('Level '+plan.level+': replacement spell is already among the active prepared spells.');
+  if(alwaysPreparedSubclassSpells(subclassId,plan.level).some(name=>[...SPELLS,...HIGHER_LEVEL_FORECAST_SPELLS].some(spell=>spell.id===from&&spell.name===name)))warnings.push('Level '+plan.level+': an always-prepared subclass spell cannot be replaced.');
  }
  return warnings;
 }
