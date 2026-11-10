@@ -12,6 +12,18 @@ const build=()=>{
 };
 const start=()=>startCompanionEncounter(build(),{paladin:15,druid:12,fiend:9},{paladin:{x:0,y:0},druid:{x:1,y:0},fiend:{x:5,y:5}},{paladin:30,druid:22,fiend:25});
 describe('isolated companion encounter vertical slice',()=>{
+ it('rejects stale character HP synchronization rather than overwriting sheet edits',()=>{
+  const base=build();
+  let c=startUnifiedEncounter(base,{nighthawk:20,paladin:10},{nighthawk:{x:0,y:2},paladin:{x:0,y:0}},{paladin:20});
+  c=damageCompanion(c,'nighthawk',3,'Fire');
+  const edited={...c,character:{...c.character!,currentHitPoints:9}};
+  expect(()=>synchronizeNighthawkHitPoints(edited)).toThrow('changed since encounter snapshot');
+  expect(edited.character.currentHitPoints).toBe(9);
+  const synced=synchronizeNighthawkHitPoints(c);
+  expect(synced.character?.currentHitPoints).toBe(7);
+  expect(synced.companionEncounter?.nighthawkSheetHpSnapshot).toBe(7);
+ });
+
  it('uses DM-verified enemy damage modifier without writing character sheet',()=>{
   const base=build();
   let c=startUnifiedEncounter(base,{nighthawk:20,paladin:10},{nighthawk:{x:0,y:2},paladin:{x:0,y:0}},{paladin:20});
