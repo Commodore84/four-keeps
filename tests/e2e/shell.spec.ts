@@ -75,7 +75,8 @@ test('campaign deletion requires confirmation and preserves other campaigns', as
   await page.getByRole('button', { name: 'Confirm delete' }).click();
   await expect(page.getByText('No campaign selected')).toBeVisible();
   await page.reload();
-  await expect(page.getByText('No campaign selected')).toBeVisible();
+  await expect(page.getByLabel('Four Keeps landing page')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Continue Adventure' })).toBeDisabled();
 });
 
 test('combat replaces persistent DM composer with optional Ask DM and header resources', async ({ page }) => {
@@ -126,11 +127,11 @@ test('landing page routes and character draft survive reload', async ({page})=>{
  await page.getByRole('button',{name:'My Characters'}).click();
  await page.getByRole('button',{name:/Browser Hero/}).click();
  await expect(page.getByLabel('name *')).toHaveValue('Browser Hero');
- await page.getByRole('button',{name:'Home'}).click();
+ await page.getByRole('button',{name:/Home/}).click();
  await page.getByRole('button',{name:'New Adventure'}).click();
- await page.getByRole('button',{name:'Home'}).click();
+ await page.getByRole('button',{name:/Home/}).click();
  await page.getByRole('button',{name:'My Campaigns'}).click();
- await page.getByRole('button',{name:'Home'}).click();
+ await page.getByRole('button',{name:/Home/}).click();
  await page.getByRole('button',{name:'Help'}).click();
  await expect(page.getByRole('heading',{name:'Help'})).toBeVisible();
 });
