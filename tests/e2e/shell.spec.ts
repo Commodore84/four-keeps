@@ -386,3 +386,39 @@ test('companion encounter initiative, turn, resistance and persistence stay isol
  await expect(page.getByLabel('Companion encounter')).toContainText('druid: 15/20 HP');
  await expect(page.getByRole('heading',{name:'Player Character'})).toBeVisible();
 });
+
+test('companion attack consumes action and movement budget persists across reload',async({page})=>{
+ await page.goto('/four-keeps/');
+ await page.getByRole('button',{name:'Settings',exact:true}).click();
+ await page.getByLabel('New campaign name').fill('Companion attacks browser');
+ await page.getByRole('button',{name:'New',exact:true}).click();
+ await page.getByRole('button',{name:'Adventure',exact:true}).click();
+ await page.getByRole('button',{name:'Player',exact:true}).click();
+ const manager=page.getByLabel('Subclass actor manager');
+ for(const [id,subclass] of [['paladin','paladin-devotion'],['fiend','warlock-fiend']] as const){
+  await manager.getByLabel('New subclass actor ID').fill(id);
+  await manager.getByLabel('New subclass',{exact:true}).selectOption(subclass);
+  await manager.getByRole('button',{name:'Register subclass actor'}).click();
+ }
+ const panel=page.getByLabel('Companion encounter');
+ await panel.getByLabel('Initiative paladin').fill('18');
+ await panel.getByLabel('Initiative fiend').fill('12');
+ await panel.getByRole('button',{name:'Start companion encounter'}).click();
+ await panel.getByLabel('Move Y').fill('2');
+ await panel.getByRole('button',{name:'Move active actor'}).click();
+ await expect(panel).toContainText('movement 20/30 ft');
+ await panel.getByLabel('Companion target').selectOption('fiend');
+ await panel.getByLabel('Companion attack d20').fill('15');
+ await panel.getByLabel('Companion attack modifier').fill('3');
+ await panel.getByLabel('Companion target AC').fill('14');
+ await panel.getByLabel('Companion damage',{exact:true}).fill('8');
+ await panel.getByLabel('Companion damage modifier').fill('2');
+ await panel.getByRole('button',{name:'Attack with action'}).click();
+ await expect(panel).toContainText('fiend: 10/20 HP');
+ await expect(panel.getByRole('button',{name:'Attack with action'})).toBeDisabled();
+ await page.reload();
+ await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await page.getByRole('button',{name:'Player',exact:true}).click();
+ await expect(page.getByLabel('Companion encounter')).toContainText('fiend: 10/20 HP');
+ await expect(page.getByLabel('Companion encounter')).toContainText('movement 20/30 ft');
+});
