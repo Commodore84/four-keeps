@@ -4,6 +4,7 @@ import {SPELLS} from './creationMagic';
 import {HIGHER_LEVEL_FORECAST_SPELLS} from './creationHigherSpellCatalog';
 import {spellcastingAtLevel,preparedSpellsAtLevel} from './creationClasses';
 import {subclassesForClass} from './creationSubclasses';
+import {alwaysPreparedSubclassSpells} from './creationSubclassSpells';
 export interface LevelPlan {level:number;subclassId?:string;abilityPlan?:string;abilityIncreases?:Partial<Record<Ability,number>>;featPlan?:string;spellPlan?:string;plannedSpellIds?:string[];replacementSpellId?:string;replacementWithSpellId?:string;notes?:string}
 export interface AdvancementForecast {targetLevel:number;levels:LevelPlan[]}
 export type SpellAcquisitionMode='spellbook'|'prepared'|'pact-prepared'|'subclass';
@@ -76,6 +77,7 @@ export function toggleForecastSpell(forecast:AdvancementForecast,classId:string,
 export function forecastSpellSelectionWarnings(classId:string,forecast:AdvancementForecast,level:number,spellId:string):string[]{
  const spell=forecastSpellOptions(classId,plannedLevel(forecast,3).subclassId,level).find(item=>item.id===spellId);
  if(!spell)return ['Level '+level+': spell is not eligible.'];
+ if(alwaysPreparedSubclassSpells(plannedLevel(forecast,3).subclassId,level).includes(spell.name))return ['Level '+level+': this spell is already always prepared by the subclass and does not consume a class preparation choice.'];
  const previous=plannedLevel(forecast,level).plannedSpellIds??[];
  if(previous.includes(spellId))return [];
  const selected=previous.map(id=>[...SPELLS,...HIGHER_LEVEL_FORECAST_SPELLS].find(item=>item.id===id)).filter((item):item is NonNullable<typeof item>=>Boolean(item));
@@ -122,6 +124,7 @@ export function forecastReplacementWarnings(classId:string,forecast:AdvancementF
   if(from===to){warnings.push('Level '+plan.level+': replacement must be a different spell.');continue;}
   const subclassId=plannedLevel(forecast,3).subclassId;
   const options=forecastSpellOptions(classId,subclassId,plan.level);
+  if(alwaysPreparedSubclassSpells(subclassId,plan.level).some(name=>options.some(spell=>spell.id===to&&spell.name===name)))warnings.push('Level '+plan.level+': the replacement is already always prepared by the subclass.');
   if(!options.some(spell=>spell.id===to&&spell.level>0))warnings.push('Level '+plan.level+': replacement spell is not eligible for this class and level.');
   if(![...SPELLS,...HIGHER_LEVEL_FORECAST_SPELLS].some(spell=>spell.id===from))warnings.push('Level '+plan.level+': original spell is not in the curated catalog.');
   const owned=new Set(initialPreparedSpellIds);
