@@ -135,7 +135,7 @@ function Adventure({ campaign, fullHistory, onToggleHistory, onAdventureChange, 
       <p className="leading-7 text-parchment/85">The road bends toward a frontier village, its lanterns glowing beneath the evening mist. Beyond the tree line, an old keep waits in silence.</p>
     </div>}
     {turns.map((entry) => <article key={entry.id} className={entry.kind === 'player' ? 'ml-8 rounded-xl border border-gold/30 bg-gold/10 p-4' : 'mr-3 rounded-xl border border-white/10 bg-panel p-5'}>
-      <p className="eyebrow">{entry.kind === 'player' ? 'Nighthawk' : 'Dungeon Master'}</p>
+      <p className="eyebrow">{entry.kind === 'player' ? (campaign?.characterIdentity?.name??'Nighthawk') : 'Dungeon Master'}</p>
       <p className="mt-2 whitespace-pre-wrap leading-7 text-parchment/90">{entry.kind==='system'?publicCombatText(entry.text):entry.text}</p>
     </article>)}
     {campaign && <p className="text-xs text-gold/80">Campaign saved on this device · {turns.length ? 'AI Dungeon Master connected' : 'Ready for your first action'}</p>}
