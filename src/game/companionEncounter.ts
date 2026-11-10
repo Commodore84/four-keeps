@@ -588,6 +588,21 @@ export function attackCompanionWithVerifiedStats(campaign:Campaign,attackerId:st
  if(equipmentAvailable>0)return spendUnifiedNighthawkInventory(result,'arrows',1);
  return spendUnifiedNighthawkInventory(result,ammoName,1);
 }
+/** An explicitly declared thrown attack removes the verified weapon from inventory.
+ * Ordinary melee attacks do not spend a weapon; recovered weapons must be
+ * returned through a separate DM inventory action.
+ */
+export function attackWithThrownEquippedWeapon(campaign:Campaign,attackerId:string,targetId:string,roll:number,damageRoll:number,damageType:DamageType,rangeFeet:number,secondD20?:number):Campaign{
+ const equipped=attackerId==='nighthawk'?nighthawkEquippedAttack(campaign):null;
+ const weapon=equipped?ITEMS.find(item=>item.id===equipped.weaponId):undefined;
+ if(!weapon?.properties?.some(p=>p.startsWith('Thrown ')))throw Error('Verified equipped thrown weapon required');
+ const [normal,maximum]=(weapon.properties.find(p=>p.startsWith('Thrown '))?.replace('Thrown ','').split('/').map(Number)??[]);
+ if(!Number.isInteger(rangeFeet)||rangeFeet<5||rangeFeet>maximum||rangeFeet>normal)throw Error('Thrown weapon range requires DM disadvantage adjudication');
+ const available=(weapon.id==='dagger'?campaign.equipment?.daggers??0:0)+(campaign.inventoryLedger?.gear.find(g=>g.name===weapon.name)?.quantity??0);
+ if(available<1)throw Error('Insufficient thrown weapons');
+ const resolved=attackCompanionWithVerifiedStats(campaign,attackerId,targetId,roll,damageRoll,damageType,rangeFeet,secondD20);
+ return spendUnifiedNighthawkInventory(resolved,weapon.id==='dagger'&&(campaign.equipment?.daggers??0)>0?'daggers':weapon.name,1);
+}
 export function useCompanionAction(campaign:Campaign,actorId:string,choice:'Dash'|'Disengage'|'Dodge'|'Help'|'Search'|'Study'|'Influence'|'Ready'|'Utilize'):Campaign{
  const battle=activeActor(campaign,actorId),actor=battle.participants[actorId];
  if(actor.actionUsed)throw Error('Action already used this turn');
