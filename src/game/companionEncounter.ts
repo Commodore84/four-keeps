@@ -8,6 +8,8 @@ import {ITEMS} from './creationEquipment';
 export interface CompanionEncounter {
  status:'active'|'completed';
  mode?:'companions'|'unified';
+ /** Last character-sheet HP observed at encounter creation or explicit synchronization. */
+ nighthawkSheetHpSnapshot?:number;
  round:number;
  turnIndex:number;
  order:string[];
@@ -126,7 +128,7 @@ export function startUnifiedEncounter(campaign:Campaign,initiative:Record<string
  if(!Number.isInteger(roll)||roll<1||roll>40||!Number.isInteger(hp)||!Number.isInteger(maxHp)||hp!<1||maxHp!<1||hp!>maxHp!||!Number.isInteger(speed)||speed!<0||speed!>120||speed!%5!==0)throw Error('Invalid Nighthawk character statistics');
  const participants:CompanionEncounter['participants']={...battle.participants,nighthawk:{...position,hp:hp!,maxHp:maxHp!,initiative:roll,conditions:[] as ('Charmed'|'Poisoned')[],speedFeet:speed!,movementSpentFeet:0,actionUsed:false,bonusActionUsed:false,dashFeet:0,disengaged:false,dodging:false,reactionUsed:false}};
  const order=Object.keys(participants).sort((a,b)=>participants[b].initiative-participants[a].initiative||a.localeCompare(b));
- return save(campaign,{...battle,mode:'unified',participants,order,log:['Unified encounter started; Nighthawk prototype combat preserved.']});
+ return save(campaign,{...battle,mode:'unified',nighthawkSheetHpSnapshot:hp!,participants,order,log:['Unified encounter started; Nighthawk prototype combat preserved.']});
 }
 /** Potential reach exits only: the DM confirms hostility, actual reach and trigger. */
 export function companionOpportunityCandidates(battle:CompanionEncounter,moverId:string,from:Cell,to:Cell):string[]{
@@ -262,7 +264,8 @@ export function synchronizeNighthawkHitPoints(campaign:Campaign):Campaign{
  const battle=encounter(campaign),actor=battle.participants.nighthawk;
  if(battle.mode!=='unified'||!actor||!campaign.character)throw Error('No unified Nighthawk to synchronize');
  if(!Number.isInteger(actor.hp)||actor.hp<0||actor.hp>actor.maxHp)throw Error('Invalid encounter hit points');
- return {...campaign,character:{...campaign.character,currentHitPoints:actor.hp},companionEncounter:{...battle,log:[...battle.log,'Nighthawk HP synchronized to character sheet']},updatedAt:new Date().toISOString()};
+ if(battle.nighthawkSheetHpSnapshot!==undefined&&campaign.character.currentHitPoints!==undefined&&campaign.character.currentHitPoints!==battle.nighthawkSheetHpSnapshot)throw Error('Character-sheet HP changed since encounter snapshot; reconcile manually');
+ return {...campaign,character:{...campaign.character,currentHitPoints:actor.hp},companionEncounter:{...battle,nighthawkSheetHpSnapshot:actor.hp,log:[...battle.log,'Nighthawk HP synchronized to character sheet']},updatedAt:new Date().toISOString()};
 }
 /** Manually recorded reactions are actor-scoped; the DM adjudicates triggers and effects. */
 export function recordCompanionReaction(campaign:Campaign,actorId:string,description:string):Campaign{
