@@ -641,3 +641,26 @@ test('DM-verified opportunity reaction consumes only the attacker reaction',asyn
  await panel.getByRole('button',{name:'Resolve DM-verified opportunity'}).click();
  await expect(panel).toContainText('opportunity attack vs fiend: hit');
 });
+
+test('unified campaign ammunition spending is persistent and rejects overdrafts',async({page})=>{
+ await page.goto('/four-keeps/');
+ await page.getByRole('button',{name:'Settings',exact:true}).click();
+ await page.getByLabel('New campaign name').fill('Ammunition browser');
+ await page.getByRole('button',{name:'New',exact:true}).click();
+ await page.getByRole('button',{name:'Adventure',exact:true}).click();
+ await page.getByRole('button',{name:'Player',exact:true}).click();
+ const manager=page.getByLabel('Subclass actor manager');
+ await manager.getByLabel('New subclass actor ID').fill('paladin');
+ await manager.getByRole('button',{name:'Register subclass actor'}).click();
+ const panel=page.getByLabel('Companion encounter');
+ await panel.getByLabel('Include Nighthawk in unified encounter').check();
+ await panel.getByRole('button',{name:'Start companion encounter'}).click();
+ await panel.getByLabel('Nighthawk campaign item').selectOption('arrows');
+ await panel.getByLabel('Campaign item quantity').fill('1');
+ await panel.getByRole('button',{name:'Spend campaign inventory'}).click();
+ await expect(panel.getByRole('status')).toContainText('Campaign inventory spent');
+ await page.reload();
+ await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await page.getByRole('button',{name:'Player',exact:true}).click();
+ await expect(page.getByLabel('Nighthawk campaign inventory')).toContainText('19 arrows');
+});
