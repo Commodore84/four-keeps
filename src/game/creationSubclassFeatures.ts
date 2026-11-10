@@ -28,7 +28,7 @@ const NAMES:Record<string,string[]>={
 'monk-open-hand':['Open Hand Technique','Wholeness of Body','Fleet Step','Quivering Palm'],
 'monk-shadow':['Shadow Arts','Shadow Step','Improved Shadow Step','Cloak of Shadows'],
 'paladin-ancients':['Nature’s Wrath','Aura of Warding','Undying Sentinel','Elder Champion'],
-'paladin-devotion':['Sacred Weapon','Aura of Devotion','Purity of Spirit','Holy Nimbus'],
+'paladin-devotion':['Sacred Weapon','Aura of Devotion','Smite of Protection','Holy Nimbus'],
 'paladin-glory':['Peerless Athlete and Inspiring Smite','Aura of Alacrity','Glorious Defense','Living Legend'],
 'paladin-vengeance':['Vow of Enmity','Relentless Avenger','Soul of Vengeance','Avenging Angel'],
 'ranger-beast-master':['Primal Companion','Exceptional Training','Bestial Fury','Share Spells'],
