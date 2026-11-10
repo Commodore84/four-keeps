@@ -560,7 +560,7 @@ export function resolveCompanionOpportunityAttack(campaign:Campaign,attackerId:s
  const hit=roll===20||(roll!==1&&roll+modifier>=targetAC);
  const raw=hit?Math.max(0,damage+damageModifier):0;
  const taken=(targetId==='nighthawk'&&battle.mode==='unified')||target.actorKind==='enemy'?raw:adjudicateSubclassActorDamage(campaign,targetId,raw,damageType);
- return save(campaign,{...battle,pendingOpportunity:battle.pendingOpportunity?{...battle.pendingOpportunity,attackerIds:battle.pendingOpportunity.attackerIds.filter(id=>id!==attackerId)}:undefined,participants:{...battle.participants,[attackerId]:{...attacker,reactionUsed:true},[targetId]:damagedActor(target,taken)},log:[...battle.log,attackerId+' opportunity attack vs '+targetId+': '+(hit?'hit for '+taken:'miss')+' (DM verified reach trigger)']});
+ return save(campaign,{...battle,pendingOpportunity:battle.pendingOpportunity&&battle.pendingOpportunity.attackerIds.some(id=>id!==attackerId)?{...battle.pendingOpportunity,attackerIds:battle.pendingOpportunity.attackerIds.filter(id=>id!==attackerId)}:undefined,participants:{...battle.participants,[attackerId]:{...attacker,reactionUsed:true},[targetId]:damagedActor(target,taken)},log:[...battle.log,attackerId+' opportunity attack vs '+targetId+': '+(hit?'hit for '+taken:'miss')+' (DM verified reach trigger)']});
 }
 export function finishCompanionEncounter(campaign:Campaign):Campaign{
  const battle=encounter(campaign);
