@@ -663,17 +663,17 @@ export function App() {
       const history = current.journal.filter((entry) => entry.kind === 'player' || entry.kind === 'dm')
         .slice(-12).map((entry) => ({ role: entry.kind === 'player' ? 'user' : 'assistant', content: entry.text }));
       const response = await fetch('/api/dm', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-four-keeps-access': accessCode },
-        body: JSON.stringify({ message, character:current.character ?? prototypeNighthawk, gameState:{ combat:current.combat??null, familiar:current.familiar ?? null, elapsedMinutes:current.elapsedMinutes ?? 0, concentration:current.concentration??null, spellEffects:(current.spellEffects??[]).slice(-12), recentEvents:current.journal.filter(e=>e.kind==='system').slice(-8).map(e=>e.text) }, history, worldFacts: current.worldFacts ?? [], world: current.world ?? emptyWorld() }) });
+        body: JSON.stringify({ message, character:current.character ?? prototypeNighthawk, gameState:{ adventureSession:current.adventureSession??null, characterIdentity:current.characterIdentity??null, location:current.location, combat:current.combat??null, familiar:current.familiar ?? null, elapsedMinutes:current.elapsedMinutes ?? 0, concentration:current.concentration??null, spellEffects:(current.spellEffects??[]).slice(-12), recentEvents:current.journal.filter(e=>e.kind==='system').slice(-8).map(e=>e.text) }, history, worldFacts: current.worldFacts ?? [], world: current.world ?? emptyWorld() }) });
       const result: { narration?: string; newFacts?: string[]; worldUpdates?: unknown; checkRequest?: { skill:string; mode:'normal'|'advantage'|'disadvantage'; reason:string; token:string } | null; combatStart?:{enemyName:string}|null; error?: string } = await response.json();
       if (!response.ok || !result.narration) throw new Error(result.error || 'DM request failed');
       const narrated = addExchange(current, message, result.narration, new Date().toISOString(), result.newFacts ?? [], result.worldUpdates, result.checkRequest ?? undefined);
-      const next = result.combatStart && !current.combat && !current.pendingAftermath ? beginDuel(narrated,result.combatStart.enemyName) : current.pendingAftermath ? {...narrated,pendingAftermath:undefined} : narrated;
+      const next = result.combatStart && !current.adventureSession && !current.characterIdentity && !current.combat && !current.pendingAftermath ? beginDuel(narrated,result.combatStart.enemyName) : current.pendingAftermath ? {...narrated,pendingAftermath:undefined} : narrated;
       await localCampaignStorage.save(next);
       setCampaign(next);
       setCampaigns((items) => items.map((item) => item.id === next.id ? next : item));
       setDraft('');
       setActiveView('adventure');
-      setNotice(result.combatStart?'Combat started. Tap Roll initiative.':'The DM replied. Conversation saved locally.');
+      setNotice(next.combat?.status==='awaiting-initiative'?'Combat started. Tap Roll initiative.':'The DM replied. Conversation saved locally.');
     } catch (error) { setNotice('DM error: ' + String(error)); }
     finally { if(!alreadySaving)setSaving(false); }
   }
