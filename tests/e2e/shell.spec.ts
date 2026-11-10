@@ -272,3 +272,28 @@ test('projected warlock sheet recalculates from provisional level-four ability c
  await page.getByRole('button',{name:/Projection Warlock/}).click();
  await expect(page.getByLabel('Level 4 projected character sheet').getByText('Spell save DC: 14',{exact:false})).toBeVisible();
 });
+
+test('registered subclass actors persist in campaign and remain separate from Nighthawk',async({page})=>{
+ await page.goto('/four-keeps/');
+ await page.getByRole('button',{name:'Settings',exact:true}).click();
+ await page.getByLabel('New campaign name').fill('Subclass actor persistence');
+ await page.getByRole('button',{name:'New',exact:true}).click();
+ await page.getByRole('button',{name:'Adventure',exact:true}).click();
+ await page.evaluate(async()=>{
+  const db=await new Promise<IDBDatabase>((resolve,reject)=>{const request=indexedDB.open('four-keeps-local',1);request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(request.error);});
+  await new Promise<void>((resolve,reject)=>{
+   const tx=db.transaction('campaigns','readwrite');const store=tx.objectStore('campaigns');
+   const req=store.getAll();req.onsuccess=()=>{
+    const campaign=req.result[0];campaign.subclassActors={'ally-fiend':{classId:'warlock',subclassId:'warlock-fiend',level:10,charismaModifier:3,luckRemaining:2,fiendResistance:'Fire'}};store.put(campaign);
+   };tx.oncomplete=()=>resolve();tx.onerror=()=>reject(tx.error);
+  });db.close();
+ });
+ await page.reload();
+ await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await page.getByRole('button',{name:'Player',exact:true}).click();
+ const actors=page.getByLabel('Registered subclass combat actors');
+ await expect(actors).toContainText('ally-fiend');
+ await expect(actors).toContainText('Dark One’s Own Luck 2 remaining');
+ await expect(actors).toContainText('Fiendish Resilience: Fire');
+ await expect(actors).toContainText('Separate from Nighthawk combat');
+});
