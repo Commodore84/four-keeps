@@ -1,7 +1,7 @@
 import {describe,it,expect} from 'vitest';
 import {newCampaign,registerSubclassActor,chooseSubclassResistance} from './campaign';
 import {initialSubclassCombatState} from './subclassCombatRules';
-import {startCompanionEncounter,moveCompanion,endCompanionTurn,damageCompanion,conditionCompanion,finishCompanionEncounter,attackCompanion,setCompanionSpeed ,useCompanionAction,setCompanionObstacles,companionLineOfSight,companionOpportunityAttackEligible,setCompanionCover,companionCoverStatus,companionPartySnapshot,startUnifiedEncounter,synchronizeNighthawkHitPoints,recordCompanionReaction,removeCompanionCondition,nighthawkEncounterStatistics,useCompanionBonusAction,setCompanionConcentration,companionConcentrationSaveDC,resolveCompanionConcentrationSave,setCompanionConsumable,spendCompanionConsumable,spendUnifiedNighthawkSpellSlot,resolveCompanionOpportunityAttack,nighthawkEncounterInventory,companionOpportunityCandidates,spendUnifiedNighthawkInventory,setCompanionTactics,applyCompanionCondition,nighthawkEquipmentReferences,addCompanionEnemy,companionConditionEffects,setNighthawkEncounterLoadout,resolveCompanionSavingThrow,nighthawkEquippedAttack,nighthawkEquippedDefense,standCompanionFromProne,attackCompanionWithVerifiedStats,resolveCompanionDeathSave,healCompanion,configureEnemyTactic,previewEnemyTurn,refreshNighthawkEncounterStatistics,executeEnemyMovementTurn,stabilizeCompanion,recoverStableCompanion,attackWithThrownEquippedWeapon,executeEnemyMoveAndAttackTurn,executeEnemyAttackTurn,dismissEnemyOpportunityReactions,recoverEncounterThrownWeapons} from './companionEncounter';
+import {startCompanionEncounter,moveCompanion,endCompanionTurn,damageCompanion,conditionCompanion,finishCompanionEncounter,attackCompanion,setCompanionSpeed ,useCompanionAction,setCompanionObstacles,companionLineOfSight,companionOpportunityAttackEligible,setCompanionCover,companionCoverStatus,companionPartySnapshot,startUnifiedEncounter,synchronizeNighthawkHitPoints,recordCompanionReaction,removeCompanionCondition,nighthawkEncounterStatistics,useCompanionBonusAction,setCompanionConcentration,companionConcentrationSaveDC,resolveCompanionConcentrationSave,setCompanionConsumable,spendCompanionConsumable,spendUnifiedNighthawkSpellSlot,resolveCompanionOpportunityAttack,nighthawkEncounterInventory,companionOpportunityCandidates,spendUnifiedNighthawkInventory,setCompanionTactics,applyCompanionCondition,nighthawkEquipmentReferences,addCompanionEnemy,companionConditionEffects,setNighthawkEncounterLoadout,resolveCompanionSavingThrow,nighthawkEquippedAttack,nighthawkEquippedDefense,standCompanionFromProne,attackCompanionWithVerifiedStats,resolveCompanionDeathSave,healCompanion,configureEnemyTactic,previewEnemyTurn,refreshNighthawkEncounterStatistics,executeEnemyMovementTurn,stabilizeCompanion,recoverStableCompanion,attackWithThrownEquippedWeapon,executeEnemyMoveAndAttackTurn,executeEnemyAttackTurn,dismissEnemyOpportunityReactions,recoverEncounterThrownWeapons,recoverEncounterAmmunition} from './companionEncounter';
 const build=()=>{
  let c=newCampaign('Companion test');
  c=registerSubclassActor(c,'paladin',initialSubclassCombatState('paladin','paladin-devotion',7,3));
@@ -12,6 +12,22 @@ const build=()=>{
 };
 const start=()=>startCompanionEncounter(build(),{paladin:15,druid:12,fiend:9},{paladin:{x:0,y:0},druid:{x:1,y:0},fiend:{x:5,y:5}},{paladin:30,druid:22,fiend:25});
 describe('isolated companion encounter vertical slice',()=>{
+ it('reconciles only previously spent verified arrows and persists ledger state',()=>{
+  const base=build();
+  let c=startUnifiedEncounter({...base,equipment:{daggers:0,arrows:2,caltrops:0,ballBearings:0},inventoryLedger:{currency:{CP:0,SP:0,EP:0,GP:0,PP:0},gear:[{name:'Shortbow',quantity:1}]}},{nighthawk:20,paladin:10},{nighthawk:{x:0,y:2},paladin:{x:0,y:0}},{paladin:20});
+  c=addCompanionEnemy(c,'goblin1',15,{x:2,y:2},12,13,4);
+  c=setNighthawkEncounterLoadout(c,'weaponId','shortbow');
+  c=attackCompanionWithVerifiedStats(c,'nighthawk','goblin1',16,2,'Piercing',80);
+  expect(c.equipment?.arrows).toBe(1);
+  expect(c.companionEncounter?.ammunitionPendingRecovery?.arrows).toBe(1);
+  expect(()=>recoverEncounterAmmunition(c,'arrows',2)).toThrow('Invalid ammunition recovery');
+  c=recoverEncounterAmmunition(c,'arrows',1);
+  expect(c.equipment?.arrows).toBe(2);
+  expect(()=>recoverEncounterAmmunition(c,'arrows',1)).toThrow('Invalid ammunition recovery');
+  expect(c.combat).toEqual(base.combat);
+  expect(JSON.parse(JSON.stringify(c)).equipment.arrows).toBe(2);
+ });
+
  it('executes an enemy move and DM-rolled attack while keeping legacy combat unchanged',()=>{
   const base=build();
   let c=startUnifiedEncounter(base,{nighthawk:20,paladin:10},{nighthawk:{x:0,y:8},paladin:{x:0,y:0}},{paladin:20});
