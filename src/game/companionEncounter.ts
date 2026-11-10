@@ -40,9 +40,9 @@ export function startCompanionEncounter(campaign:Campaign,initiative:Record<stri
 }
 export function moveCompanion(campaign:Campaign,actorId:string,x:number,y:number):Campaign{
  const battle=activeActor(campaign,actorId),actor=battle.participants[actorId];
- if(!Number.isInteger(x)||!Number.isInteger(y)||x<0||y<0||x>19||y>19||(Math.max(Math.abs(x-actor.x),Math.abs(y-actor.y))*5>actor.speedFeet+actor.dashFeet-actor.movementSpentFeet)throw Error('Move must be within six squares and the 20×20 arena');
+ if(!Number.isInteger(x)||!Number.isInteger(y)||x<0||y<0||x>19||y>19||(Math.max(Math.abs(x-actor.x),Math.abs(y-actor.y))*5>actor.speedFeet+actor.dashFeet-actor.movementSpentFeet))throw Error('Move exceeds remaining movement or 20×20 arena');
  if(Object.entries(battle.participants).some(([id,p])=>id!==actorId&&p.hp>0&&p.x===x&&p.y===y))throw Error('Square occupied');
- return save(campaign,{...battle,participants:{...battle.participants,[actorId]:{...actor,x,y,movementSpentFeet:actor.movementSpentFeet+(Math.max(Math.abs(x-actor.x),Math.abs(y-actor.y))*5}},log:[...battle.log,actorId+' moved to '+x+','+y]});
+ return save(campaign,{...battle,participants:{...battle.participants,[actorId]:{...actor,x,y,movementSpentFeet:actor.movementSpentFeet+(Math.max(Math.abs(x-actor.x),Math.abs(y-actor.y))*5)}},log:[...battle.log,actorId+' moved to '+x+','+y]});
 }
 export function endCompanionTurn(campaign:Campaign,actorId:string):Campaign{
  const battle=activeActor(campaign,actorId);
