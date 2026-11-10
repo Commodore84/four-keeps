@@ -804,9 +804,9 @@ test('DM-approved enemy movement turn persists across campaign reload',async({pa
  await panel.getByLabel('Active enemy tactic').selectOption('nearest');
  await panel.getByRole('button',{name:'Execute configured enemy movement'}).click();
  await expect(panel).toContainText('Active turn:');
- await expect(panel).toContainText('goblin1 moved to');
+ await expect(panel).toContainText('goblin1: 12/12 HP · (1,1)');
  await page.reload();
  await page.getByRole('button',{name:'Continue Adventure'}).click();
  await page.getByRole('button',{name:'Player',exact:true}).click();
- await expect(page.getByLabel('Companion encounter')).toContainText('goblin1 moved to');
+ await expect(page.getByLabel('Companion encounter')).toContainText('goblin1: 12/12 HP · (1,1)');
 });
