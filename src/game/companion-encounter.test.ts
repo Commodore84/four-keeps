@@ -1,7 +1,7 @@
 import {describe,it,expect} from 'vitest';
 import {newCampaign,registerSubclassActor,chooseSubclassResistance} from './campaign';
 import {initialSubclassCombatState} from './subclassCombatRules';
-import {startCompanionEncounter,moveCompanion,endCompanionTurn,damageCompanion,conditionCompanion,finishCompanionEncounter,attackCompanion,setCompanionSpeed ,useCompanionAction,setCompanionObstacles,companionLineOfSight,companionOpportunityAttackEligible,setCompanionCover,companionCoverStatus,companionPartySnapshot,startUnifiedEncounter,synchronizeNighthawkHitPoints,recordCompanionReaction,removeCompanionCondition,nighthawkEncounterStatistics,useCompanionBonusAction,setCompanionConcentration,companionConcentrationSaveDC,resolveCompanionConcentrationSave,setCompanionConsumable,spendCompanionConsumable,spendUnifiedNighthawkSpellSlot,resolveCompanionOpportunityAttack,nighthawkEncounterInventory,companionOpportunityCandidates,spendUnifiedNighthawkInventory,setCompanionTactics,applyCompanionCondition,nighthawkEquipmentReferences,addCompanionEnemy,companionConditionEffects,setNighthawkEncounterLoadout,resolveCompanionSavingThrow,nighthawkEquippedAttack,nighthawkEquippedDefense,standCompanionFromProne,attackCompanionWithVerifiedStats,resolveCompanionDeathSave,healCompanion,configureEnemyTactic,previewEnemyTurn,refreshNighthawkEncounterStatistics,executeEnemyMovementTurn,stabilizeCompanion,recoverStableCompanion,attackWithThrownEquippedWeapon} from './companionEncounter';
+import {startCompanionEncounter,moveCompanion,endCompanionTurn,damageCompanion,conditionCompanion,finishCompanionEncounter,attackCompanion,setCompanionSpeed ,useCompanionAction,setCompanionObstacles,companionLineOfSight,companionOpportunityAttackEligible,setCompanionCover,companionCoverStatus,companionPartySnapshot,startUnifiedEncounter,synchronizeNighthawkHitPoints,recordCompanionReaction,removeCompanionCondition,nighthawkEncounterStatistics,useCompanionBonusAction,setCompanionConcentration,companionConcentrationSaveDC,resolveCompanionConcentrationSave,setCompanionConsumable,spendCompanionConsumable,spendUnifiedNighthawkSpellSlot,resolveCompanionOpportunityAttack,nighthawkEncounterInventory,companionOpportunityCandidates,spendUnifiedNighthawkInventory,setCompanionTactics,applyCompanionCondition,nighthawkEquipmentReferences,addCompanionEnemy,companionConditionEffects,setNighthawkEncounterLoadout,resolveCompanionSavingThrow,nighthawkEquippedAttack,nighthawkEquippedDefense,standCompanionFromProne,attackCompanionWithVerifiedStats,resolveCompanionDeathSave,healCompanion,configureEnemyTactic,previewEnemyTurn,refreshNighthawkEncounterStatistics,executeEnemyMovementTurn,stabilizeCompanion,recoverStableCompanion,attackWithThrownEquippedWeapon,executeEnemyMoveAndAttackTurn,executeEnemyAttackTurn,dismissEnemyOpportunityReactions,recoverEncounterThrownWeapons} from './companionEncounter';
 const build=()=>{
  let c=newCampaign('Companion test');
  c=registerSubclassActor(c,'paladin',initialSubclassCombatState('paladin','paladin-devotion',7,3));
@@ -12,6 +12,47 @@ const build=()=>{
 };
 const start=()=>startCompanionEncounter(build(),{paladin:15,druid:12,fiend:9},{paladin:{x:0,y:0},druid:{x:1,y:0},fiend:{x:5,y:5}},{paladin:30,druid:22,fiend:25});
 describe('isolated companion encounter vertical slice',()=>{
+ it('executes an enemy move and DM-rolled attack while keeping legacy combat unchanged',()=>{
+  const base=build();
+  let c=startUnifiedEncounter(base,{nighthawk:20,paladin:10},{nighthawk:{x:0,y:8},paladin:{x:0,y:0}},{paladin:20});
+  c=addCompanionEnemy(c,'goblin1',15,{x:3,y:8},12,13,4,30,5,2,'1d6 piercing');
+  c=configureEnemyTactic(c,'goblin1','nearest');
+  c=endCompanionTurn(c,'nighthawk');
+  c=executeEnemyMoveAndAttackTurn(c,'goblin1',17,4,'Piercing');
+  expect(c.companionEncounter?.participants.nighthawk.hp).toBe(4);
+  expect(c.companionEncounter?.order[c.companionEncounter.turnIndex]).toBe('paladin');
+  expect(c.companionEncounter?.participants.goblin1.actionUsed).toBe(true);
+  expect(c.combat).toEqual(base.combat);
+  const persisted=JSON.parse(JSON.stringify(c)) as typeof c;
+  expect(persisted.companionEncounter?.participants.nighthawk.hp).toBe(4);
+ });
+ it('never spends a pending enemy attack before the DM resolves movement reactions',()=>{
+  let c=startUnifiedEncounter(build(),{nighthawk:20,paladin:10},{nighthawk:{x:0,y:8},paladin:{x:0,y:0}},{paladin:20});
+  c=addCompanionEnemy(c,'goblin1',15,{x:3,y:8},12,13,4,30);
+  c=configureEnemyTactic(c,'goblin1','nearest');
+  c=endCompanionTurn(c,'nighthawk');
+  // A verified pending reaction is retained instead of silently skipped.
+  c={...c,companionEncounter:{...c.companionEncounter!,pendingOpportunity:{moverId:'goblin1',attackerIds:['paladin'],from:{x:3,y:8},to:{x:1,y:8}}}};
+  expect(()=>executeEnemyAttackTurn(c,'goblin1',15,3,'Piercing')).toThrow('Pending opportunity');
+  expect(c.companionEncounter?.participants.goblin1.actionUsed).toBe(false);
+  c=dismissEnemyOpportunityReactions(c,'goblin1');
+  expect(c.companionEncounter?.pendingOpportunity).toBeUndefined();
+ });
+ it('recovers only DM-confirmed thrown daggers once and preserves campaign combat',()=>{
+  const base=build();
+  let c=startUnifiedEncounter({...base,equipment:{daggers:2,arrows:0,caltrops:0,ballBearings:0}},{nighthawk:20,paladin:10},{nighthawk:{x:0,y:2},paladin:{x:0,y:0}},{paladin:20});
+  c=addCompanionEnemy(c,'goblin1',15,{x:2,y:2},12,13,4);
+  c=setNighthawkEncounterLoadout(c,'weaponId','dagger');
+  c=attackWithThrownEquippedWeapon(c,'nighthawk','goblin1',15,2,'Piercing',20);
+  expect(c.companionEncounter?.thrownWeaponsPendingRecovery?.daggers).toBe(1);
+  expect(c.equipment?.daggers).toBe(1);
+  c=recoverEncounterThrownWeapons(c,'daggers',1);
+  expect(c.equipment?.daggers).toBe(2);
+  expect(c.companionEncounter?.thrownWeaponsPendingRecovery?.daggers).toBe(0);
+  expect(()=>recoverEncounterThrownWeapons(c,'daggers',1)).toThrow('Invalid thrown-weapon recovery');
+  expect(c.combat).toEqual(base.combat);
+ });
+
  it('resets death saves and unconsciousness after a natural 20',()=>{
   let c=startUnifiedEncounter(build(),{nighthawk:20,paladin:10},{nighthawk:{x:0,y:2},paladin:{x:0,y:0}},{paladin:20});
   c=damageCompanion(c,'nighthawk',10,'Fire');
