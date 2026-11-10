@@ -152,9 +152,19 @@ export function setCompanionTactics(campaign:Campaign,actorId:string,faction:str
  if(!actor||!faction.trim()||faction.length>40||!Number.isInteger(reachFeet)||reachFeet<5||reachFeet>30||reachFeet%5!==0)throw Error('Invalid actor faction or reach');
  return save(campaign,{...battle,participants:{...battle.participants,[actorId]:{...actor,faction:faction.trim(),reachFeet}},log:[...battle.log,actorId+' faction/reach configured']});
 }
+const INCAPACITATING:CompanionCondition[]=['Incapacitated','Paralyzed','Stunned','Unconscious'];
+const IMMOBILE:CompanionCondition[]=['Grappled','Restrained','Paralyzed','Petrified','Stunned','Unconscious'];
+function cannotAct(actor:CompanionEncounter['participants'][string]):boolean{return actor.conditions.some(c=>INCAPACITATING.includes(c))}
+/** Deterministic condition effects supported without inventing rolls or monster features. */
+export function companionConditionEffects(campaign:Campaign,actorId:string){
+ const actor=encounter(campaign).participants[actorId];
+ if(!actor)throw Error('Unknown actor');
+ return {canAct:actor.hp>0&&!cannotAct(actor),canMove:actor.hp>0&&!actor.conditions.some(c=>IMMOBILE.includes(c)),attackDisadvantage:actor.conditions.includes('Poisoned')||actor.conditions.includes('Blinded')||actor.conditions.includes('Restrained'),attacksAgainstAdvantage:actor.conditions.some(c=>['Paralyzed','Stunned','Unconscious','Restrained','Blinded'].includes(c)),strengthDexSaveDisadvantage:actor.conditions.includes('Restrained'),automaticStrengthDexSaveFailure:actor.conditions.some(c=>['Paralyzed','Stunned','Unconscious'].includes(c))};
+}
 export function moveCompanion(campaign:Campaign,actorId:string,x:number,y:number):Campaign{
  const battle=activeActor(campaign,actorId),actor=battle.participants[actorId];
  if(actor.hp<=0)throw Error('Actor at zero HP cannot move');
+ if(actor.conditions.some(c=>IMMOBILE.includes(c)))throw Error('Condition prevents movement');
  if(!valid({x,y}))throw Error('Destination outside 20×20 arena');
  if(Object.entries(battle.participants).some(([id,p])=>id!==actorId&&p.hp>0&&p.x===x&&p.y===y))throw Error('Square occupied');
  const route=pathRoute(battle,actor,{x,y},actorId);
@@ -314,7 +324,7 @@ export function spendUnifiedNighthawkSpellSlot(campaign:Campaign,spell:string):C
  */
 export function resolveCompanionOpportunityAttack(campaign:Campaign,attackerId:string,targetId:string,roll:number,modifier:number,targetAC:number,damage:number,damageModifier:number,damageType:DamageType):Campaign{
  const battle=encounter(campaign),attacker=battle.participants[attackerId],target=battle.participants[targetId];
- if(!attacker||!target||attackerId===targetId||attacker.hp<=0||target.hp<=0||attacker.reactionUsed)throw Error('Opportunity reaction unavailable');
+ if(!attacker||!target||attackerId===targetId||attacker.hp<=0||target.hp<=0||attacker.reactionUsed||cannotAct(attacker))throw Error('Opportunity reaction unavailable');
  if(!Number.isInteger(roll)||roll<1||roll>20||![modifier,targetAC,damage,damageModifier].every(Number.isInteger)||targetAC<1||damage<0)throw Error('Invalid opportunity attack adjudication');
  if(target.disengaged)throw Error('Disengage prevents opportunity attack');
  if(battle.pendingOpportunity&&(!battle.pendingOpportunity.attackerIds.includes(attackerId)||battle.pendingOpportunity.moverId!==targetId))throw Error('Attacker not in pending opportunity candidates');
@@ -335,13 +345,15 @@ export function attackCompanion(campaign:Campaign,attackerId:string,targetId:str
  const attacker=battle.participants[attackerId],target=battle.participants[targetId];
  if(!target||attackerId===targetId||attacker.hp<=0||target.hp<=0)throw Error('Invalid attacker or target');
  if(attacker.actionUsed)throw Error('Action already used this turn');
+ if(cannotAct(attacker))throw Error('Condition prevents action');
  if((battle.cover??[]).some(p=>p.x===target.x&&p.y===target.y))throw Error('Target has annotated cover: DM must supply adjusted AC and clear cover annotation before attack');
  if(!companionLineOfSight(battle,attacker,target))throw Error('Line of sight blocked by map obstacle');
- if(target.dodging&&secondD20===undefined)throw Error('Dodge requires a second d20 for disadvantage');
+ const attackDisadvantage=target.dodging||attacker.conditions.some(c=>['Poisoned','Blinded','Restrained'].includes(c));
+ if(attackDisadvantage&&secondD20===undefined)throw Error('Condition or Dodge requires a second d20 for disadvantage');
  if(secondD20!==undefined&&(!Number.isInteger(secondD20)||secondD20<1||secondD20>20))throw Error('Invalid second d20');
  if(rangeFeet!==undefined){if(!Number.isInteger(rangeFeet)||rangeFeet<5||rangeFeet>1000||rangeFeet%5!==0)throw Error('Invalid attack range');const distance=Math.max(Math.abs(attacker.x-target.x),Math.abs(attacker.y-target.y))*5;if(distance>rangeFeet)throw Error('Target outside declared attack range');}
  if(!Number.isInteger(roll)||roll<1||roll>20||!Number.isInteger(attackModifier)||attackModifier< -20||attackModifier>30||!Number.isInteger(targetAC)||targetAC<1||targetAC>40||!Number.isInteger(damageRoll)||damageRoll<0||damageRoll>1000||!Number.isInteger(damageModifier)||damageModifier< -20||damageModifier>30)throw Error('Invalid attack inputs');
- const effectiveRoll=target.dodging?Math.min(roll,secondD20!):roll;
+ const effectiveRoll=attackDisadvantage?Math.min(roll,secondD20!):roll;
  const critical=effectiveRoll===20;
  const hit=critical||(effectiveRoll!==1&&effectiveRoll+attackModifier>=targetAC);
  const used={...attacker,actionUsed:true};
@@ -350,7 +362,7 @@ export function attackCompanion(campaign:Campaign,attackerId:string,targetId:str
  if(hit){
   // Caller supplies total rolled damage dice, including doubled dice on a critical hit.
   const raw=Math.max(0,damageRoll+damageModifier);
-  dealt=targetId==='nighthawk'&&battle.mode==='unified'?raw:adjudicateSubclassActorDamage(campaign,targetId,raw,damageType);
+  dealt=(targetId==='nighthawk'&&battle.mode==='unified')||target.actorKind==='enemy'?raw:adjudicateSubclassActorDamage(campaign,targetId,raw,damageType);
   participants[targetId]={...target,hp:Math.max(0,target.hp-dealt)};
  }
  return save(campaign,{...battle,participants,log:[...battle.log,attackerId+' attack d20 '+effectiveRoll+(target.dodging?' (Dodge disadvantage)':'')+(critical?' critical hit':hit?' hit':' miss')+' vs '+targetId+' AC '+targetAC+(hit?'; '+dealt+' '+damageType+' damage':'')]});
@@ -365,6 +377,7 @@ export function setCompanionSpeed(campaign:Campaign,actorId:string,speedFeet:num
 export function useCompanionAction(campaign:Campaign,actorId:string,choice:'Dash'|'Disengage'|'Dodge'|'Help'|'Search'|'Study'|'Influence'|'Ready'|'Utilize'):Campaign{
  const battle=activeActor(campaign,actorId),actor=battle.participants[actorId];
  if(actor.actionUsed)throw Error('Action already used this turn');
+ if(cannotAct(actor))throw Error('Condition prevents action');
  const updated={...actor,actionUsed:true,dashFeet:choice==='Dash'?actor.dashFeet+actor.speedFeet:actor.dashFeet,disengaged:choice==='Disengage'||actor.disengaged,dodging:choice==='Dodge'||actor.dodging};
  const note=['Help','Search','Study','Influence','Ready','Utilize'].includes(choice)?' (requires DM adjudication; no mechanical benefit assumed)':'';
  return save(campaign,{...battle,participants:{...battle.participants,[actorId]:updated},log:[...battle.log,actorId+' used '+choice+note]});
