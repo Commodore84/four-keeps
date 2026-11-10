@@ -143,7 +143,7 @@ export function endCompanionTurn(campaign:Campaign,actorId:string):Campaign{
 export function damageCompanion(campaign:Campaign,targetId:string,amount:number,type:DamageType):Campaign{
  const battle=encounter(campaign),actor=battle.participants[targetId];
  if(!actor||!Number.isInteger(amount)||amount<0||amount>1000)throw Error('Invalid damage target or amount');
- const taken=adjudicateSubclassActorDamage(campaign,targetId,amount,type);
+ const taken=targetId==='nighthawk'&&battle.mode==='unified'?amount:adjudicateSubclassActorDamage(campaign,targetId,amount,type);
  const hp=Math.max(0,actor.hp-taken);
  return save(campaign,{...battle,participants:{...battle.participants,[targetId]:{...actor,hp}},log:[...battle.log,targetId+' took '+taken+' '+type+' damage'+(taken!==amount?' (resisted)':'')]});
 }
