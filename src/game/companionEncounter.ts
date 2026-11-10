@@ -1,6 +1,7 @@
 import type {Campaign} from './campaign';
 import {adjudicateSubclassActorCondition,adjudicateSubclassActorDamage} from './campaign';
 import type {DamageType} from './subclassCombatRules';
+import {abilityModifier} from './checks';
 
 /** Isolated companion skirmish. Never mutates Campaign.combat (the Nighthawk training encounter). */
 export interface CompanionEncounter {
@@ -9,7 +10,7 @@ export interface CompanionEncounter {
  round:number;
  turnIndex:number;
  order:string[];
- participants:Record<string,{x:number;y:number;hp:number;maxHp:number;initiative:number;conditions:('Charmed'|'Poisoned')[];speedFeet:number;movementSpentFeet:number;actionUsed:boolean;bonusActionUsed:boolean;dashFeet:number;disengaged:boolean;dodging:boolean;reactionUsed?:boolean}>;
+ participants:Record<string,{x:number;y:number;hp:number;maxHp:number;initiative:number;conditions:('Charmed'|'Poisoned')[];speedFeet:number;movementSpentFeet:number;actionUsed:boolean;bonusActionUsed:boolean;dashFeet:number;disengaged:boolean;dodging:boolean;reactionUsed?:boolean;concentratingOn?:string;consumables?:Record<string,number>}>;
  obstacles?:{x:number;y:number}[];
  cover?:{x:number;y:number}[];
  log:string[];
@@ -180,6 +181,42 @@ export function removeCompanionCondition(campaign:Campaign,targetId:string,condi
  const battle=encounter(campaign),actor=battle.participants[targetId];
  if(!actor)throw Error('Unknown condition target');
  return save(campaign,{...battle,participants:{...battle.participants,[targetId]:{...actor,conditions:actor.conditions.filter(c=>c!==condition)}},log:[...battle.log,targetId+' ended '+condition+' (DM adjudicated)']});
+}
+/** Derive only statistics explicitly present on the character sheet; weapon proficiency remains unverified. */
+export function nighthawkEncounterStatistics(campaign:Campaign){
+ const c=campaign.character;
+ if(!c)throw Error('Nighthawk character unavailable');
+ return {armorClass:c.armorClass??null,speedFeet:c.speed??null,proficiencyBonus:c.proficiencyBonus,dexterityModifier:abilityModifier(c.scores.dex),strengthModifier:abilityModifier(c.scores.str),spellSlots:c.spellSlots?{...c.spellSlots}:null,weaponAttackModifier:null as number|null};
+}
+/** Uses an explicitly granted bonus action; never assumes all actors have a bonus-action feature. */
+export function useCompanionBonusAction(campaign:Campaign,actorId:string,description:string,eligible:boolean):Campaign{
+ const battle=activeActor(campaign,actorId),actor=battle.participants[actorId];
+ if(!eligible)throw Error('Bonus action requires verified feature eligibility');
+ if(actor.hp<=0||actor.bonusActionUsed)throw Error('Bonus action unavailable');
+ if(!description.trim()||description.length>160)throw Error('Bonus action requires a description');
+ return save(campaign,{...battle,participants:{...battle.participants,[actorId]:{...actor,bonusActionUsed:true}},log:[...battle.log,actorId+' bonus action: '+description.trim()+' (feature eligibility supplied; effect DM adjudicated)']});
+}
+/** Concentration is actor-scoped. Damage triggers a manual Constitution save, not an invented roll. */
+export function setCompanionConcentration(campaign:Campaign,actorId:string,spell:string|null):Campaign{
+ const battle=encounter(campaign),actor=battle.participants[actorId];
+ if(!actor)throw Error('Unknown concentration actor');
+ if(spell!==null&&(!spell.trim()||spell.length>100||actor.hp<=0))throw Error('Invalid concentration spell');
+ return save(campaign,{...battle,participants:{...battle.participants,[actorId]:{...actor,concentratingOn:spell?.trim()??undefined}},log:[...battle.log,actorId+(spell?' concentrating on '+spell:' ended concentration')]});
+}
+export function companionConcentrationSaveDC(damage:number):number{
+ if(!Number.isInteger(damage)||damage<0||damage>1000)throw Error('Invalid concentration damage');
+ return Math.max(10,Math.floor(damage/2));
+}
+/** Explicitly recorded inventory quantities, never inferred from class or level. */
+export function setCompanionConsumable(campaign:Campaign,actorId:string,item:string,quantity:number):Campaign{
+ const battle=encounter(campaign),actor=battle.participants[actorId];
+ if(!actor||!item.trim()||item.length>80||!Number.isInteger(quantity)||quantity<0||quantity>999)throw Error('Invalid consumable inventory');
+ return save(campaign,{...battle,participants:{...battle.participants,[actorId]:{...actor,consumables:{...actor.consumables,[item.trim()]:quantity}}},log:[...battle.log,actorId+' inventory: '+item.trim()+' = '+quantity]});
+}
+export function spendCompanionConsumable(campaign:Campaign,actorId:string,item:string):Campaign{
+ const battle=activeActor(campaign,actorId),actor=battle.participants[actorId];
+ if(!Object.hasOwn(actor.consumables??{},item)||(actor.consumables?.[item]??0)<1)throw Error('Consumable unavailable');
+ return save(campaign,{...battle,participants:{...battle.participants,[actorId]:{...actor,consumables:{...actor.consumables,[item]:(actor.consumables?.[item]??0)-1}}},log:[...battle.log,actorId+' consumed '+item+' (item effect DM adjudicated)']});
 }
 export function finishCompanionEncounter(campaign:Campaign):Campaign{
  const battle=encounter(campaign);
