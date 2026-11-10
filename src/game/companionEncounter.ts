@@ -193,7 +193,35 @@ export function executeEnemyMovementTurn(campaign:Campaign,enemyId:string):Campa
  const best=candidates[0];
  if(!best||best.steps===0)return endCompanionTurn(campaign,enemyId);
  const moved=moveCompanion(campaign,enemyId,best.x,best.y);
+ // Preserve the mover's turn while leaving-reach reactions await DM resolution.
+ if(moved.companionEncounter?.pendingOpportunity)return moved;
  return endCompanionTurn(moved,enemyId);
+}
+/** DM explicitly declines all outstanding opportunity reactions and continues
+ * the enemy's turn. No attack is silently forfeited by automated movement.
+ */
+export function dismissEnemyOpportunityReactions(campaign:Campaign,enemyId:string):Campaign{
+ const battle=activeActor(campaign,enemyId);
+ if(battle.participants[enemyId]?.actorKind!=='enemy'||battle.pendingOpportunity?.moverId!==enemyId)throw Error('No pending enemy movement reactions');
+ return save(campaign,{...battle,pendingOpportunity:undefined,log:[...battle.log,'DM declined pending reactions against '+enemyId]});
+}
+/** Resolves the DM-supplied enemy attack from its current square, then ends
+ * the turn. Movement and reactions must already be adjudicated.
+ */
+export function executeEnemyAttackTurn(campaign:Campaign,enemyId:string,roll:number,damageRoll:number,damageType:DamageType,secondD20?:number):Campaign{
+ const battle=activeActor(campaign,enemyId),enemy=battle.participants[enemyId];
+ if(enemy.actorKind!=='enemy')throw Error('Enemy actor required');
+ if(battle.pendingOpportunity?.moverId===enemyId)throw Error('Pending opportunity reactions require DM adjudication');
+ const plan=previewEnemyTurn(campaign,enemyId);
+ if(!plan.targetId||!plan.inReach)throw Error('No hostile target within enemy reach');
+ const attacked=attackCompanionWithVerifiedStats(campaign,enemyId,plan.targetId,roll,damageRoll,damageType,enemy.reachFeet??5,secondD20);
+ return endCompanionTurn(attacked,enemyId);
+}
+/** One explicit DM command for an enemy already within melee reach.
+ * Movement is a separate step when distance or reaction decisions matter.
+ */
+export function executeEnemyMeleeTurn(campaign:Campaign,enemyId:string,roll:number,damageRoll:number,damageType:DamageType,secondD20?:number):Campaign{
+ return executeEnemyAttackTurn(campaign,enemyId,roll,damageRoll,damageType,secondD20);
 }
 export function setCompanionTactics(campaign:Campaign,actorId:string,faction:string,reachFeet:number):Campaign{
  const battle=encounter(campaign),actor=battle.participants[actorId];
