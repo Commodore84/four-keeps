@@ -12,6 +12,19 @@ const build=()=>{
 };
 const start=()=>startCompanionEncounter(build(),{paladin:15,druid:12,fiend:9},{paladin:{x:0,y:0},druid:{x:1,y:0},fiend:{x:5,y:5}},{paladin:30,druid:22,fiend:25});
 describe('isolated companion encounter vertical slice',()=>{
+ it('resolves invisible attack advantage and opposing disadvantage cancellation',()=>{
+  let c=applyCompanionCondition(start(),'paladin','Invisible');
+  expect(()=>attackCompanion(c,'paladin','druid',6,0,12,3,0,'Fire',5)).toThrow('second d20');
+  const hit=attackCompanion(c,'paladin','druid',6,0,12,3,0,'Fire',5,19);
+  expect(hit.companionEncounter?.participants.druid.hp).toBe(19);
+  c=applyCompanionCondition(c,'druid','Invisible');
+  // Both Invisible: advantage and disadvantage cancel, so no second roll required.
+  c=endCompanionTurn(c,'paladin');
+  c=endCompanionTurn(c,'druid');
+  c=endCompanionTurn(c,'fiend');
+  expect(()=>attackCompanion(c,'paladin','druid',6,0,12,3,0,'Fire',5)).not.toThrow();
+ });
+
  it('resolves equipped Nighthawk versus enemy AC and enemy versus character-sheet AC',()=>{
   const base=build();
   let c=startUnifiedEncounter({...base,equipment:{daggers:2,arrows:0,caltrops:0,ballBearings:0}},{nighthawk:20,paladin:10},{nighthawk:{x:0,y:2},paladin:{x:0,y:0}},{paladin:20});
