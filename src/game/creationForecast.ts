@@ -1,6 +1,7 @@
+import type {Ability} from './creationAbilities';
 import {CLASSES} from './creationClasses';
 import {subclassesForClass} from './creationSubclasses';
-export interface LevelPlan {level:number;subclassId?:string;abilityPlan?:string;featPlan?:string;spellPlan?:string;notes?:string}
+export interface LevelPlan {level:number;subclassId?:string;abilityPlan?:string;abilityIncreases?:Partial<Record<Ability,number>>;featPlan?:string;spellPlan?:string;notes?:string}
 export interface AdvancementForecast {targetLevel:number;levels:LevelPlan[]}
 export const LEVEL_CAP=20;
 export function emptyForecast():AdvancementForecast{return {targetLevel:1,levels:[]}}
