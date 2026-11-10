@@ -5,7 +5,7 @@ import {HIGHER_LEVEL_FORECAST_SPELLS} from './creationHigherSpellCatalog';
 import {spellcastingAtLevel,preparedSpellsAtLevel} from './creationClasses';
 import {subclassesForClass} from './creationSubclasses';
 import {alwaysPreparedSubclassSpells} from './creationSubclassSpells';
-export interface LevelPlan {level:number;subclassId?:string;abilityPlan?:string;abilityIncreases?:Partial<Record<Ability,number>>;featPlan?:string;spellPlan?:string;plannedSpellIds?:string[];replacementSpellId?:string;replacementWithSpellId?:string;notes?:string}
+export interface LevelPlan {level:number;subclassId?:string;abilityPlan?:string;abilityIncreases?:Partial<Record<Ability,number>>;featPlan?:string;spellPlan?:string;plannedSpellIds?:string[];wizardPreparedSpellIds?:string[];replacementSpellId?:string;replacementWithSpellId?:string;notes?:string}
 export interface AdvancementForecast {targetLevel:number;levels:LevelPlan[]}
 export type SpellAcquisitionMode='spellbook'|'prepared'|'pact-prepared'|'subclass';
 export interface ForecastSpellPolicy {mode:SpellAcquisitionMode;canReplaceOnLevelUp:boolean;replacementLimit:number;replacementTiming:'level-up'|'long-rest'|'none';description:string}
@@ -28,6 +28,11 @@ export function updateLevelPlan(forecast:AdvancementForecast,level:number,patch:
  const existing=plannedLevel(forecast,level);
  const updated={...existing,...patch,level};
  return {...forecast,levels:[...forecast.levels.filter(p=>p.level!==level),updated].sort((a,b)=>a.level-b.level)};
+}
+/** Optional Wizard preparation snapshot; spellbook ownership is unchanged. */
+export function setWizardPreparedSpells(forecast:AdvancementForecast,level:number,spellIds:readonly string[]):AdvancementForecast{
+ if(!Number.isInteger(level)||level<2||level>LEVEL_CAP)return forecast;
+ return updateLevelPlan(forecast,level,{wizardPreparedSpellIds:[...new Set(spellIds)]});
 }
 export function extendForecast(forecast:AdvancementForecast):AdvancementForecast{return {...forecast,targetLevel:Math.min(LEVEL_CAP,Math.max(1,forecast.targetLevel)+1)}}
 export function forecastForClass(classId:string,forecast:AdvancementForecast){
