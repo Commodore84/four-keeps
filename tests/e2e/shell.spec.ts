@@ -194,17 +194,15 @@ test('Ask DM sees current character selections and responds in creation flow',as
  expect((sent as {draft:{identity:{name:string};selections:{classId:string}}}).draft.selections.classId).toBe('rogue');
 });
 
-test('full spell explanation sends spell name and character context to Ask DM',async ({page})=>{
+test('spell choices show full inline descriptions without per-spell DM buttons',async ({page})=>{
  const now='2026-11-10T00:00:00.000Z';
  const draft={schemaVersion:1,id:'spell-details-test',status:'draft',rules:{edition:'2024',allowCompatibleLegacy:true},step:'spells',identity:{name:'Wizard Scholar',pronouns:'',appearance:'',personality:'',backstory:'',portrait:null},selections:{speciesId:'human',backgroundId:'sage',classId:'wizard',classChoices:{}},createdAt:now,updatedAt:now};
  await page.addInitScript(value=>{if(!localStorage.getItem('four-keeps-character-drafts-v1'))localStorage.setItem('four-keeps-character-drafts-v1',JSON.stringify([value]));},draft);
- let question='';
- await page.route('**/api/ask-dm',async route=>{question=(route.request().postDataJSON() as {question:string}).question;await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({answer:'Fire Bolt: spell attack, fire damage, 120-foot range.'})});});
  await page.goto('/four-keeps/');
  await page.getByRole('button',{name:'My Characters'}).click();
  await page.getByRole('button',{name:/Wizard Scholar/}).click();
- await page.getByRole('button',{name:'Full spell rules with DM'}).first().click();
- await expect(page.getByText(/Fire Bolt: spell attack/)).toBeVisible();
- expect(question).toContain('full 2024 rules');
- expect(question).toContain('Acid Splash');
+ await expect(page.getByText('Hurl a bubble of acid at one creature you can see.',{exact:false}).first()).toBeVisible();
+ await expect(page.getByText('Sorcerer, Wizard',{exact:false}).first()).toBeVisible();
+ await expect(page.getByRole('button',{name:'Full spell rules with DM'})).toHaveCount(0);
+ await expect(page.getByLabel('Ask DM')).toBeVisible();
 });
