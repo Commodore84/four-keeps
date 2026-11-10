@@ -22,8 +22,8 @@ describe('isolated companion encounter vertical slice',()=>{
  it('applies two failed death saves on a melee critical hit against unconscious target',()=>{
   let c=startUnifiedEncounter(build(),{nighthawk:20,paladin:10},{nighthawk:{x:0,y:1},paladin:{x:0,y:0}},{paladin:20});
   c=damageCompanion(c,'nighthawk',10,'Fire');
-  c=endCompanionTurn(c,'nighthawk');
   c=addCompanionEnemy(c,'goblin1',15,{x:1,y:1},10,12,5,30,5,0,'1d4 piercing');
+  c=endCompanionTurn(c,'nighthawk');
   c=attackCompanionWithVerifiedStats(c,'goblin1','nighthawk',14,2,'Piercing',5,18);
   expect(c.companionEncounter?.participants.nighthawk.deathSaves?.failures).toBe(2);
   expect(c.companionEncounter?.log.at(-1)).toContain('critical hit');
