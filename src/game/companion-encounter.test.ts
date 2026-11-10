@@ -1,7 +1,7 @@
 import {describe,it,expect} from 'vitest';
 import {newCampaign,registerSubclassActor,chooseSubclassResistance} from './campaign';
 import {initialSubclassCombatState} from './subclassCombatRules';
-import {startCompanionEncounter,moveCompanion,endCompanionTurn,damageCompanion,conditionCompanion,finishCompanionEncounter,attackCompanion,setCompanionSpeed ,useCompanionAction,setCompanionObstacles,companionLineOfSight,companionOpportunityAttackEligible,setCompanionCover,companionCoverStatus,companionPartySnapshot,startUnifiedEncounter,synchronizeNighthawkHitPoints,recordCompanionReaction,removeCompanionCondition,nighthawkEncounterStatistics,useCompanionBonusAction,setCompanionConcentration,companionConcentrationSaveDC,resolveCompanionConcentrationSave,setCompanionConsumable,spendCompanionConsumable,spendUnifiedNighthawkSpellSlot,resolveCompanionOpportunityAttack,nighthawkEncounterInventory,companionOpportunityCandidates,spendUnifiedNighthawkInventory,setCompanionTactics,applyCompanionCondition,nighthawkEquipmentReferences} from './companionEncounter';
+import {startCompanionEncounter,moveCompanion,endCompanionTurn,damageCompanion,conditionCompanion,finishCompanionEncounter,attackCompanion,setCompanionSpeed ,useCompanionAction,setCompanionObstacles,companionLineOfSight,companionOpportunityAttackEligible,setCompanionCover,companionCoverStatus,companionPartySnapshot,startUnifiedEncounter,synchronizeNighthawkHitPoints,recordCompanionReaction,removeCompanionCondition,nighthawkEncounterStatistics,useCompanionBonusAction,setCompanionConcentration,companionConcentrationSaveDC,resolveCompanionConcentrationSave,setCompanionConsumable,spendCompanionConsumable,spendUnifiedNighthawkSpellSlot,resolveCompanionOpportunityAttack,nighthawkEncounterInventory,companionOpportunityCandidates,spendUnifiedNighthawkInventory,setCompanionTactics,applyCompanionCondition,nighthawkEquipmentReferences,addCompanionEnemy,companionConditionEffects} from './companionEncounter';
 const build=()=>{
  let c=newCampaign('Companion test');
  c=registerSubclassActor(c,'paladin',initialSubclassCombatState('paladin','paladin-devotion',7,3));
@@ -12,6 +12,31 @@ const build=()=>{
 };
 const start=()=>startCompanionEncounter(build(),{paladin:15,druid:12,fiend:9},{paladin:{x:0,y:0},druid:{x:1,y:0},fiend:{x:5,y:5}},{paladin:30,druid:22,fiend:25});
 describe('isolated companion encounter vertical slice',()=>{
+ it('adds a first-class enemy with supplied statistics and retains initiative and faction',()=>{
+  let c=start();
+  const legacy=c.combat;
+  c=addCompanionEnemy(c,'goblin1',15,{x:6,y:6},12,15,4,30,5);
+  expect(c.companionEncounter?.participants.goblin1).toMatchObject({actorKind:'enemy',faction:'enemies',hp:12,armorClass:15,attackModifier:4});
+  expect(c.companionEncounter?.order).toContain('goblin1');
+  expect(c.combat).toEqual(legacy);
+  expect(()=>addCompanionEnemy(c,'goblin1',15,{x:7,y:7},12,15,4)).toThrow('duplicate');
+  c=damageCompanion(c,'goblin1',5,'Fire');
+  expect(c.companionEncounter?.participants.goblin1.hp).toBe(7);
+ });
+ it('enforces immobility and incapacitation and reports supported save modifiers',()=>{
+  let c=start();
+  c=applyCompanionCondition(c,'paladin','Grappled');
+  expect(companionConditionEffects(c,'paladin').canMove).toBe(false);
+  expect(()=>moveCompanion(c,'paladin',1,1)).toThrow('Condition prevents movement');
+  c=removeCompanionCondition(c,'paladin','Grappled');
+  c=applyCompanionCondition(c,'paladin','Stunned');
+  expect(companionConditionEffects(c,'paladin')).toMatchObject({canAct:false,canMove:false,automaticStrengthDexSaveFailure:true});
+  expect(()=>useCompanionAction(c,'paladin','Dash')).toThrow('Condition prevents action');
+  c=removeCompanionCondition(c,'paladin','Stunned');
+  c=applyCompanionCondition(c,'paladin','Poisoned');
+  expect(companionConditionEffects(c,'paladin').attackDisadvantage).toBe(true);
+ });
+
  it('exposes verified catalog damage for carried daggers without assuming equipped gear',()=>{
   const c={...build(),equipment:{daggers:1,arrows:0,caltrops:0,ballBearings:0}};
   const references=nighthawkEquipmentReferences(c);
