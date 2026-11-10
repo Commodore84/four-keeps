@@ -1,7 +1,19 @@
 import {describe,it,expect} from 'vitest';
-import {alwaysPreparedSubclassSpells,isAlwaysPreparedSubclassSpell} from './creationSubclassSpells';
+import {alwaysPreparedSubclassSpells,isAlwaysPreparedSubclassSpell,alwaysPreparedClassSpells,allAlwaysPreparedSpells} from './creationSubclassSpells';
 import {emptyForecast,forecastSpellSelectionWarnings,updateLevelPlan} from './creationForecast';
 describe('2024 always-prepared subclass spells',()=>{
+ it('unifies 2024 Paladin and Warlock class-feature automatic spells with subclass spells',()=>{
+  expect(alwaysPreparedClassSpells('paladin',1)).toEqual([]);
+  expect(alwaysPreparedClassSpells('paladin',2)).toEqual(['Divine Smite']);
+  expect(alwaysPreparedClassSpells('paladin',5)).toEqual(['Divine Smite','Find Steed']);
+  expect(alwaysPreparedClassSpells('warlock',8)).toEqual([]);
+  expect(alwaysPreparedClassSpells('warlock',9)).toEqual(['Contact Other Plane']);
+  expect(allAlwaysPreparedSpells('paladin','paladin-devotion',5)).toEqual(expect.arrayContaining(['Divine Smite','Find Steed','Aid','Zone of Truth']));
+  expect(allAlwaysPreparedSpells('warlock','warlock-fiend',9)).toContain('Contact Other Plane');
+  expect(allAlwaysPreparedSpells('druid','druid-land',5,'arid')).toContain('Fireball');
+  expect(allAlwaysPreparedSpells('druid','druid-land',5)).not.toContain('Fireball');
+ });
+
  it('unlocks 2024 Trickery and War Domain spells at the correct levels',()=>{
   for(const subclass of ['cleric-trickery','cleric-war']){
    expect(alwaysPreparedSubclassSpells(subclass,2)).toEqual([]);
