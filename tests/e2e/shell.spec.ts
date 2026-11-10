@@ -636,8 +636,8 @@ test('DM-verified opportunity reaction consumes only the attacker reaction',asyn
  await manager.getByRole('button',{name:'Register subclass actor'}).click();
  const panel=page.getByLabel('Companion encounter');
  await panel.getByRole('button',{name:'Start companion encounter'}).click();
- await panel.getByLabel('Opportunity attacker').selectOption('fiend');
+ await panel.getByLabel('Opportunity attacker').selectOption('paladin');
  await panel.getByLabel('Opportunity d20').fill('20');
  await panel.getByRole('button',{name:'Resolve DM-verified opportunity'}).click();
- await expect(panel).toContainText('opportunity attack vs paladin: hit');
+ await expect(panel).toContainText('opportunity attack vs fiend: hit');
 });
