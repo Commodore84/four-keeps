@@ -571,3 +571,31 @@ test('unified reaction and explicit Nighthawk HP sync persist after reload',asyn
  await expect(page.getByLabel('Reaction status')).toContainText('used');
  await expect(page.getByLabel('Companion encounter')).toContainText('Nighthawk HP synchronized to character sheet');
 });
+
+test('unified actor resources and derived statistics persist in browser',async({page})=>{
+ await page.goto('/four-keeps/');
+ await page.getByRole('button',{name:'Settings',exact:true}).click();
+ await page.getByLabel('New campaign name').fill('Unified resource browser');
+ await page.getByRole('button',{name:'New',exact:true}).click();
+ await page.getByRole('button',{name:'Adventure',exact:true}).click();
+ await page.getByRole('button',{name:'Player',exact:true}).click();
+ const manager=page.getByLabel('Subclass actor manager');
+ await manager.getByLabel('New subclass actor ID').fill('paladin');
+ await manager.getByRole('button',{name:'Register subclass actor'}).click();
+ const panel=page.getByLabel('Companion encounter');
+ await panel.getByLabel('Include Nighthawk in unified encounter').check();
+ await panel.getByRole('button',{name:'Start companion encounter'}).click();
+ await expect(panel.getByLabel('Nighthawk derived combat statistics')).toContainText('AC 14');
+ await panel.getByLabel('Concentration spell').fill('Bless');
+ await panel.getByRole('button',{name:'Start concentration'}).click();
+ await panel.getByLabel('Consumable name').fill('Potion');
+ await panel.getByLabel('Consumable quantity').fill('2');
+ await panel.getByRole('button',{name:'Set inventory'}).click();
+ await panel.getByRole('button',{name:'Spend item'}).click();
+ await expect(panel.getByLabel('Consumable status')).toContainText('Potion: 1');
+ await page.reload();
+ await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await page.getByRole('button',{name:'Player',exact:true}).click();
+ await expect(page.getByLabel('Concentration status')).toContainText('Bless');
+ await expect(page.getByLabel('Consumable status')).toContainText('Potion: 1');
+});
