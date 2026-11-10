@@ -2,6 +2,17 @@ import {describe,it,expect} from 'vitest';
 import {alwaysPreparedSubclassSpells,isAlwaysPreparedSubclassSpell,alwaysPreparedClassSpells,allAlwaysPreparedSpells} from './creationSubclassSpells';
 import {emptyForecast,forecastSpellSelectionWarnings,updateLevelPlan} from './creationForecast';
 describe('2024 always-prepared subclass spells',()=>{
+ it('rejects ordinary preparation of automatic class spells and selected Land terrain spells',()=>{
+  const paladin=updateLevelPlan(emptyForecast(),3,{subclassId:'paladin-devotion'});
+  const divine=forecastSpellSelectionWarnings('paladin',paladin,3,'divine-smite');
+  expect(divine.some(message=>message.includes('always prepared'))).toBe(true);
+  const druid=updateLevelPlan(emptyForecast(),3,{subclassId:'druid-land',landTerrain:'arid'});
+  const options=allAlwaysPreparedSpells('druid','druid-land',5,'arid');
+  expect(options).toContain('Fireball');
+  const forecast=updateLevelPlan(druid,5,{landTerrain:'polar'});
+  expect(allAlwaysPreparedSpells('druid','druid-land',5,'polar')).not.toContain('Fireball');
+ });
+
  it('unifies 2024 Paladin and Warlock class-feature automatic spells with subclass spells',()=>{
   expect(alwaysPreparedClassSpells('paladin',1)).toEqual([]);
   expect(alwaysPreparedClassSpells('paladin',2)).toEqual(['Divine Smite']);
