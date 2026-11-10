@@ -14,6 +14,7 @@ test('creates a local campaign and restores its journal after reload', async ({ 
   await page.getByRole('button', { name: 'Journal', exact: true }).click();
   await expect(page.getByText('I inspect the road.')).toBeVisible();
   await page.reload();
+  await page.getByRole('button', { name: 'Continue Adventure' }).click();
   await page.getByRole('button', { name: 'Journal', exact: true }).click();
   await expect(page.getByText('I inspect the road.')).toBeVisible();
 });
@@ -27,10 +28,12 @@ test('training encounter starts, rolls initiative, and survives reload', async (
   await page.getByRole('button', { name: 'Start encounter training' }).click();
   await expect(page.getByRole('button', { name: 'Roll initiative (d20 + DEX)' })).toBeVisible();
   await page.reload();
+  await page.getByRole('button', { name: 'Continue Adventure' }).click();
   await expect(page.getByRole('button', { name: 'Roll initiative (d20 + DEX)' })).toBeVisible();
   await page.getByRole('button', { name: 'Roll initiative (d20 + DEX)' }).click();
   await expect(page.locator('[aria-label="Combat turn summary"]')).toBeVisible();
   await page.reload();
+  await page.getByRole('button', { name: 'Continue Adventure' }).click();
   await expect(page.locator('[aria-label="Combat turn summary"]')).toBeVisible();
 });
 
@@ -108,4 +111,26 @@ test('illustrated forest map displays terrain-aligned grid without a legend', as
   await expect(grid).toHaveCSS('background-image', /forest-ruins-test/);
   await expect(page.getByText('N = Nighthawk')).toHaveCount(0);
   await expect(page.getByRole('gridcell', { name: /Square 10, 11; stream terrain/ })).toHaveCount(1);
+});
+
+test('landing page routes and character draft survive reload', async ({page})=>{
+ await page.goto('/four-keeps/');
+ await expect(page.getByLabel('Four Keeps landing page')).toBeVisible();
+ await expect(page.getByRole('button',{name:'Continue Adventure'})).toBeDisabled();
+ await page.getByRole('button',{name:'My Characters'}).click();
+ await page.getByRole('button',{name:'Create character'}).click();
+ await page.getByLabel('name *').fill('Browser Hero');
+ await page.getByRole('button',{name:'All characters'}).click();
+ await page.reload();
+ await expect(page.getByLabel('Four Keeps landing page')).toBeVisible();
+ await page.getByRole('button',{name:'My Characters'}).click();
+ await page.getByRole('button',{name:/Browser Hero/}).click();
+ await expect(page.getByLabel('name *')).toHaveValue('Browser Hero');
+ await page.getByRole('button',{name:'Home'}).click();
+ await page.getByRole('button',{name:'New Adventure'}).click();
+ await page.getByRole('button',{name:'Home'}).click();
+ await page.getByRole('button',{name:'My Campaigns'}).click();
+ await page.getByRole('button',{name:'Home'}).click();
+ await page.getByRole('button',{name:'Help'}).click();
+ await expect(page.getByRole('heading',{name:'Help'})).toBeVisible();
 });
