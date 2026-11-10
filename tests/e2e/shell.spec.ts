@@ -408,6 +408,7 @@ test('companion attack consumes action and movement budget persists across reloa
  await panel.getByRole('button',{name:'Move active actor'}).click();
  await expect(panel).toContainText('movement 20/30 ft');
  await panel.getByLabel('Companion target',{exact:true}).selectOption('fiend');
+ await panel.getByLabel('Companion attack range').fill('30');
  await panel.getByLabel('Companion attack d20').fill('15');
  await panel.getByLabel('Companion attack modifier').fill('3');
  await panel.getByLabel('Companion target AC').fill('14');
