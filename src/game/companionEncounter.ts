@@ -210,15 +210,27 @@ export function executeEnemyMovementTurn(campaign:Campaign,enemyId:string):Campa
 export function dismissEnemyOpportunityReactions(campaign:Campaign,enemyId:string):Campaign{
  const battle=activeActor(campaign,enemyId);
  if(battle.participants[enemyId]?.actorKind!=='enemy'||battle.pendingOpportunity?.moverId!==enemyId)throw Error('No pending enemy movement reactions');
- return save(campaign,{...battle,pendingOpportunity:undefined,log:[...battle.log,'DM declined pending reactions against '+enemyId]});
+ return save(campaign,{...battle,pendingOpportunity:battle.pendingOpportunity.destination?{...battle.pendingOpportunity,attackerIds:[]}:undefined,log:[...battle.log,'DM declined pending reactions against '+enemyId]});
 }
 /** Resolves the DM-supplied enemy attack from its current square, then ends
  * the turn. Movement and reactions must already be adjudicated.
  */
+/** Continue an interrupted enemy move only after all DM reactions are
+ * resolved or declined. A killed or immobilized mover cannot resume.
+ */
+export function resumeEnemyInterruptedMovement(campaign:Campaign,enemyId:string):Campaign{
+ const battle=activeActor(campaign,enemyId),pending=battle.pendingOpportunity;
+ if(battle.participants[enemyId]?.actorKind!=='enemy'||pending?.moverId!==enemyId||!pending.destination)throw Error('No interrupted enemy movement');
+ if(pending.attackerIds.length)throw Error('Pending opportunity reactions require DM adjudication');
+ const actor=battle.participants[enemyId];
+ const cleared=save(campaign,{...battle,pendingOpportunity:undefined});
+ if(actor.hp<=0||actor.conditions.some(c=>IMMOBILE.includes(c)))return save(cleared,{...cleared.companionEncounter!,log:[...battle.log,enemyId+' could not resume interrupted movement']});
+ return moveCompanion(cleared,enemyId,pending.destination.x,pending.destination.y);
+}
 export function executeEnemyAttackTurn(campaign:Campaign,enemyId:string,roll:number,damageRoll:number,damageType:DamageType,secondD20?:number):Campaign{
  const battle=activeActor(campaign,enemyId),enemy=battle.participants[enemyId];
  if(enemy.actorKind!=='enemy')throw Error('Enemy actor required');
- if(battle.pendingOpportunity?.moverId===enemyId)throw Error('Pending opportunity reactions require DM adjudication');
+ if(battle.pendingOpportunity?.moverId===enemyId)throw Error('Resume interrupted enemy movement before attacking');
  const plan=previewEnemyTurn(campaign,enemyId);
  if(!plan.targetId||!plan.inReach)throw Error('No hostile target within enemy reach');
  const attacked=attackCompanionWithVerifiedStats(campaign,enemyId,plan.targetId,roll,damageRoll,damageType,enemy.reachFeet??5,secondD20);
@@ -568,7 +580,7 @@ export function resolveCompanionOpportunityAttack(campaign:Campaign,attackerId:s
  const hit=roll===20||(roll!==1&&roll+modifier>=targetAC);
  const raw=hit?Math.max(0,damage+damageModifier):0;
  const taken=(targetId==='nighthawk'&&battle.mode==='unified')||target.actorKind==='enemy'?raw:adjudicateSubclassActorDamage(campaign,targetId,raw,damageType);
- return save(campaign,{...battle,pendingOpportunity:battle.pendingOpportunity&&battle.pendingOpportunity.attackerIds.some(id=>id!==attackerId)?{...battle.pendingOpportunity,attackerIds:battle.pendingOpportunity.attackerIds.filter(id=>id!==attackerId)}:undefined,participants:{...battle.participants,[attackerId]:{...attacker,reactionUsed:true},[targetId]:damagedActor(target,taken)},log:[...battle.log,attackerId+' opportunity attack vs '+targetId+': '+(hit?'hit for '+taken:'miss')+' (DM verified reach trigger)']});
+ return save(campaign,{...battle,pendingOpportunity:battle.pendingOpportunity?.destination?{...battle.pendingOpportunity,attackerIds:battle.pendingOpportunity.attackerIds.filter(id=>id!==attackerId)}:battle.pendingOpportunity&&battle.pendingOpportunity.attackerIds.some(id=>id!==attackerId)?{...battle.pendingOpportunity,attackerIds:battle.pendingOpportunity.attackerIds.filter(id=>id!==attackerId)}:undefined,participants:{...battle.participants,[attackerId]:{...attacker,reactionUsed:true},[targetId]:damagedActor(target,taken)},log:[...battle.log,attackerId+' opportunity attack vs '+targetId+': '+(hit?'hit for '+taken:'miss')+' (DM verified reach trigger)']});
 }
 export function finishCompanionEncounter(campaign:Campaign):Campaign{
  const battle=encounter(campaign);
