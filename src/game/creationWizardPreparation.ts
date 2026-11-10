@@ -32,3 +32,19 @@ export function changeWizardPreparation(spellbook:readonly string[],prepared:rea
  if(!next.includes(addId))next.push(addId);
  return wizardPreparationWarnings(spellbook,next,level).length?[...prepared]:next;
 }
+
+/** The most recent explicit preparation snapshot carries forward until changed. */
+export function wizardPreparedAtLevel(initialPrepared:readonly string[],forecast:AdvancementForecast,level:number):string[]{
+ const previous=[...forecast.levels].filter(plan=>plan.level<=level&&plan.wizardPreparedSpellIds!==undefined).sort((a,b)=>b.level-a.level)[0];
+ return [...(previous?.wizardPreparedSpellIds??initialPrepared)];
+}
+export function wizardForecastPreparationWarnings(initialBook:readonly string[],initialPrepared:readonly string[],forecast:AdvancementForecast):string[]{
+ const warnings:string[]=[];
+ for(const plan of [...forecast.levels].sort((a,b)=>a.level-b.level)){
+  if(plan.wizardPreparedSpellIds===undefined)continue;
+  const book=wizardSpellbookAtLevel(initialBook,forecast,plan.level);
+  const prepared=wizardPreparedAtLevel(initialPrepared,forecast,plan.level);
+  for(const warning of wizardPreparationWarnings(book,prepared,plan.level))warnings.push('Level '+plan.level+': '+warning);
+ }
+ return warnings;
+}
