@@ -1,3 +1,4 @@
+import { ABILITIES, STANDARD_ARRAY, POINT_COSTS, emptyAbilityDraft, pointCost, rollSet, totalScores, modifier, validateAbilityDraft, type AbilityDraft, type Ability } from '../game/creationAbilities';
 import { CLASSES, classChoices, classSummary, reconcileChoices, setChoice, spellcastingAtLevel, validateClassAgainstBackground, type ChoiceSelections, type ChoiceDefinition } from '../game/creationClasses';
 import { availableSpecies, availableBackgrounds, validateOrigins, originBenefits } from '../game/creationOrigins';
 import { useEffect, useState } from 'react';
@@ -10,7 +11,7 @@ export interface CharacterDraft {
   rules: { edition: '2024'; allowCompatibleLegacy: boolean };
   step: CreationStep;
   identity: { name: string; pronouns: string; appearance: string; personality: string; backstory: string; portrait: null|string };
-  selections: { speciesId?: string; lineageId?: string; backgroundId?: string; classId?: string; classChoices?: ChoiceSelections };
+  selections: { speciesId?: string; lineageId?: string; backgroundId?: string; classId?: string; classChoices?: ChoiceSelections; abilities?: AbilityDraft };
   createdAt: string;
   updatedAt: string;
 }
@@ -62,6 +63,12 @@ export function CharacterCreator(){
     const next=setChoice(draft.selections.classChoices??{},definition,value);
     updateSelections({classChoices:reconcileChoices(classChoices(draft.selections.classId,next['class-skills']??[]),next)});
   }
+  function updateAbilities(next:AbilityDraft){updateSelections({abilities:next});}
+  function rollAbilities(){
+    const random=()=>{const bytes=new Uint32Array(1);crypto.getRandomValues(bytes);return bytes[0]/4294967296;};
+    const rolls=rollSet(random);
+    updateAbilities({...emptyAbilityDraft(),method:'rolled',...rolls});
+  }
   function updateRules(allowCompatibleLegacy:boolean){
     if(!draft)return;
     update({rules:{...draft.rules,allowCompatibleLegacy}});
@@ -76,7 +83,7 @@ export function CharacterCreator(){
     {!draft?<><button type="button" className="rounded-lg bg-gold px-4 py-2 font-semibold text-ink" onClick={()=>{const next=createCharacterDraft();persist([next,...drafts]);setSelected(next.id);}}>Create character</button>
       {drafts.length>0&&<div className="space-y-2"><h4 className="font-semibold">Unfinished characters</h4>{drafts.map(item=><button key={item.id} type="button" onClick={()=>setSelected(item.id)} className="block w-full rounded-lg border border-white/20 p-3 text-left">{item.identity.name||'Unnamed character'} <span className="text-xs text-parchment/60">· Resume draft</span></button>)}</div>}</>:
     <><div className="flex items-center justify-between gap-2"><strong>{draft.identity.name||'Unnamed character'}</strong><button type="button" onClick={()=>setSelected(null)} className="rounded-lg border border-white/25 px-3 py-2 text-sm">All characters</button></div>
-      <nav aria-label="Character creation steps" className="grid grid-cols-2 gap-2 sm:grid-cols-4">{CREATION_STEPS.map((step,index)=><button type="button" key={step.id} disabled={index>2||index===1&&validateIdentity(draft).length>0||index===2&&(validateIdentity(draft).length>0||validateOrigins(draft.selections,draft.rules.allowCompatibleLegacy).length>0)} onClick={()=>update({step:step.id})} className={`rounded-lg border px-2 py-2 text-left text-sm ${draft.step===step.id?'border-gold text-gold':'border-white/20'} disabled:opacity-40`}>{index+1}. {step.label}</button>)}</nav>
+      <nav aria-label="Character creation steps" className="grid grid-cols-2 gap-2 sm:grid-cols-4">{CREATION_STEPS.map((step,index)=><button type="button" key={step.id} disabled={index>3||index===1&&validateIdentity(draft).length>0||index>=2&&(validateIdentity(draft).length>0||validateOrigins(draft.selections,draft.rules.allowCompatibleLegacy).length>0)||index===3&&validateClassAgainstBackground(draft.selections.classId,draft.selections.classChoices??{},availableBackgrounds(draft.rules.allowCompatibleLegacy).find(b=>b.id===draft.selections.backgroundId)?.skills??[]).length>0} onClick={()=>update({step:step.id})} className={`rounded-lg border px-2 py-2 text-left text-sm ${draft.step===step.id?'border-gold text-gold':'border-white/20'} disabled:opacity-40`}>{index+1}. {step.label}</button>)}</nav>
       {draft.step==='identity'?<div className="space-y-3">
         <p className="text-sm text-parchment/65">Tell us about your adventurer. Only the name is required.</p>
         {(['name','pronouns','appearance','personality','backstory'] as const).map(field=><label key={field} className="block space-y-1"><span className="block text-sm capitalize">{field}{field==='name'?' *':''}</span>{field==='name'||field==='pronouns'?<input className="w-full rounded-lg border border-white/20 bg-ink p-2" value={draft.identity[field]} onChange={e=>updateIdentity(field,e.target.value)}/>:<textarea className="w-full rounded-lg border border-white/20 bg-ink p-2" rows={2} value={draft.identity[field]} onChange={e=>updateIdentity(field,e.target.value)}/>}</label>)}
@@ -96,7 +103,7 @@ export function CharacterCreator(){
         <div className="rounded-lg border border-gold/30 p-3 space-y-1"><h5 className="font-semibold">Origin benefits preview</h5>{(()=>{const b=originBenefits(draft.selections,draft.rules.allowCompatibleLegacy);return <div className="text-sm text-parchment/80"><p>{[b.species,b.lineage,b.background].filter(Boolean).join(' · ')||'Choose your origins above'}</p>{b.originFeat&&<p>Origin feat: {b.originFeat}</p>}{b.speed&&<p>Speed: {b.speed} ft.</p>}{b.skills.length>0&&<p>Skills: {b.skills.join(', ')}</p>}</div>})()}</div>
         {validateOrigins(draft.selections,draft.rules.allowCompatibleLegacy).length>0&&<p role="status" className="text-sm text-amber-200">{validateOrigins(draft.selections,draft.rules.allowCompatibleLegacy).join(' ')}</p>}
         <div className="flex gap-2"><button type="button" onClick={()=>update({step:'identity'})} className="rounded-lg border border-white/25 px-3 py-2">Back to identity</button><button type="button" disabled={validateOrigins(draft.selections,draft.rules.allowCompatibleLegacy).length>0} onClick={()=>update({step:"class"})} className="rounded-lg bg-gold px-3 py-2 text-ink disabled:opacity-40">Continue to class</button></div>
-      </div>:<div className="space-y-4" aria-label="Class selection">
+      </div>:draft.step==='class'?<div className="space-y-4" aria-label="Class selection">
         <h4 className="font-serif text-lg">Choose a Class</h4>
         <p className="text-xs text-parchment/60">2024 Player's Handbook · Level 1 choices. Future features are previewed only.</p>
         <div className="grid grid-cols-2 gap-2">{CLASSES.map(cls=><button key={cls.id} type="button" aria-pressed={draft.selections.classId===cls.id} onClick={()=>chooseClass(cls.id)} className={'rounded-lg border p-3 text-left '+(draft.selections.classId===cls.id?'border-gold bg-gold/10':'border-white/20')}><strong>{cls.name}</strong><span className="block text-xs text-parchment/60">d{cls.hitDie} · {cls.primaryAbilities.join(' / ')}</span></button>)}</div>
@@ -114,7 +121,31 @@ export function CharacterCreator(){
           </fieldset>)}
           {validateClassAgainstBackground(cls.id,selections,availableBackgrounds(draft.rules.allowCompatibleLegacy).find(b=>b.id===draft.selections.backgroundId)?.skills??[]).length>0?<p role="status" className="text-sm text-amber-200">{validateClassAgainstBackground(cls.id,selections,availableBackgrounds(draft.rules.allowCompatibleLegacy).find(b=>b.id===draft.selections.backgroundId)?.skills??[]).join(' ')}</p>:<p role="status" className="text-sm text-emerald-300">Class choices valid and saved.</p>}
           </div>})()}
-        <div className="flex gap-2"><button type="button" onClick={()=>update({step:'origins'})} className="rounded-lg border border-white/25 px-3 py-2">Back to origins</button><button type="button" disabled className="rounded-lg bg-gold px-3 py-2 text-ink opacity-40">Continue to abilities (next phase)</button></div>
+        <div className="flex gap-2"><button type="button" onClick={()=>update({step:'origins'})} className="rounded-lg border border-white/25 px-3 py-2">Back to origins</button><button type="button" disabled={validateClassAgainstBackground(draft.selections.classId,draft.selections.classChoices??{},availableBackgrounds(draft.rules.allowCompatibleLegacy).find(b=>b.id===draft.selections.backgroundId)?.skills??[]).length>0} onClick={()=>update({step:'abilities'})} className="rounded-lg bg-gold px-3 py-2 text-ink disabled:opacity-40">Continue to abilities</button></div>
+      </div>:<div className="space-y-4" aria-label="Ability scores">
+        <h4 className="font-serif text-lg">Ability Scores</h4>
+        {(()=>{const abilities=draft.selections.abilities??emptyAbilityDraft();
+          const background=availableBackgrounds(draft.rules.allowCompatibleLegacy).find(b=>b.id===draft.selections.backgroundId);
+          const allowed=background?.abilities??[];
+          const scores=totalScores(abilities);
+          const errors=validateAbilityDraft(abilities,allowed);
+          const options=abilities.method==='standard'?[...STANDARD_ARRAY]:abilities.method==='rolled'?abilities.rolls:[];
+          return <div className="space-y-4">
+            <fieldset className="space-y-2"><legend className="font-semibold">Generation method</legend>
+              <div className="flex flex-wrap gap-2">{(['standard','point-buy','rolled'] as const).map(method=><button type="button" key={method} aria-pressed={abilities.method===method} onClick={()=>updateAbilities({...emptyAbilityDraft(),method})} className={'rounded-lg border px-3 py-2 text-sm '+(abilities.method===method?'border-gold bg-gold/10':'border-white/20')}>{method==='standard'?'Standard Array':method==='point-buy'?'Point Buy':'4d6 drop lowest'}</button>)}</div>
+            </fieldset>
+            {abilities.method==='rolled'&&<div className="space-y-2"><button type="button" onClick={rollAbilities} className="rounded-lg border border-gold/40 px-3 py-2 text-gold">{abilities.rolls.length===6?'Reroll six scores':'Roll six scores'}</button>{abilities.rollDice.length===6&&<p className="text-xs text-parchment/65">Rolls: {abilities.rollDice.map((dice,i)=>dice.join('+')+' → '+abilities.rolls[i]).join(' · ')}</p>}</div>}
+            {abilities.method==='point-buy'&&<p className="text-sm">Points spent: <strong>{pointCost(abilities.base)} / 27</strong> · Unassigned abilities count as 8 until selected.</p>}
+            <div className="space-y-2">{ABILITIES.map(ability=><div key={ability} className="grid grid-cols-[3.5rem_1fr_1fr] items-center gap-2 rounded-lg border border-white/15 p-2">
+              <strong>{ability}</strong>
+              <label className="space-y-1 text-xs"><span className="block">Base</span><select aria-label={ability+' base score'} value={abilities.base[ability]??''} onChange={e=>updateAbilities({...abilities,base:{...abilities.base,[ability]:e.target.value===''?undefined:Number(e.target.value)}})} className="w-full rounded border border-white/20 bg-ink p-2"><option value="">Choose</option>{(abilities.method==='point-buy'?Object.keys(POINT_COSTS).map(Number):options).map((score,i)=><option key={i} value={score}>{score}</option>)}</select></label>
+              <label className="space-y-1 text-xs"><span className="block">Background</span><select aria-label={ability+' background bonus'} value={abilities.bonuses[ability]??0} disabled={!allowed.includes(ability)} onChange={e=>updateAbilities({...abilities,bonuses:{...abilities.bonuses,[ability]:Number(e.target.value)}})} className="w-full rounded border border-white/20 bg-ink p-2 disabled:opacity-40">{[0,1,2].map(v=><option key={v} value={v}>+{v}</option>)}</select></label>
+              <span className="col-span-3 text-right text-xs text-parchment/70">Total {abilities.base[ability]===undefined?'—':scores[ability]} · Modifier {abilities.base[ability]===undefined?'—':(modifier(scores[ability])>=0?'+':'')+modifier(scores[ability])}</span>
+            </div>)}</div>
+            <fieldset className="space-y-2"><legend className="font-semibold">Background increase ({background?.name??'choose a background'})</legend><div className="flex flex-wrap gap-2">{(['two-one','one-one-one'] as const).map(mode=><button type="button" key={mode} aria-pressed={abilities.bonusMode===mode} onClick={()=>updateAbilities({...abilities,bonusMode:mode,bonuses:{}})} className={'rounded border px-3 py-2 text-sm '+(abilities.bonusMode===mode?'border-gold':'border-white/20')}>{mode==='two-one'?'+2 / +1':'+1 / +1 / +1'}</button>)}</div><p className="text-xs text-parchment/60">Eligible abilities: {allowed.join(', ')}. Each bonus must go to a different ability.</p></fieldset>
+            {errors.length>0?<p role="status" className="text-sm text-amber-200">{errors.join(' ')}</p>:<p role="status" className="text-sm text-emerald-300">Ability scores valid and saved.</p>}
+            <div className="flex gap-2"><button type="button" onClick={()=>update({step:'class'})} className="rounded-lg border border-white/25 px-3 py-2">Back to class</button><button type="button" disabled className="rounded-lg bg-gold px-3 py-2 text-ink opacity-40">Continue to equipment (next phase)</button></div>
+          </div>})()}
       </div>}
       <p className="text-xs text-parchment/55">Draft only · not attached to a campaign · cannot enter play until all required choices are valid</p>
     </>}
