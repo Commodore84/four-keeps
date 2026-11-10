@@ -1,7 +1,7 @@
 import {describe,it,expect} from 'vitest';
 import {newCampaign,registerSubclassActor,chooseSubclassResistance} from './campaign';
 import {initialSubclassCombatState} from './subclassCombatRules';
-import {startCompanionEncounter,moveCompanion,endCompanionTurn,damageCompanion,conditionCompanion,finishCompanionEncounter,attackCompanion,setCompanionSpeed ,useCompanionAction,setCompanionObstacles,companionLineOfSight,companionOpportunityAttackEligible,setCompanionCover,companionCoverStatus,companionPartySnapshot,startUnifiedEncounter,synchronizeNighthawkHitPoints,recordCompanionReaction,removeCompanionCondition,nighthawkEncounterStatistics,useCompanionBonusAction,setCompanionConcentration,companionConcentrationSaveDC,resolveCompanionConcentrationSave,setCompanionConsumable,spendCompanionConsumable,spendUnifiedNighthawkSpellSlot,resolveCompanionOpportunityAttack,nighthawkEncounterInventory,companionOpportunityCandidates} from './companionEncounter';
+import {startCompanionEncounter,moveCompanion,endCompanionTurn,damageCompanion,conditionCompanion,finishCompanionEncounter,attackCompanion,setCompanionSpeed ,useCompanionAction,setCompanionObstacles,companionLineOfSight,companionOpportunityAttackEligible,setCompanionCover,companionCoverStatus,companionPartySnapshot,startUnifiedEncounter,synchronizeNighthawkHitPoints,recordCompanionReaction,removeCompanionCondition,nighthawkEncounterStatistics,useCompanionBonusAction,setCompanionConcentration,companionConcentrationSaveDC,resolveCompanionConcentrationSave,setCompanionConsumable,spendCompanionConsumable,spendUnifiedNighthawkSpellSlot,resolveCompanionOpportunityAttack,nighthawkEncounterInventory,companionOpportunityCandidates,spendUnifiedNighthawkInventory} from './companionEncounter';
 const build=()=>{
  let c=newCampaign('Companion test');
  c=registerSubclassActor(c,'paladin',initialSubclassCombatState('paladin','paladin-devotion',7,3));
@@ -12,6 +12,21 @@ const build=()=>{
 };
 const start=()=>startCompanionEncounter(build(),{paladin:15,druid:12,fiend:9},{paladin:{x:0,y:0},druid:{x:1,y:0},fiend:{x:5,y:5}},{paladin:30,druid:22,fiend:25});
 describe('isolated companion encounter vertical slice',()=>{
+ it('spends authoritative arrows and ledger gear with no negative balances or prototype changes',()=>{
+  const base=build();
+  const original={...base,equipment:{daggers:2,arrows:3,caltrops:1,ballBearings:0},inventoryLedger:{currency:{CP:0,SP:0,EP:0,GP:0,PP:0},gear:[{name:'Potion',quantity:2}]}};
+  const c=startUnifiedEncounter(original,{nighthawk:20,paladin:10},{nighthawk:{x:0,y:2},paladin:{x:0,y:0}},{paladin:20});
+  const spent=spendUnifiedNighthawkInventory(c,'arrows',2);
+  expect(spent.equipment?.arrows).toBe(1);
+  expect(c.equipment?.arrows).toBe(3);
+  expect(spent.combat).toEqual(original.combat);
+  expect(()=>spendUnifiedNighthawkInventory(spent,'arrows',2)).toThrow('Insufficient');
+  const potion=spendUnifiedNighthawkInventory(spent,'Potion',1);
+  expect(potion.inventoryLedger?.gear[0].quantity).toBe(1);
+  expect(spent.inventoryLedger?.gear[0].quantity).toBe(2);
+  expect(()=>spendUnifiedNighthawkInventory(potion,'Potion',2)).toThrow('Insufficient');
+ });
+
  it('detects potential opportunity attacks when leaving adjacency, not when approaching or Disengaged',()=>{
   let c=start();
   const battle=c.companionEncounter!;
