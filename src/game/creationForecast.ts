@@ -1,4 +1,3 @@
-import {forecastImprovementLevels} from './creationProjection';
 import type {Ability} from './creationAbilities';
 import {CLASSES} from './creationClasses';
 import {subclassesForClass} from './creationSubclasses';
@@ -21,7 +20,7 @@ export function forecastForClass(classId:string,forecast:AdvancementForecast){
   const plan=plannedLevel(forecast,level);
   const features=cls?.features.find(f=>f.level===level)?.names??[];
   const subclass=level>=3?subclassesForClass(classId).find(s=>s.id===plannedLevel(forecast,3).subclassId):undefined;
-  return {level,plan,features,subclass,subclassChoices:level===3?subclassesForClass(classId):[],abilityImprovement:forecastImprovementLevels(classId).includes(level)};
+  return {level,plan,features,subclass,subclassChoices:level===3?subclassesForClass(classId):[],abilityImprovement:(classId==='fighter'?[4,6,8,12,14,16]:classId==='rogue'?[4,8,10,12,16]:[4,8,12,16]).includes(level)};
  });
 }
 export function validateForecast(classId:string,forecast:AdvancementForecast):string[]{
