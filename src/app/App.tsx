@@ -1,3 +1,4 @@
+import {CompanionEncounterPanel} from './CompanionEncounterPanel';
 import {SubclassActorManager} from './SubclassActorManager';
 import { CharacterCreator } from './CharacterCreator';
 import { useEffect, useRef, useState } from 'react';
