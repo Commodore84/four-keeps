@@ -62,3 +62,16 @@ export function landCirclePreparedSpells(terrain:string|undefined,level:number):
  if(!table)return [];
  return Object.entries(table).filter(([unlock])=>Number(unlock)<=level).flatMap(([,spells])=>spells);
 }
+
+/** Automatically prepared 2024 class-feature spells, separate from subclass tables.
+ * Source: D&D Beyond 2024 Basic Rules, Paladin and Warlock class features.
+ */
+export function alwaysPreparedClassSpells(classId:string,level:number):string[]{
+ if(!Number.isInteger(level)||level<1||level>20)return [];
+ if(classId==='paladin')return [...(level>=2?['Divine Smite']:[]),...(level>=5?['Find Steed']:[])];
+ if(classId==='warlock')return level>=9?['Contact Other Plane']:[];
+ return [];
+}
+export function allAlwaysPreparedSpells(classId:string,subclassId:string|undefined,level:number,terrain?:string):string[]{
+ return [...new Set([...alwaysPreparedClassSpells(classId,level),...alwaysPreparedSubclassSpells(subclassId,level),...(subclassId==='druid-land'?landCirclePreparedSpells(terrain,level):[])])];
+}
