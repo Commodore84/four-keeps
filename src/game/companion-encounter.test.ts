@@ -1,7 +1,7 @@
 import {describe,it,expect} from 'vitest';
 import {newCampaign,registerSubclassActor,chooseSubclassResistance} from './campaign';
 import {initialSubclassCombatState} from './subclassCombatRules';
-import {startCompanionEncounter,moveCompanion,endCompanionTurn,damageCompanion,conditionCompanion,finishCompanionEncounter,attackCompanion,setCompanionSpeed ,useCompanionAction,setCompanionObstacles,companionLineOfSight,companionOpportunityAttackEligible,setCompanionCover,companionCoverStatus,companionPartySnapshot,startUnifiedEncounter,synchronizeNighthawkHitPoints,recordCompanionReaction,removeCompanionCondition,nighthawkEncounterStatistics,useCompanionBonusAction,setCompanionConcentration,companionConcentrationSaveDC,resolveCompanionConcentrationSave,setCompanionConsumable,spendCompanionConsumable,spendUnifiedNighthawkSpellSlot,resolveCompanionOpportunityAttack,nighthawkEncounterInventory,companionOpportunityCandidates,spendUnifiedNighthawkInventory,setCompanionTactics,applyCompanionCondition,nighthawkEquipmentReferences,addCompanionEnemy,companionConditionEffects,setNighthawkEncounterLoadout,resolveCompanionSavingThrow,nighthawkEquippedAttack,nighthawkEquippedDefense,standCompanionFromProne,attackCompanionWithVerifiedStats} from './companionEncounter';
+import {startCompanionEncounter,moveCompanion,endCompanionTurn,damageCompanion,conditionCompanion,finishCompanionEncounter,attackCompanion,setCompanionSpeed ,useCompanionAction,setCompanionObstacles,companionLineOfSight,companionOpportunityAttackEligible,setCompanionCover,companionCoverStatus,companionPartySnapshot,startUnifiedEncounter,synchronizeNighthawkHitPoints,recordCompanionReaction,removeCompanionCondition,nighthawkEncounterStatistics,useCompanionBonusAction,setCompanionConcentration,companionConcentrationSaveDC,resolveCompanionConcentrationSave,setCompanionConsumable,spendCompanionConsumable,spendUnifiedNighthawkSpellSlot,resolveCompanionOpportunityAttack,nighthawkEncounterInventory,companionOpportunityCandidates,spendUnifiedNighthawkInventory,setCompanionTactics,applyCompanionCondition,nighthawkEquipmentReferences,addCompanionEnemy,companionConditionEffects,setNighthawkEncounterLoadout,resolveCompanionSavingThrow,nighthawkEquippedAttack,nighthawkEquippedDefense,standCompanionFromProne,attackCompanionWithVerifiedStats,resolveCompanionDeathSave,healCompanion} from './companionEncounter';
 const build=()=>{
  let c=newCampaign('Companion test');
  c=registerSubclassActor(c,'paladin',initialSubclassCombatState('paladin','paladin-devotion',7,3));
@@ -12,6 +12,45 @@ const build=()=>{
 };
 const start=()=>startCompanionEncounter(build(),{paladin:15,druid:12,fiend:9},{paladin:{x:0,y:0},druid:{x:1,y:0},fiend:{x:5,y:5}},{paladin:30,druid:22,fiend:25});
 describe('isolated companion encounter vertical slice',()=>{
+ it('uses DM-verified enemy damage modifier without writing character sheet',()=>{
+  const base=build();
+  let c=startUnifiedEncounter(base,{nighthawk:20,paladin:10},{nighthawk:{x:0,y:2},paladin:{x:0,y:0}},{paladin:20});
+  c=addCompanionEnemy(c,'goblin1',25,{x:1,y:2},12,13,4,30,5,3,'1d6 slashing');
+  expect(c.companionEncounter?.participants.goblin1).toMatchObject({damageModifier:3,damageDice:'1d6 slashing'});
+  c=attackCompanionWithVerifiedStats(c,'goblin1','nighthawk',15,4,'Slashing',5);
+  expect(c.companionEncounter?.participants.nighthawk.hp).toBe(3);
+  expect(c.character).toEqual(base.character);
+  expect(c.combat).toEqual(base.combat);
+ });
+ it('tracks death saves, critical failures, stability and healing without changing legacy combat',()=>{
+  const base=build();
+  let c=startUnifiedEncounter(base,{nighthawk:20,paladin:10},{nighthawk:{x:0,y:2},paladin:{x:0,y:0}},{paladin:20});
+  c=damageCompanion(c,'nighthawk',10,'Fire');
+  expect(c.companionEncounter?.participants.nighthawk.conditions).toContain('Unconscious');
+  c=resolveCompanionDeathSave(c,'nighthawk',1);
+  expect(c.companionEncounter?.participants.nighthawk.deathSaves?.failures).toBe(2);
+  c=endCompanionTurn(c,'nighthawk');c=endCompanionTurn(c,'paladin');
+  c=resolveCompanionDeathSave(c,'nighthawk',11);
+  expect(c.companionEncounter?.participants.nighthawk.deathSaves?.successes).toBe(1);
+  c=healCompanion(c,'nighthawk',4);
+  expect(c.companionEncounter?.participants.nighthawk).toMatchObject({hp:4});
+  expect(c.companionEncounter?.participants.nighthawk.deathSaves).toBeUndefined();
+  expect(c.companionEncounter?.participants.nighthawk.conditions).not.toContain('Unconscious');
+  expect(c.character).toEqual(base.character);
+  expect(c.combat).toEqual(base.combat);
+ });
+ it('automatically expends exactly one verified shortbow arrow on successful attack resolution',()=>{
+  const base=build();
+  let c=startUnifiedEncounter({...base,equipment:{daggers:0,arrows:2,caltrops:0,ballBearings:0},inventoryLedger:{currency:{CP:0,SP:0,EP:0,GP:0,PP:0},gear:[{name:'Shortbow',quantity:1}]}},{nighthawk:20,paladin:10},{nighthawk:{x:0,y:2},paladin:{x:0,y:0}},{paladin:20});
+  c=addCompanionEnemy(c,'goblin1',15,{x:2,y:2},12,13,4);
+  c=setNighthawkEncounterLoadout(c,'weaponId','shortbow');
+  expect(()=>attackCompanionWithVerifiedStats(c,'nighthawk','goblin1',0,4,'Piercing',80)).toThrow();
+  expect(c.equipment?.arrows).toBe(2);
+  c=attackCompanionWithVerifiedStats(c,'nighthawk','goblin1',15,4,'Piercing',80);
+  expect(c.equipment?.arrows).toBe(1);
+  expect(c.combat).toEqual(base.combat);
+ });
+
  it('resolves invisible attack advantage and opposing disadvantage cancellation',()=>{
   let c=applyCompanionCondition(start(),'paladin','Invisible');
   expect(()=>attackCompanion(c,'paladin','druid',6,0,12,3,0,'Fire',5)).toThrow('second d20');
