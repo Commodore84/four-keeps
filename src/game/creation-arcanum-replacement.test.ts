@@ -1,6 +1,14 @@
 import {describe,it,expect} from 'vitest';
 import {emptyForecast,forecastSpellOptions,toggleForecastSpell,plannedLevel,forecastReplacementWarnings,forecastArcanumReplacementWarnings,updateLevelPlan} from './creationForecast';
 describe('Mystic Arcanum and stateful replacement regression',()=>{
+ it('rejects replacing a spell with one already prepared even when forecast levels are unordered',()=>{
+  const spells=forecastSpellOptions('bard',undefined,5).filter(spell=>spell.level===1);
+  if(spells.length<3)return;
+  let forecast=updateLevelPlan(emptyForecast(),5,{replacementSpellId:spells[0].id,replacementWithSpellId:spells[1].id});
+  forecast=updateLevelPlan(forecast,3,{replacementSpellId:spells[2].id,replacementWithSpellId:spells[1].id});
+  expect(forecastReplacementWarnings('bard',forecast,[spells[0].id,spells[2].id]).some(w=>w.includes('already among'))).toBe(true);
+ });
+
  it('replaces an unlocked arcanum without granting another tier selection',()=>{
   const choices=forecastSpellOptions('warlock',undefined,13).filter(spell=>spell.level===6);
   if(choices.length<2)return;
