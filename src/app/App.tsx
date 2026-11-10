@@ -49,7 +49,14 @@ const spellSheetMetadata: Record<string,SpellSheetMetadata> = {
   "Identify": {time:"1 minute (or Ritual)",range:"Touch",duration:"Instantaneous",components:"V, S, M (a pearl worth 100+ GP)"},
   "Jump": {time:"Bonus Action",range:"Touch",duration:"1 minute",components:"V, S, M (a grasshopper hind leg)"},
   "Thunderwave": {time:"Action",range:"Self (15-foot cube)",duration:"Instantaneous",components:"V, S"},
-  "Witch Bolt": {time:"Action",range:"60 feet",duration:"Concentration, up to 1 minute",components:"V, S, M (a twig struck by lightning)"}
+  "Witch Bolt": {time:"Action",range:"60 feet",duration:"Concentration, up to 1 minute",components:"V, S, M (a twig struck by lightning)"},
+  "Chromatic Orb": {time:"Action",range:"90 feet",duration:"Instantaneous",components:"V, S, M (a diamond worth 50+ GP)"},
+  "Color Spray": {time:"Action",range:"Self (15-foot cone)",duration:"Instantaneous",components:"V, S, M (a pinch of colorful sand or powder)"},
+  "Illusory Script": {time:"1 minute (or Ritual)",range:"Touch",duration:"10 days",components:"S, M (ink worth 10+ GP, consumed)"},
+  "Protection from Evil and Good": {time:"Action",range:"Touch",duration:"Concentration, up to 10 minutes",components:"V, S, M (holy water or powdered silver and iron, consumed)"},
+  "Tasha’s Hideous Laughter": {time:"Action",range:"30 feet",duration:"Concentration, up to 1 minute",components:"V, S, M (a tart and a feather)"},
+  "Tenser’s Floating Disk": {time:"Action (or Ritual)",range:"30 feet",duration:"1 hour",components:"V, S, M (a drop of mercury)"},
+  "Unseen Servant": {time:"Action (or Ritual)",range:"60 feet",duration:"1 hour",components:"V, S, M (a bit of string and wood)"}
 };
 const spellSummaries: Record<string,string> = {
   "Acid Splash": "Hurl acid at a creature; it makes a Dexterity saving throw or takes acid damage.",
@@ -231,11 +238,11 @@ function Party({ campaign, onRoll, onSaveRoll, onAwardXP, onLevelUp, onLevelThre
               <span className="mt-2 block text-xs text-parchment/65">{group==='Cantrips'?'Cantrip':'Level 1'} · {isRitualSpell(spell)?'Ritual · ':''}{spellRequiresConcentration(spell)?'Concentration · ':''}{spellSheetMetadata[spell] ? `${spellSheetMetadata[spell].time} · ${spellSheetMetadata[spell].range} · ${spellSheetMetadata[spell].duration}` : 'Casting metadata not yet recorded'}</span>
             </button>
             {selectedSpell===spell&&<div className="space-y-3 border-t border-gold/25 p-3">
-              <p className="text-sm leading-6">{spellSummaries[spell]??'Detailed rules are not yet recorded for this spell.'}</p>
+              <div><p className="text-xs uppercase tracking-widest text-gold">Spell effect</p><p className="mt-1 text-sm leading-6">{spellSummaries[spell]??'Detailed rules are not yet recorded for this spell.'}</p></div>
               {spellSheetMetadata[spell]?<div className="grid grid-cols-2 gap-2 text-xs"><div><span className="text-parchment/55">Casting time</span><p>{spellSheetMetadata[spell].time}</p></div><div><span className="text-parchment/55">Range</span><p>{spellSheetMetadata[spell].range}</p></div><div><span className="text-parchment/55">Duration</span><p>{spellSheetMetadata[spell].duration}</p></div><div><span className="text-parchment/55">Components</span><p>{spellSheetMetadata[spell].components}</p></div></div>:<p className="text-xs text-parchment/60">Casting metadata not yet recorded; check the 2024 spell rules before casting.</p>}
               {spellRequiresConcentration(spell)&&<p className="text-xs text-gold">Requires concentration. Casting replaces any existing concentration.</p>}
               {isRitualSpell(spell)&&<p className="text-xs text-gold">Ritual casting adds 10 minutes and spends no spell slot.</p>}
-              <p className="text-xs text-parchment/60">Use the Adventure screen to cast and resolve this spell.</p>
+              <p className="text-xs text-parchment/60">This is a play reference, not the complete official spell rules. Use Adventure to cast and resolve effects; consult the 2024 rules for precise saves, damage, scaling, and limitations.</p>
             </div>}
           </div>)}
         </div>)}
