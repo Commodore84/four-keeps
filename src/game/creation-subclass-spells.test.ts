@@ -2,6 +2,22 @@ import {describe,it,expect} from 'vitest';
 import {alwaysPreparedSubclassSpells,isAlwaysPreparedSubclassSpell,alwaysPreparedClassSpells,allAlwaysPreparedSpells} from './creationSubclassSpells';
 import {emptyForecast,forecastSpellSelectionWarnings,updateLevelPlan} from './creationForecast';
 describe('2024 always-prepared subclass spells',()=>{
+ it('keeps class and subclass automatic spells separate from ordinary preparation at multiple forecast levels',()=>{
+  const paladin=updateLevelPlan(emptyForecast(),3,{subclassId:'paladin-devotion'});
+  const atThree=allAlwaysPreparedSpells('paladin','paladin-devotion',3);
+  const atFive=allAlwaysPreparedSpells('paladin','paladin-devotion',5);
+  expect(atThree).toContain('Divine Smite');
+  expect(atThree).not.toContain('Find Steed');
+  expect(atFive).toContain('Find Steed');
+  expect(atFive).toContain('Aid');
+  expect(atFive.length).toBeGreaterThan(atThree.length);
+  const druid=updateLevelPlan(emptyForecast(),3,{subclassId:'druid-land',landTerrain:'arid'});
+  expect(allAlwaysPreparedSpells('druid','druid-land',5,'arid')).toContain('Fireball');
+  expect(allAlwaysPreparedSpells('druid','druid-land',5,'polar')).not.toContain('Fireball');
+  expect(paladin.levels.length).toBeGreaterThan(0);
+  expect(druid.levels.length).toBeGreaterThan(0);
+ });
+
  it('rejects ordinary preparation of automatic class spells and selected Land terrain spells',()=>{
   const paladin=updateLevelPlan(emptyForecast(),3,{subclassId:'paladin-devotion'});
   expect(allAlwaysPreparedSpells('paladin','paladin-devotion',3)).toContain('Divine Smite');
