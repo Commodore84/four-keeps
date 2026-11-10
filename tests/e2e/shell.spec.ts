@@ -810,3 +810,31 @@ test('DM-approved enemy movement turn persists across campaign reload',async({pa
  await page.getByRole('button',{name:'Player',exact:true}).click();
  await expect(page.getByLabel('Companion encounter')).toContainText('goblin1: 12/12 HP · (1,1)');
 });
+
+test('DM-rolled enemy move and attack resolves and persists after reload',async({page})=>{
+ await page.goto('/four-keeps/');
+ await page.getByRole('button',{name:'Settings',exact:true}).click();
+ await page.getByLabel('New campaign name').fill('Enemy attack persistence');
+ await page.getByRole('button',{name:'New',exact:true}).click();
+ await page.getByRole('button',{name:'Adventure',exact:true}).click();
+ await page.getByRole('button',{name:'Player',exact:true}).click();
+ const manager=page.getByLabel('Subclass actor manager');
+ await manager.getByLabel('New subclass actor ID').fill('paladin');
+ await manager.getByRole('button',{name:'Register subclass actor'}).click();
+ const panel=page.getByLabel('Companion encounter');
+ await panel.getByRole('button',{name:'Start companion encounter'}).click();
+ await panel.getByLabel('Enemy ID').fill('goblin1');
+ await panel.getByLabel('Enemy X').fill('1');
+ await panel.getByLabel('Enemy Y').fill('0');
+ await panel.getByRole('button',{name:'Add enemy actor'}).click();
+ await panel.getByRole('button',{name:'End companion turn'}).click();
+ await panel.getByLabel('Active enemy tactic').selectOption('nearest');
+ await panel.getByLabel('Companion attack d20').fill('18');
+ await panel.getByRole('button',{name:'Execute enemy move and attack'}).click();
+ await expect(panel).toContainText('Active turn: paladin');
+ await expect(panel).toContainText('paladin: 15/20 HP');
+ await page.reload();
+ await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await page.getByRole('button',{name:'Player',exact:true}).click();
+ await expect(page.getByLabel('Companion encounter')).toContainText('paladin: 15/20 HP');
+});
