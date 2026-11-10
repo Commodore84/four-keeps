@@ -251,7 +251,7 @@ export function resolveCompanionDeathSave(campaign:Campaign,actorId:string,roll:
  if(roll===20){hp=1;successes=0;failures=0;}
  else {if(roll===1)failures+=2;else if(roll>=10)successes++;else failures++;stable=successes>=3;dead=failures>=3;}
  const deathSaves={successes:Math.min(3,successes),failures:Math.min(3,failures),stable,dead};
- return save(campaign,{...battle,participants:{...battle.participants,[actorId]:{...actor,hp,deathSaves,conditions:hp>0?actor.conditions.filter(c=>c!=='Unconscious'):actor.conditions}},log:[...battle.log,actorId+' death save '+roll+': '+(hp>0?'regained 1 HP':dead?'dead':stable?'stable':deathSaves.successes+' successes, '+deathSaves.failures+' failures')]});
+ return save(campaign,{...battle,participants:{...battle.participants,[actorId]:{...actor,hp,deathSaves:hp>0?undefined:deathSaves,conditions:hp>0?actor.conditions.filter(c=>c!=='Unconscious'):actor.conditions}},log:[...battle.log,actorId+' death save '+roll+': '+(hp>0?'regained 1 HP':dead?'dead':stable?'stable':deathSaves.successes+' successes, '+deathSaves.failures+' failures')]});
 }
 /** DM-recorded healing resets death saves on regaining HP, never writes to legacy combat. */
 export function healCompanion(campaign:Campaign,actorId:string,amount:number):Campaign{
