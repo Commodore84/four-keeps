@@ -39,6 +39,7 @@ export function interactAdventure(campaign:Campaign,choiceId:string,now=new Date
 export function enterAdventureEncounter(campaign:Campaign,companionId:string,initiative:{nighthawk:number;companion:number},companionHp:number,now=new Date().toISOString()):Campaign{
  const session=campaign.adventureSession;
  if(!session||session.status!=='exploring'||session.site!=='watchtower')throw Error('Reach the watchtower before entering an encounter');
+ if(campaign.characterIdentity && campaign.characterIdentity.classId!=='rogue')throw Error('Linked encounter currently supports the Rogue prototype only; other imported classes require a class-neutral combat actor');
  if(!campaign.subclassActors?.[companionId])throw Error('Select a registered companion');
  if(!Number.isInteger(companionHp)||companionHp<1||companionHp>500)throw Error('Enter verified companion HP');
  if(campaign.companionEncounter?.status==='active')throw Error('Finish the active encounter first');
