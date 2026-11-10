@@ -2,6 +2,17 @@ import {describe,it,expect} from 'vitest';
 import {alwaysPreparedSubclassSpells,isAlwaysPreparedSubclassSpell} from './creationSubclassSpells';
 import {emptyForecast,forecastSpellSelectionWarnings,updateLevelPlan} from './creationForecast';
 describe('2024 always-prepared subclass spells',()=>{
+ it('unlocks 2024 Trickery and War Domain spells at the correct levels',()=>{
+  for(const subclass of ['cleric-trickery','cleric-war']){
+   expect(alwaysPreparedSubclassSpells(subclass,2)).toEqual([]);
+   for(const [level,count] of [[3,4],[5,6],[7,8],[9,10]])expect(alwaysPreparedSubclassSpells(subclass,level)).toHaveLength(count);
+  }
+  expect(isAlwaysPreparedSubclassSpell('cleric-trickery',3,'Invisibility')).toBe(true);
+  expect(isAlwaysPreparedSubclassSpell('cleric-trickery',5,'Hypnotic Pattern')).toBe(true);
+  expect(isAlwaysPreparedSubclassSpell('cleric-war',9,'Steel Wind Strike')).toBe(true);
+  expect(isAlwaysPreparedSubclassSpell('cleric-war',8,'Steel Wind Strike')).toBe(false);
+ });
+
  it('unlocks verified Light Domain and Fiend Patron lists cumulatively',()=>{
   for(const subclass of ['cleric-light','warlock-fiend']){
    expect(alwaysPreparedSubclassSpells(subclass,2)).toEqual([]);
@@ -31,6 +42,6 @@ describe('2024 always-prepared subclass spells',()=>{
   expect(forecastSpellSelectionWarnings('cleric',forecast,3,'aid')[0]).toContain('always prepared');
  });
  it('does not infer lists for unverified subclasses',()=>{
-  expect(alwaysPreparedSubclassSpells('cleric-trickery',20)).toEqual([]);
+  expect(alwaysPreparedSubclassSpells('warlock-archfey',20)).toEqual([]);
  });
 });
