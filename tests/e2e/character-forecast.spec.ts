@@ -54,7 +54,7 @@ test('forecast UI displays Warlock Mystic Arcanum replacement selectors',async({
 });
 
 test('planned subclass persists across reload',async({page})=>{
- await page.addInitScript(()=>{if(!localStorage.getItem('four-keeps-character-drafts-v1'))localStorage.setItem('four-keeps-character-drafts-v1',JSON.stringify([{schemaVersion:1,id:'subclass-persistence',status:'draft',rules:{edition:'2024',allowCompatibleLegacy:true},step:'forecast',identity:{name:'Subclass Persistence'},selections:{classId:'paladin'},forecast:{targetLevel:3,levels:[]},createdAt:'2026-11-10T00:00:00.000Z',updatedAt:'2026-11-10T00:00:00.000Z'}])));});
+ await page.addInitScript(()=>{if(!localStorage.getItem('four-keeps-character-drafts-v1'))localStorage.setItem('four-keeps-character-drafts-v1',JSON.stringify([{schemaVersion:1,id:'subclass-persistence',status:'draft',rules:{edition:'2024',allowCompatibleLegacy:true},step:'forecast',identity:{name:'Subclass Persistence'},selections:{classId:'paladin'},forecast:{targetLevel:3,levels:[]},createdAt:'2026-11-10T00:00:00.000Z',updatedAt:'2026-11-10T00:00:00.000Z'}]));});
  await page.goto('/four-keeps/');
  await page.getByRole('button',{name:'My Characters'}).click();
  await page.getByRole('button',{name:/Subclass Persistence/}).click();
@@ -64,7 +64,7 @@ test('planned subclass persists across reload',async({page})=>{
  await expect(page.getByLabel('Planned subclass')).toHaveValue('paladin-devotion');
 });
 test('Mystic Arcanum replacement controls save selected existing and replacement spells',async({page})=>{
- await page.addInitScript(()=>{if(!localStorage.getItem('four-keeps-character-drafts-v1'))localStorage.setItem('four-keeps-character-drafts-v1',JSON.stringify([{schemaVersion:1,id:'arcanum-interaction',status:'draft',rules:{edition:'2024',allowCompatibleLegacy:true},step:'forecast',identity:{name:'Arcanum Interaction'},selections:{classId:'warlock'},forecast:{targetLevel:12,levels:[{level:11,plannedSpellIds:['eyebite']}]},createdAt:'2026-11-10T00:00:00.000Z',updatedAt:'2026-11-10T00:00:00.000Z'}])));});
+ await page.addInitScript(()=>{if(!localStorage.getItem('four-keeps-character-drafts-v1'))localStorage.setItem('four-keeps-character-drafts-v1',JSON.stringify([{schemaVersion:1,id:'arcanum-interaction',status:'draft',rules:{edition:'2024',allowCompatibleLegacy:true},step:'forecast',identity:{name:'Arcanum Interaction'},selections:{classId:'warlock'},forecast:{targetLevel:12,levels:[{level:11,plannedSpellIds:['eyebite']}]},createdAt:'2026-11-10T00:00:00.000Z',updatedAt:'2026-11-10T00:00:00.000Z'}]));});
  await page.goto('/four-keeps/');
  await page.getByRole('button',{name:'My Characters'}).click();
  await page.getByRole('button',{name:/Arcanum Interaction/}).click();
