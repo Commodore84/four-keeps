@@ -80,6 +80,7 @@ export function forecastSpellSelectionWarnings(classId:string,forecast:Advanceme
  const previous=plannedLevel(forecast,level).plannedSpellIds??[];
  if(previous.includes(spellId))return [];
  const selected=previous.map(id=>[...SPELLS,...HIGHER_LEVEL_FORECAST_SPELLS].find(item=>item.id===id)).filter((item):item is NonNullable<typeof item>=>Boolean(item));
+ if(classId==='warlock'&&spell.level>=6&&forecast.levels.some(plan=>plan.level!==level&&(plan.plannedSpellIds??[]).some(id=>[...SPELLS,...HIGHER_LEVEL_FORECAST_SPELLS].some(item=>item.id===id&&item.level===spell.level))))return ['Level '+level+': a Mystic Arcanum spell of level '+spell.level+' is already planned at another level.'];
  if(classId==='warlock'&&spell.level>=6&&selected.some(item=>item.level===spell.level))return ['Level '+level+': only one Mystic Arcanum spell of level '+spell.level+' may be selected.'];
  if(preparedSpellsAtLevel(classId,level)!==null&&classId!=='wizard'&&spell.level>0&&spell.level<=5){
   const cap=Math.max(0,(preparedSpellsAtLevel(classId,level)??0)-(preparedSpellsAtLevel(classId,level-1)??0));
