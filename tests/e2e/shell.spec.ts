@@ -307,7 +307,7 @@ test('player registers and manages a Fiend actor without modifying Nighthawk',as
  await page.getByRole('button',{name:'Player',exact:true}).click();
  const manager=page.getByLabel('Subclass actor manager');
  await manager.getByLabel('New subclass actor ID').fill('companion-fiend');
- await manager.getByLabel('New subclass').selectOption('warlock-fiend');
+ await manager.getByLabel('New subclass',{exact:true}).selectOption('warlock-fiend');
  await manager.getByLabel('New actor level').fill('10');
  await manager.getByLabel('New actor Charisma modifier').fill('3');
  await manager.getByRole('button',{name:'Register subclass actor'}).click();
@@ -339,7 +339,7 @@ test('Druid terrain changes only on Long Rest and persists',async({page})=>{
  await page.getByRole('button',{name:'Player',exact:true}).click();
  const manager=page.getByLabel('Subclass actor manager');
  await manager.getByLabel('New subclass actor ID').fill('companion-druid');
- await manager.getByLabel('New subclass').selectOption('druid-land');
+ await manager.getByLabel('New subclass',{exact:true}).selectOption('druid-land');
  await manager.getByLabel('New actor level').fill('10');
  await manager.getByLabel('New actor terrain').selectOption('arid');
  await manager.getByRole('button',{name:'Register subclass actor'}).click();
