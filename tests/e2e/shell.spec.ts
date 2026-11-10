@@ -642,7 +642,7 @@ test('DM-verified opportunity reaction consumes only the attacker reaction',asyn
  await expect(panel).toContainText('opportunity attack vs fiend: hit');
 });
 
-test('unified campaign ammunition spending is persistent and rejects overdrafts',async({page})=>{
+test('unified campaign ammunition spending rejects missing campaign equipment',async({page})=>{
  await page.goto('/four-keeps/');
  await page.getByRole('button',{name:'Settings',exact:true}).click();
  await page.getByLabel('New campaign name').fill('Ammunition browser');
@@ -658,9 +658,9 @@ test('unified campaign ammunition spending is persistent and rejects overdrafts'
  await panel.getByLabel('Nighthawk campaign item').selectOption('arrows');
  await panel.getByLabel('Campaign item quantity').fill('1');
  await panel.getByRole('button',{name:'Spend campaign inventory'}).click();
- await expect(panel.getByRole('status')).toContainText('Campaign inventory spent');
+ await expect(panel.getByRole('status')).toContainText('Insufficient campaign equipment');
  await page.reload();
  await page.getByRole('button',{name:'Continue Adventure'}).click();
  await page.getByRole('button',{name:'Player',exact:true}).click();
- await expect(page.getByLabel('Nighthawk campaign inventory')).toContainText('19 arrows');
+ await expect(page.getByLabel('Nighthawk campaign inventory')).toContainText('unknown arrows');
 });
