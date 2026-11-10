@@ -205,13 +205,36 @@ export function endCompanionTurn(campaign:Campaign,actorId:string):Campaign{
  const next=(battle.turnIndex+1)%battle.order.length;
  const nextId=battle.order[next];const outgoing=battle.participants[actorId];const participants={...battle.participants,[actorId]:{...outgoing,disengaged:false}};participants[nextId]={...participants[nextId],movementSpentFeet:0,actionUsed:false,bonusActionUsed:false,dashFeet:0,disengaged:false,dodging:false,reactionUsed:false};return save(campaign,{...battle,participants,turnIndex:next,round:battle.round+(next===0?1:0),log:[...battle.log,actorId+' ended turn']});
 }
+/** 2024 death saves are tracked independently of campaign.character and legacy combat.
+ * Natural 20 restores 1 HP; natural 1 causes two failures; other rolls use DC 10.
+ */
+export function resolveCompanionDeathSave(campaign:Campaign,actorId:string,roll:number):Campaign{
+ const battle=activeActor(campaign,actorId),actor=battle.participants[actorId];
+ if(!Number.isInteger(roll)||roll<1||roll>20||actor.hp!==0||actor.actorKind==='enemy')throw Error('Death saving throw unavailable');
+ const current=actor.deathSaves??{successes:0,failures:0,stable:false,dead:false};
+ if(current.stable||current.dead)throw Error('Death saves already resolved');
+ let successes=current.successes,failures=current.failures,hp=0,stable=false,dead=false;
+ if(roll===20){hp=1;successes=0;failures=0;}
+ else {if(roll===1)failures+=2;else if(roll>=10)successes++;else failures++;stable=successes>=3;dead=failures>=3;}
+ const deathSaves={successes:Math.min(3,successes),failures:Math.min(3,failures),stable,dead};
+ return save(campaign,{...battle,participants:{...battle.participants,[actorId]:{...actor,hp,deathSaves,conditions:hp>0?actor.conditions.filter(c=>c!=='Unconscious'):actor.conditions}},log:[...battle.log,actorId+' death save '+roll+': '+(hp>0?'regained 1 HP':dead?'dead':stable?'stable':deathSaves.successes+' successes, '+deathSaves.failures+' failures')]});
+}
+/** DM-recorded healing resets death saves on regaining HP, never writes to legacy combat. */
+export function healCompanion(campaign:Campaign,actorId:string,amount:number):Campaign{
+ const battle=encounter(campaign),actor=battle.participants[actorId];
+ if(!actor||!Number.isInteger(amount)||amount<1||amount>1000||actor.deathSaves?.dead)throw Error('Invalid healing');
+ const hp=Math.min(actor.maxHp,actor.hp+amount);
+ return save(campaign,{...battle,participants:{...battle.participants,[actorId]:{...actor,hp,deathSaves:hp>0?undefined:actor.deathSaves,conditions:hp>0?actor.conditions.filter(c=>c!=='Unconscious'):actor.conditions}},log:[...battle.log,actorId+' healed '+(hp-actor.hp)+' HP']});
+}
 export function damageCompanion(campaign:Campaign,targetId:string,amount:number,type:DamageType):Campaign{
  const battle=encounter(campaign),actor=battle.participants[targetId];
  if(!actor||!Number.isInteger(amount)||amount<0||amount>1000)throw Error('Invalid damage target or amount');
  const taken=(targetId==='nighthawk'&&battle.mode==='unified')||actor.actorKind==='enemy'?amount:adjudicateSubclassActorDamage(campaign,targetId,amount,type);
  const hp=Math.max(0,actor.hp-taken);
+ const existing=actor.deathSaves;
+ const deathSaves=actor.actorKind==='enemy'?undefined:hp===0?{successes:existing?.successes??0,failures:Math.min(3,(existing?.failures??0)+(actor.hp===0&&taken>0?1:0)),stable:false,dead:(existing?.dead??false)||(actor.hp===0&&taken>0&&(existing?.failures??0)+1>=3)}:undefined;
  const concentrationNote=actor.concentratingOn&&taken>0?' Concentration save required (DC '+companionConcentrationSaveDC(taken)+')'+(hp===0?'; concentration ends at 0 HP':''):'';
- return save(campaign,{...battle,participants:{...battle.participants,[targetId]:{...actor,hp,concentratingOn:hp===0?undefined:actor.concentratingOn}},log:[...battle.log,targetId+' took '+taken+' '+type+' damage'+(taken!==amount?' (resisted)':'')+concentrationNote]});
+ return save(campaign,{...battle,participants:{...battle.participants,[targetId]:{...actor,hp,concentratingOn:hp===0?undefined:actor.concentratingOn,deathSaves,conditions:hp===0&&actor.actorKind!=='enemy'?[...new Set([...actor.conditions,'Unconscious' as const])]:actor.conditions}},log:[...battle.log,targetId+' took '+taken+' '+type+' damage'+(taken!==amount?' (resisted)':'')+concentrationNote]});
 }
 export function conditionCompanion(campaign:Campaign,targetId:string,condition:'Charmed'|'Poisoned',auraSourceId?:string):Campaign{
  const battle=encounter(campaign),actor=battle.participants[targetId];
