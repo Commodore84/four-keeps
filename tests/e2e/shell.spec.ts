@@ -957,7 +957,7 @@ test('frontier adventure travels, records interactions and resumes from campaign
  await page.getByLabel('New campaign name').fill('Frontier session persistence');
  await page.getByRole('button',{name:'New',exact:true}).click();
  await page.getByRole('button',{name:'Adventure',exact:true}).click();
- const session=page.getByLabel('Adventure session');
+ const session=page.getByLabel('Adventure session',{exact:true});
  await session.getByRole('button',{name:'Start frontier adventure'}).click();
  await expect(session.getByLabel('Adventure session status')).toContainText('exploring');
  await session.getByRole('button',{name:'Speak with the watchkeeper'}).click();
@@ -967,7 +967,7 @@ test('frontier adventure travels, records interactions and resumes from campaign
  await expect(session).toContainText('Visited 3/3 locations');
  await page.reload();
  await page.getByRole('button',{name:'Continue Adventure'}).click();
- await expect(page.getByLabel('Adventure session')).toContainText('Old Watchtower');
+ await expect(page.getByLabel('Adventure session',{exact:true})).toContainText('Old Watchtower');
  await expect(page.getByLabel('Adventure narrative history')).toContainText('watchkeeper reports travelers');
 });
 test('frontier encounter handoff uses registered companion and resumes after completed encounter',async({page})=>{
@@ -981,11 +981,11 @@ test('frontier encounter handoff uses registered companion and resumes after com
  await manager.getByLabel('New subclass actor ID').fill('paladin');
  await manager.getByRole('button',{name:'Register subclass actor'}).click();
  await page.getByRole('button',{name:'Adventure',exact:true}).click();
- const session=page.getByLabel('Adventure session');
+ const session=page.getByLabel('Adventure session',{exact:true});
  await session.getByRole('button',{name:'Start frontier adventure'}).click();
  await session.getByRole('button',{name:'Travel to Old Crossroads'}).click();
  await session.getByRole('button',{name:'Travel to Old Watchtower'}).click();
- await session.getByLabel('Adventure companion').selectOption('paladin');
+ await session.getByLabel('Adventure companion',{exact:true}).selectOption('paladin');
  await session.getByLabel('Adventure Nighthawk initiative').fill('20');
  await session.getByLabel('Adventure companion initiative').fill('10');
  await session.getByLabel('Adventure companion HP').fill('20');
@@ -994,7 +994,7 @@ test('frontier encounter handoff uses registered companion and resumes after com
  await expect(session.getByLabel('Companion encounter')).toContainText('nighthawk: 10/10 HP');
  await page.reload();
  await page.getByRole('button',{name:'Continue Adventure'}).click();
- const restored=page.getByLabel('Adventure session');
+ const restored=page.getByLabel('Adventure session',{exact:true});
  await expect(restored.getByLabel('Companion encounter')).toContainText('paladin: 20/20 HP');
  await restored.getByRole('button',{name:'Finish companion encounter'}).click();
  await restored.getByRole('button',{name:'Resume exploration after encounter'}).click();
