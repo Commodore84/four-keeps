@@ -85,7 +85,6 @@ export function armorClass(draft:EquipmentDraft,classId:string,backgroundId:stri
  let ac=a?.category==='armor'&&(owned[a.id]??0)>0?(a.baseAC??10)+Math.min(dex,a.dexCap??99):10+dex;
  if((!a||(owned[a.id]??0)<1)&&classId==='barbarian')ac=10+dex+modifier(scores.Con);
  if((!a||(owned[a.id]??0)<1)&&classId==='monk')ac=10+dex+modifier(scores.Wis);
- const owned=inventory(draft,classId,backgroundId);
  if(shield?.category==='shield'&&(owned[shield.id]??0)>0&&armorTrained(classId,shield))ac+=2;
  return ac;
 }
