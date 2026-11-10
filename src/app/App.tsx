@@ -1,7 +1,8 @@
 import {CompanionEncounterPanel} from './CompanionEncounterPanel';
 import {AdventureSessionPanel} from './AdventureSessionPanel';
 import {SubclassActorManager} from './SubclassActorManager';
-import { CharacterCreator } from './CharacterCreator';
+import { CharacterCreator,readCharacterDrafts } from './CharacterCreator';
+import {campaignFromCharacterDraft,characterDraftImportOptions} from '../game/characterImport';
 import { useEffect, useRef, useState } from 'react';
 import { createBackup, parseBackup } from '../game/backup';
 import { BookOpen, Bird, Blocks, Compass, Droplet, Map, RefreshCw, Send, Settings, Shield, Swords, UserRound, Users } from 'lucide-react';
@@ -368,6 +369,7 @@ function WorldMap({campaign}:{campaign:Campaign|null}) {
 }
 export function App() {
   const [activeView, setActiveView] = useState<View>('adventure');
+  const [selectedCharacterDraft,setSelectedCharacterDraft]=useState('');
   const [portalScreen,setPortalScreen] = useState<'home'|'characters'|'campaigns'|'new'|'help'|'adventure'>('home');
   const [fullHistory, setFullHistory] = useState(false);
   const [draft, setDraft] = useState('');
@@ -419,7 +421,9 @@ export function App() {
     if (saving || !newTitle.trim()) return;
     setSaving(true);
     try {
-      const next = newCampaign(newTitle);
+      const selected=selectedCharacterDraft?readCharacterDrafts().find(d=>d.id===selectedCharacterDraft):undefined;
+      if(selectedCharacterDraft&&!selected)throw Error('Selected character draft no longer exists');
+      const next = selected?campaignFromCharacterDraft(selected,newTitle):newCampaign(newTitle);
       await localCampaignStorage.save(next);
       setCampaign(next);
       setCampaigns((items) => [next, ...items]);
@@ -1107,7 +1111,11 @@ export function App() {
       {portalScreen==='characters'&&<div className="space-y-3"><h2 className="font-serif text-2xl">My Characters</h2><CharacterCreator/></div>}
       {portalScreen==='new'&&<section className="space-y-4 rounded-xl border border-white/20 bg-panel p-4">
         <h2 className="font-serif text-2xl">New Adventure</h2>
-        <p className="text-sm text-parchment/65">Campaigns currently start with the prototype character. Selecting a created character for a campaign is planned for a later milestone.</p>
+        <p className="text-sm text-parchment/65">Select a fully validated level-one character, or leave the prototype Nighthawk selected for legacy playtesting. Existing campaigns are never overwritten.</p>
+        <label className="block space-y-2 text-sm">Starting character<select aria-label="Starting character" value={selectedCharacterDraft} onChange={e=>setSelectedCharacterDraft(e.target.value)} className="w-full rounded-lg border border-white/20 bg-ink p-3">
+        <option value="">Prototype Nighthawk (legacy)</option>
+        {characterDraftImportOptions(readCharacterDrafts()).map(item=><option key={item.id} value={item.id} disabled={!item.valid}>{item.name} · {item.classId}{item.valid?'':' (incomplete)'}</option>)}
+        </select></label>
         <label className="block space-y-2 text-sm">Campaign name<input value={newTitle} onChange={event=>setNewTitle(event.target.value)} className="w-full rounded-lg border border-white/20 bg-ink p-3" placeholder="Campaign name"/></label>
         <button type="button" disabled={saving||loading||!newTitle.trim()} onClick={()=>void createCampaign()} className="rounded-lg bg-gold px-4 py-3 font-semibold text-ink disabled:opacity-40">Create campaign</button>
       </section>}
