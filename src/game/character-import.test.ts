@@ -33,5 +33,8 @@ describe('validated character draft to campaign import',()=>{
   expect(isCampaign(c)).toBe(true);
   expect(JSON.parse(JSON.stringify(c)).characterIdentity.name).toBe('Raven');
   expect(beginAdventureSession(c).characterIdentity?.name).toBe('Raven');
+  expect(isCampaign({...c,characterIdentity:{...c.characterIdentity!,name:''}})).toBe(false);
+  const session=beginAdventureSession(c);
+  expect(isCampaign({...session,adventureSession:{...session.adventureSession!,site:'unknown' as 'frontier'}})).toBe(false);
  });
 });
