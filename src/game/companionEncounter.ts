@@ -2,6 +2,7 @@ import type {Campaign} from './campaign';
 import {adjudicateSubclassActorCondition,adjudicateSubclassActorDamage} from './campaign';
 import type {DamageType} from './subclassCombatRules';
 import {abilityModifier} from './checks';
+import {ITEMS} from './creationEquipment';
 
 /** Isolated companion skirmish. Never mutates Campaign.combat (the Nighthawk training encounter). */
 export interface CompanionEncounter {
@@ -257,6 +258,14 @@ export function spendCompanionConsumable(campaign:Campaign,actorId:string,item:s
 }
 /** Character-sheet level-one slots are authoritative. Spending is opt-in and does not touch legacy combat. */
 /** Read-only inventory bridge. Campaign inventory is never duplicated or consumed implicitly. */
+/** Display authoritative catalog weapon and armor references only when recorded in campaign inventory.
+ * A carried weapon is not necessarily equipped; no attack proficiency or AC is inferred.
+ */
+export function nighthawkEquipmentReferences(campaign:Campaign){
+ const names=new Set((campaign.inventoryLedger?.gear??[]).filter(g=>g.quantity>0).map(g=>g.name.toLowerCase()));
+ if((campaign.equipment?.daggers??0)>0)names.add('dagger');
+ return {armorClass:campaign.character?.armorClass??null,items:ITEMS.filter(item=>(item.category==='weapon'||item.category==='armor'||item.category==='shield')&&names.has(item.name.toLowerCase())).map(item=>({id:item.id,name:item.name,category:item.category,damage:item.damage??null,properties:item.properties??[],baseAC:item.baseAC??null})),equippedWeapon:'unverified' as const,equippedArmor:'unverified' as const};
+}
 export function nighthawkEncounterInventory(campaign:Campaign){
  const gear=(campaign.inventoryLedger?.gear??[]).filter(item=>Number.isInteger(item.quantity)&&item.quantity>=0).map(item=>({name:item.name,quantity:item.quantity}));
  return {gear,ammunition:{arrows:campaign.equipment?.arrows??null},weapons:{daggers:campaign.equipment?.daggers??null},supplies:{caltrops:campaign.equipment?.caltrops??null,ballBearings:campaign.equipment?.ballBearings??null},authoritativeSource:'campaign' as const};
