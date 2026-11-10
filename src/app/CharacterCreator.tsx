@@ -1,3 +1,4 @@
+import {SPELL_COUNTS,INVOCATIONS,emptyMagic,spellOptions,toggleSpell,validateMagic,spellStats,type MagicDraft} from '../game/creationMagic';
 import { ITEMS, ITEM_BY_ID, CLASS_PACKAGES, BACKGROUND_PACKAGES, emptyEquipment, inventory, remainingCp, buy, armorClass, attackBonus, weaponTrained, armorTrained, equipmentErrors, carryingWeight, carryingCapacity, type EquipmentDraft } from '../game/creationEquipment';
 import { ABILITIES, STANDARD_ARRAY, POINT_COSTS, emptyAbilityDraft, pointCost, rollSet, totalScores, modifier, validateAbilityDraft, type AbilityDraft } from '../game/creationAbilities';
 import { CLASSES, classChoices, classSummary, reconcileChoices, setChoice, spellcastingAtLevel, validateClassAgainstBackground, type ChoiceSelections, type ChoiceDefinition } from '../game/creationClasses';
@@ -12,7 +13,7 @@ export interface CharacterDraft {
   rules: { edition: '2024'; allowCompatibleLegacy: boolean };
   step: CreationStep;
   identity: { name: string; pronouns: string; appearance: string; personality: string; backstory: string; portrait: null|string };
-  selections: { speciesId?: string; lineageId?: string; backgroundId?: string; classId?: string; classChoices?: ChoiceSelections; abilities?: AbilityDraft; equipment?: EquipmentDraft };
+  selections: { speciesId?: string; lineageId?: string; backgroundId?: string; classId?: string; classChoices?: ChoiceSelections; abilities?: AbilityDraft; equipment?: EquipmentDraft; magic?: MagicDraft };
   createdAt: string;
   updatedAt: string;
 }
@@ -58,12 +59,13 @@ export function CharacterCreator(){
     if(!draft)return;
     update({selections:{...draft.selections,...patch}});
   }
-  function chooseClass(classId:string){if(!draft)return;updateSelections({classId,classChoices:{}});}
+  function chooseClass(classId:string){if(!draft)return;updateSelections({classId,classChoices:{},magic:emptyMagic()});}
   function toggleClassChoice(definition:ChoiceDefinition,value:string){
     if(!draft?.selections.classId)return;
     const next=setChoice(draft.selections.classChoices??{},definition,value);
     updateSelections({classChoices:reconcileChoices(classChoices(draft.selections.classId,next['class-skills']??[]),next)});
   }
+  function updateMagic(next:MagicDraft){updateSelections({magic:next});}
   function updateEquipment(next:EquipmentDraft){updateSelections({equipment:next});}
   function updateAbilities(next:AbilityDraft){updateSelections({abilities:next});}
   function rollAbilities(){
@@ -85,7 +87,7 @@ export function CharacterCreator(){
     {!draft?<><button type="button" className="rounded-lg bg-gold px-4 py-2 font-semibold text-ink" onClick={()=>{const next=createCharacterDraft();persist([next,...drafts]);setSelected(next.id);}}>Create character</button>
       {drafts.length>0&&<div className="space-y-2"><h4 className="font-semibold">Unfinished characters</h4>{drafts.map(item=><button key={item.id} type="button" onClick={()=>setSelected(item.id)} className="block w-full rounded-lg border border-white/20 p-3 text-left">{item.identity.name||'Unnamed character'} <span className="text-xs text-parchment/60">· Resume draft</span></button>)}</div>}</>:
     <><div className="flex items-center justify-between gap-2"><strong>{draft.identity.name||'Unnamed character'}</strong><button type="button" onClick={()=>setSelected(null)} className="rounded-lg border border-white/25 px-3 py-2 text-sm">All characters</button></div>
-      <nav aria-label="Character creation steps" className="grid grid-cols-2 gap-2 sm:grid-cols-4">{CREATION_STEPS.map((step,index)=><button type="button" key={step.id} disabled={index>4||index===1&&validateIdentity(draft).length>0||index>=2&&(validateIdentity(draft).length>0||validateOrigins(draft.selections,draft.rules.allowCompatibleLegacy).length>0)||index>=3&&validateClassAgainstBackground(draft.selections.classId,draft.selections.classChoices??{},availableBackgrounds(draft.rules.allowCompatibleLegacy).find(b=>b.id===draft.selections.backgroundId)?.skills??[]).length>0||index===4&&validateAbilityDraft(draft.selections.abilities??emptyAbilityDraft(),availableBackgrounds(draft.rules.allowCompatibleLegacy).find(b=>b.id===draft.selections.backgroundId)?.abilities??[]).length>0} onClick={()=>update({step:step.id})} className={`rounded-lg border px-2 py-2 text-left text-sm ${draft.step===step.id?'border-gold text-gold':'border-white/20'} disabled:opacity-40`}>{index+1}. {step.label}</button>)}</nav>
+      <nav aria-label="Character creation steps" className="grid grid-cols-2 gap-2 sm:grid-cols-4">{CREATION_STEPS.map((step,index)=><button type="button" key={step.id} disabled={index>5||index===1&&validateIdentity(draft).length>0||index>=2&&(validateIdentity(draft).length>0||validateOrigins(draft.selections,draft.rules.allowCompatibleLegacy).length>0)||index>=3&&validateClassAgainstBackground(draft.selections.classId,draft.selections.classChoices??{},availableBackgrounds(draft.rules.allowCompatibleLegacy).find(b=>b.id===draft.selections.backgroundId)?.skills??[]).length>0||index>=4&&validateAbilityDraft(draft.selections.abilities??emptyAbilityDraft(),availableBackgrounds(draft.rules.allowCompatibleLegacy).find(b=>b.id===draft.selections.backgroundId)?.abilities??[]).length>0||index===5&&equipmentErrors(draft.selections.equipment??emptyEquipment(),draft.selections.classId??'',draft.selections.backgroundId??'',totalScores(draft.selections.abilities??emptyAbilityDraft())).length>0} onClick={()=>update({step:step.id})} className={`rounded-lg border px-2 py-2 text-left text-sm ${draft.step===step.id?'border-gold text-gold':'border-white/20'} disabled:opacity-40`}>{index+1}. {step.label}</button>)}</nav>
       {draft.step==='identity'?<div className="space-y-3">
         <p className="text-sm text-parchment/65">Tell us about your adventurer. Only the name is required.</p>
         {(['name','pronouns','appearance','personality','backstory'] as const).map(field=><label key={field} className="block space-y-1"><span className="block text-sm capitalize">{field}{field==='name'?' *':''}</span>{field==='name'||field==='pronouns'?<input className="w-full rounded-lg border border-white/20 bg-ink p-2" value={draft.identity[field]} onChange={e=>updateIdentity(field,e.target.value)}/>:<textarea className="w-full rounded-lg border border-white/20 bg-ink p-2" rows={2} value={draft.identity[field]} onChange={e=>updateIdentity(field,e.target.value)}/>}</label>)}
@@ -148,7 +150,7 @@ export function CharacterCreator(){
             {errors.length>0?<p role="status" className="text-sm text-amber-200">{errors.join(' ')}</p>:<p role="status" className="text-sm text-emerald-300">Ability scores valid and saved.</p>}
             <div className="flex gap-2"><button type="button" onClick={()=>update({step:'class'})} className="rounded-lg border border-white/25 px-3 py-2">Back to class</button><button type="button" disabled={errors.length>0} onClick={()=>update({step:'equipment'})} className="rounded-lg bg-gold px-3 py-2 text-ink disabled:opacity-40">Continue to equipment</button></div>
           </div>})()}
-      </div>:<div className="space-y-4" aria-label="Starting equipment">
+      </div>:draft.step==='equipment'?<div className="space-y-4" aria-label="Starting equipment">
         <h4 className="font-serif text-lg">Starting Equipment</h4>
         {(()=>{const classId=draft.selections.classId??'';const backgroundId=draft.selections.backgroundId??'';
           const eq=draft.selections.equipment??emptyEquipment();
@@ -183,7 +185,20 @@ export function CharacterCreator(){
               <p className="text-xs text-parchment/60">Armor training, shield training, weapon proficiency, and Strength requirements are checked below. Additional class feature modifiers will be integrated later.</p>
             </section>
             {errors.length?<p role="status" className="text-sm text-amber-200">{errors.join(' ')}</p>:<p role="status" className="text-sm text-emerald-300">Equipment selections valid and saved.</p>}
-            <div className="flex gap-2"><button type="button" onClick={()=>update({step:'abilities'})} className="rounded-lg border border-white/25 px-3 py-2">Back to abilities</button><button type="button" disabled className="rounded-lg bg-gold px-3 py-2 text-ink opacity-40">Continue to spells (next phase)</button></div>
+            <div className="flex gap-2"><button type="button" onClick={()=>update({step:'abilities'})} className="rounded-lg border border-white/25 px-3 py-2">Back to abilities</button><button type="button" disabled={errors.length>0} onClick={()=>update({step:"spells"})} className="rounded-lg bg-gold px-3 py-2 text-ink disabled:opacity-40">Continue to spells</button></div>
+          </div>})()}
+      </div>:<div className="space-y-4" aria-label="Spells and features">
+        <h4 className="font-serif text-lg">Spells &amp; Special Choices</h4>
+        {(()=>{const cls=draft.selections.classId??'';const count=SPELL_COUNTS[cls];const magic=draft.selections.magic??emptyMagic();const scores=totalScores(draft.selections.abilities??emptyAbilityDraft());const stats=spellStats(cls,scores);const errors=validateMagic(cls,magic);
+          const choose=(key:'cantrips'|'prepared'|'spellbook'|'invocations',id:string,max:number)=>updateMagic({...magic,[key]:toggleSpell(magic[key],id,max)});
+          return <div className="space-y-4">
+            <p className="text-sm text-parchment/70">Level 1 character choices. Spells gained from species, background feats, and later class levels will be configured in their own feature panels.</p>
+            {stats?<section className="rounded-lg border border-gold/30 p-3 text-sm"><h5 className="font-semibold">Spellcasting statistics</h5><p>Spell save DC <strong>{stats.dc}</strong> · Spell attack <strong>{stats.attack>=0?'+':''}{stats.attack}</strong> · Level-one slots <strong>{stats.slots[0]}</strong></p></section>:<p className="text-sm">No level-one class spellcasting. Your class features are recorded on the Class step.</p>}
+            {count&&<>{([['cantrips','Cantrips',count.cantrips,0],['spellbook','Wizard spellbook',count.book??0,1],['prepared',count.book?'Prepared from spellbook':'Prepared spells',count.prepared,1]] as const).filter(([key])=>key!=='spellbook'||!!count.book).filter(([, ,max])=>max>0).map(([key,label,max,level])=><fieldset key={key} className="space-y-2 rounded-lg border border-white/20 p-3"><legend className="font-semibold">{label} — {magic[key].length}/{max}</legend><div className="grid grid-cols-1 gap-2 sm:grid-cols-2">{(key==='prepared'&&count.book?spellOptions(cls,1).filter(spell=>magic.spellbook.includes(spell.id)):spellOptions(cls,level as 0|1)).map(spell=><label key={spell.id} className="flex items-start gap-2 rounded border border-white/15 p-2 text-sm"><input type="checkbox" checked={magic[key].includes(spell.id)} onChange={()=>choose(key,spell.id,max)}/><span>{spell.name}<span className="block text-xs text-parchment/60">{spell.school}</span></span></label>)}</div></fieldset>)}
+              {cls==='warlock'&&<fieldset className="space-y-2 rounded-lg border border-white/20 p-3"><legend className="font-semibold">Eldritch Invocation — {magic.invocations.length}/1</legend><div className="grid grid-cols-1 gap-2 sm:grid-cols-2">{INVOCATIONS.map(name=><label key={name} className="flex items-center gap-2 text-sm"><input type="radio" name="invocation" checked={magic.invocations.includes(name)} onChange={()=>updateMagic({...magic,invocations:[name]})}/>{name}</label>)}</div></fieldset>}
+            </>}
+            {errors.length?<p role="status" className="text-sm text-amber-200">{errors.join(' ')}</p>:<p role="status" className="text-sm text-emerald-300">Level-one spell choices valid and saved.</p>}
+            <div className="flex gap-2"><button type="button" onClick={()=>update({step:'equipment'})} className="rounded-lg border border-white/25 px-3 py-2">Back to equipment</button><button type="button" disabled className="rounded-lg bg-gold px-3 py-2 text-ink opacity-40">Continue to review (next phase)</button></div>
           </div>})()}
       </div>}
       <p className="text-xs text-parchment/55">Draft only · not attached to a campaign · cannot enter play until all required choices are valid</p>
