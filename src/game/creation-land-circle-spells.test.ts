@@ -1,6 +1,18 @@
 import {describe,it,expect} from 'vitest';
+import {emptyForecast,updateLevelPlan,landTerrainAtLevel} from './creationForecast';
 import {LAND_CIRCLE_SPELLS,landCirclePreparedSpells} from './creationSubclassSpells';
 describe('2024 Circle of the Land terrain preparation',()=>{
+ it('inherits terrain across forecast levels until the player changes it',()=>{
+  let forecast=updateLevelPlan(emptyForecast(),3,{landTerrain:'arid'});
+  expect(landTerrainAtLevel(forecast,4)).toBe('arid');
+  expect(landCirclePreparedSpells(landTerrainAtLevel(forecast,5),5)).toContain('Fireball');
+  forecast=updateLevelPlan(forecast,6,{landTerrain:'polar'});
+  expect(landTerrainAtLevel(forecast,5)).toBe('arid');
+  expect(landTerrainAtLevel(forecast,6)).toBe('polar');
+  expect(landCirclePreparedSpells(landTerrainAtLevel(forecast,6),6)).toContain('Sleet Storm');
+  expect(landCirclePreparedSpells(landTerrainAtLevel(forecast,6),6)).not.toContain('Fireball');
+ });
+
  it('requires a terrain choice and unlocks at Druid levels 3,5,7,9',()=>{
   expect(landCirclePreparedSpells(undefined,20)).toEqual([]);
   expect(landCirclePreparedSpells('arid',2)).toEqual([]);
