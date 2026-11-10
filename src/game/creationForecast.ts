@@ -138,7 +138,7 @@ export function forecastArcanumReplacementWarnings(forecast:AdvancementForecast)
   if(!from||!to){warnings.push('Level '+plan.level+': choose both Mystic Arcanum replacement spells.');continue;}
   const oldSpell=spells.find(item=>item.id===from);
   const newSpell=spells.find(item=>item.id===to);
-  if(!oldSpell||!newSpell||oldSpell.level<6||oldSpell.level>9||oldSpell.level!==newSpell.level||!newSpell.classes.includes('warlock')){
+  if(!oldSpell||!newSpell||oldSpell.level<6||oldSpell.level>9||oldSpell.level!==newSpell.level||!oldSpell.classes.includes('warlock')||!newSpell.classes.includes('warlock')){
    warnings.push('Level '+plan.level+': Mystic Arcanum replacement must be a Warlock spell of the same spell level.');continue;
   }
   if(from===to){warnings.push('Level '+plan.level+': Mystic Arcanum replacement must change the spell.');continue;}
