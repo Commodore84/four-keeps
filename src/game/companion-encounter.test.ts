@@ -1,7 +1,7 @@
 import {describe,it,expect} from 'vitest';
 import {newCampaign,registerSubclassActor,chooseSubclassResistance} from './campaign';
 import {initialSubclassCombatState} from './subclassCombatRules';
-import {startCompanionEncounter,moveCompanion,endCompanionTurn,damageCompanion,conditionCompanion,finishCompanionEncounter,attackCompanion,setCompanionSpeed ,useCompanionAction,setCompanionObstacles,companionLineOfSight,companionOpportunityAttackEligible,setCompanionCover,companionCoverStatus,companionPartySnapshot,startUnifiedEncounter,synchronizeNighthawkHitPoints,recordCompanionReaction,removeCompanionCondition,nighthawkEncounterStatistics,useCompanionBonusAction,setCompanionConcentration,companionConcentrationSaveDC,resolveCompanionConcentrationSave,setCompanionConsumable,spendCompanionConsumable,spendUnifiedNighthawkSpellSlot,resolveCompanionOpportunityAttack,nighthawkEncounterInventory,companionOpportunityCandidates,spendUnifiedNighthawkInventory,setCompanionTactics,applyCompanionCondition} from './companionEncounter';
+import {startCompanionEncounter,moveCompanion,endCompanionTurn,damageCompanion,conditionCompanion,finishCompanionEncounter,attackCompanion,setCompanionSpeed ,useCompanionAction,setCompanionObstacles,companionLineOfSight,companionOpportunityAttackEligible,setCompanionCover,companionCoverStatus,companionPartySnapshot,startUnifiedEncounter,synchronizeNighthawkHitPoints,recordCompanionReaction,removeCompanionCondition,nighthawkEncounterStatistics,useCompanionBonusAction,setCompanionConcentration,companionConcentrationSaveDC,resolveCompanionConcentrationSave,setCompanionConsumable,spendCompanionConsumable,spendUnifiedNighthawkSpellSlot,resolveCompanionOpportunityAttack,nighthawkEncounterInventory,companionOpportunityCandidates,spendUnifiedNighthawkInventory,setCompanionTactics,applyCompanionCondition,nighthawkEquipmentReferences} from './companionEncounter';
 const build=()=>{
  let c=newCampaign('Companion test');
  c=registerSubclassActor(c,'paladin',initialSubclassCombatState('paladin','paladin-devotion',7,3));
@@ -12,6 +12,15 @@ const build=()=>{
 };
 const start=()=>startCompanionEncounter(build(),{paladin:15,druid:12,fiend:9},{paladin:{x:0,y:0},druid:{x:1,y:0},fiend:{x:5,y:5}},{paladin:30,druid:22,fiend:25});
 describe('isolated companion encounter vertical slice',()=>{
+ it('exposes verified catalog damage for carried daggers without assuming equipped gear',()=>{
+  const c={...build(),equipment:{daggers:1,arrows:0,caltrops:0,ballBearings:0}};
+  const references=nighthawkEquipmentReferences(c);
+  expect(references.items).toContainEqual(expect.objectContaining({name:'Dagger',damage:'1d4 piercing'}));
+  expect(references.armorClass).toBe(c.character?.armorClass);
+  expect(references.equippedWeapon).toBe('unverified');
+  expect(references.equippedArmor).toBe('unverified');
+ });
+
  it('records DM-confirmed conditions and ends concentration on incapacitation',()=>{
   let c=start();
   c=setCompanionConcentration(c,'fiend','Hex');
