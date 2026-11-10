@@ -13,7 +13,7 @@ export interface CompanionEncounter {
  round:number;
  turnIndex:number;
  order:string[];
- participants:Record<string,{x:number;y:number;hp:number;maxHp:number;initiative:number;conditions:('Charmed'|'Poisoned'|'Blinded'|'Deafened'|'Frightened'|'Grappled'|'Incapacitated'|'Invisible'|'Paralyzed'|'Petrified'|'Prone'|'Restrained'|'Stunned'|'Unconscious'|'Exhaustion')[];speedFeet:number;movementSpentFeet:number;actionUsed:boolean;bonusActionUsed:boolean;dashFeet:number;disengaged:boolean;dodging:boolean;reactionUsed?:boolean;concentratingOn?:string;consumables?:Record<string,number>;faction?:string;reachFeet?:number;actorKind?:'party'|'enemy';armorClass?:number;attackModifier?:number;constitutionSaveModifier?:number;damageModifier?:number;damageDice?:string;enemyTactic?:'hold'|'nearest'|'lowest-hp';deathSaves?:{successes:number;failures:number;stable:boolean;dead:boolean}}>;
+ participants:Record<string,{x:number;y:number;hp:number;maxHp:number;initiative:number;conditions:('Charmed'|'Poisoned'|'Blinded'|'Deafened'|'Frightened'|'Grappled'|'Incapacitated'|'Invisible'|'Paralyzed'|'Petrified'|'Prone'|'Restrained'|'Stunned'|'Unconscious'|'Exhaustion')[];speedFeet:number;movementSpentFeet:number;actionUsed:boolean;bonusActionUsed:boolean;dashFeet:number;disengaged:boolean;dodging:boolean;reactionUsed?:boolean;concentratingOn?:string;consumables?:Record<string,number>;faction?:string;reachFeet?:number;actorKind?:'party'|'enemy';armorClass?:number;attackModifier?:number;constitutionSaveModifier?:number;damageModifier?:number;damageDice?:string;enemyTactic?:'hold'|'nearest'|'lowest-hp';rangedAttackFeet?:number;deathSaves?:{successes:number;failures:number;stable:boolean;dead:boolean}}>;
  obstacles?:{x:number;y:number}[];
  cover?:{x:number;y:number}[];
  pendingOpportunity?:{moverId:string;attackerIds:string[];from:{x:number;y:number};to:{x:number;y:number};destination?:{x:number;y:number}};
@@ -160,6 +160,24 @@ export function configureEnemyTactic(campaign:Campaign,enemyId:string,tactic:'ho
  const battle=encounter(campaign),actor=battle.participants[enemyId];
  if(actor?.actorKind!=='enemy')throw Error('Enemy actor required');
  return save(campaign,{...battle,participants:{...battle.participants,[enemyId]:{...actor,enemyTactic:tactic}},log:[...battle.log,enemyId+' tactic set to '+tactic]});
+}
+/** Optional DM-verified ranged attack profile; the game never invents
+ * a monster weapon, range or dice.
+ */
+export function configureEnemyRangedAttack(campaign:Campaign,enemyId:string,rangeFeet:number):Campaign{
+ const battle=encounter(campaign),actor=battle.participants[enemyId];
+ if(actor?.actorKind!=='enemy'||!Number.isInteger(rangeFeet)||rangeFeet<5||rangeFeet>600||rangeFeet%5!==0)throw Error('Invalid enemy ranged profile');
+ return save(campaign,{...battle,participants:{...battle.participants,[enemyId]:{...actor,rangedAttackFeet:rangeFeet}},log:[...battle.log,enemyId+' DM-verified ranged reach '+rangeFeet+' ft']});
+}
+/** Explicit target ranged attack: range and statistics must be configured,
+ * and the DM supplies both the attack and damage dice.
+ */
+export function executeEnemyRangedAttackTurn(campaign:Campaign,enemyId:string,targetId:string,roll:number,damageRoll:number,damageType:DamageType,secondD20?:number):Campaign{
+ const battle=activeActor(campaign,enemyId),actor=battle.participants[enemyId],target=battle.participants[targetId];
+ if(actor?.actorKind!=='enemy'||!actor.rangedAttackFeet||!target||actor.faction===target.faction)throw Error('Verified hostile ranged target and profile required');
+ if(battle.pendingOpportunity?.moverId===enemyId)throw Error('Pending opportunity reactions or interrupted movement');
+ const attacked=attackCompanionWithVerifiedStats(campaign,enemyId,targetId,roll,damageRoll,damageType,actor.rangedAttackFeet,secondD20);
+ return endCompanionTurn(attacked,enemyId);
 }
 export function previewEnemyTurn(campaign:Campaign,enemyId:string):{tactic:'hold'|'nearest'|'lowest-hp';targetId:string|null;distanceFeet:number|null;inReach:boolean}{
  const battle=activeActor(campaign,enemyId),actor=battle.participants[enemyId];
