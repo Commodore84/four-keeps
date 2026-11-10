@@ -8,7 +8,7 @@ export interface CompanionEncounter {
  round:number;
  turnIndex:number;
  order:string[];
- participants:Record<string,{x:number;y:number;hp:number;maxHp:number;initiative:number;conditions:('Charmed'|'Poisoned')[];speedFeet:number;movementSpentFeet:number;actionUsed:boolean;bonusActionUsed:boolean}>;
+ participants:Record<string,{x:number;y:number;hp:number;maxHp:number;initiative:number;conditions:('Charmed'|'Poisoned')[];speedFeet:number;movementSpentFeet:number;actionUsed:boolean;bonusActionUsed:boolean;dashFeet:number;disengaged:boolean;dodging:boolean}>;
  log:string[];
 }
 function encounter(campaign:Campaign):CompanionEncounter{
@@ -33,21 +33,21 @@ export function startCompanionEncounter(campaign:Campaign,initiative:Record<stri
   const roll=initiative[id],position=positions[id],hp=hitPoints[id];
   if(!Number.isInteger(roll)||roll<1||roll>40||!position||!Number.isInteger(position.x)||!Number.isInteger(position.y)||position.x<0||position.y<0||position.x>19||position.y>19||!Number.isInteger(hp)||hp<1||hp>500)throw Error('Invalid initiative, position or hit points');
   if(Object.values(participants).some(p=>p.x===position.x&&p.y===position.y))throw Error('Actors cannot share a starting square');
-  participants[id]={...position,hp,maxHp:hp,initiative:roll,conditions:[],speedFeet:30,movementSpentFeet:0,actionUsed:false,bonusActionUsed:false};
+  participants[id]={...position,hp,maxHp:hp,initiative:roll,conditions:[],speedFeet:30,movementSpentFeet:0,actionUsed:false,bonusActionUsed:false,dashFeet:0,disengaged:false,dodging:false};
  }
  const order=ids.sort((a,b)=>participants[b].initiative-participants[a].initiative||a.localeCompare(b));
  return save(campaign,{status:'active',round:1,turnIndex:0,order,participants,log:['Companion encounter started.']});
 }
 export function moveCompanion(campaign:Campaign,actorId:string,x:number,y:number):Campaign{
  const battle=activeActor(campaign,actorId),actor=battle.participants[actorId];
- if(!Number.isInteger(x)||!Number.isInteger(y)||x<0||y<0||x>19||y>19||(Math.abs(x-actor.x)+Math.abs(y-actor.y))*5>actor.speedFeet-actor.movementSpentFeet)throw Error('Move must be within six squares and the 20×20 arena');
+ if(!Number.isInteger(x)||!Number.isInteger(y)||x<0||y<0||x>19||y>19||(Math.max(Math.abs(x-actor.x),Math.abs(y-actor.y))*5>actor.speedFeet+actor.dashFeet-actor.movementSpentFeet)throw Error('Move must be within six squares and the 20×20 arena');
  if(Object.entries(battle.participants).some(([id,p])=>id!==actorId&&p.hp>0&&p.x===x&&p.y===y))throw Error('Square occupied');
- return save(campaign,{...battle,participants:{...battle.participants,[actorId]:{...actor,x,y,movementSpentFeet:actor.movementSpentFeet+(Math.abs(x-actor.x)+Math.abs(y-actor.y))*5}},log:[...battle.log,actorId+' moved to '+x+','+y]});
+ return save(campaign,{...battle,participants:{...battle.participants,[actorId]:{...actor,x,y,movementSpentFeet:actor.movementSpentFeet+(Math.max(Math.abs(x-actor.x),Math.abs(y-actor.y))*5}},log:[...battle.log,actorId+' moved to '+x+','+y]});
 }
 export function endCompanionTurn(campaign:Campaign,actorId:string):Campaign{
  const battle=activeActor(campaign,actorId);
  const next=(battle.turnIndex+1)%battle.order.length;
- const nextId=battle.order[next];const participant=battle.participants[nextId];return save(campaign,{...battle,participants:{...battle.participants,[nextId]:{...participant,movementSpentFeet:0,actionUsed:false,bonusActionUsed:false}},turnIndex:next,round:battle.round+(next===0?1:0),log:[...battle.log,actorId+' ended turn']});
+ const nextId=battle.order[next];const participant=battle.participants[nextId];return save(campaign,{...battle,participants:{...battle.participants,[nextId]:{...participant,movementSpentFeet:0,actionUsed:false,bonusActionUsed:false,dashFeet:0,disengaged:false,dodging:false}},turnIndex:next,round:battle.round+(next===0?1:0),log:[...battle.log,actorId+' ended turn']});
 }
 export function damageCompanion(campaign:Campaign,targetId:string,amount:number,type:DamageType):Campaign{
  const battle=encounter(campaign),actor=battle.participants[targetId];
@@ -74,11 +74,12 @@ export function finishCompanionEncounter(campaign:Campaign):Campaign{
 }
 
 /** Manual d20 and damage dice inputs; no automatic attack modifiers or dice invented. */
-export function attackCompanion(campaign:Campaign,attackerId:string,targetId:string,roll:number,attackModifier:number,targetAC:number,damageRoll:number,damageModifier:number,damageType:DamageType):Campaign{
+export function attackCompanion(campaign:Campaign,attackerId:string,targetId:string,roll:number,attackModifier:number,targetAC:number,damageRoll:number,damageModifier:number,damageType:DamageType,rangeFeet?:number):Campaign{
  const battle=activeActor(campaign,attackerId);
  const attacker=battle.participants[attackerId],target=battle.participants[targetId];
  if(!target||attackerId===targetId||attacker.hp<=0||target.hp<=0)throw Error('Invalid attacker or target');
  if(attacker.actionUsed)throw Error('Action already used this turn');
+ if(rangeFeet!==undefined){if(!Number.isInteger(rangeFeet)||rangeFeet<5||rangeFeet>1000||rangeFeet%5!==0)throw Error('Invalid attack range');const distance=Math.max(Math.abs(attacker.x-target.x),Math.abs(attacker.y-target.y))*5;if(distance>rangeFeet)throw Error('Target outside declared attack range');}
  if(!Number.isInteger(roll)||roll<1||roll>20||!Number.isInteger(attackModifier)||attackModifier< -20||attackModifier>30||!Number.isInteger(targetAC)||targetAC<1||targetAC>40||!Number.isInteger(damageRoll)||damageRoll<0||damageRoll>1000||!Number.isInteger(damageModifier)||damageModifier< -20||damageModifier>30)throw Error('Invalid attack inputs');
  const critical=roll===20;
  const hit=critical||(roll!==1&&roll+attackModifier>=targetAC);
@@ -97,4 +98,13 @@ export function setCompanionSpeed(campaign:Campaign,actorId:string,speedFeet:num
  const battle=encounter(campaign),actor=battle.participants[actorId];
  if(!actor||!Number.isInteger(speedFeet)||speedFeet<0||speedFeet>120||speedFeet%5!==0)throw Error('Invalid speed');
  return save(campaign,{...battle,participants:{...battle.participants,[actorId]:{...actor,speedFeet}},log:[...battle.log,actorId+' speed set to '+speedFeet+' ft (manual character statistic)']});
+}
+
+/** Explicit 2024 action choices; only effects we can enforce are automated. */
+export function useCompanionAction(campaign:Campaign,actorId:string,choice:'Dash'|'Disengage'|'Dodge'|'Help'|'Search'|'Study'|'Influence'|'Ready'|'Utilize'):Campaign{
+ const battle=activeActor(campaign,actorId),actor=battle.participants[actorId];
+ if(actor.actionUsed)throw Error('Action already used this turn');
+ const updated={...actor,actionUsed:true,dashFeet:choice==='Dash'?actor.dashFeet+actor.speedFeet:actor.dashFeet,disengaged:choice==='Disengage'||actor.disengaged,dodging:choice==='Dodge'||actor.dodging};
+ const note=['Help','Search','Study','Influence','Ready','Utilize'].includes(choice)?' (requires DM adjudication; no mechanical benefit assumed)':'';
+ return save(campaign,{...battle,participants:{...battle.participants,[actorId]:updated},log:[...battle.log,actorId+' used '+choice+note]});
 }
