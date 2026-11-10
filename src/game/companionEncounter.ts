@@ -10,6 +10,7 @@ export interface CompanionEncounter {
  order:string[];
  participants:Record<string,{x:number;y:number;hp:number;maxHp:number;initiative:number;conditions:('Charmed'|'Poisoned')[];speedFeet:number;movementSpentFeet:number;actionUsed:boolean;bonusActionUsed:boolean;dashFeet:number;disengaged:boolean;dodging:boolean}>;
  obstacles?:{x:number;y:number}[];
+ cover?:{x:number;y:number}[];
  log:string[];
 }
 function encounter(campaign:Campaign):CompanionEncounter{
@@ -37,7 +38,7 @@ export function startCompanionEncounter(campaign:Campaign,initiative:Record<stri
   participants[id]={...position,hp,maxHp:hp,initiative:roll,conditions:[],speedFeet:30,movementSpentFeet:0,actionUsed:false,bonusActionUsed:false,dashFeet:0,disengaged:false,dodging:false};
  }
  const order=ids.sort((a,b)=>participants[b].initiative-participants[a].initiative||a.localeCompare(b));
- return save(campaign,{status:'active',round:1,turnIndex:0,order,participants,obstacles:[],log:['Companion encounter started.']});
+ return save(campaign,{status:'active',round:1,turnIndex:0,order,participants,obstacles:[],cover:[],log:['Companion encounter started.']});
 }
 type Cell={x:number;y:number};
 const key=(p:Cell)=>p.x+','+p.y;
@@ -64,6 +65,7 @@ export function setCompanionObstacles(campaign:Campaign,obstacles:Cell[]):Campai
  const battle=encounter(campaign);
  if(obstacles.length>120||obstacles.some(p=>!valid(p))||new Set(obstacles.map(key)).size!==obstacles.length)throw Error('Invalid obstacle coordinates');
  if(obstacles.some(p=>Object.values(battle.participants).some(actor=>actor.x===p.x&&actor.y===p.y)))throw Error('Obstacle overlaps an actor');
+ if(obstacles.some(p=>(battle.cover??[]).some(c=>c.x===p.x&&c.y===p.y)))throw Error('Obstacle overlaps cover annotation');
  return save(campaign,{...battle,obstacles:obstacles.map(p=>({...p})),log:[...battle.log,'Map obstacles updated: '+obstacles.length]});
 }
 /** Solid occupied squares block sight. Other terrain and partial cover require DM judgment. */
@@ -78,6 +80,25 @@ export function companionLineOfSight(battle:CompanionEncounter,from:Cell,to:Cell
   if(blocked.has(key({x:Math.round(x),y:Math.round(y)}))&&Math.abs(x-Math.round(x))<0.49&&Math.abs(y-Math.round(y))<0.49)return false;
  }
  return true;
+}
+/** Partial cover is a DM-supplied map annotation, not an automatic AC bonus. */
+export function setCompanionCover(campaign:Campaign,cells:{x:number;y:number}[]):Campaign{
+ const battle=encounter(campaign);
+ if(cells.length>120||cells.some(p=>!valid(p))||new Set(cells.map(key)).size!==cells.length)throw Error('Invalid cover coordinates');
+ if(cells.some(p=>(battle.obstacles??[]).some(o=>o.x===p.x&&o.y===p.y)))throw Error('Cover cannot overlap solid obstacles');
+ return save(campaign,{...battle,cover:cells.map(p=>({...p})),log:[...battle.log,'Cover annotations updated: '+cells.length]});
+}
+export function companionCoverStatus(campaign:Campaign,targetId:string):'annotated'|'none'{
+ const battle=encounter(campaign),target=battle.participants[targetId];
+ if(!target)throw Error('Unknown cover target');
+ return (battle.cover??[]).some(p=>p.x===target.x&&p.y===target.y)?'annotated':'none';
+}
+/** Read-only bridge for planning a unified party encounter. Never writes to Nighthawk combat. */
+export function companionPartySnapshot(campaign:Campaign){
+ const battle=campaign.companionEncounter;
+ return {nighthawk:{id:'nighthawk',prototypeCombatStatus:campaign.combat?.status??'not-started',includedInCompanionEncounter:false},
+  companions:battle?battle.order.map(id=>({id,hp:battle.participants[id].hp,initiative:battle.participants[id].initiative,active:battle.status==='active'&&battle.order[battle.turnIndex]===id})):[],
+  readyForUnifiedCombat:false};
 }
 export function companionOpportunityAttackEligible(campaign:Campaign,actorId:string):boolean{
  const battle=encounter(campaign),actor=battle.participants[actorId];
@@ -128,6 +149,7 @@ export function attackCompanion(campaign:Campaign,attackerId:string,targetId:str
  const attacker=battle.participants[attackerId],target=battle.participants[targetId];
  if(!target||attackerId===targetId||attacker.hp<=0||target.hp<=0)throw Error('Invalid attacker or target');
  if(attacker.actionUsed)throw Error('Action already used this turn');
+ if((battle.cover??[]).some(p=>p.x===target.x&&p.y===target.y))throw Error('Target has annotated cover: DM must supply adjusted AC and clear cover annotation before attack');
  if(!companionLineOfSight(battle,attacker,target))throw Error('Line of sight blocked by map obstacle');
  if(target.dodging&&secondD20===undefined)throw Error('Dodge requires a second d20 for disadvantage');
  if(secondD20!==undefined&&(!Number.isInteger(secondD20)||secondD20<1||secondD20>20))throw Error('Invalid second d20');
