@@ -1,7 +1,7 @@
 import {describe,it,expect} from 'vitest';
 import {newCampaign,registerSubclassActor,chooseSubclassResistance} from './campaign';
 import {initialSubclassCombatState} from './subclassCombatRules';
-import {startCompanionEncounter,moveCompanion,endCompanionTurn,damageCompanion,conditionCompanion,finishCompanionEncounter,attackCompanion,setCompanionSpeed ,useCompanionAction,setCompanionObstacles,companionLineOfSight,companionOpportunityAttackEligible,setCompanionCover,companionCoverStatus,companionPartySnapshot,startUnifiedEncounter,synchronizeNighthawkHitPoints,recordCompanionReaction,removeCompanionCondition,nighthawkEncounterStatistics,useCompanionBonusAction,setCompanionConcentration,companionConcentrationSaveDC,resolveCompanionConcentrationSave,setCompanionConsumable,spendCompanionConsumable} from './companionEncounter';
+import {startCompanionEncounter,moveCompanion,endCompanionTurn,damageCompanion,conditionCompanion,finishCompanionEncounter,attackCompanion,setCompanionSpeed ,useCompanionAction,setCompanionObstacles,companionLineOfSight,companionOpportunityAttackEligible,setCompanionCover,companionCoverStatus,companionPartySnapshot,startUnifiedEncounter,synchronizeNighthawkHitPoints,recordCompanionReaction,removeCompanionCondition,nighthawkEncounterStatistics,useCompanionBonusAction,setCompanionConcentration,companionConcentrationSaveDC,resolveCompanionConcentrationSave,setCompanionConsumable,spendCompanionConsumable,spendUnifiedNighthawkSpellSlot,resolveCompanionOpportunityAttack} from './companionEncounter';
 const build=()=>{
  let c=newCampaign('Companion test');
  c=registerSubclassActor(c,'paladin',initialSubclassCombatState('paladin','paladin-devotion',7,3));
@@ -12,6 +12,29 @@ const build=()=>{
 };
 const start=()=>startCompanionEncounter(build(),{paladin:15,druid:12,fiend:9},{paladin:{x:0,y:0},druid:{x:1,y:0},fiend:{x:5,y:5}},{paladin:30,druid:22,fiend:25});
 describe('isolated companion encounter vertical slice',()=>{
+ it('spends verified Nighthawk spell slots atomically and preserves prototype combat',()=>{
+  const base=build();
+  const character={...base.character!,preparedSpells:['Shield','Magic Missile'],spellSlots:{level1:2,usedLevel1:0}};
+  const initial={...base,character};
+  const c=startUnifiedEncounter(initial,{nighthawk:20,paladin:10},{nighthawk:{x:0,y:2},paladin:{x:0,y:0}},{paladin:20});
+  const cast=spendUnifiedNighthawkSpellSlot(c,'Magic Missile');
+  expect(cast.character?.spellSlots?.usedLevel1).toBe(1);
+  expect(cast.companionEncounter?.participants.nighthawk.actionUsed).toBe(true);
+  expect(cast.combat).toEqual(initial.combat);
+  expect(()=>spendUnifiedNighthawkSpellSlot(cast,'Magic Missile')).toThrow('unavailable');
+  expect(()=>spendUnifiedNighthawkSpellSlot(c,'Unprepared')).toThrow('not prepared');
+ });
+ it('resolves DM-verified opportunity reactions without spending the active turn action',()=>{
+  let c=start();
+  c=resolveCompanionOpportunityAttack(c,'fiend','paladin',18,3,12,5,2,'Fire');
+  expect(c.companionEncounter?.participants.fiend.reactionUsed).toBe(true);
+  expect(c.companionEncounter?.participants.paladin.hp).toBe(23);
+  expect(c.companionEncounter?.participants.paladin.actionUsed).toBe(false);
+  expect(()=>resolveCompanionOpportunityAttack(c,'fiend','paladin',18,3,12,5,2,'Fire')).toThrow('unavailable');
+  c=useCompanionAction(c,'paladin','Disengage');
+  expect(()=>resolveCompanionOpportunityAttack(c,'druid','paladin',18,3,12,5,2,'Fire')).toThrow('Disengage');
+ });
+
  it('ends Disengage at the end of its turn but preserves Dodge until its next turn',()=>{
   let c=start();
   c=useCompanionAction(c,'paladin','Disengage');
