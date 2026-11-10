@@ -216,7 +216,7 @@ test('character builder shows species, background, class, and choice rules inlin
  await page.getByRole('button',{name:/Guide Tester/}).click();
  await expect(page.getByText(/Your walking Speed increases to 35 feet/)).toBeVisible();
  await expect(page.getByText(/Choose two Wizard cantrips and one level-one Wizard spell/)).toBeVisible();
- await page.getByRole('button',{name:/4\\. Class/}).click();
+ await page.getByRole('button',{name:'3. Class'}).click();
  await expect(page.getByText(/Pact Magic slots refresh on Short Rests/)).toBeVisible();
  await expect(page.getByText(/Warlock spell slots return on a Short or Long Rest/)).toBeVisible();
 });
@@ -268,5 +268,7 @@ test('projected warlock sheet recalculates from provisional level-four ability c
  await page.getByRole('button',{name:'Add level 4 Cha increase'}).click();
  await expect(sheet.getByText('Spell save DC: 14',{exact:false})).toBeVisible();
  await page.reload();
+ await page.getByRole('button',{name:'My Characters'}).click();
+ await page.getByRole('button',{name:/Projection Warlock/}).click();
  await expect(page.getByLabel('Level 4 projected character sheet').getByText('Spell save DC: 14',{exact:false})).toBeVisible();
 });
