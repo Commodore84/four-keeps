@@ -1,4 +1,4 @@
-import {useState} from 'react';
+import {useEffect,useState} from 'react';
 import type {CharacterDraft} from './CharacterCreator';
 type Message={role:'user'|'assistant';content:string};
 export function AskDM({draft,initialQuestion}:{draft:CharacterDraft;initialQuestion?:string}){
