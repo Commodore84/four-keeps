@@ -10,7 +10,7 @@ export interface ProjectedLevel {
 }
 const fullCasters=new Set(['bard','cleric','druid','sorcerer','wizard']);
 const halfCasters=new Set(['paladin','ranger']);
-export function forecastImprovementLevels(classId:string):number[]{return classId==='fighter'?[4,6,8,12,14,16,19]:classId==='rogue'?[4,8,10,12,16,19]:[4,8,12,16,19]}
+export function forecastImprovementLevels(classId:string):number[]{return classId==='fighter'?[4,6,8,12,14,16]:classId==='rogue'?[4,8,10,12,16]:[4,8,12,16]}
 export function projectCharacterLevel(classId:string,baseScores:Scores,forecast:AdvancementForecast,level:number):ProjectedLevel{
  const cls=classSummary(classId);const safeLevel=Math.max(1,Math.min(20,Math.trunc(level)));
  const scores={...baseScores};const assumptions:string[]=[];
@@ -18,6 +18,8 @@ export function projectCharacterLevel(classId:string,baseScores:Scores,forecast:
  for(const l of improvementLevels){
   const p=plannedLevel(forecast,l);
   if(p.abilityIncreases){
+   const total=ABILITIES.reduce((sum,ability)=>sum+(p.abilityIncreases?.[ability]??0),0);
+   if(total>2){assumptions.push('Level '+l+' ability increases exceed the two-point budget; ignored');continue;}
    for(const ability of ABILITIES){const value=p.abilityIncreases[ability]??0;if(Number.isInteger(value)&&value>=0&&value<=2)scores[ability]=Math.min(20,scores[ability]+value)}
   }else assumptions.push('Level '+l+' ability improvement not selected; scores stay unchanged');
  }
@@ -25,12 +27,8 @@ export function projectCharacterLevel(classId:string,baseScores:Scores,forecast:
  const proficiencyBonus=2+Math.floor((safeLevel-1)/4);
  const conMod=modifier(scores.Con);
  const firstDie=cls?.hitDie??8;
- let hitPoints=firstDie+modifier(baseScores.Con);
- for(let l=2;l<=safeLevel;l++){
-  const previousCon=modifier(baseScores.Con)+0;
-  hitPoints+=Math.floor(firstDie/2)+1+previousCon;
- }
- hitPoints+=safeLevel*(conMod-modifier(baseScores.Con));
+ let hitPoints=firstDie+conMod;
+ for(let l=2;l<=safeLevel;l++)hitPoints+=Math.max(1,Math.floor(firstDie/2)+1+conMod);
  hitPoints=Math.max(safeLevel,hitPoints);
  const spellcasting=spellcastingAtLevel(classId,safeLevel);
  const slots=spellcasting?.slots??[];
