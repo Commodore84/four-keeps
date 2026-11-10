@@ -478,3 +478,26 @@ test('companion obstacles block attacks and persist across reload',async({page})
  await page.getByRole('button',{name:'Player',exact:true}).click();
  await expect(page.getByLabel('Companion obstacles')).toContainText('(1,0)');
 });
+
+test('companion cover annotations persist and keep Nighthawk separate',async({page})=>{
+ await page.goto('/four-keeps/');
+ await page.getByRole('button',{name:'Settings',exact:true}).click();
+ await page.getByLabel('New campaign name').fill('Companion cover browser');
+ await page.getByRole('button',{name:'New',exact:true}).click();
+ await page.getByRole('button',{name:'Adventure',exact:true}).click();
+ await page.getByRole('button',{name:'Player',exact:true}).click();
+ const manager=page.getByLabel('Subclass actor manager');
+ await manager.getByLabel('New subclass actor ID').fill('paladin');
+ await manager.getByRole('button',{name:'Register subclass actor'}).click();
+ const panel=page.getByLabel('Companion encounter');
+ await panel.getByRole('button',{name:'Start companion encounter'}).click();
+ await panel.getByLabel('Cover X').fill('3');
+ await panel.getByLabel('Cover Y').fill('3');
+ await panel.getByRole('button',{name:'Mark partial cover'}).click();
+ await expect(panel.getByLabel('Companion cover')).toContainText('(3,3)');
+ await expect(panel.getByLabel('Unified party readiness')).toContainText('Nighthawk remains in separate prototype combat');
+ await page.reload();
+ await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await page.getByRole('button',{name:'Player',exact:true}).click();
+ await expect(page.getByLabel('Companion cover')).toContainText('(3,3)');
+});
