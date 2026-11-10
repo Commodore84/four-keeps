@@ -26,7 +26,7 @@ describe('structured spell forecasting',()=>{
   expect(toggleForecastSpell(emptyForecast(),'fighter',2,wizardSpell.id)).toEqual(emptyForecast());
   const once=toggleForecastSpell(emptyForecast(),'wizard',3,wizardSpell.id);
   const twice=toggleForecastSpell(once,'wizard',4,wizardSpell.id);
-  expect(forecastSpellWarnings('wizard',twice).some(warning=>warning.includes('already selected'))).toBe(true);
+  expect(twice).toEqual(once); // Duplicate picks are rejected at selection time.
   const trickster=updateLevelPlan(emptyForecast(),3,{subclassId:'rogue-arcane-trickster'});
   const selected=toggleForecastSpell(trickster,'rogue',3,wizardSpell.id);
   const changed=updateLevelPlan(selected,3,{subclassId:'rogue-thief'});
