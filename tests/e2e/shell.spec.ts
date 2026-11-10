@@ -1028,3 +1028,32 @@ test('validated character draft becomes a persistent campaign without replacing 
  await page.getByRole('button',{name:'Adventure',exact:true}).click();
  await expect(page.getByLabel('Adventure')).not.toContainText('Raven begins a new adventure');
 });
+
+test('adventure DM request carries authoritative location and interaction context without legacy auto-combat',async({page})=>{
+ await page.goto('/four-keeps/');
+ await page.evaluate(()=>localStorage.setItem('four-keeps-access-code','browser-test-code'));
+ await page.reload();
+ await page.getByRole('button',{name:'Settings',exact:true}).click();
+ await page.getByLabel('New campaign name').fill('DM scene integration');
+ await page.getByRole('button',{name:'New',exact:true}).click();
+ await page.getByRole('button',{name:'Adventure',exact:true}).click();
+ const session=page.getByLabel('Adventure session',{exact:true});
+ await session.getByRole('button',{name:'Start frontier adventure'}).click();
+ await session.getByRole('button',{name:'Speak with the watchkeeper'}).click();
+ await session.getByRole('button',{name:'Travel to Old Crossroads'}).click();
+ let request:Record<string,any>|undefined;
+ await page.route('**/api/dm',async route=>{
+  request=route.request().postDataJSON();
+  await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({narration:'The crossroads remain quiet.',combatStart:{enemyName:'Unverified enemy'},newFacts:[],worldUpdates:{}})});
+ });
+ await page.getByLabel('Message the Dungeon Master').fill('What can I see from the crossroads?');
+ await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
+ await expect(page.getByLabel('Adventure')).toContainText('The crossroads remain quiet.');
+ expect(request?.gameState?.adventureSession?.site).toBe('crossroads');
+ expect(request?.gameState?.adventureSession?.interactions?.[0]?.choice).toBe('speak-watchkeeper');
+ expect(request?.gameState?.location).toBe('Old Crossroads');
+ await expect(page.getByRole('button',{name:'Roll initiative (d20 + DEX)'})).toHaveCount(0);
+ await page.reload();
+ await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await expect(page.getByLabel('Adventure')).toContainText('The crossroads remain quiet.');
+});
