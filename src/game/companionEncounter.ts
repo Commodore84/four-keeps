@@ -230,7 +230,7 @@ export function resumeEnemyInterruptedMovement(campaign:Campaign,enemyId:string)
 export function executeEnemyAttackTurn(campaign:Campaign,enemyId:string,roll:number,damageRoll:number,damageType:DamageType,secondD20?:number):Campaign{
  const battle=activeActor(campaign,enemyId),enemy=battle.participants[enemyId];
  if(enemy.actorKind!=='enemy')throw Error('Enemy actor required');
- if(battle.pendingOpportunity?.moverId===enemyId)throw Error('Resume interrupted enemy movement before attacking');
+ if(battle.pendingOpportunity?.moverId===enemyId)throw Error('Pending opportunity reactions or interrupted movement: resolve and resume before attacking');
  const plan=previewEnemyTurn(campaign,enemyId);
  if(!plan.targetId||!plan.inReach)throw Error('No hostile target within enemy reach');
  const attacked=attackCompanionWithVerifiedStats(campaign,enemyId,plan.targetId,roll,damageRoll,damageType,enemy.reachFeet??5,secondD20);
