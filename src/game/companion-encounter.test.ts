@@ -1,7 +1,7 @@
 import {describe,it,expect} from 'vitest';
 import {newCampaign,registerSubclassActor,chooseSubclassResistance} from './campaign';
 import {initialSubclassCombatState} from './subclassCombatRules';
-import {startCompanionEncounter,moveCompanion,endCompanionTurn,damageCompanion,conditionCompanion,finishCompanionEncounter,attackCompanion,setCompanionSpeed ,useCompanionAction,setCompanionObstacles,companionLineOfSight,companionOpportunityAttackEligible,setCompanionCover,companionCoverStatus,companionPartySnapshot,startUnifiedEncounter} from './companionEncounter';
+import {startCompanionEncounter,moveCompanion,endCompanionTurn,damageCompanion,conditionCompanion,finishCompanionEncounter,attackCompanion,setCompanionSpeed ,useCompanionAction,setCompanionObstacles,companionLineOfSight,companionOpportunityAttackEligible,setCompanionCover,companionCoverStatus,companionPartySnapshot,startUnifiedEncounter,synchronizeNighthawkHitPoints,recordCompanionReaction,removeCompanionCondition} from './companionEncounter';
 const build=()=>{
  let c=newCampaign('Companion test');
  c=registerSubclassActor(c,'paladin',initialSubclassCombatState('paladin','paladin-devotion',7,3));
@@ -12,6 +12,28 @@ const build=()=>{
 };
 const start=()=>startCompanionEncounter(build(),{paladin:15,druid:12,fiend:9},{paladin:{x:0,y:0},druid:{x:1,y:0},fiend:{x:5,y:5}},{paladin:30,druid:22,fiend:25});
 describe('isolated companion encounter vertical slice',()=>{
+ it('syncs unified Nighthawk HP only on explicit command and never changes legacy combat',()=>{
+  const original={...start(),companionEncounter:undefined};
+  let c=startUnifiedEncounter(original,{nighthawk:20,paladin:10},{nighthawk:{x:0,y:2},paladin:{x:0,y:0}},{paladin:20});
+  c=damageCompanion(c,'nighthawk',3,'Fire');
+  expect(c.character?.currentHitPoints).toBe(original.character?.currentHitPoints);
+  const synced=synchronizeNighthawkHitPoints(c);
+  expect(synced.character?.currentHitPoints).toBe(7);
+  expect(synced.combat).toEqual(original.combat);
+  expect(()=>synchronizeNighthawkHitPoints(start())).toThrow('No unified');
+ });
+ it('tracks per-actor reactions and DM condition removal without touching other actors',()=>{
+  let c=start();
+  c=recordCompanionReaction(c,'fiend','Opportunity attack');
+  expect(c.companionEncounter?.participants.fiend.reactionUsed).toBe(true);
+  expect(()=>recordCompanionReaction(c,'fiend','Again')).toThrow('already used');
+  c=conditionCompanion(c,'fiend','Poisoned');
+  c=removeCompanionCondition(c,'fiend','Poisoned');
+  expect(c.companionEncounter?.participants.fiend.conditions).not.toContain('Poisoned');
+  expect(c.companionEncounter?.participants.paladin.reactionUsed).toBe(false);
+  expect(c.combat).toEqual(start().combat);
+ });
+
  it('rejects reserved, case-colliding and unsafe registered identities',()=>{
   const c=newCampaign('Identity test');
   const state=initialSubclassCombatState('paladin','paladin-devotion',7,2);
