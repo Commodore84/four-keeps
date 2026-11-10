@@ -632,7 +632,7 @@ test('DM-verified opportunity reaction consumes only the attacker reaction',asyn
  await manager.getByLabel('New subclass actor ID').fill('paladin');
  await manager.getByRole('button',{name:'Register subclass actor'}).click();
  await manager.getByLabel('New subclass actor ID').fill('fiend');
- await manager.getByLabel('New class').selectOption('warlock');
+ await manager.getByLabel('New subclass',{exact:true}).selectOption('warlock-fiend');
  await manager.getByRole('button',{name:'Register subclass actor'}).click();
  const panel=page.getByLabel('Companion encounter');
  await panel.getByRole('button',{name:'Start companion encounter'}).click();
