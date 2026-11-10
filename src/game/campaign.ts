@@ -1,4 +1,5 @@
 import type {CompanionEncounter} from './companionEncounter';
+import type {AdventureSession} from './adventureSession';
 import {finishSubclassRest,resolveSubclassDamage,canApplyCondition,selectFiendResistance,spendDarkOnesOwnLuck,type SubclassCombatState,type DamageType,type Terrain} from './subclassCombatRules';
 import { prototypeNighthawk, abilityModifier, type CharacterStats, type Skill, skillAbility } from './checks';
 import { emptyWorld, mergeWorld, normalizeWorld, type WorldState } from './world';
@@ -8,6 +9,7 @@ export interface Campaign {
   /** Reserved for future non-Nighthawk actors; never implicitly applied to the Rogue prototype. */
   subclassActors?:Record<string,SubclassCombatState>;
   companionEncounter?:CompanionEncounter;
+  adventureSession?:AdventureSession;
   /** Explicitly verified equipped items from the shared equipment catalog; distinct from carried inventory. */
   encounterLoadout?:{weaponId?:string;armorId?:string;shieldId?:string};
   id: string;
