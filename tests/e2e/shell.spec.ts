@@ -927,3 +927,26 @@ test('mobile tactical preview shows movement cost and selects enemy target witho
  await page.getByRole('button',{name:'Player',exact:true}).click();
  await expect(page.getByLabel('Companion encounter')).toContainText('goblin1: 12/12 HP · (2,1)');
 });
+
+test('tactical path preview identifies reach-exit opportunity threats before committing movement',async({page})=>{
+ await page.goto('/four-keeps/');
+ await page.getByRole('button',{name:'Settings',exact:true}).click();
+ await page.getByLabel('New campaign name').fill('Reach exit preview');
+ await page.getByRole('button',{name:'New',exact:true}).click();
+ await page.getByRole('button',{name:'Adventure',exact:true}).click();
+ await page.getByRole('button',{name:'Player',exact:true}).click();
+ const manager=page.getByLabel('Subclass actor manager');
+ await manager.getByLabel('New subclass actor ID').fill('paladin');
+ await manager.getByRole('button',{name:'Register subclass actor'}).click();
+ const panel=page.getByLabel('Companion encounter');
+ await panel.getByRole('button',{name:'Start companion encounter'}).click();
+ await panel.getByLabel('Enemy ID').fill('goblin1');
+ await panel.getByLabel('Enemy X').fill('1');
+ await panel.getByLabel('Enemy Y').fill('0');
+ await panel.getByRole('button',{name:'Add enemy actor'}).click();
+ await panel.getByRole('button',{name:'Toggle tactical grid'}).click();
+ await panel.getByRole('button',{name:'Grid square 0,3'}).click();
+ await expect(panel.getByLabel('Movement path preview')).toContainText('Opportunity threats: goblin1');
+ await expect(panel.getByLabel('Movement path preview')).toContainText('Reach exit:');
+ await expect(panel).toContainText('paladin: 20/20 HP · (0,0)');
+});
