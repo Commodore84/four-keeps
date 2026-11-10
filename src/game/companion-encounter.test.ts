@@ -1,7 +1,7 @@
 import {describe,it,expect} from 'vitest';
 import {newCampaign,registerSubclassActor,chooseSubclassResistance} from './campaign';
 import {initialSubclassCombatState} from './subclassCombatRules';
-import {startCompanionEncounter,moveCompanion,endCompanionTurn,damageCompanion,conditionCompanion,finishCompanionEncounter,attackCompanion,setCompanionSpeed ,useCompanionAction,setCompanionObstacles,companionLineOfSight,companionOpportunityAttackEligible} from './companionEncounter';
+import {startCompanionEncounter,moveCompanion,endCompanionTurn,damageCompanion,conditionCompanion,finishCompanionEncounter,attackCompanion,setCompanionSpeed ,useCompanionAction,setCompanionObstacles,companionLineOfSight,companionOpportunityAttackEligible,setCompanionCover,companionCoverStatus,companionPartySnapshot} from './companionEncounter';
 const build=()=>{
  let c=newCampaign('Companion test');
  c=registerSubclassActor(c,'paladin',initialSubclassCombatState('paladin','paladin-devotion',7,3));
@@ -12,6 +12,26 @@ const build=()=>{
 };
 const start=()=>startCompanionEncounter(build(),{paladin:15,druid:12,fiend:9},{paladin:{x:0,y:0},druid:{x:1,y:0},fiend:{x:5,y:5}},{paladin:30,druid:22,fiend:25});
 describe('isolated companion encounter vertical slice',()=>{
+ it('keeps annotated cover separate from solid obstacles and requires DM review',()=>{
+  let c=start();
+  c=setCompanionCover(c,[{x:5,y:5}]);
+  expect(companionCoverStatus(c,'fiend')).toBe('annotated');
+  expect(()=>attackCompanion(c,'paladin','fiend',20,0,10,10,0,'Fire',100)).toThrow('DM must supply adjusted AC');
+  expect(()=>setCompanionObstacles(c,[{x:5,y:5}])).toThrow();
+  c=setCompanionCover(c,[]);
+  expect(companionCoverStatus(c,'fiend')).toBe('none');
+  expect(c.combat).toEqual(start().combat);
+ });
+ it('exposes a read-only Nighthawk and companion bridge without merging combat',()=>{
+  const c=start();
+  const snapshot=companionPartySnapshot(c);
+  expect(snapshot.nighthawk.id).toBe('nighthawk');
+  expect(snapshot.nighthawk.includedInCompanionEncounter).toBe(false);
+  expect(snapshot.companions).toHaveLength(3);
+  expect(snapshot.readyForUnifiedCombat).toBe(false);
+  expect(c.combat).toEqual(start().combat);
+ });
+
  it('routes around solid obstacles and rejects occupied obstacle squares',()=>{
   let c=start();
   expect(()=>setCompanionObstacles(c,[{x:0,y:0}])).toThrow('overlaps');
