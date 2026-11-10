@@ -173,15 +173,15 @@ export function previewEnemyTurn(campaign:Campaign,enemyId:string):{tactic:'hold
 /** DM-authorized enemy turn: reuse validated grid movement, stop within reach,
  * and end the turn. No attack rolls, damage or reactions are invented.
  */
-export function executeEnemyMovementTurn(campaign:Campaign,enemyId:string):Campaign{
+function executeEnemyMovement(campaign:Campaign,enemyId:string,finishTurn:boolean):Campaign{
  const battle=activeActor(campaign,enemyId),actor=battle.participants[enemyId];
  if(actor.actorKind!=='enemy')throw Error('Enemy actor required');
  const preview=previewEnemyTurn(campaign,enemyId);
- if(preview.targetId===null||preview.inReach)return endCompanionTurn(campaign,enemyId);
+ if(preview.targetId===null||preview.inReach)return finishTurn?endCompanionTurn(campaign,enemyId):campaign;
  const target=battle.participants[preview.targetId];
  const candidates: {x:number;y:number;distance:number;steps:number}[]=[];
  const maxSteps=Math.floor((actor.speedFeet+actor.dashFeet-actor.movementSpentFeet)/(actor.conditions.includes('Prone')?10:5));
- if(actor.hp<=0||actor.conditions.some(c=>IMMOBILE.includes(c))||maxSteps<=0)return endCompanionTurn(campaign,enemyId);
+ if(actor.hp<=0||actor.conditions.some(c=>IMMOBILE.includes(c))||maxSteps<=0)return finishTurn?endCompanionTurn(campaign,enemyId):campaign;
  for(let x=0;x<20;x++)for(let y=0;y<20;y++){
   if(Object.entries(battle.participants).some(([id,p])=>id!==enemyId&&p.hp>0&&p.x===x&&p.y===y))continue;
   try{
@@ -193,11 +193,14 @@ export function executeEnemyMovementTurn(campaign:Campaign,enemyId:string):Campa
  }
  candidates.sort((a,b)=>a.distance-b.distance||a.steps-b.steps||a.y-b.y||a.x-b.x);
  const best=candidates[0];
- if(!best||best.steps===0)return endCompanionTurn(campaign,enemyId);
+ if(!best||best.steps===0)return finishTurn?endCompanionTurn(campaign,enemyId):campaign;
  const moved=moveCompanion(campaign,enemyId,best.x,best.y);
  // Preserve the mover's turn while leaving-reach reactions await DM resolution.
  if(moved.companionEncounter?.pendingOpportunity)return moved;
- return endCompanionTurn(moved,enemyId);
+ return finishTurn?endCompanionTurn(moved,enemyId):moved;
+}
+export function executeEnemyMovementTurn(campaign:Campaign,enemyId:string):Campaign{
+ return executeEnemyMovement(campaign,enemyId,true);
 }
 /** DM explicitly declines all outstanding opportunity reactions and continues
  * the enemy's turn. No attack is silently forfeited by automated movement.
@@ -218,6 +221,16 @@ export function executeEnemyAttackTurn(campaign:Campaign,enemyId:string,roll:num
  if(!plan.targetId||!plan.inReach)throw Error('No hostile target within enemy reach');
  const attacked=attackCompanionWithVerifiedStats(campaign,enemyId,plan.targetId,roll,damageRoll,damageType,enemy.reachFeet??5,secondD20);
  return endCompanionTurn(attacked,enemyId);
+}
+/** Moves toward the selected hostile and attacks if in reach.
+ * Pending opportunity reactions suspend the turn before any attack is made.
+ */
+export function executeEnemyMoveAndAttackTurn(campaign:Campaign,enemyId:string,roll:number,damageRoll:number,damageType:DamageType,secondD20?:number):Campaign{
+ const moved=executeEnemyMovement(campaign,enemyId,false);
+ if(moved.companionEncounter?.pendingOpportunity?.moverId===enemyId)return moved;
+ const plan=previewEnemyTurn(moved,enemyId);
+ if(!plan.targetId||!plan.inReach)return endCompanionTurn(moved,enemyId);
+ return executeEnemyAttackTurn(moved,enemyId,roll,damageRoll,damageType,secondD20);
 }
 /** One explicit DM command for an enemy already within melee reach.
  * Movement is a separate step when distance or reaction decisions matter.
