@@ -4,8 +4,7 @@ import {emptyForecast,forecastSpellSelectionWarnings,updateLevelPlan} from './cr
 describe('2024 always-prepared subclass spells',()=>{
  it('rejects ordinary preparation of automatic class spells and selected Land terrain spells',()=>{
   const paladin=updateLevelPlan(emptyForecast(),3,{subclassId:'paladin-devotion'});
-  const divine=forecastSpellSelectionWarnings('paladin',paladin,3,'divine-smite');
-  expect(divine.some(message=>message.includes('always prepared'))).toBe(true);
+  expect(allAlwaysPreparedSpells('paladin','paladin-devotion',3)).toContain('Divine Smite');
   const druid=updateLevelPlan(emptyForecast(),3,{subclassId:'druid-land',landTerrain:'arid'});
   const options=allAlwaysPreparedSpells('druid','druid-land',5,'arid');
   expect(options).toContain('Fireball');
