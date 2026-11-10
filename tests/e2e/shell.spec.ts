@@ -854,7 +854,7 @@ test('mobile tactical grid selects a square and persists movement after reload',
  await manager.getByRole('button',{name:'Register subclass actor'}).click();
  const panel=page.getByLabel('Companion encounter');
  await panel.getByRole('button',{name:'Start companion encounter'}).click();
- await panel.getByRole('button',{name:'Show tactical grid'}).click();
+ await panel.getByRole('button',{name:'Toggle tactical grid'}).click();
  await expect(panel.getByLabel('Tactical grid')).toBeVisible();
  await panel.getByRole('button',{name:'Grid square 1,0'}).click();
  await panel.getByRole('button',{name:'Confirm grid move'}).click();
