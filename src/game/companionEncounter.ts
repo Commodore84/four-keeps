@@ -11,7 +11,7 @@ export interface CompanionEncounter {
  round:number;
  turnIndex:number;
  order:string[];
- participants:Record<string,{x:number;y:number;hp:number;maxHp:number;initiative:number;conditions:('Charmed'|'Poisoned'|'Blinded'|'Deafened'|'Frightened'|'Grappled'|'Incapacitated'|'Invisible'|'Paralyzed'|'Petrified'|'Prone'|'Restrained'|'Stunned'|'Unconscious'|'Exhaustion')[];speedFeet:number;movementSpentFeet:number;actionUsed:boolean;bonusActionUsed:boolean;dashFeet:number;disengaged:boolean;dodging:boolean;reactionUsed?:boolean;concentratingOn?:string;consumables?:Record<string,number>;faction?:string;reachFeet?:number;actorKind?:'party'|'enemy';armorClass?:number;attackModifier?:number;constitutionSaveModifier?:number}>;
+ participants:Record<string,{x:number;y:number;hp:number;maxHp:number;initiative:number;conditions:('Charmed'|'Poisoned'|'Blinded'|'Deafened'|'Frightened'|'Grappled'|'Incapacitated'|'Invisible'|'Paralyzed'|'Petrified'|'Prone'|'Restrained'|'Stunned'|'Unconscious'|'Exhaustion')[];speedFeet:number;movementSpentFeet:number;actionUsed:boolean;bonusActionUsed:boolean;dashFeet:number;disengaged:boolean;dodging:boolean;reactionUsed?:boolean;concentratingOn?:string;consumables?:Record<string,number>;faction?:string;reachFeet?:number;actorKind?:'party'|'enemy';armorClass?:number;attackModifier?:number;constitutionSaveModifier?:number;damageModifier?:number;damageDice?:string;deathSaves?:{successes:number;failures:number;stable:boolean;dead:boolean}}>;
  obstacles?:{x:number;y:number}[];
  cover?:{x:number;y:number}[];
  pendingOpportunity?:{moverId:string;attackerIds:string[];from:{x:number;y:number};to:{x:number;y:number}};
@@ -137,12 +137,12 @@ export function companionOpportunityCandidates(battle:CompanionEncounter,moverId
 }
 /** Explicit faction and melee reach configuration. Unset factions remain unknown. */
 /** Explicit DM-defined enemy. Statistics are required; no monster stat block is invented. */
-export function addCompanionEnemy(campaign:Campaign,id:string,initiative:number,position:Cell,hp:number,armorClass:number,attackModifier:number,speedFeet=30,reachFeet=5):Campaign{
+export function addCompanionEnemy(campaign:Campaign,id:string,initiative:number,position:Cell,hp:number,armorClass:number,attackModifier:number,speedFeet=30,reachFeet=5,damageModifier=0,damageDice?:string):Campaign{
  const battle=encounter(campaign),name=id.trim();
  if(!/^[a-zA-Z][a-zA-Z0-9_-]{1,39}$/.test(name)||battle.participants[name]||campaign.subclassActors?.[name]||name==='nighthawk')throw Error('Invalid or duplicate enemy ID');
  if(!valid(position)||Object.values(battle.participants).some(p=>p.hp>0&&p.x===position.x&&p.y===position.y))throw Error('Invalid or occupied enemy position');
- if(![initiative,hp,armorClass,attackModifier,speedFeet,reachFeet].every(Number.isInteger)||initiative<1||initiative>40||hp<1||hp>500||armorClass<1||armorClass>40||attackModifier< -20||attackModifier>30||speedFeet<0||speedFeet>120||speedFeet%5!==0||reachFeet<5||reachFeet>30||reachFeet%5!==0)throw Error('Invalid enemy statistics');
- const participants={...battle.participants,[name]:{...position,hp,maxHp:hp,initiative,armorClass,attackModifier,speedFeet,reachFeet,actorKind:'enemy' as const,faction:'enemies',conditions:[] as CompanionCondition[],movementSpentFeet:0,actionUsed:false,bonusActionUsed:false,dashFeet:0,disengaged:false,dodging:false,reactionUsed:false}};
+ if(![initiative,hp,armorClass,attackModifier,speedFeet,reachFeet,damageModifier].every(Number.isInteger)||initiative<1||initiative>40||hp<1||hp>500||armorClass<1||armorClass>40||attackModifier< -20||attackModifier>30||damageModifier< -20||damageModifier>30||!!damageDice&&!/^\d{1,2}d\d{1,3}(?:\s+[a-z]+)?$/i.test(damageDice)||speedFeet<0||speedFeet>120||speedFeet%5!==0||reachFeet<5||reachFeet>30||reachFeet%5!==0)throw Error('Invalid enemy statistics');
+ const participants={...battle.participants,[name]:{...position,hp,maxHp:hp,initiative,armorClass,attackModifier,damageModifier,damageDice,speedFeet,reachFeet,actorKind:'enemy' as const,faction:'enemies',conditions:[] as CompanionCondition[],movementSpentFeet:0,actionUsed:false,bonusActionUsed:false,dashFeet:0,disengaged:false,dodging:false,reactionUsed:false}};
  const currentId=battle.order[battle.turnIndex];
  const order=Object.keys(participants).sort((a,b)=>participants[b].initiative-participants[a].initiative||a.localeCompare(b));
  return save(campaign,{...battle,participants,order,turnIndex:order.indexOf(currentId),log:[...battle.log,'Enemy '+name+' joined initiative with DM-supplied statistics']});
@@ -456,7 +456,7 @@ export function attackCompanionWithVerifiedStats(campaign:Campaign,attackerId:st
  if(!attacker||!target)throw Error('Unknown attack participant');
  const equipped=attackerId==='nighthawk'&&battle.mode==='unified'?nighthawkEquippedAttack(campaign):null;
  const attackModifier=equipped?.attackModifier??(attacker.actorKind==='enemy'?attacker.attackModifier:undefined);
- const damageModifier=equipped?.damageModifier??(attacker.actorKind==='enemy'?0:undefined);
+ const damageModifier=equipped?.damageModifier??(attacker.actorKind==='enemy'?attacker.damageModifier??0:undefined);
  const targetAC=targetId==='nighthawk'&&battle.mode==='unified'?nighthawkEquippedDefense(campaign)?.armorClass:target.armorClass;
  if(attackModifier===undefined||damageModifier===undefined||targetAC===undefined||targetAC===null)throw Error('Verified attack or defense statistics unavailable');
  return attackCompanion(campaign,attackerId,targetId,roll,attackModifier,targetAC,damageRoll,damageModifier,damageType,rangeFeet,secondD20);
