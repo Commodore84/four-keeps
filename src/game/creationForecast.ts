@@ -102,6 +102,23 @@ export function forecastSpellSelectionWarnings(classId:string,forecast:Advanceme
  }
  return [];
 }
+/** Active Mystic Arcanum spells at a forecast level, after earlier replacements. */
+export function activeMysticArcanumAtLevel(forecast:AdvancementForecast,level:number):string[]{
+ const spells=[...SPELLS,...HIGHER_LEVEL_FORECAST_SPELLS];
+ const active=new Map<number,string>();
+ for(const plan of [...forecast.levels].filter(p=>p.level<=level).sort((a,b)=>a.level-b.level)){
+  for(const id of plan.plannedSpellIds??[]){
+   const spell=spells.find(item=>item.id===id);
+   if(spell&&spell.level>=6&&spell.level<=9&&[11,13,15,17][spell.level-6]===plan.level)active.set(spell.level,id);
+  }
+  const from=plan.arcanumReplacementFromId,to=plan.arcanumReplacementToId;
+  if(!from||!to)continue;
+  const oldSpell=spells.find(item=>item.id===from);
+  const newSpell=spells.find(item=>item.id===to);
+  if(oldSpell&&newSpell&&oldSpell.level===newSpell.level&&oldSpell.level>=6&&oldSpell.level<=9&&newSpell.classes.includes('warlock')&&from!==to&&active.get(oldSpell.level)===from)active.set(oldSpell.level,to);
+ }
+ return [...active.values()];
+}
 /** Mystic Arcanum replacements are separate from the one-time tier unlock. */
 export function forecastArcanumReplacementWarnings(forecast:AdvancementForecast):string[]{
  const warnings:string[]=[];
