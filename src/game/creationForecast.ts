@@ -1,6 +1,7 @@
 import type {Ability} from './creationAbilities';
 import {CLASSES} from './creationClasses';
 import {SPELLS} from './creationMagic';
+import {HIGHER_LEVEL_FORECAST_SPELLS} from './creationHigherSpellCatalog';
 import {spellcastingAtLevel} from './creationClasses';
 import {subclassesForClass} from './creationSubclasses';
 export interface LevelPlan {level:number;subclassId?:string;abilityPlan?:string;abilityIncreases?:Partial<Record<Ability,number>>;featPlan?:string;spellPlan?:string;plannedSpellIds?:string[];notes?:string}
@@ -33,15 +34,17 @@ export function validateForecast(classId:string,forecast:AdvancementForecast):st
  return [...errors,...forecastSpellWarnings(classId,forecast)];
 }
 
-/** Only level-zero and first-level spells are catalogued; selections are provisional. */
+/** Curated, incomplete spell catalog. Forecast selections are not prepared spells. */
 export function forecastSpellOptions(classId:string,subclassId?:string,level=20){
  const thirdCaster=(classId==='rogue'&&subclassId==='rogue-arcane-trickster')||(classId==='fighter'&&subclassId==='fighter-eldritch-knight');
  const listClass=thirdCaster?'wizard':classId;
  if(thirdCaster&&level<3)return [];
- if(!thirdCaster&&!spellcastingAtLevel(classId,level))return [];
- const spellSlots=thirdCaster?(level>=3?[1]:[]):spellcastingAtLevel(classId,level)?.slots??[];
- const hasFirstLevel=spellSlots.some(count=>count>0);
- return SPELLS.filter(spell=>spell.classes.includes(listClass)&&(spell.level===0||hasFirstLevel)).sort((a,b)=>a.level-b.level||a.name.localeCompare(b.name));
+ const casting=thirdCaster?null:spellcastingAtLevel(classId,level);
+ if(!thirdCaster&&!casting)return [];
+ const thirdCasterSlots=[0,0,0,1,1,1,1,2,2,2,2,2,2,3,3,3,3,3,3,4,4];
+ const highest=thirdCaster?thirdCasterSlots[level]:casting?.kind==='pact'?Math.min(5,Math.ceil(level/2)):casting?.slots.reduce((max,count,index)=>count>0?index+1:max,0)??0;
+ const arcanum=classId==='warlock'?([11,13,15,17] as const).filter(unlock=>level>=unlock).map((_,index)=>index+6):[];
+ return [...SPELLS,...HIGHER_LEVEL_FORECAST_SPELLS].filter(spell=>spell.classes.includes(listClass)&&(spell.level===0||spell.level<=highest||arcanum.includes(spell.level))).sort((a,b)=>a.level-b.level||a.name.localeCompare(b.name));
 }
 export function toggleForecastSpell(forecast:AdvancementForecast,classId:string,level:number,spellId:string):AdvancementForecast{
  if(!Number.isInteger(level)||level<2||level>LEVEL_CAP)return forecast;
