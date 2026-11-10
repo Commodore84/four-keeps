@@ -7,6 +7,7 @@ export interface Campaign {
   schemaVersion: 1;
   /** Reserved for future non-Nighthawk actors; never implicitly applied to the Rogue prototype. */
   subclassActors?:Record<string,SubclassCombatState>;
+  companionEncounter?:CompanionEncounter;
   id: string;
   title: string;
   location: string;
