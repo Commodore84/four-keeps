@@ -1,3 +1,4 @@
+import {subclassesForClass} from '../game/creationSubclasses';
 import {SPECIES_TRAITS,LINEAGE_DETAILS,ORIGIN_FEATS,CLASS_OVERVIEW,CLASS_FEATURE_DETAILS,CHOICE_DETAILS,SKILL_DETAILS,choiceExplanation} from '../game/creationRulesGuide';
 import {INVOCATION_DETAILS} from '../game/creationInvocationInfo';
 import {fullSpellInfo} from '../game/creationFullSpellInfo';
@@ -124,6 +125,15 @@ export function CharacterCreator(){
           return <div className="space-y-4"><section className="space-y-2 rounded-lg border border-white/20 p-3 text-sm">
             <h5 className="font-semibold">{cls.name}</h5><p>{CLASS_OVERVIEW[cls.id]??cls.summary}</p><p>Hit Die: d{cls.hitDie} · Primary: {cls.primaryAbilities.join(', ')}</p><p>Saves: {cls.savingThrows.join(', ')}</p><p>Armor: {cls.armor.join(', ')||'None'}</p><p>Weapons: {cls.weapons.join(', ')}</p><p>Tools: {cls.tools.join(', ')||'None'}</p><p>Starting equipment: {cls.startingEquipment}</p><button type="button" onClick={()=>setDmQuestion("Explain all level-one 2024 rules, class features, proficiencies, key choices, and future subclass implications for the "+cls.name+" class with my current character.")} className="rounded border border-gold/40 px-2 py-1 text-xs text-gold">Full class rules with DM</button>
             <details><summary className="cursor-pointer font-semibold">Level progression preview</summary>{cls.features.map(f=><div key={f.level} className="mt-2 space-y-1"><strong>Level {f.level}</strong>{f.names.map(name=><p key={name} className="pl-2"><strong>{name}</strong><span className="block text-xs text-parchment/75">{CLASS_FEATURE_DETAILS[name]??'A class feature unlocked at this level; its exact effect depends on your class and any associated choices.'}</span></p>)}</div>)}</details>
+          </section>
+          <section className="space-y-3 rounded-lg border border-white/20 p-3 text-sm" aria-label="Subclass options preview">
+            <h5 className="font-semibold">Subclass options — available at level 3</h5>
+            <p className="text-xs text-parchment/65">Compare all four 2024 Player's Handbook subclasses for this class. This is a planning reference, not a level-one selection; you will choose a subclass when you reach level 3.</p>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">{subclassesForClass(cls.id).map(subclass=><article key={subclass.id} className="space-y-1 rounded-lg border border-white/15 p-3">
+              <h6 className="font-semibold text-gold">{subclass.name}</h6>
+              <p className="text-xs text-parchment/65">{subclass.focus}</p>
+              <p className="leading-relaxed text-parchment/85">{subclass.description}</p>
+            </article>)}</div>
           </section>
           {(()=>{const magic=spellcastingAtLevel(cls.id,1);return magic?<p className="text-sm rounded-lg border border-white/20 p-3">Level 1 spellcasting: {magic.ability} · {magic.kind} · slots {magic.slots.join(' / ')}{magic.cantrips!==null?' · '+magic.cantrips+' cantrips':''}. Spell preparation will be configured in Spells & Features.</p>:null})()}
           {classChoices(cls.id,selections['class-skills']??[]).map(definition=><fieldset key={definition.id} className="space-y-2 rounded-lg border border-white/20 p-3">
