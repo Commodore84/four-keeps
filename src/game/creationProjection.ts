@@ -6,7 +6,7 @@ import {plannedLevel,type AdvancementForecast} from './creationForecast';
 export interface ProjectedLevel {
  level:number;proficiencyBonus:number;hitPoints:number;hitPointsLabel:string;scores:Scores;modifiers:Scores;
  spellSlots:{spellLevel:number;count:number}[];pactSlotLevel:number|null;spellAttack:number|null;spellSaveDC:number|null;
- subclassName:string|null;criticalHitMinimum:number;unarmoredArmorClass:number|null;subclassBonuses:string[];improvementLevels:number[];mysticArcanumLevels:number[];assumptions:string[];
+ subclassName:string|null;criticalHitMinimum:number;unarmoredArmorClass:number|null;subclassBonuses:string[];subclassResources:{name:string;maximum:number;recovery:string}[];improvementLevels:number[];mysticArcanumLevels:number[];assumptions:string[];
 }
 const fullCasters=new Set(['bard','cleric','druid','sorcerer','wizard']);
 const halfCasters=new Set(['paladin','ranger']);
@@ -40,6 +40,11 @@ export function projectCharacterLevel(classId:string,baseScores:Scores,forecast:
  const selected=plannedLevel(forecast,3).subclassId;
  const subclassName=safeLevel>=3?subclassesForClass(classId).find(x=>x.id===selected)?.name??null:null;
  const subclassBonuses:string[]=[];
+ const subclassResources:{name:string;maximum:number;recovery:string}[]=[];
+ if(safeLevel>=3&&selected==='fighter-battle-master')subclassResources.push({name:'Superiority Dice',maximum:safeLevel>=15?6:safeLevel>=7?5:4,recovery:'Short or Long Rest'});
+ if(safeLevel>=3&&selected==='fighter-psi-warrior')subclassResources.push({name:'Psionic Energy Dice',maximum:2*proficiencyBonus,recovery:'Long Rest; one die also restored by a Bonus Action once per Short or Long Rest'});
+ if(safeLevel>=3&&selected==='rogue-soulknife')subclassResources.push({name:'Psionic Energy Dice',maximum:2*proficiencyBonus,recovery:'Long Rest; one die also restored by a Bonus Action once per Short or Long Rest'});
+ if(safeLevel>=3&&selected==='warlock-celestial')subclassResources.push({name:'Healing Light dice',maximum:1+safeLevel,recovery:'Long Rest'});
  const criticalHitMinimum=selected==='fighter-champion'&&safeLevel>=15?18:selected==='fighter-champion'&&safeLevel>=3?19:20;
  if(criticalHitMinimum<20)subclassBonuses.push('Weapon and Unarmed Strike critical hits on '+criticalHitMinimum+'–20');
  const unarmoredArmorClass=selected==='sorcerer-draconic-sorcery'&&safeLevel>=3?10+modifier(scores.Dex)+modifier(scores.Cha):null;
@@ -47,7 +52,7 @@ export function projectCharacterLevel(classId:string,baseScores:Scores,forecast:
  assumptions.push('HP assumes fixed average hit-die increases; no rolled HP or additional feat effects');
  if(fullCasters.has(classId)||halfCasters.has(classId)||classId==='warlock')assumptions.push('Spell slots are class-only; no multiclassing, items, or special recovery effects');
  if(classId==='rogue'||classId==='fighter')assumptions.push('Subclass spellcasting is not yet included in the projection');
- return {level:safeLevel,proficiencyBonus,hitPoints,hitPointsLabel:'Estimated HP',scores,modifiers,spellSlots,pactSlotLevel,spellAttack,spellSaveDC,subclassName,criticalHitMinimum,unarmoredArmorClass,subclassBonuses,improvementLevels,mysticArcanumLevels:classId==='warlock'?mysticArcanumLevel(safeLevel):[],assumptions};
+ return {level:safeLevel,proficiencyBonus,hitPoints,hitPointsLabel:'Estimated HP',scores,modifiers,spellSlots,pactSlotLevel,spellAttack,spellSaveDC,subclassName,criticalHitMinimum,unarmoredArmorClass,subclassBonuses,subclassResources,improvementLevels,mysticArcanumLevels:classId==='warlock'?mysticArcanumLevel(safeLevel):[],assumptions};
 }
 export function applyAbilityIncrease(forecast:AdvancementForecast,level:number,ability:Ability,delta:-1|1):AdvancementForecast{
  if(!forecastImprovementLevels('fighter').includes(level))return forecast;
