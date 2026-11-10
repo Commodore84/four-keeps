@@ -448,6 +448,19 @@ export function setCompanionSpeed(campaign:Campaign,actorId:string,speedFeet:num
 }
 
 /** Explicit 2024 action choices; only effects we can enforce are automated. */
+/** Uses authoritative combat modifiers/AC for verified equipped Nighthawk or DM-stat enemies.
+ * Damage dice are still supplied explicitly; attack actions remain subject to the usual rules.
+ */
+export function attackCompanionWithVerifiedStats(campaign:Campaign,attackerId:string,targetId:string,roll:number,damageRoll:number,damageType:DamageType,rangeFeet?:number,secondD20?:number):Campaign{
+ const battle=encounter(campaign),attacker=battle.participants[attackerId],target=battle.participants[targetId];
+ if(!attacker||!target)throw Error('Unknown attack participant');
+ const equipped=attackerId==='nighthawk'&&battle.mode==='unified'?nighthawkEquippedAttack(campaign):null;
+ const attackModifier=equipped?.attackModifier??(attacker.actorKind==='enemy'?attacker.attackModifier:undefined);
+ const damageModifier=equipped?.damageModifier??(attacker.actorKind==='enemy'?0:undefined);
+ const targetAC=targetId==='nighthawk'&&battle.mode==='unified'?nighthawkEquippedDefense(campaign)?.armorClass:target.armorClass;
+ if(attackModifier===undefined||damageModifier===undefined||targetAC===undefined||targetAC===null)throw Error('Verified attack or defense statistics unavailable');
+ return attackCompanion(campaign,attackerId,targetId,roll,attackModifier,targetAC,damageRoll,damageModifier,damageType,rangeFeet,secondD20);
+}
 export function useCompanionAction(campaign:Campaign,actorId:string,choice:'Dash'|'Disengage'|'Dodge'|'Help'|'Search'|'Study'|'Influence'|'Ready'|'Utilize'):Campaign{
  const battle=activeActor(campaign,actorId),actor=battle.participants[actorId];
  if(actor.actionUsed)throw Error('Action already used this turn');
