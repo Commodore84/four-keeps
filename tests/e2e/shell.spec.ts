@@ -1001,3 +1001,30 @@ test('frontier encounter handoff uses registered companion and resumes after com
  await expect(restored.getByLabel('Adventure session status')).toContainText('exploring');
  await expect(restored).toContainText('Old Watchtower');
 });
+
+test('validated character draft becomes a persistent campaign without replacing legacy Nighthawk',async({page})=>{
+ await page.goto('/four-keeps/');
+ await page.evaluate(()=>{
+  const draft={schemaVersion:1,id:'valid-rogue-draft',status:'draft',rules:{edition:'2024',allowCompatibleLegacy:true},step:'review',
+   identity:{name:'Raven',pronouns:'they/them',appearance:'',personality:'',backstory:'',portrait:null},
+   selections:{speciesId:'elf',lineageId:'wood-elf',backgroundId:'criminal',classId:'rogue',
+    classChoices:{'class-skills':['Perception','Acrobatics','Investigation','Deception'],expertise:['Perception','Acrobatics'],'weapon-mastery':['Dagger','Shortbow']},
+    abilities:{method:'standard',base:{Str:8,Dex:15,Con:14,Int:13,Wis:12,Cha:10},bonusMode:'two-one',bonuses:{Dex:2,Int:1},rolls:[],rollDice:[]},
+    equipment:{classPackage:0,backgroundPackage:0,purchases:{},equipped:{weapons:[]}}},createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()};
+  localStorage.setItem('four-keeps-character-drafts-v1',JSON.stringify([draft]));
+ });
+ await page.reload();
+ await page.getByRole('button',{name:'New Adventure',exact:true}).click();
+ await page.getByLabel('Starting character').selectOption('valid-rogue-draft');
+ await page.getByLabel('Campaign name').fill('Raven Campaign');
+ await page.getByRole('button',{name:'Create campaign'}).click();
+ await expect(page.getByLabel('Adventure')).toContainText('Raven begins a new adventure');
+ await page.reload();
+ await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await expect(page.getByLabel('Adventure')).toContainText('Raven begins a new adventure');
+ await page.getByRole('button',{name:'Settings',exact:true}).click();
+ await page.getByLabel('New campaign name').fill('Legacy Nighthawk');
+ await page.getByRole('button',{name:'New',exact:true}).click();
+ await page.getByRole('button',{name:'Adventure',exact:true}).click();
+ await expect(page.getByLabel('Adventure')).not.toContainText('Raven begins a new adventure');
+});
