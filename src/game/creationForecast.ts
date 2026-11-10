@@ -5,7 +5,7 @@ import {HIGHER_LEVEL_FORECAST_SPELLS} from './creationHigherSpellCatalog';
 import {spellcastingAtLevel,preparedSpellsAtLevel} from './creationClasses';
 import {subclassesForClass} from './creationSubclasses';
 import {alwaysPreparedSubclassSpells} from './creationSubclassSpells';
-export interface LevelPlan {level:number;subclassId?:string;abilityPlan?:string;abilityIncreases?:Partial<Record<Ability,number>>;featPlan?:string;spellPlan?:string;plannedSpellIds?:string[];wizardPreparedSpellIds?:string[];arcanumReplacementFromId?:string;arcanumReplacementToId?:string;replacementSpellId?:string;replacementWithSpellId?:string;notes?:string}
+export interface LevelPlan {level:number;subclassId?:string;abilityPlan?:string;abilityIncreases?:Partial<Record<Ability,number>>;featPlan?:string;spellPlan?:string;plannedSpellIds?:string[];wizardPreparedSpellIds?:string[];landTerrain?:'arid'|'polar'|'temperate'|'tropical';arcanumReplacementFromId?:string;arcanumReplacementToId?:string;replacementSpellId?:string;replacementWithSpellId?:string;notes?:string}
 export interface AdvancementForecast {targetLevel:number;levels:LevelPlan[]}
 export type SpellAcquisitionMode='spellbook'|'prepared'|'pact-prepared'|'subclass';
 export interface ForecastSpellPolicy {mode:SpellAcquisitionMode;canReplaceOnLevelUp:boolean;replacementLimit:number;replacementTiming:'level-up'|'long-rest'|'none';description:string}
@@ -101,6 +101,10 @@ export function forecastSpellSelectionWarnings(classId:string,forecast:Advanceme
   if(selected.filter(item=>item.level===0).length>=gained)return ['Level '+level+': no additional class cantrip choices are available at this level.'];
  }
  return [];
+}
+/** Circle of the Land terrain is a changeable Long Rest preparation choice. */
+export function landTerrainAtLevel(forecast:AdvancementForecast,level:number):LevelPlan['landTerrain']{
+ return [...forecast.levels].filter(plan=>plan.level<=level&&plan.landTerrain).sort((a,b)=>b.level-a.level)[0]?.landTerrain;
 }
 /** Active Mystic Arcanum spells at a forecast level, after earlier replacements. */
 export function activeMysticArcanumAtLevel(forecast:AdvancementForecast,level:number):string[]{
