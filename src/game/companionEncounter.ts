@@ -208,6 +208,13 @@ export function endCompanionTurn(campaign:Campaign,actorId:string):Campaign{
 /** 2024 death saves are tracked independently of campaign.character and legacy combat.
  * Natural 20 restores 1 HP; natural 1 causes two failures; other rolls use DC 10.
  */
+function damagedActor(actor:CompanionEncounter['participants'][string],taken:number):CompanionEncounter['participants'][string]{
+ const hp=Math.max(0,actor.hp-taken);
+ if(hp>0||actor.actorKind==='enemy')return {...actor,hp,concentratingOn:hp===0?undefined:actor.concentratingOn};
+ const previous=actor.deathSaves;
+ const failures=Math.min(3,(previous?.failures??0)+(actor.hp===0&&taken>0?1:0));
+ return {...actor,hp,concentratingOn:undefined,conditions:[...new Set([...actor.conditions,'Unconscious' as const])],deathSaves:{successes:previous?.successes??0,failures,stable:false,dead:previous?.dead===true||failures===3}};
+}
 export function resolveCompanionDeathSave(campaign:Campaign,actorId:string,roll:number):Campaign{
  const battle=activeActor(campaign,actorId),actor=battle.participants[actorId];
  if(!Number.isInteger(roll)||roll<1||roll>20||actor.hp!==0||actor.actorKind==='enemy')throw Error('Death saving throw unavailable');
@@ -427,7 +434,7 @@ export function resolveCompanionOpportunityAttack(campaign:Campaign,attackerId:s
  const hit=roll===20||(roll!==1&&roll+modifier>=targetAC);
  const raw=hit?Math.max(0,damage+damageModifier):0;
  const taken=(targetId==='nighthawk'&&battle.mode==='unified')||target.actorKind==='enemy'?raw:adjudicateSubclassActorDamage(campaign,targetId,raw,damageType);
- return save(campaign,{...battle,participants:{...battle.participants,[attackerId]:{...attacker,reactionUsed:true},[targetId]:{...target,hp:Math.max(0,target.hp-taken),concentratingOn:target.hp<=taken?undefined:target.concentratingOn}},log:[...battle.log,attackerId+' opportunity attack vs '+targetId+': '+(hit?'hit for '+taken:'miss')+' (DM verified reach trigger)']});
+ return save(campaign,{...battle,participants:{...battle.participants,[attackerId]:{...attacker,reactionUsed:true},[targetId]:damagedActor(target,taken)},log:[...battle.log,attackerId+' opportunity attack vs '+targetId+': '+(hit?'hit for '+taken:'miss')+' (DM verified reach trigger)']});
 }
 export function finishCompanionEncounter(campaign:Campaign):Campaign{
  const battle=encounter(campaign);
@@ -460,7 +467,7 @@ export function attackCompanion(campaign:Campaign,attackerId:string,targetId:str
   // Caller supplies total rolled damage dice, including doubled dice on a critical hit.
   const raw=Math.max(0,damageRoll+damageModifier);
   dealt=(targetId==='nighthawk'&&battle.mode==='unified')||target.actorKind==='enemy'?raw:adjudicateSubclassActorDamage(campaign,targetId,raw,damageType);
-  participants[targetId]={...target,hp:Math.max(0,target.hp-dealt)};
+  participants[targetId]=damagedActor(target,dealt);
  }
  return save(campaign,{...battle,participants,log:[...battle.log,attackerId+' attack d20 '+effectiveRoll+(target.dodging?' (Dodge disadvantage)':'')+(critical?' critical hit':hit?' hit':' miss')+' vs '+targetId+' AC '+targetAC+(hit?'; '+dealt+' '+damageType+' damage':'')]});
 }
