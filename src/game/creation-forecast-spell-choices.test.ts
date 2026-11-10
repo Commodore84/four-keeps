@@ -21,7 +21,7 @@ describe('structured spell forecasting',()=>{
  });
  it('blocks spells before casting unlock and flags duplicates and stale subclass choices',()=>{
   const wizardSpell=forecastSpellOptions('wizard').find(spell=>spell.name==='Magic Missile')!;
-  expect(forecastSpellOptions('paladin',undefined,1)).toEqual([]);
+  expect(forecastSpellOptions('barbarian',undefined,1)).toEqual([]);
   expect(forecastSpellOptions('fighter','fighter-eldritch-knight',2)).toEqual([]);
   expect(toggleForecastSpell(emptyForecast(),'fighter',2,wizardSpell.id)).toEqual(emptyForecast());
   const once=toggleForecastSpell(emptyForecast(),'wizard',3,wizardSpell.id);
