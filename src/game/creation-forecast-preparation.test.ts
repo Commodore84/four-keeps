@@ -17,6 +17,12 @@ describe('class spell preparation and replacement forecasts',()=>{
   expect(forecastReplacementWarnings('bard',valid)[0]).toContain('not established');
   expect(validateForecast('bard',valid).length).toBeGreaterThan(0);
  });
+ it('recognizes level-one prepared spells as valid replacement ownership',()=>{
+  const options=forecastSpellOptions('bard',undefined,5).filter(s=>s.level===1);
+  const forecast=updateLevelPlan(emptyForecast(),5,{replacementSpellId:options[0].id,replacementWithSpellId:options[1].id});
+  expect(forecastReplacementWarnings('bard',forecast,[options[0].id])).toEqual([]);
+  expect(forecastReplacementWarnings('bard',forecast)).toHaveLength(1);
+ });
  it('uses the correct 2024 replacement timing',()=>{
   for(const cls of ['cleric','druid','paladin','ranger','wizard'])expect(forecastSpellPolicy(cls)?.replacementTiming).toBe('long-rest');
   for(const cls of ['bard','sorcerer','warlock'])expect(forecastSpellPolicy(cls)?.replacementTiming).toBe('level-up');
