@@ -144,6 +144,7 @@ test('wizard spellbook and prepared choices persist after reload', async ({page}
  await page.getByRole('button',{name:'My Characters'}).click();
  await page.getByRole('button',{name:/Spell Browser Hero/}).click();
  await expect(page.getByLabel('Spells and features')).toBeVisible();
+ console.log('SPELL SCREEN:',await page.getByLabel('Spells and features').innerText());
  for(const name of ['Fire Bolt','Mage Hand','Minor Illusion'])await page.getByText(name,{exact:true}).first().click();
  for(const name of ['Alarm','Burning Hands','Charm Person','Detect Magic','Find Familiar','Magic Missile'])await page.getByText(name,{exact:true}).first().click();
  for(const name of ['Alarm','Burning Hands','Charm Person','Detect Magic'])await page.getByText(name,{exact:true}).last().click();
