@@ -1,6 +1,21 @@
 import {describe,it,expect} from 'vitest';
 import {emptyForecast,forecastSpellOptions,toggleForecastSpell,plannedLevel,forecastReplacementWarnings,forecastArcanumReplacementWarnings,activeMysticArcanumAtLevel,updateLevelPlan} from './creationForecast';
 describe('Mystic Arcanum and stateful replacement regression',()=>{
+ it('ignores non-Warlock spells injected into Mystic Arcanum unlocks',()=>{
+  const bardOnly=forecastSpellOptions('bard',undefined,11).find(spell=>spell.level===6&&!spell.classes.includes('warlock'));
+  expect(bardOnly).toBeDefined();
+  if(!bardOnly)return;
+  const forecast=updateLevelPlan(emptyForecast(),11,{plannedSpellIds:[bardOnly.id]});
+  expect(activeMysticArcanumAtLevel(forecast,11)).toEqual([]);
+ });
+ it('does not activate a replacement for an unowned Warlock arcanum',()=>{
+  const choices=forecastSpellOptions('warlock',undefined,12).filter(spell=>spell.level===6);
+  expect(choices.length).toBeGreaterThanOrEqual(2);
+  const forecast=updateLevelPlan(emptyForecast(),12,{arcanumReplacementFromId:choices[0].id,arcanumReplacementToId:choices[1].id});
+  expect(activeMysticArcanumAtLevel(forecast,12)).toEqual([]);
+  expect(forecastArcanumReplacementWarnings(forecast).some(message=>message.includes('not currently active'))).toBe(true);
+ });
+
  it('requires both replacement fields and rejects an unchanged Arcanum',()=>{
   const sixth=forecastSpellOptions('warlock',undefined,11).find(spell=>spell.level===6);
   expect(sixth).toBeDefined();
