@@ -285,6 +285,17 @@ export function conditionCompanion(campaign:Campaign,targetId:string,condition:'
 /** Explicitly reconcile Nighthawk encounter HP to the character sheet.
  * This is opt-in to prevent overwriting changes made by the legacy combat prototype.
  */
+/** Explicit refresh of verified character speed and maximum HP.
+ * Never overwrites encounter damage, action economy or legacy Nighthawk combat.
+ */
+export function refreshNighthawkEncounterStatistics(campaign:Campaign):Campaign{
+ const battle=encounter(campaign),actor=battle.participants.nighthawk,character=campaign.character;
+ if(battle.mode!=='unified'||!actor||!character)throw Error('Unified Nighthawk encounter required');
+ const speed=character.speed,maxHp=character.maxHitPoints;
+ if(!Number.isInteger(speed)||speed!<0||speed!>120||speed!%5!==0||!Number.isInteger(maxHp)||maxHp!<1||maxHp!>500)throw Error('Invalid verified character statistics');
+ if(actor.hp>maxHp!)throw Error('Encounter HP exceeds updated character maximum; reconcile manually');
+ return save(campaign,{...battle,participants:{...battle.participants,nighthawk:{...actor,speedFeet:speed!,maxHp:maxHp!}},log:[...battle.log,'Nighthawk refreshed verified speed and maximum HP from character sheet']});
+}
 export function synchronizeNighthawkHitPoints(campaign:Campaign):Campaign{
  const battle=encounter(campaign),actor=battle.participants.nighthawk;
  if(battle.mode!=='unified'||!actor||!campaign.character)throw Error('No unified Nighthawk to synchronize');
