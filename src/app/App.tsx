@@ -136,7 +136,7 @@ function Adventure({ campaign, fullHistory, onToggleHistory }: { campaign: Campa
     <div ref={endRef}/>
   </section>;
 }
-function Party({ campaign, onRoll, onSaveRoll, onAwardXP, onLevelUp, onLevelThree, onReconcile, onUndoReconcile, onRestore, onCastSpell, onEndConcentration, onAdjustEquipment, saving }: { campaign: Campaign | null; onRoll: (skill: Skill, mode: RollMode) => void; onSaveRoll: (ability: typeof abilities[number], mode: RollMode) => void; onAwardXP: (amount: number, reason: string) => void; onLevelUp: (hpGain: number) => void; onLevelThree: (hpGain: number, cantrips: string[], spells: string[]) => void; onReconcile: () => void; onUndoReconcile: () => void; onRestore: () => void; onCastSpell: (spell: string, ritual: boolean, components: boolean, target: string) => void; onEndConcentration: () => void; onAdjustEquipment: (item:'daggers'|'arrows'|'caltrops'|'ballBearings',delta:number)=>void; saving: boolean }) {
+function Party({ campaign, onRoll, onSaveRoll, onAwardXP, onLevelUp, onLevelThree, onReconcile, onUndoReconcile, onRestore, onCastSpell, onEndConcentration, onAdjustEquipment, onUpdateInventory, saving }: { campaign: Campaign | null; onRoll: (skill: Skill, mode: RollMode) => void; onSaveRoll: (ability: typeof abilities[number], mode: RollMode) => void; onAwardXP: (amount: number, reason: string) => void; onLevelUp: (hpGain: number) => void; onLevelThree: (hpGain: number, cantrips: string[], spells: string[]) => void; onReconcile: () => void; onUndoReconcile: () => void; onRestore: () => void; onCastSpell: (spell: string, ritual: boolean, components: boolean, target: string) => void; onEndConcentration: () => void; onAdjustEquipment: (item:'daggers'|'arrows'|'caltrops'|'ballBearings',delta:number)=>void; onUpdateInventory:(ledger:NonNullable<Campaign['inventoryLedger']>)=>void; saving: boolean }) {
   const [mode, setMode] = useState<RollMode>('normal');
   const [testXP, setTestXP] = useState('300');
   const [hpChoice, setHpChoice] = useState('7');
@@ -146,6 +146,7 @@ function Party({ campaign, onRoll, onSaveRoll, onAwardXP, onLevelUp, onLevelThre
   const [castRitual, setCastRitual] = useState(false);
   const [componentsConfirmed, setComponentsConfirmed] = useState(false);
   const [spellTarget, setSpellTarget] = useState('');
+  const [newGearName,setNewGearName] = useState('');
   const skills = Object.keys(skillAbility) as Skill[];
   const stats = campaign?.character ?? prototypeNighthawk;
   const lastRoll = campaign?.journal.filter(entry => entry.kind === 'system' && (entry.text.startsWith('Nighthawk rolled ') || entry.text.startsWith('Nighthawk · '))).at(-1);
@@ -193,8 +194,11 @@ function Party({ campaign, onRoll, onSaveRoll, onAwardXP, onLevelUp, onLevelThre
       <div className="rounded-xl border border-white/15 bg-ink/30 p-3 space-y-2"><h4 className="font-semibold">Ammunition &amp; Consumables</h4>
       {([['daggers','Daggers'],['arrows','Arrows'],['caltrops','Caltrops'],['ballBearings','Ball bearings']] as const).map(([key,label])=><div key={key} className="flex items-center justify-between gap-3 border-t border-white/10 pt-2"><span className="text-sm">{label}</span><div className="flex items-center gap-3"><button type="button" aria-label={'Remove '+label} disabled={saving||!!campaign?.combat||(campaign?.equipment?.[key]??(key==='daggers'?2:key==='arrows'?20:0))<=0} className="rounded border border-white/30 px-3 py-1 disabled:opacity-30" onClick={()=>onAdjustEquipment(key,-1)}>−</button><strong className="min-w-6 text-center tabular-nums">{campaign?.combat?(key==='daggers'?campaign.combat.daggersAvailable??campaign.equipment?.daggers??2:key==='arrows'?campaign.combat.arrowsRemaining??campaign.equipment?.arrows??20:campaign.equipment?.[key]??0):campaign?.equipment?.[key]??(key==='daggers'?2:key==='arrows'?20:0)}</strong><button type="button" aria-label={'Add '+label} disabled={saving||!!campaign?.combat} className="rounded border border-white/30 px-3 py-1 disabled:opacity-30" onClick={()=>onAdjustEquipment(key,1)}>+</button></div></div>)}
       {!!campaign?.combat?.daggersThrown&&<p className="text-xs text-gold">{campaign.combat.daggersThrown} thrown dagger(s) awaiting recovery.</p>}</div>
-      <div className="rounded-xl border border-white/15 bg-ink/30 p-3"><h4 className="font-semibold">Adventuring Gear</h4><p className="mt-2 text-sm text-parchment/60">Not recorded</p></div>
-      <div className="rounded-xl border border-white/15 bg-ink/30 p-3"><h4 className="font-semibold">Currency</h4><div className="mt-2 grid grid-cols-5 gap-2 text-center">{(['CP','SP','EP','GP','PP'] as const).map(unit=><div key={unit} className="rounded-lg border border-white/10 p-2"><p className="text-xs text-gold">{unit}</p><p className="mt-1 text-xs text-parchment/60">—</p></div>)}</div><p className="mt-2 text-xs text-parchment/55">Currency ledger not implemented; no balances assumed.</p></div>
+      <div className="rounded-xl border border-white/15 bg-ink/30 p-3 space-y-3"><h4 className="font-semibold">Adventuring Gear</h4>
+        {(campaign?.inventoryLedger?.gear??[]).map((item,index)=><div key={index} className="flex items-center justify-between gap-2 text-sm"><span className="min-w-0 flex-1 truncate">{item.name}</span><button type="button" disabled={saving||item.quantity<=1} aria-label={'Remove one '+item.name} className="rounded border border-white/20 px-2 py-1 disabled:opacity-30" onClick={()=>onUpdateInventory({currency:campaign?.inventoryLedger?.currency??{CP:0,SP:0,EP:0,GP:0,PP:0},gear:(campaign?.inventoryLedger?.gear??[]).map((g,i)=>i===index?{...g,quantity:g.quantity-1}:g)})}>−</button><span className="w-6 text-center tabular-nums">{item.quantity}</span><button type="button" disabled={saving} aria-label={'Add one '+item.name} className="rounded border border-white/20 px-2 py-1" onClick={()=>onUpdateInventory({currency:campaign?.inventoryLedger?.currency??{CP:0,SP:0,EP:0,GP:0,PP:0},gear:(campaign?.inventoryLedger?.gear??[]).map((g,i)=>i===index?{...g,quantity:g.quantity+1}:g)})}>+</button><button type="button" disabled={saving} aria-label={'Delete '+item.name} className="rounded border border-white/20 px-2 py-1 text-parchment/60" onClick={()=>onUpdateInventory({currency:campaign?.inventoryLedger?.currency??{CP:0,SP:0,EP:0,GP:0,PP:0},gear:(campaign?.inventoryLedger?.gear??[]).filter((_,i)=>i!==index)})}>Remove</button></div>)}
+        <form className="flex gap-2" onSubmit={e=>{e.preventDefault();const name=newGearName.trim();if(!name)return;const ledger=campaign?.inventoryLedger;const gear=ledger?.gear??[];const existing=gear.findIndex(g=>g.name.toLowerCase()===name.toLowerCase());onUpdateInventory({currency:ledger?.currency??{CP:0,SP:0,EP:0,GP:0,PP:0},gear:existing>=0?gear.map((g,i)=>i===existing?{...g,quantity:g.quantity+1}:g):[...gear,{name,quantity:1}]});setNewGearName('');}}><input aria-label="New gear item" value={newGearName} onChange={e=>setNewGearName(e.target.value)} placeholder="Add an item" maxLength={80} className="min-w-0 flex-1 rounded-lg border border-white/20 bg-ink p-2 text-base"/><button type="submit" disabled={saving||!newGearName.trim()} className="rounded-lg border border-gold px-3 text-gold disabled:opacity-30">Add</button></form>
+      </div>
+      <div className="rounded-xl border border-white/15 bg-ink/30 p-3"><h4 className="font-semibold">Currency</h4><div className="mt-2 grid grid-cols-5 gap-2">{(['CP','SP','EP','GP','PP'] as const).map(unit=><label key={unit} className="min-w-0 text-center"><span className="text-xs text-gold">{unit}</span><input type="number" min="0" max="999999999" step="1" disabled={saving} aria-label={unit+' balance'} value={campaign?.inventoryLedger?.currency?.[unit]??0} onChange={e=>{const value=Number(e.target.value);if(!Number.isSafeInteger(value)||value<0||value>999999999)return;const ledger=campaign?.inventoryLedger;onUpdateInventory({currency:{CP:0,SP:0,EP:0,GP:0,PP:0,...ledger?.currency,[unit]:value},gear:ledger?.gear??[]});}} className="mt-1 w-full min-w-0 rounded-lg border border-white/15 bg-ink p-1 text-center text-sm tabular-nums"/></label>)}</div><p className="mt-2 text-xs text-parchment/55">Balances are saved with this campaign. No starting currency is assumed.</p></div>
       <div className="rounded-xl border border-white/15 bg-ink/30 p-3 space-y-2"><h4 className="font-semibold">Training, Languages &amp; Attunement</h4><p className="text-sm text-parchment/70">Armor training, weapon training, tools and languages: complete choices not yet recorded.</p><p className="text-sm text-parchment/70">Attuned magic items: not tracked · Carrying capacity: not tracked</p></div>
     </section>
     <div className="rounded-xl border border-white/10 bg-panel p-5">
@@ -225,28 +229,6 @@ function Party({ campaign, onRoll, onSaveRoll, onAwardXP, onLevelUp, onLevelThre
       </section>
       {lastRoll && <p role="status" className="mt-3 rounded-lg border border-gold/30 p-3 text-sm">{lastRoll.text}</p>}
     </div>
-      {(stats.level ?? 1) < 3 && <section aria-label="Spells and spell slots" className="rounded-xl border border-gold/35 bg-panel p-5 space-y-4">
-        <div><p className="eyebrow">Arcane Trickster · Unlocks at Level 3</p><h3 className="mt-1 font-serif text-2xl">Spells</h3><p className="mt-2 text-sm text-parchment/70">Spellcasting is not yet available to Nighthawk. Preview spells below; your actual spells and spell slots will appear here when you reach Level 3.</p></div>
-        {([['Cantrip previews',['Mage Hand','Minor Illusion','Mind Sliver']],['Level 1 spell previews',['Find Familiar','Disguise Self','Tasha’s Hideous Laughter']]] as const).map(([group,spells])=><div key={group} className="space-y-2">
-          <h4 className="font-semibold">{group}</h4>
-          {spells.map(spell=><div key={spell} className="overflow-hidden rounded-xl border border-white/15 bg-ink/30">
-            <button type="button" aria-expanded={selectedSpell===spell} onClick={()=>setSelectedSpell(selectedSpell===spell?null:spell)} className="w-full p-3 text-left">
-              <span className="flex items-center justify-between gap-2"><strong className="text-sm">{spell}</strong><span className="text-xs text-gold">{selectedSpell===spell?'Hide details':'Show details'}</span></span>
-              <span className="mt-2 block text-xs text-parchment/65">{spellSheetMetadata[spell]?.time} · {spellSheetMetadata[spell]?.range} · {spellSheetMetadata[spell]?.duration}</span>
-            </button>
-            {selectedSpell===spell&&<div className="space-y-3 border-t border-gold/25 p-3">
-              <div className="grid grid-cols-2 gap-2 text-xs">
-                <div><span className="text-parchment/55">Casting time</span><p>{spellSheetMetadata[spell]?.time}</p></div>
-                <div><span className="text-parchment/55">Range</span><p>{spellSheetMetadata[spell]?.range}</p></div>
-                <div><span className="text-parchment/55">Duration</span><p>{spellSheetMetadata[spell]?.duration}</p></div>
-                <div><span className="text-parchment/55">Components</span><p>{spellSheetMetadata[spell]?.components}</p></div>
-              </div>
-              <p className="text-sm leading-6">{spellSummaries[spell]}</p>
-              <p className="text-xs text-parchment/60">Preview only. This spell is not yet available to cast. Full rules and spell selection become relevant at Level 3.</p>
-            </div>}
-          </div>)}
-        </div>)}
-      </section>}
       {(stats.level ?? 1) >= 3 && <section aria-label="Spells and spell slots" className="rounded-xl border border-gold/35 bg-panel p-5 space-y-4">
         <div><p className="eyebrow">Arcane Trickster</p><h3 className="mt-1 font-serif text-2xl">Spells</h3><p className="mt-1 text-xs text-parchment/65">INT spellcasting · Save DC {8+stats.proficiencyBonus+abilityModifier(stats.scores.int)} · Spell attack {signed(stats.proficiencyBonus+abilityModifier(stats.scores.int))}</p></div>
         <div className="rounded-xl border border-gold/30 bg-ink/40 p-4"><div className="flex items-center justify-between gap-3"><h4 className="font-semibold">Level 1 spell slots</h4><span className="font-semibold tabular-nums text-gold">{Math.max(0,(stats.spellSlots?.level1??2)-(stats.spellSlots?.usedLevel1??0))} / {stats.spellSlots?.level1??2} available</span></div>
@@ -691,6 +673,12 @@ export function App() {
     try{const next=adjustEquipment(campaign,item,delta);await localCampaignStorage.save(next);setCampaign(next);setCampaigns(items=>items.map(entry=>entry.id===next.id?next:entry));}
     catch(error){setNotice('Equipment: '+String(error));}finally{setSaving(false);}
   }
+  async function updateInventoryLedger(ledger:NonNullable<Campaign['inventoryLedger']>){
+    if(!campaign||saving)return;
+    setSaving(true);
+    try{const next={...campaign,inventoryLedger:ledger,updatedAt:new Date().toISOString()};await localCampaignStorage.save(next);setCampaign(next);setCampaigns(items=>items.map(entry=>entry.id===next.id?next:entry));}
+    catch(error){setNotice('Inventory: '+String(error));}finally{setSaving(false);}
+  }
   async function startTrainingCombatTest() {
     if(!campaign||saving||campaign.combat||campaign.pendingAftermath)return;
     setSaving(true);
@@ -1077,7 +1065,7 @@ export function App() {
     finally { setSaving(false); if (importInput.current) importInput.current.value = ''; }
   }
 
-  const content = { adventure: campaign?.combat && campaign.combat.status!=='completed' ? null : <Adventure campaign={campaign} fullHistory={fullHistory} onToggleHistory={() => setFullHistory(value => !value)}/>, party: <Party campaign={campaign} saving={saving} onRoll={(skill,mode) => void saveSkillRoll(skill,mode)} onSaveRoll={(ability,mode) => void saveSavingThrow(ability,mode)} onAwardXP={(amount,reason) => void updateProgress('award',amount,reason)} onLevelUp={hp => void updateProgress('level',hp)} onLevelThree={(hp,cantrips,spells) => void updateProgress('level3',hp,'',cantrips,spells)} onReconcile={() => void updateProgress('reconcile')} onUndoReconcile={() => void updateProgress('undoReconcile')} onRestore={() => void updateProgress('restore')} onCastSpell={(spell,ritual,components,target)=>void castSpell(spell,ritual,components,target)} onEndConcentration={()=>void endConcentration()} onAdjustEquipment={(item,delta)=>void changeEquipment(item,delta)}/>, journal: <Journal campaign={campaign}/>, map: <WorldMap campaign={campaign}/>, settings: <section className="space-y-4"><h2 className="font-serif text-2xl">Settings</h2><p className="text-sm text-parchment/60">Manage campaigns, backups, and Dungeon Master access below.</p></section> };
+  const content = { adventure: campaign?.combat && campaign.combat.status!=='completed' ? null : <Adventure campaign={campaign} fullHistory={fullHistory} onToggleHistory={() => setFullHistory(value => !value)}/>, party: <Party campaign={campaign} saving={saving} onRoll={(skill,mode) => void saveSkillRoll(skill,mode)} onSaveRoll={(ability,mode) => void saveSavingThrow(ability,mode)} onAwardXP={(amount,reason) => void updateProgress('award',amount,reason)} onLevelUp={hp => void updateProgress('level',hp)} onLevelThree={(hp,cantrips,spells) => void updateProgress('level3',hp,'',cantrips,spells)} onReconcile={() => void updateProgress('reconcile')} onUndoReconcile={() => void updateProgress('undoReconcile')} onRestore={() => void updateProgress('restore')} onCastSpell={(spell,ritual,components,target)=>void castSpell(spell,ritual,components,target)} onEndConcentration={()=>void endConcentration()} onAdjustEquipment={(item,delta)=>void changeEquipment(item,delta)} onUpdateInventory={ledger=>void updateInventoryLedger(ledger)}/>, journal: <Journal campaign={campaign}/>, map: <WorldMap campaign={campaign}/>, settings: <section className="space-y-4"><h2 className="font-serif text-2xl">Settings</h2><p className="text-sm text-parchment/60">Manage campaigns, backups, and Dungeon Master access below.</p></section> };
   return <div className="min-h-dvh bg-ink text-parchment">
     <div className={activeView==='map'?"mx-auto flex h-dvh w-full max-w-3xl flex-col overflow-hidden":"mx-auto flex min-h-dvh w-full max-w-3xl flex-col"}>
       <header className="sticky top-0 z-20 border-b border-white/10 bg-ink/95 px-5 pb-4 pt-[max(1.2rem,env(safe-area-inset-top))] backdrop-blur">
