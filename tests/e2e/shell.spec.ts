@@ -536,13 +536,13 @@ test('opt-in unified Nighthawk encounter shares initiative and survives reload',
  await panel.getByLabel('Initiative nighthawk').fill('20');
  await panel.getByLabel('Initiative paladin').fill('10');
  await panel.getByRole('button',{name:'Start companion encounter'}).click();
- await expect(panel).toContainText('Active turn: Nighthawk');
- await expect(panel).toContainText('Nighthawk: 10/10 HP');
+ await expect(panel).toContainText('Active turn: nighthawk');
+ await expect(panel).toContainText('nighthawk: 10/10 HP');
  await panel.getByRole('button',{name:'Move South'}).click();
- await expect(panel).toContainText('Nighthawk: 10/10 HP · (0,3)');
+ await expect(panel).toContainText('nighthawk: 10/10 HP · (0,3)');
  await page.reload();
  await page.getByRole('button',{name:'Continue Adventure'}).click();
  await page.getByRole('button',{name:'Player',exact:true}).click();
- await expect(page.getByLabel('Companion encounter')).toContainText('Active turn: Nighthawk');
- await expect(page.getByLabel('Companion encounter')).toContainText('Nighthawk: 10/10 HP · (0,3)');
+ await expect(page.getByLabel('Companion encounter')).toContainText('Active turn: nighthawk');
+ await expect(page.getByLabel('Companion encounter')).toContainText('nighthawk: 10/10 HP · (0,3)');
 });
