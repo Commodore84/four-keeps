@@ -94,7 +94,7 @@ export function attackBonus(classId:string,item:Item,scores:Scores):number{
  const ability=ranged?modifier(scores.Dex):finesse?Math.max(modifier(scores.Str),modifier(scores.Dex)):modifier(scores.Str);
  return ability+(weaponTrained(classId,item)?2:0);
 }
-export function equipmentErrors(draft:EquipmentDraft,classId:string,backgroundId:string,scores:Scores):string[]{
+export function equipmentErrors(draft:EquipmentDraft,classId:string,backgroundId:string,_scores:Scores):string[]{
  const errors:string[]=[];
  if(!CLASS_PACKAGES[classId]?.[draft.classPackage??-1])errors.push('Choose class equipment.');
  if(!BACKGROUND_PACKAGES[backgroundId]?.[draft.backgroundPackage??-1])errors.push('Choose background equipment.');
