@@ -145,7 +145,7 @@ test('wizard spellbook and prepared choices persist after reload', async ({page}
  await page.getByRole('button',{name:/Spell Browser Hero/}).click();
  await expect(page.getByLabel('Spells and features')).toBeVisible();
  for(const name of ['Fire Bolt','Mage Hand','Minor Illusion'])await page.getByRole('checkbox',{name:new RegExp('^'+name)}).first().check();
- for(const name of ['Alarm','Burning Hands','Charm Person','Detect Magic','Find Familiar','Magic Missile'])await page.getByText(name,{exact:true}).first().click();
+ for(const name of ['Alarm','Burning Hands','Charm Person','Detect Magic','Find Familiar','Magic Missile'])await page.getByRole('checkbox',{name:new RegExp('^'+name)}).first().check();
  for(const name of ['Alarm','Burning Hands','Charm Person','Detect Magic'])await page.getByRole('checkbox',{name:new RegExp('^'+name)}).last().check();
  await expect(page.getByText('Level-one spell choices valid and saved.')).toBeVisible();
  await page.reload();
