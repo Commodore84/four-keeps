@@ -483,7 +483,7 @@ export function attackCompanionWithVerifiedStats(campaign:Campaign,attackerId:st
  const targetAC=targetId==='nighthawk'&&battle.mode==='unified'?nighthawkEquippedDefense(campaign)?.armorClass:target.armorClass;
  if(attackModifier===undefined||damageModifier===undefined||targetAC===undefined||targetAC===null)throw Error('Verified attack or defense statistics unavailable');
  const weapon=equipped?ITEMS.find(item=>item.id===equipped.weaponId):undefined;
- const ammo=weapon?.properties?.includes('Ammunition')&&equipped?.weaponId==='shortbow'?'arrows':null;
+ const ammo=weapon?.properties?.some(p=>p.startsWith('Ammunition'))&&equipped?.weaponId==='shortbow'?'arrows':null;
  if(ammo&&(!campaign.equipment||campaign.equipment.arrows<1))throw Error('Insufficient campaign ammunition');
  const result=attackCompanion(campaign,attackerId,targetId,roll,attackModifier,targetAC,damageRoll,damageModifier,damageType,rangeFeet,secondD20);
  return ammo?spendUnifiedNighthawkInventory(result,ammo,1):result;
