@@ -1,4 +1,4 @@
-import {validateIdentity,type CharacterDraft} from '../app/CharacterCreator';
+import type {CharacterDraft} from '../app/CharacterCreator';
 import {validateOrigins,availableBackgrounds,originBenefits} from './creationOrigins';
 import {validateClassAgainstBackground,classSummary} from './creationClasses';
 import {emptyAbilityDraft,totalScores,validateAbilityDraft,modifier,ABILITIES} from './creationAbilities';
@@ -8,7 +8,7 @@ export function reviewErrors(d:CharacterDraft):string[]{
  const s=d.selections;
  const background=availableBackgrounds(d.rules.allowCompatibleLegacy).find(b=>b.id===s.backgroundId);
  const abilities=s.abilities??emptyAbilityDraft();
- return [...validateIdentity(d),...validateOrigins(s,d.rules.allowCompatibleLegacy),
+ return [...(d.identity.name.trim()?[]:['Character name is required.']),...validateOrigins(s,d.rules.allowCompatibleLegacy),
  ...validateClassAgainstBackground(s.classId,s.classChoices??{},background?.skills??[]),
  ...validateAbilityDraft(abilities,background?.abilities??[]),
  ...equipmentErrors(s.equipment??emptyEquipment(),s.classId??'',s.backgroundId??'',totalScores(abilities)),
