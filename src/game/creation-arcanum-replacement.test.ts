@@ -1,6 +1,24 @@
 import {describe,it,expect} from 'vitest';
 import {emptyForecast,forecastSpellOptions,toggleForecastSpell,plannedLevel,forecastReplacementWarnings,forecastArcanumReplacementWarnings,activeMysticArcanumAtLevel,updateLevelPlan} from './creationForecast';
 describe('Mystic Arcanum and stateful replacement regression',()=>{
+ it('requires both replacement fields and rejects an unchanged Arcanum',()=>{
+  const sixth=forecastSpellOptions('warlock',undefined,11).find(spell=>spell.level===6);
+  expect(sixth).toBeDefined();
+  if(!sixth)return;
+  let forecast=toggleForecastSpell(emptyForecast(),'warlock',11,sixth.id);
+  forecast=updateLevelPlan(forecast,12,{arcanumReplacementFromId:sixth.id});
+  expect(forecastArcanumReplacementWarnings(forecast).some(w=>w.includes('choose both'))).toBe(true);
+  forecast=updateLevelPlan(forecast,12,{arcanumReplacementToId:sixth.id});
+  expect(forecastArcanumReplacementWarnings(forecast).some(w=>w.includes('must change'))).toBe(true);
+ });
+ it('rejects an Arcanum replacement before any tier has been unlocked',()=>{
+  const sixth=forecastSpellOptions('warlock',undefined,11).filter(spell=>spell.level===6);
+  expect(sixth.length).toBeGreaterThanOrEqual(2);
+  const forecast=updateLevelPlan(emptyForecast(),10,{arcanumReplacementFromId:sixth[0].id,arcanumReplacementToId:sixth[1].id});
+  expect(forecastArcanumReplacementWarnings(forecast).length).toBeGreaterThan(0);
+  expect(activeMysticArcanumAtLevel(forecast,10)).toEqual([]);
+ });
+
  it('shows the active replacement spell rather than the retired Arcanum',()=>{
   const spells=forecastSpellOptions('warlock',undefined,13).filter(spell=>spell.level===6);
   if(spells.length<2)return;
