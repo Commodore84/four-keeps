@@ -1,8 +1,11 @@
+import {finishSubclassRest,resolveSubclassDamage,canApplyCondition,selectFiendResistance,spendDarkOnesOwnLuck,type SubclassCombatState,type DamageType,type Terrain} from './subclassCombatRules';
 import { prototypeNighthawk, abilityModifier, type CharacterStats, type Skill, skillAbility } from './checks';
 import { emptyWorld, mergeWorld, normalizeWorld, type WorldState } from './world';
 export interface JournalEntry { id: string; text: string; createdAt: string; kind: 'note' | 'system' | 'player' | 'dm' }
 export interface Campaign {
   schemaVersion: 1;
+  /** Reserved for future non-Nighthawk actors; never implicitly applied to the Rogue prototype. */
+  subclassActors?:Record<string,SubclassCombatState>;
   id: string;
   title: string;
   location: string;
@@ -1100,4 +1103,34 @@ export function shoveTrainingEnemy(campaign:Campaign,outcome:'prone'|'push'):Cam
  const now=new Date().toISOString();
  const description='Nighthawk attempts Shove ('+(outcome==='prone'?'Prone':'Push 5 ft')+'). DC '+dc+' Strength/Dexterity save: '+(succeeds?'PASSED':'FAILED')+'. '+detail;
  return {...campaign,combat:{...c,actionUsed:true,lastAction:'Shove',enemyPosition:second?c.enemyPosition:target,enemyProne:second?c.enemyProne:prone,secondEnemy:second?{...c.secondEnemy!,position:target,prone}:c.secondEnemy,lastShoveSave:{passed:succeeds,dc,outcome,effectApplied:!succeeds&&(outcome==='prone'||target.x!==e.x||target.y!==e.y)}},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:description,createdAt:now}]};
+}
+
+/** Explicit actor-scoped integration boundary; existing Nighthawk encounters never call these implicitly. */
+export function updateSubclassActor(campaign:Campaign,actorId:string,update:(state:SubclassCombatState)=>SubclassCombatState):Campaign{
+ const state=campaign.subclassActors?.[actorId];
+ if(!state)throw new Error('Subclass actor not registered: '+actorId);
+ return {...campaign,subclassActors:{...campaign.subclassActors,[actorId]:update(state)},updatedAt:new Date().toISOString()};
+}
+export function registerSubclassActor(campaign:Campaign,actorId:string,state:SubclassCombatState):Campaign{
+ if(!actorId||actorId==='nighthawk'||actorId==='player')throw new Error('Cannot overwrite the Nighthawk prototype');
+ return {...campaign,subclassActors:{...campaign.subclassActors,[actorId]:state},updatedAt:new Date().toISOString()};
+}
+export function restSubclassActor(campaign:Campaign,actorId:string,kind:'short'|'long',options:{fiendResistance?:DamageType;terrain?:Terrain}={}):Campaign{
+ return updateSubclassActor(campaign,actorId,state=>finishSubclassRest(state,kind,options));
+}
+export function chooseSubclassResistance(campaign:Campaign,actorId:string,type:DamageType):Campaign{
+ return updateSubclassActor(campaign,actorId,state=>selectFiendResistance(state,type));
+}
+export function useSubclassLuck(campaign:Campaign,actorId:string,roll:number):{campaign:Campaign;bonus:number}{
+ let bonus=0;
+ const next=updateSubclassActor(campaign,actorId,state=>{const result=spendDarkOnesOwnLuck(state,roll);bonus=result.bonus;return result.state;});
+ return {campaign:next,bonus};
+}
+export function adjudicateSubclassActorDamage(campaign:Campaign,actorId:string,damage:number,type:DamageType):number{
+ const actor=campaign.subclassActors?.[actorId];if(!actor)throw new Error('Subclass actor not registered');
+ return resolveSubclassDamage(actor,damage,type);
+}
+export function adjudicateSubclassActorCondition(campaign:Campaign,actorId:string,condition:'Charmed'|'Poisoned'|'Other',context:{withinDevotionAura?:boolean;auraActive?:boolean}={}):boolean{
+ const actor=campaign.subclassActors?.[actorId];if(!actor)throw new Error('Subclass actor not registered');
+ return canApplyCondition(actor,condition,context);
 }
