@@ -6,7 +6,7 @@ describe('curated higher-level spell gating',()=>{
  it('unlocks full-caster spell levels progressively through ninth level',()=>{
   expect(contains('wizard',2,'Fireball')).toBe(false);
   expect(contains('wizard',5,'Fireball')).toBe(true);
-  expect(contains('wizard',8,'Polymorph')).toBe(false);
+  expect(contains('wizard',6,'Polymorph')).toBe(false);
   expect(contains('wizard',7,'Polymorph')).toBe(true);
   expect(contains('wizard',16,'Wish')).toBe(false);
   expect(contains('wizard',17,'Wish')).toBe(true);
