@@ -5,7 +5,7 @@ import {HIGHER_LEVEL_FORECAST_SPELLS} from './creationHigherSpellCatalog';
 import {spellcastingAtLevel,preparedSpellsAtLevel} from './creationClasses';
 import {subclassesForClass} from './creationSubclasses';
 import {alwaysPreparedSubclassSpells} from './creationSubclassSpells';
-export interface LevelPlan {level:number;subclassId?:string;abilityPlan?:string;abilityIncreases?:Partial<Record<Ability,number>>;featPlan?:string;spellPlan?:string;plannedSpellIds?:string[];wizardPreparedSpellIds?:string[];replacementSpellId?:string;replacementWithSpellId?:string;notes?:string}
+export interface LevelPlan {level:number;subclassId?:string;abilityPlan?:string;abilityIncreases?:Partial<Record<Ability,number>>;featPlan?:string;spellPlan?:string;plannedSpellIds?:string[];wizardPreparedSpellIds?:string[];arcanumReplacementFromId?:string;arcanumReplacementToId?:string;replacementSpellId?:string;replacementWithSpellId?:string;notes?:string}
 export interface AdvancementForecast {targetLevel:number;levels:LevelPlan[]}
 export type SpellAcquisitionMode='spellbook'|'prepared'|'pact-prepared'|'subclass';
 export interface ForecastSpellPolicy {mode:SpellAcquisitionMode;canReplaceOnLevelUp:boolean;replacementLimit:number;replacementTiming:'level-up'|'long-rest'|'none';description:string}
@@ -102,6 +102,31 @@ export function forecastSpellSelectionWarnings(classId:string,forecast:Advanceme
  }
  return [];
 }
+/** Mystic Arcanum replacements are separate from the one-time tier unlock. */
+export function forecastArcanumReplacementWarnings(forecast:AdvancementForecast):string[]{
+ const warnings:string[]=[];
+ const spells=[...SPELLS,...HIGHER_LEVEL_FORECAST_SPELLS];
+ const active=new Map<number,string>();
+ for(const plan of [...forecast.levels].sort((a,b)=>a.level-b.level)){
+  for(const id of plan.plannedSpellIds??[]){
+   const spell=spells.find(item=>item.id===id);
+   if(spell&&spell.level>=6&&spell.level<=9&&[11,13,15,17][spell.level-6]===plan.level)active.set(spell.level,id);
+  }
+  const from=plan.arcanumReplacementFromId,to=plan.arcanumReplacementToId;
+  if(!from&&!to)continue;
+  if(!from||!to){warnings.push('Level '+plan.level+': choose both Mystic Arcanum replacement spells.');continue;}
+  const oldSpell=spells.find(item=>item.id===from);
+  const newSpell=spells.find(item=>item.id===to);
+  if(!oldSpell||!newSpell||oldSpell.level<6||oldSpell.level>9||oldSpell.level!==newSpell.level||!newSpell.classes.includes('warlock')){
+   warnings.push('Level '+plan.level+': Mystic Arcanum replacement must be a Warlock spell of the same spell level.');continue;
+  }
+  if(from===to){warnings.push('Level '+plan.level+': Mystic Arcanum replacement must change the spell.');continue;}
+  if(active.get(oldSpell.level)!==from){warnings.push('Level '+plan.level+': the replaced Mystic Arcanum is not currently active.');continue;}
+  if(plan.level<([11,13,15,17][oldSpell.level-6])){warnings.push('Level '+plan.level+': Mystic Arcanum tier is not yet unlocked.');continue;}
+  active.set(oldSpell.level,to);
+ }
+ return warnings;
+}
 export function forecastSpellWarnings(classId:string,forecast:AdvancementForecast):string[]{
  const warnings:string[]=[];
  const subclassId=plannedLevel(forecast,3).subclassId;
@@ -119,6 +144,10 @@ export function forecastSpellWarnings(classId:string,forecast:AdvancementForecas
 
 /** Replacement intent is recorded independently; it never mutates prepared spells. */
 export function forecastReplacementWarnings(classId:string,forecast:AdvancementForecast,initialPreparedSpellIds:readonly string[]=[]):string[]{
+ if(classId==='warlock')return [...forecastArcanumReplacementWarnings(forecast),...forecastOrdinaryReplacementWarnings(classId,forecast,initialPreparedSpellIds)];
+ return forecastOrdinaryReplacementWarnings(classId,forecast,initialPreparedSpellIds);
+}
+function forecastOrdinaryReplacementWarnings(classId:string,forecast:AdvancementForecast,initialPreparedSpellIds:readonly string[]=[]):string[]{
  const policy=forecastSpellPolicy(classId);
  const warnings:string[]=[];
  for(const plan of forecast.levels){
