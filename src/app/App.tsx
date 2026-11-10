@@ -420,8 +420,7 @@ export function App() {
       setCampaign(next);
       setCampaigns((items) => [next, ...items]);
       setNotice('Campaign saved on this device.');
-      setActiveView('adventure');
-      setPortalScreen('adventure');
+      if(portalScreen==='new'){setActiveView('adventure');setPortalScreen('adventure');}
     } catch (error) { setNotice('Could not save campaign: ' + String(error)); }
     finally { setSaving(false); }
   }
