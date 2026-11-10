@@ -13,7 +13,7 @@ export interface CompanionEncounter {
  round:number;
  turnIndex:number;
  order:string[];
- participants:Record<string,{x:number;y:number;hp:number;maxHp:number;initiative:number;conditions:('Charmed'|'Poisoned'|'Blinded'|'Deafened'|'Frightened'|'Grappled'|'Incapacitated'|'Invisible'|'Paralyzed'|'Petrified'|'Prone'|'Restrained'|'Stunned'|'Unconscious'|'Exhaustion')[];speedFeet:number;movementSpentFeet:number;actionUsed:boolean;bonusActionUsed:boolean;dashFeet:number;disengaged:boolean;dodging:boolean;reactionUsed?:boolean;concentratingOn?:string;consumables?:Record<string,number>;faction?:string;reachFeet?:number;actorKind?:'party'|'enemy';armorClass?:number;attackModifier?:number;constitutionSaveModifier?:number;damageModifier?:number;damageDice?:string;deathSaves?:{successes:number;failures:number;stable:boolean;dead:boolean}}>;
+ participants:Record<string,{x:number;y:number;hp:number;maxHp:number;initiative:number;conditions:('Charmed'|'Poisoned'|'Blinded'|'Deafened'|'Frightened'|'Grappled'|'Incapacitated'|'Invisible'|'Paralyzed'|'Petrified'|'Prone'|'Restrained'|'Stunned'|'Unconscious'|'Exhaustion')[];speedFeet:number;movementSpentFeet:number;actionUsed:boolean;bonusActionUsed:boolean;dashFeet:number;disengaged:boolean;dodging:boolean;reactionUsed?:boolean;concentratingOn?:string;consumables?:Record<string,number>;faction?:string;reachFeet?:number;actorKind?:'party'|'enemy';armorClass?:number;attackModifier?:number;constitutionSaveModifier?:number;damageModifier?:number;damageDice?:string;enemyTactic?:'hold'|'nearest'|'lowest-hp';deathSaves?:{successes:number;failures:number;stable:boolean;dead:boolean}}>;
  obstacles?:{x:number;y:number}[];
  cover?:{x:number;y:number}[];
  pendingOpportunity?:{moverId:string;attackerIds:string[];from:{x:number;y:number};to:{x:number;y:number}};
@@ -148,6 +148,25 @@ export function addCompanionEnemy(campaign:Campaign,id:string,initiative:number,
  const currentId=battle.order[battle.turnIndex];
  const order=Object.keys(participants).sort((a,b)=>participants[b].initiative-participants[a].initiative||a.localeCompare(b));
  return save(campaign,{...battle,participants,order,turnIndex:order.indexOf(currentId),log:[...battle.log,'Enemy '+name+' joined initiative with DM-supplied statistics']});
+}
+/** DM-approved enemy behavior: select a hostile target deterministically without
+ * generating dice or taking actions. Ties break by actor ID.
+ */
+export function configureEnemyTactic(campaign:Campaign,enemyId:string,tactic:'hold'|'nearest'|'lowest-hp'):Campaign{
+ const battle=encounter(campaign),actor=battle.participants[enemyId];
+ if(actor?.actorKind!=='enemy')throw Error('Enemy actor required');
+ return save(campaign,{...battle,participants:{...battle.participants,[enemyId]:{...actor,enemyTactic:tactic}},log:[...battle.log,enemyId+' tactic set to '+tactic]});
+}
+export function previewEnemyTurn(campaign:Campaign,enemyId:string):{tactic:'hold'|'nearest'|'lowest-hp';targetId:string|null;distanceFeet:number|null;inReach:boolean}{
+ const battle=activeActor(campaign,enemyId),actor=battle.participants[enemyId];
+ if(actor.actorKind!=='enemy')throw Error('Enemy actor required');
+ const tactic=actor.enemyTactic??'hold';
+ if(tactic==='hold'||actor.hp===0||cannotAct(actor))return {tactic,targetId:null,distanceFeet:null,inReach:false};
+ const hostile=Object.entries(battle.participants).filter(([id,p])=>id!==enemyId&&p.hp>0&&p.faction!==actor.faction);
+ const distance=(p:typeof actor)=>Math.max(Math.abs(actor.x-p.x),Math.abs(actor.y-p.y))*5;
+ hostile.sort(([idA,a],[idB,b])=>tactic==='lowest-hp'?(a.hp-b.hp||distance(a)-distance(b)||idA.localeCompare(idB)):(distance(a)-distance(b)||a.hp-b.hp||idA.localeCompare(idB)));
+ const chosen=hostile[0];
+ return {tactic,targetId:chosen?.[0]??null,distanceFeet:chosen?distance(chosen[1]):null,inReach:!!chosen&&distance(chosen[1])<=(actor.reachFeet??5)};
 }
 export function setCompanionTactics(campaign:Campaign,actorId:string,faction:string,reachFeet:number):Campaign{
  const battle=encounter(campaign),actor=battle.participants[actorId];
