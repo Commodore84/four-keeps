@@ -282,10 +282,23 @@ export function spendCompanionConsumable(campaign:Campaign,actorId:string,item:s
 /** Display authoritative catalog weapon and armor references only when recorded in campaign inventory.
  * A carried weapon is not necessarily equipped; no attack proficiency or AC is inferred.
  */
+/** Equip only items verified as owned in the campaign and present in the builder catalog.
+ * Never assumes a carried weapon is equipped; legacy character AC remains authoritative.
+ */
+export function setNighthawkEncounterLoadout(campaign:Campaign,slot:'weaponId'|'armorId'|'shieldId',itemId:string):Campaign{
+ const battle=encounter(campaign);
+ if(battle.mode!=='unified'||!battle.participants.nighthawk)throw Error('Unified Nighthawk encounter required');
+ const item=ITEMS.find(entry=>entry.id===itemId);
+ const category=slot==='weaponId'?'weapon':slot==='armorId'?'armor':'shield';
+ if(!item||item.category!==category)throw Error('Invalid equipment category');
+ const owned=(campaign.inventoryLedger?.gear??[]).some(entry=>entry.name.toLowerCase()===item.name.toLowerCase()&&entry.quantity>0)||(item.id==='dagger'&&(campaign.equipment?.daggers??0)>0);
+ if(!owned)throw Error('Item is not verified in campaign inventory');
+ return {...save(campaign,{...battle,log:[...battle.log,'Nighthawk equipped verified '+item.name+' for encounter reference']}),encounterLoadout:{...campaign.encounterLoadout,[slot]:itemId}};
+}
 export function nighthawkEquipmentReferences(campaign:Campaign){
  const names=new Set((campaign.inventoryLedger?.gear??[]).filter(g=>g.quantity>0).map(g=>g.name.toLowerCase()));
  if((campaign.equipment?.daggers??0)>0)names.add('dagger');
- return {armorClass:campaign.character?.armorClass??null,items:ITEMS.filter(item=>(item.category==='weapon'||item.category==='armor'||item.category==='shield')&&names.has(item.name.toLowerCase())).map(item=>({id:item.id,name:item.name,category:item.category,damage:item.damage??null,properties:item.properties??[],baseAC:item.baseAC??null})),equippedWeapon:'unverified' as const,equippedArmor:'unverified' as const};
+ return {armorClass:campaign.character?.armorClass??null,items:ITEMS.filter(item=>(item.category==='weapon'||item.category==='armor'||item.category==='shield')&&names.has(item.name.toLowerCase())).map(item=>({id:item.id,name:item.name,category:item.category,damage:item.damage??null,properties:item.properties??[],baseAC:item.baseAC??null})),equippedWeapon:campaign.encounterLoadout?.weaponId??null,equippedArmor:campaign.encounterLoadout?.armorId??null,equippedShield:campaign.encounterLoadout?.shieldId??null};
 }
 export function nighthawkEncounterInventory(campaign:Campaign){
  const gear=(campaign.inventoryLedger?.gear??[]).filter(item=>Number.isInteger(item.quantity)&&item.quantity>=0).map(item=>({name:item.name,quantity:item.quantity}));
