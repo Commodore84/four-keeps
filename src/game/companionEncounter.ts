@@ -378,7 +378,7 @@ export function attackCompanion(campaign:Campaign,attackerId:string,targetId:str
  const distanceFeet=Math.max(Math.abs(attacker.x-target.x),Math.abs(attacker.y-target.y))*5;
  const attackAdvantage=target.conditions.some(c=>['Blinded','Paralyzed','Restrained','Stunned','Unconscious'].includes(c))||(target.conditions.includes('Prone')&&distanceFeet<=5);
  const attackDisadvantage=target.dodging||attacker.conditions.some(c=>['Poisoned','Blinded','Restrained'].includes(c))||(target.conditions.includes('Prone')&&distanceFeet>5);
- if(attackAdvantage!==attackDisadvantage&&secondD20===undefined)throw Error('Advantage or disadvantage requires a second d20');
+ if(attackAdvantage!==attackDisadvantage&&secondD20===undefined)throw Error(target.dodging?'Dodge requires a second d20 for disadvantage':'Advantage or disadvantage requires a second d20');
  if(secondD20!==undefined&&(!Number.isInteger(secondD20)||secondD20<1||secondD20>20))throw Error('Invalid second d20');
  if(rangeFeet!==undefined){if(!Number.isInteger(rangeFeet)||rangeFeet<5||rangeFeet>1000||rangeFeet%5!==0)throw Error('Invalid attack range');const distance=Math.max(Math.abs(attacker.x-target.x),Math.abs(attacker.y-target.y))*5;if(distance>rangeFeet)throw Error('Target outside declared attack range');}
  if(!Number.isInteger(roll)||roll<1||roll>20||!Number.isInteger(attackModifier)||attackModifier< -20||attackModifier>30||!Number.isInteger(targetAC)||targetAC<1||targetAC>40||!Number.isInteger(damageRoll)||damageRoll<0||damageRoll>1000||!Number.isInteger(damageModifier)||damageModifier< -20||damageModifier>30)throw Error('Invalid attack inputs');
