@@ -1,3 +1,5 @@
+import {SUBCLASSES} from './creationSubclasses';
+import {subclassFeatureAt} from './creationSubclassFeatures';
 export interface AdvancementFeature {level:number;name:string;description:string;source:'class'|'subclass'}
 const WARLOCK:AdvancementFeature[]=[
 [2,'Magical Cunning','Once per Long Rest, perform a one-minute ritual to regain expended Pact Magic spell slots, up to half your maximum (round up).'],
@@ -137,7 +139,7 @@ export function progressionFeatures(classId:string,level:number,subclassName?:st
   if([4,8,12,16].includes(level)&&!features.some(x=>x.name==='Ability Score Improvement'))features.push({level,name:'Ability Score Improvement',description:'Choose a qualifying feat or an ability score increase; this forecast can model a provisional ability increase.',source:'class'});
   if(level===19)features.push({level,name:'Epic Boon',description:'Choose an eligible Epic Boon feat at level 19. Its effects are not included in the current projection.',source:'class'});
  }
- if(subclassName&&SUBCLASS_LEVELS[classId]?.includes(level)){const specific=classId==='warlock'?WARLOCK_PATRON_FEATURES[subclassName]?.[level]:undefined;features.push({level,name:specific?.[0]??subclassName+' feature',description:specific?.[1]??(SUBCLASS_TIER_GUIDE[classId]?.[SUBCLASS_LEVELS[classId].indexOf(level)]??'This subclass grants an additional specialty feature.')+' This is a thematic preview, not a complete mechanical rule; the exact effect is not yet included in projected statistics.',source:'subclass'});}
+ if(subclassName&&SUBCLASS_LEVELS[classId]?.includes(level)){const subclass=SUBCLASSES.find(s=>s.classId===classId&&s.name===subclassName);const entry=subclass?subclassFeatureAt(subclass.id,level):undefined;const specific=classId==='warlock'?WARLOCK_PATRON_FEATURES[subclassName]?.[level]:undefined;features.push({level,name:entry?.name??specific?.[0]??subclassName+' feature',description:(specific?.[1]??entry?.description??SUBCLASS_TIER_GUIDE[classId]?.[SUBCLASS_LEVELS[classId].indexOf(level)]??'This subclass grants an additional specialty feature.')+' Feature name and mechanics are provisional until verified against the 2024 rules. No mechanical effect is applied to the projected statistics.',source:'subclass'});}
  return features;
 }
 export function mysticArcanumLevel(warlockLevel:number):number[]{return [11,13,15,17].filter(l=>warlockLevel>=l).map(l=>6+(l-11)/2)}
