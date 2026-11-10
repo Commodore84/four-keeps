@@ -1,4 +1,4 @@
-import { ABILITIES, STANDARD_ARRAY, POINT_COSTS, emptyAbilityDraft, pointCost, rollSet, totalScores, modifier, validateAbilityDraft, type AbilityDraft, type Ability } from '../game/creationAbilities';
+import { ABILITIES, STANDARD_ARRAY, POINT_COSTS, emptyAbilityDraft, pointCost, rollSet, totalScores, modifier, validateAbilityDraft, type AbilityDraft } from '../game/creationAbilities';
 import { CLASSES, classChoices, classSummary, reconcileChoices, setChoice, spellcastingAtLevel, validateClassAgainstBackground, type ChoiceSelections, type ChoiceDefinition } from '../game/creationClasses';
 import { availableSpecies, availableBackgrounds, validateOrigins, originBenefits } from '../game/creationOrigins';
 import { useEffect, useState } from 'react';
