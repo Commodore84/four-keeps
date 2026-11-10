@@ -1114,7 +1114,8 @@ export function updateSubclassActor(campaign:Campaign,actorId:string,update:(sta
  return {...campaign,subclassActors:{...campaign.subclassActors,[actorId]:update(state)},updatedAt:new Date().toISOString()};
 }
 export function registerSubclassActor(campaign:Campaign,actorId:string,state:SubclassCombatState):Campaign{
- if(!actorId||actorId==='nighthawk'||actorId==='player')throw new Error('Cannot overwrite the Nighthawk prototype');
+ if(!/^[a-z][a-z0-9_-]{0,39}$/i.test(actorId)||['nighthawk','player','__proto__','prototype','constructor'].includes(actorId.toLowerCase()))throw new Error('Invalid or reserved subclass actor ID');
+ if(Object.keys(campaign.subclassActors??{}).some(id=>id.toLowerCase()===actorId.toLowerCase()))throw new Error('Subclass actor ID already registered');
  return {...campaign,subclassActors:{...campaign.subclassActors,[actorId]:state},updatedAt:new Date().toISOString()};
 }
 export function restSubclassActor(campaign:Campaign,actorId:string,kind:'short'|'long',options:{fiendResistance?:DamageType;terrain?:Terrain}={}):Campaign{
