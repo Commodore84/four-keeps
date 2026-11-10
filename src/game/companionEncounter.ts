@@ -139,7 +139,7 @@ export function moveCompanion(campaign:Campaign,actorId:string,x:number,y:number
 export function endCompanionTurn(campaign:Campaign,actorId:string):Campaign{
  const battle=activeActor(campaign,actorId);
  const next=(battle.turnIndex+1)%battle.order.length;
- const nextId=battle.order[next];const participant=battle.participants[nextId];return save(campaign,{...battle,participants:{...battle.participants,[nextId]:{...participant,movementSpentFeet:0,actionUsed:false,bonusActionUsed:false,dashFeet:0,disengaged:false,dodging:false,reactionUsed:false}},turnIndex:next,round:battle.round+(next===0?1:0),log:[...battle.log,actorId+' ended turn']});
+ const nextId=battle.order[next];const outgoing=battle.participants[actorId];const participant=battle.participants[nextId];const participants={...battle.participants,[actorId]:{...outgoing,disengaged:false}};participants[nextId]={...participants[nextId],movementSpentFeet:0,actionUsed:false,bonusActionUsed:false,dashFeet:0,disengaged:false,dodging:false,reactionUsed:false};return save(campaign,{...battle,participants,turnIndex:next,round:battle.round+(next===0?1:0),log:[...battle.log,actorId+' ended turn']});
 }
 export function damageCompanion(campaign:Campaign,targetId:string,amount:number,type:DamageType):Campaign{
  const battle=encounter(campaign),actor=battle.participants[targetId];
@@ -203,6 +203,17 @@ export function setCompanionConcentration(campaign:Campaign,actorId:string,spell
  if(!actor)throw Error('Unknown concentration actor');
  if(spell!==null&&(!spell.trim()||spell.length>100||actor.hp<=0))throw Error('Invalid concentration spell');
  return save(campaign,{...battle,participants:{...battle.participants,[actorId]:{...actor,concentratingOn:spell?.trim()??undefined}},log:[...battle.log,actorId+(spell?' concentrating on '+spell:' ended concentration')]});
+}
+/** A caller-supplied Constitution saving throw total determines concentration outcome.
+ * The DM supplies the actual roll and applicable modifiers; no dice are generated.
+ */
+export function resolveCompanionConcentrationSave(campaign:Campaign,actorId:string,damage:number,saveTotal:number):Campaign{
+ const battle=encounter(campaign),actor=battle.participants[actorId];
+ if(!actor||!actor.concentratingOn)throw Error('Actor is not concentrating');
+ if(!Number.isInteger(saveTotal)||saveTotal<0||saveTotal>100)throw Error('Invalid Constitution save total');
+ const dc=companionConcentrationSaveDC(damage);
+ const passed=saveTotal>=dc;
+ return save(campaign,{...battle,participants:{...battle.participants,[actorId]:{...actor,concentratingOn:passed?actor.concentratingOn:undefined}},log:[...battle.log,actorId+' concentration save '+saveTotal+' vs DC '+dc+(passed?' succeeded':' failed; concentration ended')]});
 }
 export function companionConcentrationSaveDC(damage:number):number{
  if(!Number.isInteger(damage)||damage<0||damage>1000)throw Error('Invalid concentration damage');
