@@ -339,7 +339,7 @@ export function nighthawkEquippedDefense(campaign:Campaign){
  const validShield=shield&&owned(shield.name)?shield:null;
  if(!validArmor)return {armorClass:character.armorClass??null,source:'character-sheet' as const};
  const dex=abilityModifier(character.scores.dex);
- const armorClass=validArmor.baseAC!+Math.min(dex,validArmor.dexCap??99)+(validShield?2:0);
+ const armorClass=validArmor.baseAC!+(validArmor.armorGroup==='Heavy'?0:Math.min(dex,validArmor.dexCap??99))+(validShield?2:0);
  return {armorClass,source:'verified-loadout' as const};
 }
 export function nighthawkEquipmentReferences(campaign:Campaign){
