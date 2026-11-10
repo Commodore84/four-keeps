@@ -19,12 +19,12 @@ describe('2024 always-prepared subclass spells',()=>{
  });
 
  it('rejects ordinary preparation of automatic class spells and selected Land terrain spells',()=>{
-  const paladin=updateLevelPlan(emptyForecast(),3,{subclassId:'paladin-devotion'});
   expect(allAlwaysPreparedSpells('paladin','paladin-devotion',3)).toContain('Divine Smite');
   const druid=updateLevelPlan(emptyForecast(),3,{subclassId:'druid-land',landTerrain:'arid'});
   const options=allAlwaysPreparedSpells('druid','druid-land',5,'arid');
   expect(options).toContain('Fireball');
   const forecast=updateLevelPlan(druid,5,{landTerrain:'polar'});
+  expect(forecast.levels.some(plan=>plan.level===5&&plan.landTerrain==='polar')).toBe(true);
   expect(allAlwaysPreparedSpells('druid','druid-land',5,'polar')).not.toContain('Fireball');
  });
 
