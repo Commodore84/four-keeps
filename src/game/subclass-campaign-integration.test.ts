@@ -2,6 +2,16 @@ import {describe,it,expect} from 'vitest';
 import {newCampaign,registerSubclassActor,restSubclassActor,chooseSubclassResistance,useSubclassLuck,adjudicateSubclassActorDamage,adjudicateSubclassActorCondition} from './campaign';
 import {initialSubclassCombatState} from './subclassCombatRules';
 describe('persisted actor-scoped subclass integration',()=>{
+ it('rejects duplicate prototype identifiers and does not mutate the campaign when actor action fails',()=>{
+  const base=newCampaign('Actor safety');
+  const registered=registerSubclassActor(base,'ally-warlock',initialSubclassCombatState('warlock','warlock-fiend',10,3));
+  expect(()=>registerSubclassActor(registered,'player',initialSubclassCombatState('druid','druid-land',10,0))).toThrow();
+  expect(()=>chooseSubclassResistance(registered,'ally-warlock','Force')).toThrow();
+  expect(registered.subclassActors?.['ally-warlock'].fiendResistance).toBeUndefined();
+  expect(()=>useSubclassLuck(registered,'ally-warlock',0)).toThrow();
+  expect(registered.subclassActors?.['ally-warlock'].luckRemaining).toBe(3);
+ });
+
  it('does not grant Nighthawk a foreign subclass or allow replacing prototype actor',()=>{
   const campaign=newCampaign('Integration test');
   expect(campaign.subclassActors).toBeUndefined();
