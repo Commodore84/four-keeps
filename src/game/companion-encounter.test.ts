@@ -12,6 +12,24 @@ const build=()=>{
 };
 const start=()=>startCompanionEncounter(build(),{paladin:15,druid:12,fiend:9},{paladin:{x:0,y:0},druid:{x:1,y:0},fiend:{x:5,y:5}},{paladin:30,druid:22,fiend:25});
 describe('isolated companion encounter vertical slice',()=>{
+ it('resets death saves and unconsciousness after a natural 20',()=>{
+  let c=startUnifiedEncounter(build(),{nighthawk:20,paladin:10},{nighthawk:{x:0,y:2},paladin:{x:0,y:0}},{paladin:20});
+  c=damageCompanion(c,'nighthawk',10,'Fire');
+  c=resolveCompanionDeathSave(c,'nighthawk',20);
+  expect(c.companionEncounter?.participants.nighthawk.hp).toBe(1);
+  expect(c.companionEncounter?.participants.nighthawk.deathSaves).toBeUndefined();
+  expect(c.companionEncounter?.participants.nighthawk.conditions).not.toContain('Unconscious');
+ });
+ it('damage breaks stabilization and restarts failures without changing the legacy combat',()=>{
+  const base=build();
+  let c=startUnifiedEncounter(base,{nighthawk:20,paladin:10},{nighthawk:{x:0,y:2},paladin:{x:0,y:0}},{paladin:20});
+  c=damageCompanion(c,'nighthawk',10,'Fire');
+  c=stabilizeCompanion(c,'nighthawk');
+  c=damageCompanion(c,'nighthawk',1,'Fire');
+  expect(c.companionEncounter?.participants.nighthawk.deathSaves).toMatchObject({stable:false,failures:1});
+  expect(c.combat).toEqual(base.combat);
+ });
+
  it('moves a configured enemy deterministically along valid grid paths and ends its turn',()=>{
   let c=startUnifiedEncounter(build(),{nighthawk:20,paladin:10},{nighthawk:{x:0,y:8},paladin:{x:0,y:0}},{paladin:20});
   c=addCompanionEnemy(c,'goblin1',15,{x:8,y:8},12,13,4,20);
