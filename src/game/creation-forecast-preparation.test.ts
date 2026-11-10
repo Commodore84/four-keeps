@@ -23,6 +23,15 @@ describe('class spell preparation and replacement forecasts',()=>{
   expect(forecastReplacementWarnings('bard',forecast,[options[0].id])).toEqual([]);
   expect(forecastReplacementWarnings('bard',forecast)).toHaveLength(1);
  });
+ it('separates Wizard spellbook additions from preparation and Pact Magic arcanum',()=>{
+  expect(forecastSpellPolicy('wizard')?.mode).toBe('spellbook');
+  expect(forecastSpellPolicy('warlock')?.mode).toBe('pact-prepared');
+  const sixth=forecastSpellOptions('warlock',undefined,11).find(spell=>spell.level===6);
+  if(sixth){
+   const early=updateLevelPlan(emptyForecast(),10,{plannedSpellIds:[sixth.id]});
+   expect(validateForecast('warlock',early).some(w=>w.includes('not eligible'))).toBe(true);
+  }
+ });
  it('uses the correct 2024 replacement timing',()=>{
   for(const cls of ['cleric','druid','paladin','ranger','wizard'])expect(forecastSpellPolicy(cls)?.replacementTiming).toBe('long-rest');
   for(const cls of ['bard','sorcerer','warlock'])expect(forecastSpellPolicy(cls)?.replacementTiming).toBe('level-up');
