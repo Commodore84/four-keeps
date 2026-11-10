@@ -1,7 +1,7 @@
 import {describe,it,expect} from 'vitest';
 import {newCampaign,registerSubclassActor,chooseSubclassResistance} from './campaign';
 import {initialSubclassCombatState} from './subclassCombatRules';
-import {startCompanionEncounter,moveCompanion,endCompanionTurn,damageCompanion,conditionCompanion,finishCompanionEncounter,attackCompanion,setCompanionSpeed ,useCompanionAction,setCompanionObstacles,companionLineOfSight,companionOpportunityAttackEligible,setCompanionCover,companionCoverStatus,companionPartySnapshot,startUnifiedEncounter,synchronizeNighthawkHitPoints,recordCompanionReaction,removeCompanionCondition,nighthawkEncounterStatistics,useCompanionBonusAction,setCompanionConcentration,companionConcentrationSaveDC,resolveCompanionConcentrationSave,setCompanionConsumable,spendCompanionConsumable,spendUnifiedNighthawkSpellSlot,resolveCompanionOpportunityAttack,nighthawkEncounterInventory,companionOpportunityCandidates,spendUnifiedNighthawkInventory,setCompanionTactics,applyCompanionCondition,nighthawkEquipmentReferences,addCompanionEnemy,companionConditionEffects} from './companionEncounter';
+import {startCompanionEncounter,moveCompanion,endCompanionTurn,damageCompanion,conditionCompanion,finishCompanionEncounter,attackCompanion,setCompanionSpeed ,useCompanionAction,setCompanionObstacles,companionLineOfSight,companionOpportunityAttackEligible,setCompanionCover,companionCoverStatus,companionPartySnapshot,startUnifiedEncounter,synchronizeNighthawkHitPoints,recordCompanionReaction,removeCompanionCondition,nighthawkEncounterStatistics,useCompanionBonusAction,setCompanionConcentration,companionConcentrationSaveDC,resolveCompanionConcentrationSave,setCompanionConsumable,spendCompanionConsumable,spendUnifiedNighthawkSpellSlot,resolveCompanionOpportunityAttack,nighthawkEncounterInventory,companionOpportunityCandidates,spendUnifiedNighthawkInventory,setCompanionTactics,applyCompanionCondition,nighthawkEquipmentReferences,addCompanionEnemy,companionConditionEffects,setNighthawkEncounterLoadout} from './companionEncounter';
 const build=()=>{
  let c=newCampaign('Companion test');
  c=registerSubclassActor(c,'paladin',initialSubclassCombatState('paladin','paladin-devotion',7,3));
@@ -12,6 +12,18 @@ const build=()=>{
 };
 const start=()=>startCompanionEncounter(build(),{paladin:15,druid:12,fiend:9},{paladin:{x:0,y:0},druid:{x:1,y:0},fiend:{x:5,y:5}},{paladin:30,druid:22,fiend:25});
 describe('isolated companion encounter vertical slice',()=>{
+ it('equips only verified catalog items from authoritative campaign inventory',()=>{
+  const base=build();
+  const original={...base,equipment:{daggers:2,arrows:0,caltrops:0,ballBearings:0},inventoryLedger:{currency:{CP:0,SP:0,EP:0,GP:0,PP:0},gear:[{name:'Leather Armor',quantity:1}]}};
+  const c=startUnifiedEncounter(original,{nighthawk:20,paladin:10},{nighthawk:{x:0,y:2},paladin:{x:0,y:0}},{paladin:20});
+  expect(()=>setNighthawkEncounterLoadout(c,'weaponId','greatsword')).toThrow('not verified');
+  const equipped=setNighthawkEncounterLoadout(c,'weaponId','dagger');
+  expect(equipped.encounterLoadout?.weaponId).toBe('dagger');
+  expect(equipped.equipment?.daggers).toBe(2);
+  expect(equipped.combat).toEqual(original.combat);
+  expect(setNighthawkEncounterLoadout(equipped,'armorId','leather-armor').encounterLoadout?.armorId).toBe('leather-armor');
+ });
+
  it('adds a first-class enemy with supplied statistics and retains initiative and faction',()=>{
   let c=start();
   const legacy=c.combat;
@@ -42,8 +54,8 @@ describe('isolated companion encounter vertical slice',()=>{
   const references=nighthawkEquipmentReferences(c);
   expect(references.items).toContainEqual(expect.objectContaining({name:'Dagger',damage:'1d4 piercing'}));
   expect(references.armorClass).toBe(c.character?.armorClass);
-  expect(references.equippedWeapon).toBe('unverified');
-  expect(references.equippedArmor).toBe('unverified');
+  expect(references.equippedWeapon).toBeNull();
+  expect(references.equippedArmor).toBeNull();
  });
 
  it('records DM-confirmed conditions and ends concentration on incapacitation',()=>{
