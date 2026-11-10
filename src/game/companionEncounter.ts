@@ -10,7 +10,7 @@ export interface CompanionEncounter {
  round:number;
  turnIndex:number;
  order:string[];
- participants:Record<string,{x:number;y:number;hp:number;maxHp:number;initiative:number;conditions:('Charmed'|'Poisoned')[];speedFeet:number;movementSpentFeet:number;actionUsed:boolean;bonusActionUsed:boolean;dashFeet:number;disengaged:boolean;dodging:boolean;reactionUsed?:boolean;concentratingOn?:string;consumables?:Record<string,number>}>;
+ participants:Record<string,{x:number;y:number;hp:number;maxHp:number;initiative:number;conditions:('Charmed'|'Poisoned')[];speedFeet:number;movementSpentFeet:number;actionUsed:boolean;bonusActionUsed:boolean;dashFeet:number;disengaged:boolean;dodging:boolean;reactionUsed?:boolean;concentratingOn?:string;consumables?:Record<string,number>;faction?:string;reachFeet?:number}>;
  obstacles?:{x:number;y:number}[];
  cover?:{x:number;y:number}[];
  pendingOpportunity?:{moverId:string;attackerIds:string[];from:{x:number;y:number};to:{x:number;y:number}};
@@ -46,20 +46,20 @@ export function startCompanionEncounter(campaign:Campaign,initiative:Record<stri
 type Cell={x:number;y:number};
 const key=(p:Cell)=>p.x+','+p.y;
 const valid=(p:Cell)=>Number.isInteger(p.x)&&Number.isInteger(p.y)&&p.x>=0&&p.y>=0&&p.x<20&&p.y<20;
-function pathSteps(battle:CompanionEncounter,from:Cell,to:Cell,actorId:string):number{
+function pathRoute(battle:CompanionEncounter,from:Cell,to:Cell,actorId:string):Cell[]{
  const blocked=new Set((battle.obstacles??[]).map(key));
  for(const [id,p] of Object.entries(battle.participants))if(id!==actorId&&p.hp>0)blocked.add(key(p));
- const queue:[Cell,number][]=[[from,0]],visited=new Set([key(from)]);
+ const queue:Cell[]=[from],visited=new Set([key(from)]),previous=new Map<string,Cell>();
  for(let i=0;i<queue.length;i++){
-  const [current,steps]=queue[i];
-  if(current.x===to.x&&current.y===to.y)return steps;
+  const current=queue[i];
+  if(current.x===to.x&&current.y===to.y){const route=[current];let step=current;while(previous.has(key(step))){step=previous.get(key(step))!;route.unshift(step)}return route;}
   for(let dx=-1;dx<=1;dx++)for(let dy=-1;dy<=1;dy++){
    if(!dx&&!dy)continue;
    const next={x:current.x+dx,y:current.y+dy};
    if(!valid(next)||blocked.has(key(next))||visited.has(key(next)))continue;
    // Prevent cutting a diagonal through a fully blocked corner.
    if(dx&&dy&&blocked.has(key({x:current.x+dx,y:current.y}))&&blocked.has(key({x:current.x,y:current.y+dy})))continue;
-   visited.add(key(next));queue.push([next,steps+1]);
+   visited.add(key(next));previous.set(key(next),current);queue.push(next);
   }
  }
  throw Error('No unobstructed path to destination');
@@ -131,16 +131,23 @@ export function startUnifiedEncounter(campaign:Campaign,initiative:Record<string
 export function companionOpportunityCandidates(battle:CompanionEncounter,moverId:string,from:Cell,to:Cell):string[]{
  const mover=battle.participants[moverId];
  if(!mover||mover.disengaged)return [];
- const adjacent=(a:Cell,b:Cell)=>Math.max(Math.abs(a.x-b.x),Math.abs(a.y-b.y))<=1;
- return Object.entries(battle.participants).filter(([id,actor])=>id!==moverId&&actor.hp>0&&!actor.reactionUsed&&adjacent(actor,from)&&!adjacent(actor,to)).map(([id])=>id);
+ const within=(a:Cell,b:Cell,feet:number)=>Math.max(Math.abs(a.x-b.x),Math.abs(a.y-b.y))*5<=feet;
+ return Object.entries(battle.participants).filter(([id,actor])=>id!==moverId&&actor.hp>0&&!actor.reactionUsed&&(!mover.faction||!actor.faction||mover.faction!==actor.faction)&&within(actor,from,actor.reachFeet??5)&&!within(actor,to,actor.reachFeet??5)).map(([id])=>id);
+}
+/** Explicit faction and melee reach configuration. Unset factions remain unknown. */
+export function setCompanionTactics(campaign:Campaign,actorId:string,faction:string,reachFeet:number):Campaign{
+ const battle=encounter(campaign),actor=battle.participants[actorId];
+ if(!actor||!faction.trim()||faction.length>40||!Number.isInteger(reachFeet)||reachFeet<5||reachFeet>30||reachFeet%5!==0)throw Error('Invalid actor faction or reach');
+ return save(campaign,{...battle,participants:{...battle.participants,[actorId]:{...actor,faction:faction.trim(),reachFeet}},log:[...battle.log,actorId+' faction/reach configured']});
 }
 export function moveCompanion(campaign:Campaign,actorId:string,x:number,y:number):Campaign{
  const battle=activeActor(campaign,actorId),actor=battle.participants[actorId];
  if(actor.hp<=0)throw Error('Actor at zero HP cannot move');
  if(!valid({x,y}))throw Error('Destination outside 20×20 arena');
  if(Object.entries(battle.participants).some(([id,p])=>id!==actorId&&p.hp>0&&p.x===x&&p.y===y))throw Error('Square occupied');
- const steps=pathSteps(battle,actor,{x,y},actorId);
- const candidates=companionOpportunityCandidates(battle,actorId,actor,{x,y});
+ const route=pathRoute(battle,actor,{x,y},actorId);
+ const steps=route.length-1;
+ const candidates=[...new Set(route.slice(1).flatMap((step,i)=>companionOpportunityCandidates(battle,actorId,route[i],step)))];
  if(steps*5>actor.speedFeet+actor.dashFeet-actor.movementSpentFeet)throw Error('Move exceeds remaining movement');
  if(Object.entries(battle.participants).some(([id,p])=>id!==actorId&&p.hp>0&&p.x===x&&p.y===y))throw Error('Square occupied');
  return save(campaign,{...battle,participants:{...battle.participants,[actorId]:{...actor,x,y,movementSpentFeet:actor.movementSpentFeet+steps*5}},pendingOpportunity:candidates.length?{moverId:actorId,attackerIds:candidates,from:{x:actor.x,y:actor.y},to:{x,y}}:undefined,log:[...battle.log,actorId+' moved to '+x+','+y+(candidates.length?' · potential opportunity attackers: '+candidates.join(', '):'')]});
