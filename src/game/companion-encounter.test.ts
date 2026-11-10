@@ -12,6 +12,24 @@ const build=()=>{
 };
 const start=()=>startCompanionEncounter(build(),{paladin:15,druid:12,fiend:9},{paladin:{x:0,y:0},druid:{x:1,y:0},fiend:{x:5,y:5}},{paladin:30,druid:22,fiend:25});
 describe('isolated companion encounter vertical slice',()=>{
+ it('resolves reaction at pre-exit square once and resumes without spending the enemy action',()=>{
+  const base=build();
+  let c=startUnifiedEncounter(base,{nighthawk:20,paladin:10},{nighthawk:{x:7,y:0},paladin:{x:1,y:1}},{paladin:20});
+  c=addCompanionEnemy(c,'goblin1',15,{x:1,y:0},12,13,4);
+  c=configureEnemyTactic(c,'goblin1','lowest-hp');
+  c=endCompanionTurn(c,'nighthawk');
+  c=executeEnemyMoveAndAttackTurn(c,'goblin1',17,4,'Piercing');
+  const from=c.companionEncounter!.pendingOpportunity!.from;
+  c=resolveCompanionOpportunityAttack(c,'paladin','goblin1',18,5,13,2,0,'Slashing');
+  expect(c.companionEncounter?.participants.goblin1.hp).toBe(10);
+  expect(c.companionEncounter?.participants.paladin.reactionUsed).toBe(true);
+  expect(c.companionEncounter?.pendingOpportunity?.attackerIds).toEqual([]);
+  c=resumeEnemyInterruptedMovement(c,'goblin1');
+  expect(c.companionEncounter?.participants.goblin1.x).toBeGreaterThan(from.x);
+  expect(c.companionEncounter?.participants.goblin1.actionUsed).toBe(false);
+  expect(c.combat).toEqual(base.combat);
+ });
+
  it('requires verified ranged profile and uses DM-supplied rolls for enemy ranged attack',()=>{
   const base=build();
   let c=startUnifiedEncounter(base,{nighthawk:20,paladin:10},{nighthawk:{x:0,y:8},paladin:{x:0,y:0}},{paladin:20});
