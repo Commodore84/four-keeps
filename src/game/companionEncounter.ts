@@ -482,7 +482,11 @@ export function attackCompanionWithVerifiedStats(campaign:Campaign,attackerId:st
  const damageModifier=equipped?.damageModifier??(attacker.actorKind==='enemy'?attacker.damageModifier??0:undefined);
  const targetAC=targetId==='nighthawk'&&battle.mode==='unified'?nighthawkEquippedDefense(campaign)?.armorClass:target.armorClass;
  if(attackModifier===undefined||damageModifier===undefined||targetAC===undefined||targetAC===null)throw Error('Verified attack or defense statistics unavailable');
- return attackCompanion(campaign,attackerId,targetId,roll,attackModifier,targetAC,damageRoll,damageModifier,damageType,rangeFeet,secondD20);
+ const weapon=equipped?ITEMS.find(item=>item.id===equipped.weaponId):undefined;
+ const ammo=weapon?.properties?.includes('Ammunition')&&equipped?.weaponId==='shortbow'?'arrows':null;
+ if(ammo&&(!campaign.equipment||campaign.equipment.arrows<1))throw Error('Insufficient campaign ammunition');
+ const result=attackCompanion(campaign,attackerId,targetId,roll,attackModifier,targetAC,damageRoll,damageModifier,damageType,rangeFeet,secondD20);
+ return ammo?spendUnifiedNighthawkInventory(result,ammo,1):result;
 }
 export function useCompanionAction(campaign:Campaign,actorId:string,choice:'Dash'|'Disengage'|'Dodge'|'Help'|'Search'|'Study'|'Influence'|'Ready'|'Utilize'):Campaign{
  const battle=activeActor(campaign,actorId),actor=battle.participants[actorId];
