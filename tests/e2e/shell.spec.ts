@@ -546,3 +546,28 @@ test('opt-in unified Nighthawk encounter shares initiative and survives reload',
  await expect(page.getByLabel('Companion encounter')).toContainText('Active turn: nighthawk');
  await expect(page.getByLabel('Companion encounter')).toContainText('nighthawk: 10/10 HP · (0,3)');
 });
+
+test('unified reaction and explicit Nighthawk HP sync persist after reload',async({page})=>{
+ await page.goto('/four-keeps/');
+ await page.getByRole('button',{name:'Settings',exact:true}).click();
+ await page.getByLabel('New campaign name').fill('Unified HP sync browser');
+ await page.getByRole('button',{name:'New',exact:true}).click();
+ await page.getByRole('button',{name:'Adventure',exact:true}).click();
+ await page.getByRole('button',{name:'Player',exact:true}).click();
+ const manager=page.getByLabel('Subclass actor manager');
+ await manager.getByLabel('New subclass actor ID').fill('paladin');
+ await manager.getByRole('button',{name:'Register subclass actor'}).click();
+ const panel=page.getByLabel('Companion encounter');
+ await panel.getByLabel('Include Nighthawk in unified encounter').check();
+ await panel.getByRole('button',{name:'Start companion encounter'}).click();
+ await panel.getByLabel('Companion reaction note').fill('DM opportunity attack');
+ await panel.getByRole('button',{name:'Record reaction'}).click();
+ await expect(panel.getByLabel('Reaction status')).toContainText('used');
+ await panel.getByRole('button',{name:'Sync Nighthawk HP to sheet'}).click();
+ await expect(panel.getByRole('status')).toContainText('Nighthawk HP synchronized');
+ await page.reload();
+ await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await page.getByRole('button',{name:'Player',exact:true}).click();
+ await expect(page.getByLabel('Reaction status')).toContainText('used');
+ await expect(page.getByLabel('Companion encounter')).toContainText('Nighthawk HP synchronized to character sheet');
+});
