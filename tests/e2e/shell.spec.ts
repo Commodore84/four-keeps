@@ -218,7 +218,7 @@ test('character builder shows species, background, class, and choice rules inlin
  await expect(page.getByText(/Choose two Wizard cantrips and one level-one Wizard spell/)).toBeVisible();
  await page.getByRole('button',{name:'3. Class'}).click();
  await expect(page.getByText(/Pact Magic slots refresh on Short Rests/)).toBeVisible();
- await expect(page.getByText(/Warlock spell slots return on a Short or Long Rest/)).toBeVisible();
+ await expect(page.getByText(/Warlock spell slots return on a Short or Long Rest/)).toHaveCount(1);
 });
 
 test('all Warlock subclass options are readable without selecting one at level one',async ({page})=>{
