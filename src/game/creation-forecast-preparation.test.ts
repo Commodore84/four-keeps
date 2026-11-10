@@ -14,8 +14,13 @@ describe('class spell preparation and replacement forecasts',()=>{
   const same=updateLevelPlan(partial,5,{replacementWithSpellId:options[0].id});
   expect(forecastReplacementWarnings('bard',same)[0]).toContain('different');
   const valid=updateLevelPlan(same,5,{replacementWithSpellId:options[1].id});
-  expect(forecastReplacementWarnings('bard',valid)).toEqual([]);
-  expect(validateForecast('bard',valid)).toEqual([]);
+  expect(forecastReplacementWarnings('bard',valid)[0]).toContain('not established');
+  expect(validateForecast('bard',valid).length).toBeGreaterThan(0);
+ });
+ it('uses the correct 2024 replacement timing',()=>{
+  for(const cls of ['cleric','druid','paladin','ranger','wizard'])expect(forecastSpellPolicy(cls)?.replacementTiming).toBe('long-rest');
+  for(const cls of ['bard','sorcerer','warlock'])expect(forecastSpellPolicy(cls)?.replacementTiming).toBe('level-up');
+  expect(forecastSpellPolicy('cleric')?.replacementLimit).toBeGreaterThan(1);
  });
  it('does not permit replacement intent for wizard spellbook additions',()=>{
   const options=forecastSpellOptions('wizard',undefined,4).filter(s=>s.level>0);
