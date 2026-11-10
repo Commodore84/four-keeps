@@ -1073,7 +1073,7 @@ export function App() {
   if(portalScreen!=='adventure')return <div className="min-h-dvh bg-ink text-parchment">
     <div className="mx-auto min-h-dvh w-full max-w-3xl space-y-5 px-5 pb-12 pt-[max(2rem,env(safe-area-inset-top))]">
       <header className="flex flex-col items-center gap-2 border-b border-gold/20 pb-6">
-        <img src="/four-keeps-approved.webp" alt="Four Keeps" className="h-auto w-full max-w-[min(80vw,360px)] object-contain" style={{filter:"url(#four-keeps-transparent-key)"}}/>
+        <img src="/four-keeps-approved.webp" alt="Four Keeps" className="h-auto w-full max-w-[min(80vw,360px)] object-contain"/>
         <h1 className="sr-only">Four Keeps</h1>
         <p className="text-sm text-parchment/65">Your story begins here</p>
       </header>
