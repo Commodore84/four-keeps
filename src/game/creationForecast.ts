@@ -1,6 +1,7 @@
 import type {Ability} from './creationAbilities';
 import {CLASSES} from './creationClasses';
 import {SPELLS} from './creationMagic';
+import {spellcastingAtLevel} from './creationClasses';
 import {subclassesForClass} from './creationSubclasses';
 export interface LevelPlan {level:number;subclassId?:string;abilityPlan?:string;abilityIncreases?:Partial<Record<Ability,number>>;featPlan?:string;spellPlan?:string;plannedSpellIds?:string[];notes?:string}
 export interface AdvancementForecast {targetLevel:number;levels:LevelPlan[]}
@@ -28,23 +29,40 @@ export function validateForecast(classId:string,forecast:AdvancementForecast):st
  if(!Number.isInteger(forecast.targetLevel)||forecast.targetLevel<1||forecast.targetLevel>LEVEL_CAP)return ['Forecast level must be between 1 and 20.'];
  const options=subclassesForClass(classId);
  const subclassId=plannedLevel(forecast,3).subclassId;
- return subclassId&&!options.some(s=>s.id===subclassId)?['Planned subclass does not belong to the current class.']:[];
+ const errors=subclassId&&!options.some(s=>s.id===subclassId)?['Planned subclass does not belong to the current class.']:[];
+ return [...errors,...forecastSpellWarnings(classId,forecast)];
 }
 
-/** Preview-only spell choices. This catalog currently contains cantrips and first-level spells only. */
-export function forecastSpellOptions(classId:string,subclassId?:string){
- const listClass=subclassId==='rogue-arcane-trickster'||subclassId==='fighter-eldritch-knight'?'wizard':classId;
- return SPELLS.filter(spell=>spell.classes.includes(listClass)).sort((a,b)=>a.level-b.level||a.name.localeCompare(b.name));
+/** Only level-zero and first-level spells are catalogued; selections are provisional. */
+export function forecastSpellOptions(classId:string,subclassId?:string,level=20){
+ const thirdCaster=(classId==='rogue'&&subclassId==='rogue-arcane-trickster')||(classId==='fighter'&&subclassId==='fighter-eldritch-knight');
+ const listClass=thirdCaster?'wizard':classId;
+ if(thirdCaster&&level<3)return [];
+ if(!thirdCaster&&!spellcastingAtLevel(classId,level))return [];
+ const spellSlots=thirdCaster?(level>=3?[1]:[]):spellcastingAtLevel(classId,level)?.slots??[];
+ const hasFirstLevel=spellSlots.some(count=>count>0);
+ return SPELLS.filter(spell=>spell.classes.includes(listClass)&&(spell.level===0||hasFirstLevel)).sort((a,b)=>a.level-b.level||a.name.localeCompare(b.name));
 }
 export function toggleForecastSpell(forecast:AdvancementForecast,classId:string,level:number,spellId:string):AdvancementForecast{
- if(level<2||level>LEVEL_CAP)return forecast;
+ if(!Number.isInteger(level)||level<2||level>LEVEL_CAP)return forecast;
  const subclassId=plannedLevel(forecast,3).subclassId;
- const eligible=forecastSpellOptions(classId,subclassId).find(spell=>spell.id===spellId);
+ const eligible=forecastSpellOptions(classId,subclassId,level).find(spell=>spell.id===spellId);
  if(!eligible)return forecast;
- const isThirdCaster=(classId==='rogue'&&subclassId==='rogue-arcane-trickster')||(classId==='fighter'&&subclassId==='fighter-eldritch-knight');
- if(isThirdCaster&&level<3)return forecast;
  const plan=plannedLevel(forecast,level);
  const previous=plan.plannedSpellIds??[];
  const plannedSpellIds=previous.includes(spellId)?previous.filter(id=>id!==spellId):[...previous,spellId];
  return updateLevelPlan(forecast,level,{plannedSpellIds});
+}
+export function forecastSpellWarnings(classId:string,forecast:AdvancementForecast):string[]{
+ const warnings:string[]=[];
+ const subclassId=plannedLevel(forecast,3).subclassId;
+ const seen=new Set<string>();
+ for(const plan of [...forecast.levels].sort((a,b)=>a.level-b.level)){
+  for(const id of plan.plannedSpellIds??[]){
+   if(!forecastSpellOptions(classId,subclassId,plan.level).some(spell=>spell.id===id))warnings.push('Level '+plan.level+': spell '+id+' is not eligible for the selected class, subclass, or level.');
+   if(seen.has(id))warnings.push('Level '+plan.level+': spell '+id+' was already selected at an earlier level.');
+   seen.add(id);
+  }
+ }
+ return warnings;
 }
