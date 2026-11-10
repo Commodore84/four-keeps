@@ -16,7 +16,7 @@ export interface CompanionEncounter {
  participants:Record<string,{x:number;y:number;hp:number;maxHp:number;initiative:number;conditions:('Charmed'|'Poisoned'|'Blinded'|'Deafened'|'Frightened'|'Grappled'|'Incapacitated'|'Invisible'|'Paralyzed'|'Petrified'|'Prone'|'Restrained'|'Stunned'|'Unconscious'|'Exhaustion')[];speedFeet:number;movementSpentFeet:number;actionUsed:boolean;bonusActionUsed:boolean;dashFeet:number;disengaged:boolean;dodging:boolean;reactionUsed?:boolean;concentratingOn?:string;consumables?:Record<string,number>;faction?:string;reachFeet?:number;actorKind?:'party'|'enemy';armorClass?:number;attackModifier?:number;constitutionSaveModifier?:number;damageModifier?:number;damageDice?:string;enemyTactic?:'hold'|'nearest'|'lowest-hp';deathSaves?:{successes:number;failures:number;stable:boolean;dead:boolean}}>;
  obstacles?:{x:number;y:number}[];
  cover?:{x:number;y:number}[];
- pendingOpportunity?:{moverId:string;attackerIds:string[];from:{x:number;y:number};to:{x:number;y:number}};
+ pendingOpportunity?:{moverId:string;attackerIds:string[];from:{x:number;y:number};to:{x:number;y:number};destination?:{x:number;y:number}};
  /** Thrown weapons awaiting DM-confirmed post-encounter recovery. */
  thrownWeaponsPendingRecovery?:Record<string,number>;
  /** Ammunition expended from verified inventory, awaiting DM-confirmed recovery. */
@@ -285,13 +285,18 @@ export function moveCompanion(campaign:Campaign,actorId:string,x:number,y:number
  if(actor.conditions.some(c=>IMMOBILE.includes(c)))throw Error('Condition prevents movement');
  if(!valid({x,y}))throw Error('Destination outside 20×20 arena');
  if(Object.entries(battle.participants).some(([id,p])=>id!==actorId&&p.hp>0&&p.x===x&&p.y===y))throw Error('Square occupied');
+ if(battle.pendingOpportunity?.moverId===actorId&&battle.pendingOpportunity.attackerIds.length)throw Error('Resolve pending opportunity reactions before moving');
  const route=pathRoute(battle,actor,{x,y},actorId);
  const steps=route.length-1;
- const candidates=[...new Set(route.slice(1).flatMap((step,i)=>companionOpportunityCandidates(battle,actorId,route[i],step)))];
- const movementCost=steps*5*(actor.conditions.includes('Prone')?2:1);
+ const firstTrigger=route.slice(1).map((step,i)=>({from:route[i],to:step,candidates:companionOpportunityCandidates(battle,actorId,route[i],step)})).find(entry=>entry.candidates.length>0);
+ const interrupt=actor.actorKind==='enemy'&&firstTrigger;
+ const destination=interrupt?firstTrigger.from:{x,y};
+ const traversedSteps=interrupt?route.findIndex(p=>p.x===destination.x&&p.y===destination.y):steps;
+ const candidates=interrupt?firstTrigger.candidates:[...new Set(route.slice(1).flatMap((step,i)=>companionOpportunityCandidates(battle,actorId,route[i],step)))];
+ const movementCost=traversedSteps*5*(actor.conditions.includes('Prone')?2:1);
  if(movementCost>actor.speedFeet+actor.dashFeet-actor.movementSpentFeet)throw Error('Move exceeds remaining movement');
- if(Object.entries(battle.participants).some(([id,p])=>id!==actorId&&p.hp>0&&p.x===x&&p.y===y))throw Error('Square occupied');
- return save(campaign,{...battle,participants:{...battle.participants,[actorId]:{...actor,x,y,movementSpentFeet:actor.movementSpentFeet+movementCost}},pendingOpportunity:candidates.length?{moverId:actorId,attackerIds:candidates,from:{x:actor.x,y:actor.y},to:{x,y}}:undefined,log:[...battle.log,actorId+' moved to '+x+','+y+(candidates.length?' · potential opportunity attackers: '+candidates.join(', '):'')]});
+ if(Object.entries(battle.participants).some(([id,p])=>id!==actorId&&p.hp>0&&p.x===destination.x&&p.y===destination.y))throw Error('Square occupied');
+ return save(campaign,{...battle,participants:{...battle.participants,[actorId]:{...actor,x:destination.x,y:destination.y,movementSpentFeet:actor.movementSpentFeet+movementCost}},pendingOpportunity:candidates.length?{moverId:actorId,attackerIds:candidates,from:interrupt?firstTrigger.from:{x:actor.x,y:actor.y},to:interrupt?firstTrigger.to:{x,y},...(interrupt?{destination:{x,y}}:{})}:undefined,log:[...battle.log,actorId+' moved to '+destination.x+','+destination.y+(interrupt?' · interrupted before leaving reach toward '+firstTrigger.to.x+','+firstTrigger.to.y:candidates.length?' · potential opportunity attackers: '+candidates.join(', '):'')]});
 }
 export function endCompanionTurn(campaign:Campaign,actorId:string):Campaign{
  const battle=activeActor(campaign,actorId);
