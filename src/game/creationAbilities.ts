@@ -6,6 +6,15 @@ export type BonusMode='two-one'|'one-one-one';
 export interface AbilityDraft {method:AbilityMethod;base:Partial<Scores>;bonusMode:BonusMode;bonuses:Partial<Record<Ability,number>>;rolls:number[];rollDice:number[][]}
 export const STANDARD_ARRAY=[15,14,13,12,10,8] as const;
 export const POINT_COSTS:Record<number,number>={8:0,9:1,10:2,11:3,12:4,13:5,14:7,15:9};
+export const POINT_BUY_START:Scores={Str:8,Dex:8,Con:8,Int:8,Wis:8,Cha:8};
+export function changePointBuy(draft:AbilityDraft,ability:Ability,delta:-1|1):AbilityDraft{
+ if(draft.method!=='point-buy')return draft;
+ const current=draft.base[ability]??8,next=current+delta;
+ if(!Object.hasOwn(POINT_COSTS,next))return draft;
+ const base={...POINT_BUY_START,...draft.base,[ability]:next};
+ if(pointCost(base)>27)return draft;
+ return {...draft,base};
+}
 export function emptyAbilityDraft():AbilityDraft{return {method:'standard',base:{},bonusMode:'two-one',bonuses:{},rolls:[],rollDice:[]};}
 export function modifier(score:number):number{return Math.floor((score-10)/2);}
 export function pointCost(scores:Partial<Scores>):number{return ABILITIES.reduce((sum,key)=>sum+(POINT_COSTS[scores[key]??8]??100),0);}
