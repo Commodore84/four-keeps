@@ -15,7 +15,8 @@ describe('isolated companion encounter vertical slice',()=>{
  it('uses DM-verified enemy damage modifier without writing character sheet',()=>{
   const base=build();
   let c=startUnifiedEncounter(base,{nighthawk:20,paladin:10},{nighthawk:{x:0,y:2},paladin:{x:0,y:0}},{paladin:20});
-  c=addCompanionEnemy(c,'goblin1',25,{x:1,y:2},12,13,4,30,5,3,'1d6 slashing');
+  c=addCompanionEnemy(c,'goblin1',15,{x:1,y:2},12,13,4,30,5,3,'1d6 slashing');
+  c=endCompanionTurn(c,'nighthawk');
   expect(c.companionEncounter?.participants.goblin1).toMatchObject({damageModifier:3,damageDice:'1d6 slashing'});
   c=attackCompanionWithVerifiedStats(c,'goblin1','nighthawk',15,4,'Slashing',5);
   expect(c.companionEncounter?.participants.nighthawk.hp).toBe(3);
