@@ -760,3 +760,28 @@ test('enemy damage profile and healing controls persist in encounter UI',async({
  await expect(page.getByLabel('Enemy damage modifier')).toBeVisible();
  await expect(page.getByRole('button',{name:'Heal encounter target'})).toBeVisible();
 });
+
+test('enemy tactic selection persists through reload without autonomous attacks',async({page})=>{
+ await page.goto('/four-keeps/');
+ await page.getByRole('button',{name:'Settings',exact:true}).click();
+ await page.getByLabel('New campaign name').fill('Persistent enemy tactics');
+ await page.getByRole('button',{name:'New',exact:true}).click();
+ await page.getByRole('button',{name:'Adventure',exact:true}).click();
+ await page.getByRole('button',{name:'Player',exact:true}).click();
+ const manager=page.getByLabel('Subclass actor manager');
+ await manager.getByLabel('New subclass actor ID').fill('paladin');
+ await manager.getByRole('button',{name:'Register subclass actor'}).click();
+ const panel=page.getByLabel('Companion encounter');
+ await panel.getByRole('button',{name:'Start companion encounter'}).click();
+ await panel.getByLabel('Enemy ID').fill('goblin1');
+ await panel.getByRole('button',{name:'Add enemy actor'}).click();
+ await panel.getByRole('button',{name:'End companion turn'}).click();
+ await expect(panel.getByLabel('Active enemy tactic')).toBeVisible();
+ await panel.getByLabel('Active enemy tactic').selectOption('nearest');
+ await expect(panel.getByLabel('Enemy tactic preview')).toContainText('nearest');
+ await page.reload();
+ await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await page.getByRole('button',{name:'Player',exact:true}).click();
+ await expect(page.getByLabel('Active enemy tactic')).toHaveValue('nearest');
+ await expect(page.getByLabel('Enemy tactic preview')).toContainText('nearest');
+});
