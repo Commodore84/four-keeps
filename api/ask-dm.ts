@@ -7,6 +7,9 @@ export default async function handler(req:Req,res:Res){
  const input=(req.body??{}) as {question?:unknown;draft?:unknown;history?:unknown};
  const question=typeof input.question==='string'?input.question.trim().slice(0,2500):'';
  if(!question){res.status(400).json({error:'Enter a question for the DM.'});return;}
+ const accessCode=process.env.FOUR_KEEPS_ACCESS_CODE;
+ if(!accessCode||accessCode.length<16){res.status(503).json({error:'DM access is not configured.'});return;}
+ if(req.headers['x-four-keeps-access']!==accessCode){res.status(401).json({error:'Enter your game access code in Settings to use Ask DM.'});return;}
  const key=process.env.OPENAI_API_KEY;
  if(!key){res.status(503).json({error:'Ask DM is not configured on this deployment.'});return;}
  const draft=JSON.stringify(input.draft??{}).slice(0,12000);
