@@ -24,7 +24,6 @@ describe('isolated companion encounter vertical slice',()=>{
   c=damageCompanion(c,'nighthawk',10,'Fire');
   c=endCompanionTurn(c,'nighthawk');
   c=addCompanionEnemy(c,'goblin1',15,{x:1,y:1},10,12,5,30,5,0,'1d4 piercing');
-  c=endCompanionTurn(c,'paladin');
   c=attackCompanionWithVerifiedStats(c,'goblin1','nighthawk',14,2,'Piercing',5,18);
   expect(c.companionEncounter?.participants.nighthawk.deathSaves?.failures).toBe(2);
   expect(c.companionEncounter?.log.at(-1)).toContain('critical hit');
@@ -40,7 +39,8 @@ describe('isolated companion encounter vertical slice',()=>{
  });
  it('previews DM-configured enemy tactics deterministically and persists them',()=>{
   let c=startUnifiedEncounter(build(),{nighthawk:20,paladin:10},{nighthawk:{x:0,y:2},paladin:{x:0,y:0}},{paladin:20});
-  c=addCompanionEnemy(c,'goblin1',25,{x:2,y:2},12,13,4);
+  c=addCompanionEnemy(c,'goblin1',15,{x:2,y:2},12,13,4);
+  c=endCompanionTurn(c,'nighthawk');
   expect(previewEnemyTurn(c,'goblin1').targetId).toBeNull();
   c=configureEnemyTactic(c,'goblin1','nearest');
   expect(previewEnemyTurn(c,'goblin1')).toMatchObject({tactic:'nearest',targetId:'nighthawk',distanceFeet:10,inReach:false});
