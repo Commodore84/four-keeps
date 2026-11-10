@@ -53,6 +53,26 @@ const NAMES:Record<string,string[]>={
 'wizard-illusionist':['Illusion Savant and Improved Illusions','Phantasmal Creatures','Illusory Self','Illusory Reality']
 };
 const VERIFIED:Record<string,Record<number,{description:string;applied:boolean;choiceRequired?:boolean}>>={
+ // 2024 Basic Rules: https://www.dndbeyond.com/sources/dnd/br-2024/character-classes
+ 'paladin-devotion':{
+  3:{description:'Sacred Weapon: as part of the Attack action, expend Channel Divinity to empower a held melee weapon for 10 minutes, adding your Charisma modifier (minimum +1) to attack rolls and optionally dealing Radiant damage. Your Oath spells are always prepared.',applied:false},
+  7:{description:'Aura of Devotion: you and allies within your Aura of Protection are immune to Charmed while in the aura.',applied:false},
+  15:{description:'Smite of Protection: casting Divine Smite grants you and allies in your Aura of Protection Half Cover until the start of your next turn.',applied:false},
+  20:{description:'Holy Nimbus: as a Bonus Action, empower your aura for 10 minutes, gaining protection against Fiends and Undead, Radiant damage to nearby enemies, and sunlight. Regain the use after a Long Rest or by expending a level 5 spell slot.',applied:false}
+ },
+ 'druid-land':{
+  3:{description:'Circle Spells: choose arid, polar, temperate, or tropical after a Long Rest; the corresponding spells are prepared. Land’s Aid: expend Wild Shape as a Magic action to heal one creature and deal Necrotic damage in an area.',applied:false},
+  6:{description:'Natural Recovery: once per Long Rest cast one prepared Circle Spell without a slot; once per Long Rest recover spell slots after a Short Rest totaling up to half your Druid level (rounded up), with no level 6+ slots.',applied:false},
+  10:{description:'Nature’s Ward: immunity to Poisoned and resistance according to your current terrain (arid Fire, polar Cold, temperate Lightning, tropical Poison). Land’s Aid increases to 3d6.',applied:false},
+  14:{description:'Nature’s Sanctuary: expend Wild Shape as a Magic action to create a protective 15-foot cube for 1 minute; allies gain Half Cover and your Nature’s Ward resistance. Land’s Aid increases to 4d6.',applied:false}
+ },
+ 'warlock-fiend':{
+  3:{description:'Dark One’s Blessing: when you or someone else within 10 feet of you reduces an enemy to 0 HP, gain Temporary Hit Points equal to your Charisma modifier plus Warlock level (minimum 1). Fiend spells are always prepared.',applied:false},
+  6:{description:'Dark One’s Own Luck: add 1d10 to an ability check or saving throw after seeing the roll but before its effects, up to your Charisma modifier uses (minimum one) per Long Rest.',applied:false},
+  10:{description:'Fiendish Resilience: after a Short or Long Rest choose one damage type other than Force; gain resistance to it until you choose another.',applied:false,choiceRequired:true},
+  14:{description:'Hurl Through Hell: once per turn after hitting with an attack roll, force a Charisma save or send the target away until the end of your next turn, incapacitating it and dealing 8d10 Psychic damage if not a Fiend. Recharge on a Long Rest or with a Pact Magic slot.',applied:false}
+ },
+
  'fighter-champion':{
   3:{description:'Weapon and Unarmed Strike attack rolls score a critical hit on a natural 19 or 20. You also have advantage on initiative and Athletics checks; after a critical hit you may move up to half your speed without provoking opportunity attacks.',applied:true},
   7:{description:'Gain an additional Fighting Style feat of your choice. The specific style and its benefits must be selected during actual advancement.',applied:false,choiceRequired:true},
