@@ -2,7 +2,7 @@ import type {Ability} from './creationAbilities';
 import {CLASSES} from './creationClasses';
 import {SPELLS} from './creationMagic';
 import {HIGHER_LEVEL_FORECAST_SPELLS} from './creationHigherSpellCatalog';
-import {spellcastingAtLevel} from './creationClasses';
+import {spellcastingAtLevel,preparedSpellsAtLevel} from './creationClasses';
 import {subclassesForClass} from './creationSubclasses';
 export interface LevelPlan {level:number;subclassId?:string;abilityPlan?:string;abilityIncreases?:Partial<Record<Ability,number>>;featPlan?:string;spellPlan?:string;plannedSpellIds?:string[];replacementSpellId?:string;replacementWithSpellId?:string;notes?:string}
 export interface AdvancementForecast {targetLevel:number;levels:LevelPlan[]}
@@ -81,6 +81,10 @@ export function forecastSpellSelectionWarnings(classId:string,forecast:Advanceme
  if(previous.includes(spellId))return [];
  const selected=previous.map(id=>[...SPELLS,...HIGHER_LEVEL_FORECAST_SPELLS].find(item=>item.id===id)).filter((item):item is NonNullable<typeof item>=>Boolean(item));
  if(classId==='warlock'&&spell.level>=6&&selected.some(item=>item.level===spell.level))return ['Level '+level+': only one Mystic Arcanum spell of level '+spell.level+' may be selected.'];
+ if(classId!=='wizard'&&spell.level>0&&spell.level<=5){
+  const cap=Math.max(0,(preparedSpellsAtLevel(classId,level)??0)-(preparedSpellsAtLevel(classId,level-1)??0));
+  if(selected.filter(item=>item.level>0&&item.level<=5).length>=cap)return ['Level '+level+': no additional prepared-spell choices are gained at this level (limit '+cap+').'];
+ }
  if(classId==='wizard'&&spell.level>0&&selected.filter(item=>item.level>0).length>=2)return ['Level '+level+': Wizards add two spells to their spellbook on gaining a Wizard level.'];
  const current=spellcastingAtLevel(classId,level);
  const prior=spellcastingAtLevel(classId,level-1);
@@ -119,7 +123,12 @@ export function forecastReplacementWarnings(classId:string,forecast:AdvancementF
   const options=forecastSpellOptions(classId,subclassId,plan.level);
   if(!options.some(spell=>spell.id===to&&spell.level>0))warnings.push('Level '+plan.level+': replacement spell is not eligible for this class and level.');
   if(![...SPELLS,...HIGHER_LEVEL_FORECAST_SPELLS].some(spell=>spell.id===from))warnings.push('Level '+plan.level+': original spell is not in the curated catalog.');
-  if(!initialPreparedSpellIds.includes(from)&&!forecast.levels.some(p=>p.level<plan.level&&(p.plannedSpellIds??[]).includes(from)))warnings.push('Level '+plan.level+': original spell is not in the level-one prepared spells or earlier forecast selections.');
+  const owned=new Set(initialPreparedSpellIds);
+  for(const prior of [...forecast.levels].filter(p=>p.level<plan.level).sort((a,b)=>a.level-b.level)){
+   for(const id of prior.plannedSpellIds??[])owned.add(id);
+   if(prior.replacementSpellId&&prior.replacementWithSpellId&&owned.has(prior.replacementSpellId)){owned.delete(prior.replacementSpellId);owned.add(prior.replacementWithSpellId);}
+  }
+  if(!owned.has(from))warnings.push('Level '+plan.level+': original spell is not in the level-one prepared spells or earlier active forecast selections.');
  }
  return warnings;
 }
