@@ -68,6 +68,7 @@ export function forecastSpellSelectionWarnings(classId:string,forecast:Advanceme
  if(previous.includes(spellId))return [];
  const selected=previous.map(id=>[...SPELLS,...HIGHER_LEVEL_FORECAST_SPELLS].find(item=>item.id===id)).filter((item):item is NonNullable<typeof item>=>Boolean(item));
  if(classId==='warlock'&&spell.level>=6&&selected.some(item=>item.level===spell.level))return ['Level '+level+': only one Mystic Arcanum spell of level '+spell.level+' may be selected.'];
+ if(classId==='wizard'&&spell.level>0&&selected.filter(item=>item.level>0).length>=2)return ['Level '+level+': Wizards add two spells to their spellbook on gaining a Wizard level.'];
  const current=spellcastingAtLevel(classId,level);
  const prior=spellcastingAtLevel(classId,level-1);
  if(spell.level===0&&current?.cantrips!==null&&current?.cantrips!==undefined){
