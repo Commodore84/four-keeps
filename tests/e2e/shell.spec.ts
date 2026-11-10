@@ -735,3 +735,28 @@ test('prone standing consumes movement and persists across reload',async({page})
  await page.getByRole('button',{name:'Player',exact:true}).click();
  await expect(page.getByLabel('Companion encounter')).toContainText('movement 15/30 ft');
 });
+
+test('enemy damage profile and healing controls persist in encounter UI',async({page})=>{
+ await page.goto('/four-keeps/');
+ await page.getByRole('button',{name:'Settings',exact:true}).click();
+ await page.getByLabel('New campaign name').fill('Enemy damage and healing browser');
+ await page.getByRole('button',{name:'New',exact:true}).click();
+ await page.getByRole('button',{name:'Adventure',exact:true}).click();
+ await page.getByRole('button',{name:'Player',exact:true}).click();
+ const manager=page.getByLabel('Subclass actor manager');
+ await manager.getByLabel('New subclass actor ID').fill('paladin');
+ await manager.getByRole('button',{name:'Register subclass actor'}).click();
+ const panel=page.getByLabel('Companion encounter');
+ await panel.getByRole('button',{name:'Start companion encounter'}).click();
+ await panel.getByLabel('Enemy ID').fill('goblin1');
+ await panel.getByLabel('Enemy damage modifier').fill('3');
+ await panel.getByLabel('Enemy damage dice').fill('1d6 slashing');
+ await panel.getByRole('button',{name:'Add enemy actor'}).click();
+ await expect(panel.getByRole('status')).toContainText('Enemy added');
+ await page.reload();
+ await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await page.getByRole('button',{name:'Player',exact:true}).click();
+ await expect(page.getByLabel('Companion encounter')).toContainText('goblin1');
+ await expect(page.getByLabel('Enemy damage modifier')).toBeVisible();
+ await expect(page.getByRole('button',{name:'Heal encounter target'})).toBeVisible();
+});
