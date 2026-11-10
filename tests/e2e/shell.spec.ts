@@ -864,3 +864,34 @@ test('mobile tactical grid selects a square and persists movement after reload',
  await page.getByRole('button',{name:'Player',exact:true}).click();
  await expect(page.getByLabel('Companion encounter')).toContainText('paladin: 20/20 HP · (1,0)');
 });
+
+test('DM-configured ranged enemy attack persists verified HP and range after reload',async({page})=>{
+ await page.goto('/four-keeps/');
+ await page.getByRole('button',{name:'Settings',exact:true}).click();
+ await page.getByLabel('New campaign name').fill('Ranged enemy persistence');
+ await page.getByRole('button',{name:'New',exact:true}).click();
+ await page.getByRole('button',{name:'Adventure',exact:true}).click();
+ await page.getByRole('button',{name:'Player',exact:true}).click();
+ const manager=page.getByLabel('Subclass actor manager');
+ await manager.getByLabel('New subclass actor ID').fill('paladin');
+ await manager.getByRole('button',{name:'Register subclass actor'}).click();
+ const panel=page.getByLabel('Companion encounter');
+ await panel.getByLabel('Include Nighthawk in unified encounter').check();
+ await panel.getByLabel('Initiative nighthawk').fill('20');
+ await panel.getByRole('button',{name:'Start companion encounter'}).click();
+ await panel.getByLabel('Enemy ID').fill('archer1');
+ await panel.getByLabel('Enemy X').fill('6');
+ await panel.getByLabel('Enemy Y').fill('2');
+ await panel.getByRole('button',{name:'Add enemy actor'}).click();
+ await panel.getByRole('button',{name:'End companion turn'}).click();
+ await panel.getByLabel('Enemy ranged reach').fill('60');
+ await panel.getByRole('button',{name:'Configure ranged profile'}).click();
+ await panel.getByLabel('Companion target',{exact:true}).selectOption('nighthawk');
+ await panel.getByLabel('Companion attack d20').fill('18');
+ await panel.getByRole('button',{name:'Ranged attack and end turn'}).click();
+ await expect(panel).toContainText('nighthawk: 5/10 HP');
+ await page.reload();
+ await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await page.getByRole('button',{name:'Player',exact:true}).click();
+ await expect(page.getByLabel('Companion encounter')).toContainText('nighthawk: 5/10 HP');
+});
