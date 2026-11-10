@@ -6,6 +6,18 @@ export const SUBCLASS_PREPARED_SPELLS:Readonly<Record<string,Readonly<Record<num
   7:['Aura of Life','Death Ward'],
   9:['Greater Restoration','Mass Cure Wounds']
  },
+ 'cleric-light':{
+  3:['Burning Hands','Faerie Fire','Scorching Ray','See Invisibility'],
+  5:['Daylight','Fireball'],
+  7:['Arcane Eye','Wall of Fire'],
+  9:['Flame Strike','Scrying']
+ },
+ 'warlock-fiend':{
+  3:['Burning Hands','Command','Scorching Ray','Suggestion'],
+  5:['Fireball','Stinking Cloud'],
+  7:['Fire Shield','Wall of Fire'],
+  9:['Geas','Insect Plague']
+ },
  'paladin-devotion':{
   3:['Protection from Evil and Good','Shield of Faith'],
   5:['Aid','Zone of Truth'],
