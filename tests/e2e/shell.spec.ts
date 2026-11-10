@@ -620,3 +620,24 @@ test('manual concentration save resolution records success and failure',async({p
  await expect(panel.getByLabel('Concentration status')).toContainText('Not concentrating');
  await expect(panel).toContainText('concentration save 10 vs DC 11 failed');
 });
+
+test('DM-verified opportunity reaction consumes only the attacker reaction',async({page})=>{
+ await page.goto('/four-keeps/');
+ await page.getByRole('button',{name:'Settings',exact:true}).click();
+ await page.getByLabel('New campaign name').fill('Opportunity browser');
+ await page.getByRole('button',{name:'New',exact:true}).click();
+ await page.getByRole('button',{name:'Adventure',exact:true}).click();
+ await page.getByRole('button',{name:'Player',exact:true}).click();
+ const manager=page.getByLabel('Subclass actor manager');
+ await manager.getByLabel('New subclass actor ID').fill('paladin');
+ await manager.getByRole('button',{name:'Register subclass actor'}).click();
+ await manager.getByLabel('New subclass actor ID').fill('fiend');
+ await manager.getByLabel('New class').selectOption('warlock');
+ await manager.getByRole('button',{name:'Register subclass actor'}).click();
+ const panel=page.getByLabel('Companion encounter');
+ await panel.getByRole('button',{name:'Start companion encounter'}).click();
+ await panel.getByLabel('Opportunity attacker').selectOption('fiend');
+ await panel.getByLabel('Opportunity d20').fill('20');
+ await panel.getByRole('button',{name:'Resolve DM-verified opportunity'}).click();
+ await expect(panel).toContainText('opportunity attack vs paladin: hit');
+});
