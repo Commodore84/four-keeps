@@ -446,3 +446,33 @@ test('companion grid Dash and attack range checks persist after reload',async({p
  await expect(page.getByLabel('Companion encounter')).toContainText('movement 60/60 ft');
  await expect(page.getByLabel('Companion encounter')).toContainText('action used');
 });
+
+test('companion obstacles block attacks and persist across reload',async({page})=>{
+ await page.goto('/four-keeps/');
+ await page.getByRole('button',{name:'Settings',exact:true}).click();
+ await page.getByLabel('New campaign name').fill('Companion obstacles browser');
+ await page.getByRole('button',{name:'New',exact:true}).click();
+ await page.getByRole('button',{name:'Adventure',exact:true}).click();
+ await page.getByRole('button',{name:'Player',exact:true}).click();
+ const manager=page.getByLabel('Subclass actor manager');
+ for(const id of ['paladin','fiend']){
+  await manager.getByLabel('New subclass actor ID').fill(id);
+  await manager.getByRole('button',{name:'Register subclass actor'}).click();
+ }
+ const panel=page.getByLabel('Companion encounter');
+ await panel.getByRole('button',{name:'Start companion encounter'}).click();
+ await panel.getByLabel('Obstacle X').fill('1');
+ await panel.getByLabel('Obstacle Y').fill('0');
+ await panel.getByRole('button',{name:'Add obstacle'}).click();
+ await expect(panel.getByLabel('Companion obstacles')).toContainText('(1,0)');
+ await panel.getByLabel('Companion target',{exact:true}).selectOption('fiend');
+ await panel.getByLabel('Companion attack range').fill('30');
+ await panel.getByLabel('Companion attack d20').fill('20');
+ await panel.getByRole('button',{name:'Attack with action'}).click();
+ await expect(panel.getByRole('status')).toContainText('Line of sight blocked');
+ await expect(panel).toContainText('fiend: 20/20 HP');
+ await page.reload();
+ await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await page.getByRole('button',{name:'Player',exact:true}).click();
+ await expect(page.getByLabel('Companion obstacles')).toContainText('(1,0)');
+});
