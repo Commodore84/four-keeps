@@ -460,6 +460,8 @@ test('companion obstacles block attacks and persist across reload',async({page})
   await manager.getByRole('button',{name:'Register subclass actor'}).click();
  }
  const panel=page.getByLabel('Companion encounter');
+ await panel.getByLabel('Initiative paladin').fill('18');
+ await panel.getByLabel('Initiative fiend').fill('12');
  await panel.getByRole('button',{name:'Start companion encounter'}).click();
  await panel.getByLabel('Obstacle X').fill('1');
  await panel.getByLabel('Obstacle Y').fill('0');
