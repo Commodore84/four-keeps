@@ -22,6 +22,21 @@ describe('verified subclass projections',()=>{
   expect(higher.hitPoints-projectCharacterLevel('sorcerer',scores,emptyForecast(),10).hitPoints).toBe(10);
   expect(scores.Cha).toBe(18);
  });
+ it('calculates subclass resource pools across four different classes',()=>{
+  const cases=[
+   {cls:'fighter',id:'fighter-battle-master',level:3,name:'Superiority Dice',count:4},
+   {cls:'fighter',id:'fighter-battle-master',level:15,name:'Superiority Dice',count:6},
+   {cls:'fighter',id:'fighter-psi-warrior',level:9,name:'Psionic Energy Dice',count:8},
+   {cls:'rogue',id:'rogue-soulknife',level:5,name:'Psionic Energy Dice',count:6},
+   {cls:'warlock',id:'warlock-celestial',level:11,name:'Healing Light dice',count:12}
+  ];
+  for(const entry of cases){
+   const forecast=updateLevelPlan(emptyForecast(),3,{subclassId:entry.id});
+   const projection=projectCharacterLevel(entry.cls,scores,forecast,entry.level);
+   expect(projection.subclassResources.find(r=>r.name===entry.name)?.maximum,entry.id+' level '+entry.level).toBe(entry.count);
+   expect(projectCharacterLevel(entry.cls,scores,forecast,2).subclassResources).toEqual([]);
+  }
+ });
  it('does not apply unverified subclass benefits',()=>{
   const forecast=updateLevelPlan(emptyForecast(),3,{subclassId:'fighter-battle-master'});
   expect(projectCharacterLevel('fighter',scores,forecast,10).subclassBonuses).toEqual([]);
