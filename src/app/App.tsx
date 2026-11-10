@@ -8,6 +8,28 @@ import type { View } from '../game/types';
 import { emptyWorld } from '../game/world';
 import { prototypeNighthawk, abilities, abilityModifier, skillAbility, skillModifier, savingThrowModifier, rogueSneakAttackDice, rollCheck, describeCheck, type Skill, type RollMode } from '../game/checks';
 
+type SpellSheetMetadata = {time:string;range:string;duration:string;components:string};
+const spellSheetMetadata: Record<string,SpellSheetMetadata> = {
+  "Mage Hand": {time:"Action",range:"30 feet",duration:"1 minute",components:"V, S"},
+  "Minor Illusion": {time:"Action",range:"30 feet",duration:"1 minute",components:"S, M (a bit of fleece)"},
+  "Mind Sliver": {time:"Action",range:"60 feet",duration:"Instantaneous",components:"V"},
+  "Message": {time:"Action",range:"120 feet",duration:"1 round",components:"S, M (a copper wire)"},
+  "Prestidigitation": {time:"Action",range:"10 feet",duration:"Up to 1 hour",components:"V, S"},
+  "Fire Bolt": {time:"Action",range:"120 feet",duration:"Instantaneous",components:"V, S"},
+  "Light": {time:"Action",range:"Touch",duration:"1 hour",components:"V, M (a firefly or phosphorescent moss)"},
+  "Find Familiar": {time:"1 hour (or Ritual)",range:"10 feet",duration:"Instantaneous",components:"V, S, M (10 GP of charcoal, incense, and herbs consumed)"},
+  "Disguise Self": {time:"Action",range:"Self",duration:"1 hour",components:"V, S"},
+  "Silent Image": {time:"Action",range:"60 feet",duration:"Concentration, up to 10 minutes",components:"V, S, M (a bit of fleece)"},
+  "Shield": {time:"Reaction (when hit by an attack or targeted by Magic Missile)",range:"Self",duration:"1 round",components:"V, S"},
+  "Magic Missile": {time:"Action",range:"120 feet",duration:"Instantaneous",components:"V, S"},
+  "Detect Magic": {time:"Action (or Ritual)",range:"Self",duration:"Concentration, up to 10 minutes",components:"V, S"},
+  "Charm Person": {time:"Action",range:"30 feet",duration:"1 hour",components:"V, S"},
+  "Fog Cloud": {time:"Action",range:"120 feet",duration:"Concentration, up to 1 hour",components:"V, S"},
+  "Mage Armor": {time:"Action",range:"Touch",duration:"8 hours",components:"V, S, M (a piece of cured leather)"},
+  "Feather Fall": {time:"Reaction (when a creature falls)",range:"60 feet",duration:"1 minute",components:"V, M (a small feather or piece of down)"},
+  "Longstrider": {time:"Action",range:"Touch",duration:"1 hour",components:"V, S, M (a pinch of dirt)"},
+  "Sleep": {time:"Action",range:"60 feet",duration:"Concentration, up to 1 minute",components:"V, S, M (a pinch of sand or rose petals)"}
+};
 const spellSummaries: Record<string,string> = {
   "Acid Splash": "Hurl acid at a creature; it makes a Dexterity saving throw or takes acid damage.",
   "Blade Ward": "Protect yourself against weapon attacks with a defensive ward.",
@@ -185,11 +207,11 @@ function Party({ campaign, onRoll, onSaveRoll, onAwardXP, onLevelUp, onLevelThre
           {spells.map(spell=><div key={spell} className="overflow-hidden rounded-xl border border-white/15 bg-ink/30">
             <button type="button" aria-expanded={selectedSpell===spell} onClick={()=>setSelectedSpell(selectedSpell===spell?null:spell)} className="w-full p-3 text-left">
               <span className="flex items-center justify-between gap-2"><strong className="text-sm">{spell}</strong><span className="text-xs text-gold">{selectedSpell===spell?'Hide details':'Show details'}</span></span>
-              <span className="mt-2 block text-xs text-parchment/65">{group==='Cantrips'?'Cantrip':'Level 1'} · {isRitualSpell(spell)?'Ritual · ':''}{spellRequiresConcentration(spell)?'Concentration · ':''}Casting time / range / duration: see details</span>
+              <span className="mt-2 block text-xs text-parchment/65">{group==='Cantrips'?'Cantrip':'Level 1'} · {isRitualSpell(spell)?'Ritual · ':''}{spellRequiresConcentration(spell)?'Concentration · ':''}{spellSheetMetadata[spell] ? `${spellSheetMetadata[spell].time} · ${spellSheetMetadata[spell].range} · ${spellSheetMetadata[spell].duration}` : 'Casting metadata not yet recorded'}</span>
             </button>
             {selectedSpell===spell&&<div className="space-y-3 border-t border-gold/25 p-3">
               <p className="text-sm leading-6">{spellSummaries[spell]??'Detailed rules are not yet recorded for this spell.'}</p>
-              <p className="text-xs text-parchment/60">Components and complete spell metadata are not yet stored. Verify casting requirements during Adventure.</p>
+              {spellSheetMetadata[spell]?<div className="grid grid-cols-2 gap-2 text-xs"><div><span className="text-parchment/55">Casting time</span><p>{spellSheetMetadata[spell].time}</p></div><div><span className="text-parchment/55">Range</span><p>{spellSheetMetadata[spell].range}</p></div><div><span className="text-parchment/55">Duration</span><p>{spellSheetMetadata[spell].duration}</p></div><div><span className="text-parchment/55">Components</span><p>{spellSheetMetadata[spell].components}</p></div></div>:<p className="text-xs text-parchment/60">Casting metadata not yet recorded; check the 2024 spell rules before casting.</p>}
               {spellRequiresConcentration(spell)&&<p className="text-xs text-gold">Requires concentration. Casting replaces any existing concentration.</p>}
               {isRitualSpell(spell)&&<p className="text-xs text-gold">Ritual casting adds 10 minutes and spends no spell slot.</p>}
               <p className="text-xs text-parchment/60">Use the Adventure screen to cast and resolve this spell.</p>
