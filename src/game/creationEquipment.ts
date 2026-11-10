@@ -108,8 +108,6 @@ export function equipmentErrors(draft:EquipmentDraft,classId:string,backgroundId
  }
  if(draft.equipped.weapons.length>2)errors.push('Equip no more than two weapons.');
  for(const id of draft.equipped.weapons){const it=ITEM_BY_ID[id];if(!it||(owned[id]??0)<draft.equipped.weapons.filter(x=>x===id).length||it.category!=='weapon')errors.push('Cannot equip unowned weapon '+id+'.');else if(!weaponTrained(classId,it))errors.push('No proficiency with '+it.name+'.');}
- const armorItem=ITEM_BY_ID[draft.equipped.armor??''];
- // Insufficient Strength for heavy armor reduces speed, but does not make it illegal to wear.
  return errors;
 }
 export function carryingWeight(draft:EquipmentDraft,classId:string,backgroundId:string):number{return Object.entries(inventory(draft,classId,backgroundId)).reduce((sum,[id,n])=>sum+(ITEM_BY_ID[id]?.weight??0)*n,0);}
