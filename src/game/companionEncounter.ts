@@ -640,7 +640,8 @@ export function attackCompanionWithVerifiedStats(campaign:Campaign,attackerId:st
  * than the quantity expended by verified attacks in this encounter.
  */
 export function recoverEncounterAmmunition(campaign:Campaign,item:string,quantity:number):Campaign{
- const battle=encounter(campaign);
+ const battle=campaign.companionEncounter;
+ if(!battle)throw Error('No encounter to reconcile');
  if(battle.mode!=='unified'||!Number.isInteger(quantity)||quantity<1||quantity>(battle.ammunitionPendingRecovery?.[item]??0))throw Error('Invalid ammunition recovery');
  const updated=save(campaign,{...battle,ammunitionPendingRecovery:{...battle.ammunitionPendingRecovery,[item]:battle.ammunitionPendingRecovery![item]-quantity},log:[...battle.log,'DM recovered '+quantity+' '+item]});
  if(item==='arrows'){
@@ -677,7 +678,8 @@ export function attackWithThrownEquippedWeapon(campaign:Campaign,attackerId:stri
  * The DM confirms how many were actually recovered; unrecovered items remain spent.
  */
 export function recoverEncounterThrownWeapons(campaign:Campaign,item:string,quantity:number):Campaign{
- const battle=encounter(campaign);
+ const battle=campaign.companionEncounter;
+ if(!battle)throw Error('No encounter to reconcile');
  if(battle.mode!=='unified'||!Number.isInteger(quantity)||quantity<1||quantity>(battle.thrownWeaponsPendingRecovery?.[item]??0))throw Error('Invalid thrown-weapon recovery');
  const remaining=(battle.thrownWeaponsPendingRecovery?.[item]??0)-quantity;
  const updated=save(campaign,{...battle,thrownWeaponsPendingRecovery:{...battle.thrownWeaponsPendingRecovery,[item]:remaining},log:[...battle.log,'DM recovered '+quantity+' thrown '+item]});
