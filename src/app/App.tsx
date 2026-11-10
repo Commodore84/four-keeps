@@ -1,4 +1,5 @@
 import {CompanionEncounterPanel} from './CompanionEncounterPanel';
+import {AdventureSessionPanel} from './AdventureSessionPanel';
 import {SubclassActorManager} from './SubclassActorManager';
 import { CharacterCreator } from './CharacterCreator';
 import { useEffect, useRef, useState } from 'react';
@@ -118,13 +119,14 @@ const tabs = [
   { id: 'settings', label: 'Settings', Icon: Settings },
 ] as const;
 
-function Adventure({ campaign, fullHistory, onToggleHistory }: { campaign: Campaign | null; fullHistory: boolean; onToggleHistory: () => void }) {
+function Adventure({ campaign, fullHistory, onToggleHistory, onAdventureChange, saving }: { campaign: Campaign | null; fullHistory: boolean; onToggleHistory: () => void; onAdventureChange:(next:Campaign,message:string)=>void; saving:boolean }) {
   const endRef = useRef<HTMLDivElement>(null);
   const lastTurn = campaign?.journal.filter((entry) => entry.kind === 'player' || entry.kind === 'dm').at(-1)?.id;
   useEffect(() => { if (lastTurn) endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' }); }, [lastTurn]);
   const allTurns = campaign?.journal.filter((entry) => entry.kind === 'player' || entry.kind === 'dm') ?? [];
   const turns = fullHistory ? allTurns : allTurns.slice(-6);
   return <section className="space-y-5" aria-label="Adventure">
+    {campaign&&<AdventureSessionPanel campaign={campaign} saving={saving} onChange={onAdventureChange}/> }
     {allTurns.length > 6 && <button type="button" onClick={onToggleHistory} className="w-full rounded-lg border border-gold/30 px-4 py-3 text-sm text-gold">{fullHistory ? "Show recent conversation" : "View full conversation history ("+allTurns.length+" messages)"}</button>}
     
     {turns.length === 0 && <div className="rounded-xl border border-white/10 bg-panel p-5 space-y-3">
@@ -1077,7 +1079,7 @@ export function App() {
     catch(error){setNotice('Subclass save failed: '+String(error))}
     finally{setSaving(false)}
   }
-  const content = { adventure: campaign?.combat && campaign.combat.status!=='completed' ? null : <Adventure campaign={campaign} fullHistory={fullHistory} onToggleHistory={() => setFullHistory(value => !value)}/>, party: <Party campaign={campaign} saving={saving} onRoll={(skill,mode) => void saveSkillRoll(skill,mode)} onSaveRoll={(ability,mode) => void saveSavingThrow(ability,mode)} onAwardXP={(amount,reason) => void updateProgress('award',amount,reason)} onLevelUp={hp => void updateProgress('level',hp)} onLevelThree={(hp,cantrips,spells) => void updateProgress('level3',hp,'',cantrips,spells)} onReconcile={() => void updateProgress('reconcile')} onUndoReconcile={() => void updateProgress('undoReconcile')} onRestore={() => void updateProgress('restore')} onCastSpell={(spell,ritual,components,target)=>void castSpell(spell,ritual,components,target)} onEndConcentration={()=>void endConcentration()} onAdjustEquipment={(item,delta)=>void changeEquipment(item,delta)} onUpdateInventory={ledger=>void updateInventoryLedger(ledger)} onSubclassChange={(next,message)=>void saveSubclassActor(next,message)}/> , journal: <Journal campaign={campaign}/>, map: <WorldMap campaign={campaign}/>, settings: <section className="space-y-4"><h2 className="font-serif text-2xl">Settings</h2><p className="text-sm text-parchment/60">Manage campaigns, backups, and Dungeon Master access below.</p></section> };
+  const content = { adventure: campaign?.combat && campaign.combat.status!=='completed' ? null : <Adventure campaign={campaign} fullHistory={fullHistory} onToggleHistory={() => setFullHistory(value => !value)} onAdventureChange={(next,message)=>void saveSubclassActor(next,message)} saving={saving}/>, party: <Party campaign={campaign} saving={saving} onRoll={(skill,mode) => void saveSkillRoll(skill,mode)} onSaveRoll={(ability,mode) => void saveSavingThrow(ability,mode)} onAwardXP={(amount,reason) => void updateProgress('award',amount,reason)} onLevelUp={hp => void updateProgress('level',hp)} onLevelThree={(hp,cantrips,spells) => void updateProgress('level3',hp,'',cantrips,spells)} onReconcile={() => void updateProgress('reconcile')} onUndoReconcile={() => void updateProgress('undoReconcile')} onRestore={() => void updateProgress('restore')} onCastSpell={(spell,ritual,components,target)=>void castSpell(spell,ritual,components,target)} onEndConcentration={()=>void endConcentration()} onAdjustEquipment={(item,delta)=>void changeEquipment(item,delta)} onUpdateInventory={ledger=>void updateInventoryLedger(ledger)} onSubclassChange={(next,message)=>void saveSubclassActor(next,message)}/> , journal: <Journal campaign={campaign}/>, map: <WorldMap campaign={campaign}/>, settings: <section className="space-y-4"><h2 className="font-serif text-2xl">Settings</h2><p className="text-sm text-parchment/60">Manage campaigns, backups, and Dungeon Master access below.</p></section> };
   if(portalScreen!=='adventure')return <div className="min-h-dvh bg-ink text-parchment">
     <div className="mx-auto min-h-dvh w-full max-w-3xl space-y-5 px-5 pb-12 pt-[max(2rem,env(safe-area-inset-top))]">
       <header className="flex flex-col items-center gap-2 border-b border-gold/20 pb-6">
