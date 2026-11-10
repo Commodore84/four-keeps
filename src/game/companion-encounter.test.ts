@@ -1,7 +1,7 @@
 import {describe,it,expect} from 'vitest';
 import {newCampaign,registerSubclassActor,chooseSubclassResistance} from './campaign';
 import {initialSubclassCombatState} from './subclassCombatRules';
-import {startCompanionEncounter,moveCompanion,endCompanionTurn,damageCompanion,conditionCompanion,finishCompanionEncounter,attackCompanion,setCompanionSpeed ,useCompanionAction,setCompanionObstacles,companionLineOfSight,companionOpportunityAttackEligible,setCompanionCover,companionCoverStatus,companionPartySnapshot} from './companionEncounter';
+import {startCompanionEncounter,moveCompanion,endCompanionTurn,damageCompanion,conditionCompanion,finishCompanionEncounter,attackCompanion,setCompanionSpeed ,useCompanionAction,setCompanionObstacles,companionLineOfSight,companionOpportunityAttackEligible,setCompanionCover,companionCoverStatus,companionPartySnapshot,startUnifiedEncounter} from './companionEncounter';
 const build=()=>{
  let c=newCampaign('Companion test');
  c=registerSubclassActor(c,'paladin',initialSubclassCombatState('paladin','paladin-devotion',7,3));
@@ -12,6 +12,27 @@ const build=()=>{
 };
 const start=()=>startCompanionEncounter(build(),{paladin:15,druid:12,fiend:9},{paladin:{x:0,y:0},druid:{x:1,y:0},fiend:{x:5,y:5}},{paladin:30,druid:22,fiend:25});
 describe('isolated companion encounter vertical slice',()=>{
+ it('unifies Nighthawk and companions in shared initiative without changing prototype combat',()=>{
+  const original=start();
+  const c=startUnifiedEncounter({...original,companionEncounter:undefined},{nighthawk:20,paladin:18,fiend:12},{nighthawk:{x:0,y:2},paladin:{x:0,y:0},fiend:{x:5,y:5}},{paladin:20,fiend:25});
+  expect(c.companionEncounter?.mode).toBe('unified');
+  expect(c.companionEncounter?.order).toEqual(['nighthawk','paladin','fiend']);
+  expect(c.companionEncounter?.participants.nighthawk.speedFeet).toBe(c.character?.speed);
+  expect(c.companionEncounter?.participants.nighthawk.hp).toBe(c.character?.currentHitPoints);
+  expect(c.combat).toEqual(original.combat);
+  const moved=moveCompanion(c,'nighthawk',0,3);
+  expect(moved.companionEncounter?.participants.nighthawk.movementSpentFeet).toBe(5);
+  const attacked=attackCompanion(moved,'nighthawk','fiend',20,5,12,8,3,'Piercing',60);
+  expect(attacked.companionEncounter?.participants.fiend.hp).toBe(14);
+  expect(attacked.combat).toEqual(original.combat);
+  expect(JSON.parse(JSON.stringify(attacked)).companionEncounter.mode).toBe('unified');
+ });
+ it('rejects unknown unified identities and overlapping Nighthawk positions',()=>{
+  const c={...start(),companionEncounter:undefined};
+  expect(()=>startUnifiedEncounter(c,{nighthawk:20,unknown:10},{nighthawk:{x:0,y:2},unknown:{x:3,y:3}},{unknown:20})).toThrow('Unregistered');
+  expect(()=>startUnifiedEncounter(c,{nighthawk:20,paladin:10},{nighthawk:{x:0,y:0},paladin:{x:0,y:0}},{paladin:20})).toThrow('position');
+ });
+
  it('keeps annotated cover separate from solid obstacles and requires DM review',()=>{
   let c=start();
   c=setCompanionCover(c,[{x:5,y:5}]);
