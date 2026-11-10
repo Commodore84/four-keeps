@@ -230,6 +230,30 @@ export function spendCompanionConsumable(campaign:Campaign,actorId:string,item:s
  if(!Object.hasOwn(actor.consumables??{},item)||(actor.consumables?.[item]??0)<1)throw Error('Consumable unavailable');
  return save(campaign,{...battle,participants:{...battle.participants,[actorId]:{...actor,consumables:{...actor.consumables,[item]:(actor.consumables?.[item]??0)-1}}},log:[...battle.log,actorId+' consumed '+item+' (item effect DM adjudicated)']});
 }
+/** Character-sheet level-one slots are authoritative. Spending is opt-in and does not touch legacy combat. */
+export function spendUnifiedNighthawkSpellSlot(campaign:Campaign,spell:string):Campaign{
+ const battle=activeActor(campaign,'nighthawk'),actor=battle.participants.nighthawk;
+ const character=campaign.character,slots=character?.spellSlots;
+ if(battle.mode!=='unified'||!character||!slots)throw Error('Nighthawk has no verified level-one spell slots');
+ if(!spell.trim()||spell.length>100||!character.preparedSpells?.includes(spell.trim()))throw Error('Spell is not prepared');
+ if(actor.hp<=0||actor.actionUsed)throw Error('Spell action unavailable');
+ if(!Number.isInteger(slots.level1)||!Number.isInteger(slots.usedLevel1)||slots.usedLevel1>=slots.level1||slots.usedLevel1<0)throw Error('No level-one spell slots remaining');
+ return {...save(campaign,{...battle,participants:{...battle.participants,nighthawk:{...actor,actionUsed:true}},log:[...battle.log,'Nighthawk expended level-one slot for '+spell.trim()+' (spell effect DM adjudicated)']}),character:{...character,spellSlots:{...slots,usedLevel1:slots.usedLevel1+1}}};
+}
+/** Deterministic opportunity attack from an explicitly verified leaving-reach event.
+ * Melee range, target AC and damage are supplied by the DM. No dice are generated.
+ */
+export function resolveCompanionOpportunityAttack(campaign:Campaign,attackerId:string,targetId:string,roll:number,modifier:number,targetAC:number,damage:number,damageModifier:number,damageType:DamageType):Campaign{
+ const battle=encounter(campaign),attacker=battle.participants[attackerId],target=battle.participants[targetId];
+ if(!attacker||!target||attackerId===targetId||attacker.hp<=0||target.hp<=0||attacker.reactionUsed)throw Error('Opportunity reaction unavailable');
+ if(!Number.isInteger(roll)||roll<1||roll>20||![modifier,targetAC,damage,damageModifier].every(Number.isInteger)||targetAC<1||damage<0)throw Error('Invalid opportunity attack adjudication');
+ if(target.disengaged)throw Error('Disengage prevents opportunity attack');
+ if(!companionLineOfSight(battle,attacker,target))throw Error('Opportunity target not visible');
+ const hit=roll===20||(roll!==1&&roll+modifier>=targetAC);
+ const raw=hit?Math.max(0,damage+damageModifier):0;
+ const taken=targetId==='nighthawk'&&battle.mode==='unified'?raw:adjudicateSubclassActorDamage(campaign,targetId,raw,damageType);
+ return save(campaign,{...battle,participants:{...battle.participants,[attackerId]:{...attacker,reactionUsed:true},[targetId]:{...target,hp:Math.max(0,target.hp-taken),concentratingOn:target.hp<=taken?undefined:target.concentratingOn}},log:[...battle.log,attackerId+' opportunity attack vs '+targetId+': '+(hit?'hit for '+taken:'miss')+' (DM verified reach trigger)']});
+}
 export function finishCompanionEncounter(campaign:Campaign):Campaign{
  const battle=encounter(campaign);
  return save(campaign,{...battle,status:'completed',log:[...battle.log,'Companion encounter completed']});
