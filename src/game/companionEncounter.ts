@@ -168,6 +168,33 @@ export function previewEnemyTurn(campaign:Campaign,enemyId:string):{tactic:'hold
  const chosen=hostile[0];
  return {tactic,targetId:chosen?.[0]??null,distanceFeet:chosen?distance(chosen[1]):null,inReach:!!chosen&&distance(chosen[1])<=(actor.reachFeet??5)};
 }
+/** DM-authorized enemy turn: reuse validated grid movement, stop within reach,
+ * and end the turn. No attack rolls, damage or reactions are invented.
+ */
+export function executeEnemyMovementTurn(campaign:Campaign,enemyId:string):Campaign{
+ const battle=activeActor(campaign,enemyId),actor=battle.participants[enemyId];
+ if(actor.actorKind!=='enemy')throw Error('Enemy actor required');
+ const preview=previewEnemyTurn(campaign,enemyId);
+ if(preview.targetId===null||preview.inReach)return endCompanionTurn(campaign,enemyId);
+ const target=battle.participants[preview.targetId];
+ const candidates: {x:number;y:number;distance:number;steps:number}[]=[];
+ const maxSteps=Math.floor((actor.speedFeet+actor.dashFeet-actor.movementSpentFeet)/(actor.conditions.includes('Prone')?10:5));
+ if(actor.hp<=0||actor.conditions.some(c=>IMMOBILE.includes(c))||maxSteps<=0)return endCompanionTurn(campaign,enemyId);
+ for(let x=0;x<20;x++)for(let y=0;y<20;y++){
+  if(Object.entries(battle.participants).some(([id,p])=>id!==enemyId&&p.hp>0&&p.x===x&&p.y===y))continue;
+  try{
+   const steps=pathRoute(battle,actor,{x,y},enemyId).length-1;
+   if(steps>maxSteps)continue;
+   const distance=Math.max(Math.abs(x-target.x),Math.abs(y-target.y))*5;
+   candidates.push({x,y,distance,steps});
+  }catch{/* blocked destination */}
+ }
+ candidates.sort((a,b)=>a.distance-b.distance||a.steps-b.steps||a.y-b.y||a.x-b.x);
+ const best=candidates[0];
+ if(!best||best.steps===0)return endCompanionTurn(campaign,enemyId);
+ const moved=moveCompanion(campaign,enemyId,best.x,best.y);
+ return endCompanionTurn(moved,enemyId);
+}
 export function setCompanionTactics(campaign:Campaign,actorId:string,faction:string,reachFeet:number):Campaign{
  const battle=encounter(campaign),actor=battle.participants[actorId];
  if(!actor||!faction.trim()||faction.length>40||!Number.isInteger(reachFeet)||reachFeet<5||reachFeet>30||reachFeet%5!==0)throw Error('Invalid actor faction or reach');
