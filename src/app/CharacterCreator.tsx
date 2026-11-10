@@ -1,4 +1,4 @@
-import { CLASSES, classChoices, classSummary, reconcileChoices, setChoice, validateClass, type ChoiceSelections, type ChoiceDefinition } from '../game/creationClasses';
+import { CLASSES, classChoices, classSummary, reconcileChoices, setChoice, spellcastingAtLevel, validateClassAgainstBackground, type ChoiceSelections, type ChoiceDefinition } from '../game/creationClasses';
 import { availableSpecies, availableBackgrounds, validateOrigins, originBenefits } from '../game/creationOrigins';
 import { useEffect, useState } from 'react';
 
@@ -106,12 +106,13 @@ export function CharacterCreator(){
             <h5 className="font-semibold">{cls.name}</h5><p>{cls.summary}</p><p>Hit Die: d{cls.hitDie} · Primary: {cls.primaryAbilities.join(', ')}</p><p>Saves: {cls.savingThrows.join(', ')}</p><p>Armor: {cls.armor.join(', ')||'None'}</p><p>Weapons: {cls.weapons.join(', ')}</p><p>Tools: {cls.tools.join(', ')||'None'}</p><p>Starting equipment: {cls.startingEquipment}</p>
             <details><summary className="cursor-pointer font-semibold">Level progression preview</summary>{cls.features.map(f=><p key={f.level} className="mt-1">Level {f.level}: {f.names.join(', ')}</p>)}</details>
           </section>
+          {(()=>{const magic=spellcastingAtLevel(cls.id,1);return magic?<p className="text-sm rounded-lg border border-white/20 p-3">Level 1 spellcasting: {magic.ability} · {magic.kind} · slots {magic.slots.join(' / ')}{magic.cantrips!==null?' · '+magic.cantrips+' cantrips':''}. Spell preparation will be configured in Spells & Features.</p>:null})()}
           {classChoices(cls.id,selections['class-skills']??[]).map(definition=><fieldset key={definition.id} className="space-y-2 rounded-lg border border-white/20 p-3">
             <legend className="px-1 font-semibold">{definition.label} — choose {definition.count}</legend>
             <p className="text-xs text-parchment/60">{(selections[definition.id]??[]).length} / {definition.count} selected</p>
             <div className="grid grid-cols-2 gap-2">{definition.options.map(option=><label key={option} className="flex items-start gap-2 rounded border border-white/15 p-2 text-sm"><input type="checkbox" checked={(selections[definition.id]??[]).includes(option)} onChange={()=>toggleClassChoice(definition,option)}/><span>{option}</span></label>)}</div>
           </fieldset>)}
-          {validateClass(cls.id,selections).length>0?<p role="status" className="text-sm text-amber-200">{validateClass(cls.id,selections).join(' ')}</p>:<p role="status" className="text-sm text-emerald-300">Class choices valid and saved.</p>}
+          {validateClassAgainstBackground(cls.id,selections,availableBackgrounds(draft.rules.allowCompatibleLegacy).find(b=>b.id===draft.selections.backgroundId)?.skills??[]).length>0?<p role="status" className="text-sm text-amber-200">{validateClassAgainstBackground(cls.id,selections,availableBackgrounds(draft.rules.allowCompatibleLegacy).find(b=>b.id===draft.selections.backgroundId)?.skills??[]).join(' ')}</p>:<p role="status" className="text-sm text-emerald-300">Class choices valid and saved.</p>}
           </div>})()}
         <div className="flex gap-2"><button type="button" onClick={()=>update({step:'origins'})} className="rounded-lg border border-white/25 px-3 py-2">Back to origins</button><button type="button" disabled className="rounded-lg bg-gold px-3 py-2 text-ink opacity-40">Continue to abilities (next phase)</button></div>
       </div>}
