@@ -52,17 +52,32 @@ const NAMES:Record<string,string[]>={
 'wizard-evoker':['Evocation Savant and Potent Cantrip','Sculpt Spells','Empowered Evocation','Overchannel'],
 'wizard-illusionist':['Illusion Savant and Improved Illusions','Phantasmal Creatures','Illusory Self','Illusory Reality']
 };
+const VERIFIED:Record<string,Record<number,{description:string;applied:boolean;choiceRequired?:boolean}>>={
+ 'fighter-champion':{
+  3:{description:'Weapon and Unarmed Strike attack rolls score a critical hit on a natural 19 or 20. You also have advantage on initiative and Athletics checks; after a critical hit you may move up to half your speed without provoking opportunity attacks.',applied:true},
+  7:{description:'Gain an additional Fighting Style feat of your choice. The specific style and its benefits must be selected during actual advancement.',applied:false,choiceRequired:true},
+  10:{description:'When combat begins a turn and you lack Heroic Inspiration, you can grant it to yourself. This benefit is contextual and is not a static sheet modifier.',applied:false},
+  15:{description:'Your weapon and Unarmed Strike attacks now critically hit on natural 18, 19, or 20.',applied:true},
+  18:{description:'You gain advantage on death saving throws, and a death save of 18–20 counts as a natural 20. While bloodied but above zero Hit Points, you regain 5 plus your Constitution modifier Hit Points at the start of your turn.',applied:false}
+ },
+ 'sorcerer-draconic-sorcery':{
+  3:{description:'Your maximum Hit Points increase by 3 at subclass selection, then by 1 for each additional Sorcerer level. While unarmored, you can use an Armor Class of 10 plus your Dexterity and Charisma modifiers. You also gain the subclass spell list at its specified levels.',applied:true},
+  6:{description:'Choose Acid, Cold, Fire, Lightning, or Poison. Gain resistance to that damage type and add your Charisma modifier to one damage roll of a spell dealing that type.',applied:false,choiceRequired:true},
+  14:{description:'As a Bonus Action, manifest wings for one hour, gaining a Fly Speed of 60 feet. After using the feature, regain it on a Long Rest or by spending 3 Sorcery Points.',applied:false},
+  18:{description:'Your Draconic Sorcery reaches its capstone feature. This entry still needs a source-verified description and cannot be treated as mechanically implemented.',applied:false}
+ }
+};
 export const SUBCLASS_FEATURES:SubclassFeatureEntry[]=SUBCLASSES.flatMap(subclass=>{
  const levels=TIERS[subclass.classId]??[];
  const names=NAMES[subclass.id]??[];
  return levels.map((level,index)=>({
   subclassId:subclass.id,level,
   name:names[index]??subclass.name+' advancement',
-  description:index===0?subclass.description:
-   'This feature expands the '+subclass.name+' specialization in '+subclass.focus.toLowerCase()+'. The exact action economy, resource costs, range, duration, saving throws, and scaling must be verified against the 2024 rules before it can be used by the campaign engine.',
-  confidence:'preview-needs-verification' as const,
-  appliedToProjection:false,
-  choiceRequired:index===0
+  description:VERIFIED[subclass.id]?.[level]?.description??(index===0?subclass.description:
+   'This feature expands the '+subclass.name+' specialization in '+subclass.focus.toLowerCase()+'. The exact action economy, resource costs, range, duration, saving throws, and scaling must be verified against the 2024 rules before it can be used by the campaign engine.'),
+  confidence:(VERIFIED[subclass.id]?.[level]&&!(subclass.id==='sorcerer-draconic-sorcery'&&level===18)?'verified-mechanics':'preview-needs-verification') as FeatureConfidence,
+  appliedToProjection:VERIFIED[subclass.id]?.[level]?.applied??false,
+  choiceRequired:VERIFIED[subclass.id]?.[level]?.choiceRequired??index===0
  }));
 });
 export function subclassFeatureAt(subclassId:string,level:number):SubclassFeatureEntry|undefined{
