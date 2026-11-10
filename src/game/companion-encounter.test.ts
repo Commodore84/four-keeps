@@ -1,7 +1,7 @@
 import {describe,it,expect} from 'vitest';
 import {newCampaign,registerSubclassActor,chooseSubclassResistance} from './campaign';
 import {initialSubclassCombatState} from './subclassCombatRules';
-import {startCompanionEncounter,moveCompanion,endCompanionTurn,damageCompanion,conditionCompanion,finishCompanionEncounter,attackCompanion,setCompanionSpeed ,useCompanionAction,setCompanionObstacles,companionLineOfSight,companionOpportunityAttackEligible,setCompanionCover,companionCoverStatus,companionPartySnapshot,startUnifiedEncounter,synchronizeNighthawkHitPoints,recordCompanionReaction,removeCompanionCondition,nighthawkEncounterStatistics,useCompanionBonusAction,setCompanionConcentration,companionConcentrationSaveDC,setCompanionConsumable,spendCompanionConsumable} from './companionEncounter';
+import {startCompanionEncounter,moveCompanion,endCompanionTurn,damageCompanion,conditionCompanion,finishCompanionEncounter,attackCompanion,setCompanionSpeed ,useCompanionAction,setCompanionObstacles,companionLineOfSight,companionOpportunityAttackEligible,setCompanionCover,companionCoverStatus,companionPartySnapshot,startUnifiedEncounter,synchronizeNighthawkHitPoints,recordCompanionReaction,removeCompanionCondition,nighthawkEncounterStatistics,useCompanionBonusAction,setCompanionConcentration,companionConcentrationSaveDC,resolveCompanionConcentrationSave,setCompanionConsumable,spendCompanionConsumable} from './companionEncounter';
 const build=()=>{
  let c=newCampaign('Companion test');
  c=registerSubclassActor(c,'paladin',initialSubclassCombatState('paladin','paladin-devotion',7,3));
@@ -12,6 +12,31 @@ const build=()=>{
 };
 const start=()=>startCompanionEncounter(build(),{paladin:15,druid:12,fiend:9},{paladin:{x:0,y:0},druid:{x:1,y:0},fiend:{x:5,y:5}},{paladin:30,druid:22,fiend:25});
 describe('isolated companion encounter vertical slice',()=>{
+ it('ends Disengage at the end of its turn but preserves Dodge until its next turn',()=>{
+  let c=start();
+  c=useCompanionAction(c,'paladin','Disengage');
+  expect(companionOpportunityAttackEligible(c,'paladin')).toBe(false);
+  c=endCompanionTurn(c,'paladin');
+  expect(companionOpportunityAttackEligible(c,'paladin')).toBe(true);
+  c=endCompanionTurn(c,'druid');
+  c=endCompanionTurn(c,'fiend');
+  c=useCompanionAction(c,'paladin','Dodge');
+  c=endCompanionTurn(c,'paladin');
+  expect(c.companionEncounter?.participants.paladin.dodging).toBe(true);
+  c=endCompanionTurn(c,'druid');
+  c=endCompanionTurn(c,'fiend');
+  expect(c.companionEncounter?.participants.paladin.dodging).toBe(false);
+ });
+ it('resolves concentration with a supplied Constitution saving throw total',()=>{
+  let c=start();
+  c=setCompanionConcentration(c,'fiend','Hex');
+  c=resolveCompanionConcentrationSave(c,'fiend',22,11);
+  expect(c.companionEncounter?.participants.fiend.concentratingOn).toBe('Hex');
+  c=resolveCompanionConcentrationSave(c,'fiend',22,10);
+  expect(c.companionEncounter?.participants.fiend.concentratingOn).toBeUndefined();
+  expect(()=>resolveCompanionConcentrationSave(c,'fiend',22,20)).toThrow('not concentrating');
+ });
+
  it('derives Nighthawk defense and ability modifiers without guessing weapon proficiency',()=>{
   const stats=nighthawkEncounterStatistics(newCampaign('Stats'));
   expect(stats.armorClass).toBe(14);
