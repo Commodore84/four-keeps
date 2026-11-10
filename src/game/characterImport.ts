@@ -4,6 +4,7 @@ import {newCampaign,type Campaign} from './campaign';
 import type {CharacterStats,Skill} from './checks';
 import {ITEM_BY_ID} from './creationEquipment';
 import {SPELL_BY_ID} from './creationMagic';
+import {spellcastingAtLevel} from './creationClasses';
 const skillNames=new Set<Skill>(['Acrobatics','Animal Handling','Arcana','Athletics','Deception','History','Insight','Intimidation','Investigation','Medicine','Nature','Perception','Performance','Persuasion','Religion','Sleight of Hand','Stealth','Survival']);
 const lower=(value:string)=>value.toLowerCase() as keyof CharacterStats['scores'];
 export function campaignFromCharacterDraft(draft:CharacterDraft,title:string,id:string=crypto.randomUUID(),now=new Date().toISOString()):Campaign{
@@ -13,7 +14,9 @@ export function campaignFromCharacterDraft(draft:CharacterDraft,title:string,id:
  const review=reviewCharacter(draft);
  if(!review.hitPoints||review.hitPoints<1||!Number.isFinite(review.armorClass)||!review.origins.speed)throw Error('Invalid level-one character statistics');
  const scores=Object.fromEntries(review.scores.map(({ability,score})=>[lower(ability),score])) as CharacterStats['scores'];
- const character:CharacterStats={scores,proficiencyBonus:2,proficientSkills:review.skills.filter((skill):skill is Skill=>skillNames.has(skill as Skill)),level:1,maxHitPoints:review.hitPoints,currentHitPoints:review.hitPoints,armorClass:review.armorClass,speed:review.origins.speed,
+ const expertise=(draft.selections.classChoices?.expertise??[]).filter((skill):skill is Skill=>skillNames.has(skill as Skill));
+ const slots=spellcastingAtLevel(draft.selections.classId!,1)?.slots[0]??0;
+ const character:CharacterStats={scores,proficiencyBonus:2,proficientSkills:review.skills.filter((skill):skill is Skill=>skillNames.has(skill as Skill)),expertiseSkills:expertise,spellSlots:slots?{level1:slots,usedLevel1:0}:undefined,level:1,maxHitPoints:review.hitPoints,currentHitPoints:review.hitPoints,armorClass:review.armorClass,speed:review.origins.speed,
  cantrips:[...new Set([...review.spells.cantrips,...review.spells.originCantrips,...review.spells.innate])],
  preparedSpells:[...new Set([...review.spells.prepared,...(review.spells.originSpell?[review.spells.originSpell]:[])])]};
  const eq=draft.selections.equipment!;
