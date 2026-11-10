@@ -17,6 +17,8 @@ export interface CompanionEncounter {
  obstacles?:{x:number;y:number}[];
  cover?:{x:number;y:number}[];
  pendingOpportunity?:{moverId:string;attackerIds:string[];from:{x:number;y:number};to:{x:number;y:number}};
+ /** Thrown weapons awaiting DM-confirmed post-encounter recovery. */
+ thrownWeaponsPendingRecovery?:Record<string,number>;
  log:string[];
 }
 function encounter(campaign:Campaign):CompanionEncounter{
@@ -541,11 +543,11 @@ export function resolveCompanionOpportunityAttack(campaign:Campaign,attackerId:s
  if(!Number.isInteger(roll)||roll<1||roll>20||![modifier,targetAC,damage,damageModifier].every(Number.isInteger)||targetAC<1||damage<0)throw Error('Invalid opportunity attack adjudication');
  if(target.disengaged)throw Error('Disengage prevents opportunity attack');
  if(battle.pendingOpportunity&&(!battle.pendingOpportunity.attackerIds.includes(attackerId)||battle.pendingOpportunity.moverId!==targetId))throw Error('Attacker not in pending opportunity candidates');
- if(!companionLineOfSight(battle,attacker,target))throw Error('Opportunity target not visible');
+ if(!companionLineOfSight(battle,attacker,target)&&!battle.pendingOpportunity)throw Error('Opportunity target not visible');
  const hit=roll===20||(roll!==1&&roll+modifier>=targetAC);
  const raw=hit?Math.max(0,damage+damageModifier):0;
  const taken=(targetId==='nighthawk'&&battle.mode==='unified')||target.actorKind==='enemy'?raw:adjudicateSubclassActorDamage(campaign,targetId,raw,damageType);
- return save(campaign,{...battle,participants:{...battle.participants,[attackerId]:{...attacker,reactionUsed:true},[targetId]:damagedActor(target,taken)},log:[...battle.log,attackerId+' opportunity attack vs '+targetId+': '+(hit?'hit for '+taken:'miss')+' (DM verified reach trigger)']});
+ return save(campaign,{...battle,pendingOpportunity:battle.pendingOpportunity?{...battle.pendingOpportunity,attackerIds:battle.pendingOpportunity.attackerIds.filter(id=>id!==attackerId)}:undefined,participants:{...battle.participants,[attackerId]:{...attacker,reactionUsed:true},[targetId]:damagedActor(target,taken)},log:[...battle.log,attackerId+' opportunity attack vs '+targetId+': '+(hit?'hit for '+taken:'miss')+' (DM verified reach trigger)']});
 }
 export function finishCompanionEncounter(campaign:Campaign):Campaign{
  const battle=encounter(campaign);
@@ -629,7 +631,30 @@ export function attackWithThrownEquippedWeapon(campaign:Campaign,attackerId:stri
  const available=(weapon.id==='dagger'?campaign.equipment?.daggers??0:0)+(campaign.inventoryLedger?.gear.find(g=>g.name===weapon.name)?.quantity??0);
  if(available<1)throw Error('Insufficient thrown weapons');
  const resolved=attackCompanionWithVerifiedStats(campaign,attackerId,targetId,roll,damageRoll,damageType,rangeFeet,secondD20);
- return spendUnifiedNighthawkInventory(resolved,weapon.id==='dagger'&&(campaign.equipment?.daggers??0)>0?'daggers':weapon.name,1);
+ const source=weapon.id==='dagger'&&(campaign.equipment?.daggers??0)>0?'daggers':weapon.name;
+ const spent=spendUnifiedNighthawkInventory(resolved,source,1);
+ const current=spent.companionEncounter!;
+ return save(spent,{...current,thrownWeaponsPendingRecovery:{...current.thrownWeaponsPendingRecovery,[source]:(current.thrownWeaponsPendingRecovery?.[source]??0)+1},log:[...current.log,'Thrown '+source+' awaiting DM recovery']});
+}
+/** Return only thrown weapons explicitly recorded as expended in this encounter.
+ * The DM confirms how many were actually recovered; unrecovered items remain spent.
+ */
+export function recoverEncounterThrownWeapons(campaign:Campaign,item:string,quantity:number):Campaign{
+ const battle=encounter(campaign);
+ if(battle.mode!=='unified'||!Number.isInteger(quantity)||quantity<1||quantity>(battle.thrownWeaponsPendingRecovery?.[item]??0))throw Error('Invalid thrown-weapon recovery');
+ const remaining=(battle.thrownWeaponsPendingRecovery?.[item]??0)-quantity;
+ const updated=save(campaign,{...battle,thrownWeaponsPendingRecovery:{...battle.thrownWeaponsPendingRecovery,[item]:remaining},log:[...battle.log,'DM recovered '+quantity+' thrown '+item]});
+ if(item==='daggers'){
+  if(!updated.equipment)throw Error('Missing dagger inventory');
+  return {...updated,equipment:{...updated.equipment,daggers:updated.equipment.daggers+quantity}};
+ }
+ const ledger=updated.inventoryLedger;
+ if(!ledger)throw Error('Missing recovery inventory ledger');
+ const index=ledger.gear.findIndex(g=>g.name===item);
+ const gear=[...ledger.gear];
+ if(index>=0)gear[index]={...gear[index],quantity:gear[index].quantity+quantity};
+ else gear.push({name:item,quantity});
+ return {...updated,inventoryLedger:{...ledger,gear}};
 }
 export function useCompanionAction(campaign:Campaign,actorId:string,choice:'Dash'|'Disengage'|'Dodge'|'Help'|'Search'|'Study'|'Influence'|'Ready'|'Utilize'):Campaign{
  const battle=activeActor(campaign,actorId),actor=battle.participants[actorId];
