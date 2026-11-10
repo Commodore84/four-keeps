@@ -422,3 +422,26 @@ test('companion attack consumes action and movement budget persists across reloa
  await expect(page.getByLabel('Companion encounter')).toContainText('fiend: 10/20 HP');
  await expect(page.getByLabel('Companion encounter')).toContainText('movement 20/30 ft');
 });
+
+test('companion grid Dash and attack range checks persist after reload',async({page})=>{
+ await page.goto('/four-keeps/');
+ await page.getByRole('button',{name:'Settings',exact:true}).click();
+ await page.getByLabel('New campaign name').fill('Companion Dash browser');
+ await page.getByRole('button',{name:'New',exact:true}).click();
+ await page.getByRole('button',{name:'Adventure',exact:true}).click();
+ await page.getByRole('button',{name:'Player',exact:true}).click();
+ const manager=page.getByLabel('Subclass actor manager');
+ await manager.getByLabel('New subclass actor ID').fill('paladin');
+ await manager.getByRole('button',{name:'Register subclass actor'}).click();
+ const panel=page.getByLabel('Companion encounter');
+ await panel.getByRole('button',{name:'Start companion encounter'}).click();
+ await panel.getByLabel('Companion action choice').selectOption('Dash');
+ await panel.getByRole('button',{name:'Use companion action'}).click();
+ await expect(panel).toContainText('movement 60/60 ft');
+ await expect(panel).toContainText('action used');
+ await page.reload();
+ await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await page.getByRole('button',{name:'Player',exact:true}).click();
+ await expect(page.getByLabel('Companion encounter')).toContainText('movement 60/60 ft');
+ await expect(page.getByLabel('Companion encounter')).toContainText('action used');
+});
