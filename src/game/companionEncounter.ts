@@ -109,6 +109,7 @@ export function companionOpportunityAttackEligible(campaign:Campaign,actorId:str
 /** Opt-in unified skirmish. Nighthawk's existing Campaign.combat remains untouched. */
 export function startUnifiedEncounter(campaign:Campaign,initiative:Record<string,number>,positions:Record<string,{x:number;y:number}>,hitPoints:Record<string,number>):Campaign{
  if(!campaign.character)throw Error('Nighthawk character statistics unavailable');
+ if(!Object.keys(initiative).some(id=>id!=='nighthawk'))throw Error('Unified encounter requires at least one registered companion');
  if(!Object.hasOwn(initiative,'nighthawk'))throw Error('Unified encounter requires Nighthawk');
  const companionIds=Object.keys(initiative).filter(id=>id!=='nighthawk');
  if(companionIds.some(id=>!Object.hasOwn(campaign.subclassActors??{},id)))throw Error('Unregistered companion');
@@ -153,7 +154,7 @@ export function conditionCompanion(campaign:Campaign,targetId:string,condition:'
  const auraActive=!!source&&source.subclassId==='paladin-devotion'&&source.level>=7&&!!aura&&aura.hp>0;
  const withinDevotionAura=auraActive&&Math.max(Math.abs(aura!.x-actor.x),Math.abs(aura!.y-actor.y))<=2;
  const ownAura=campaign.subclassActors?.[targetId]?.subclassId==='paladin-devotion'&&campaign.subclassActors[targetId].level>=7&&actor.hp>0;
- const permitted=!(condition==='Charmed'&&(withinDevotionAura||ownAura))&&adjudicateSubclassActorCondition(campaign,targetId,condition,{auraActive:ownAura,withinDevotionAura:ownAura});
+ const permitted=!(condition==='Charmed'&&(withinDevotionAura||ownAura))&&(targetId==='nighthawk'&&battle.mode==='unified'?true:adjudicateSubclassActorCondition(campaign,targetId,condition,{auraActive:ownAura,withinDevotionAura:ownAura}));
  if(!permitted)return save(campaign,{...battle,log:[...battle.log,targetId+' is immune to '+condition]});
  return save(campaign,{...battle,participants:{...battle.participants,[targetId]:{...actor,conditions:[...new Set([...actor.conditions,condition])]}},log:[...battle.log,targetId+' gained '+condition]});
 }
