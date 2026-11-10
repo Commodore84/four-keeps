@@ -12,6 +12,16 @@ const build=()=>{
 };
 const start=()=>startCompanionEncounter(build(),{paladin:15,druid:12,fiend:9},{paladin:{x:0,y:0},druid:{x:1,y:0},fiend:{x:5,y:5}},{paladin:30,druid:22,fiend:25});
 describe('isolated companion encounter vertical slice',()=>{
+ it('uses prone advantage at five feet and disadvantage beyond five feet',()=>{
+  let c=applyCompanionCondition(start(),'druid','Prone');
+  expect(()=>attackCompanion(c,'paladin','druid',5,0,12,4,0,'Fire',5)).toThrow('second d20');
+  const hit=attackCompanion(c,'paladin','druid',5,0,12,4,0,'Fire',5,18);
+  expect(hit.companionEncounter?.participants.druid.hp).toBe(18);
+  c=applyCompanionCondition(start(),'fiend','Prone');
+  const miss=attackCompanion(c,'paladin','fiend',20,0,12,4,0,'Fire',50,2);
+  expect(miss.companionEncounter?.participants.fiend.hp).toBe(25);
+ });
+
  it('adjudicates saving throws under Stunned and Restrained without inventing rolls',()=>{
   let c=applyCompanionCondition(start(),'paladin','Stunned');
   const forced=resolveCompanionSavingThrow(c,'paladin','Dexterity',25,10);
