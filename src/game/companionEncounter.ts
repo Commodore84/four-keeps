@@ -87,6 +87,7 @@ export function companionOpportunityAttackEligible(campaign:Campaign,actorId:str
 export function moveCompanion(campaign:Campaign,actorId:string,x:number,y:number):Campaign{
  const battle=activeActor(campaign,actorId),actor=battle.participants[actorId];
  if(!valid({x,y}))throw Error('Destination outside 20×20 arena');
+ if(Object.entries(battle.participants).some(([id,p])=>id!==actorId&&p.hp>0&&p.x===x&&p.y===y))throw Error('Square occupied');
  const steps=pathSteps(battle,actor,{x,y},actorId);
  if(steps*5>actor.speedFeet+actor.dashFeet-actor.movementSpentFeet)throw Error('Move exceeds remaining movement');
  if(Object.entries(battle.participants).some(([id,p])=>id!==actorId&&p.hp>0&&p.x===x&&p.y===y))throw Error('Square occupied');
