@@ -175,6 +175,17 @@ export function companionConditionEffects(campaign:Campaign,actorId:string){
  if(!actor)throw Error('Unknown actor');
  return {canAct:actor.hp>0&&!cannotAct(actor),canMove:actor.hp>0&&!actor.conditions.some(c=>IMMOBILE.includes(c)),attackDisadvantage:actor.conditions.includes('Poisoned')||actor.conditions.includes('Blinded')||actor.conditions.includes('Restrained'),attacksAgainstAdvantage:actor.conditions.some(c=>['Paralyzed','Stunned','Unconscious','Restrained','Blinded'].includes(c)),strengthDexSaveDisadvantage:actor.conditions.includes('Restrained'),automaticStrengthDexSaveFailure:actor.conditions.some(c=>['Paralyzed','Stunned','Unconscious'].includes(c))};
 }
+/** Standing from Prone costs half speed (rounded down to 5-foot grid units).
+ * It is unavailable at speed zero or while another condition prevents movement.
+ */
+export function standCompanionFromProne(campaign:Campaign,actorId:string):Campaign{
+ const battle=activeActor(campaign,actorId),actor=battle.participants[actorId];
+ if(!actor.conditions.includes('Prone'))throw Error('Actor is not prone');
+ if(actor.hp<=0||actor.conditions.some(c=>IMMOBILE.includes(c))||actor.speedFeet===0)throw Error('Condition prevents standing');
+ const cost=Math.floor(actor.speedFeet/10)*5;
+ if(actor.speedFeet+actor.dashFeet-actor.movementSpentFeet<cost)throw Error('Insufficient movement to stand');
+ return save(campaign,{...battle,participants:{...battle.participants,[actorId]:{...actor,conditions:actor.conditions.filter(c=>c!=='Prone'),movementSpentFeet:actor.movementSpentFeet+cost}},log:[...battle.log,actorId+' stood from Prone using '+cost+' ft of movement']});
+}
 export function moveCompanion(campaign:Campaign,actorId:string,x:number,y:number):Campaign{
  const battle=activeActor(campaign,actorId),actor=battle.participants[actorId];
  if(actor.hp<=0)throw Error('Actor at zero HP cannot move');
@@ -184,9 +195,10 @@ export function moveCompanion(campaign:Campaign,actorId:string,x:number,y:number
  const route=pathRoute(battle,actor,{x,y},actorId);
  const steps=route.length-1;
  const candidates=[...new Set(route.slice(1).flatMap((step,i)=>companionOpportunityCandidates(battle,actorId,route[i],step)))];
- if(steps*5>actor.speedFeet+actor.dashFeet-actor.movementSpentFeet)throw Error('Move exceeds remaining movement');
+ const movementCost=steps*5*(actor.conditions.includes('Prone')?2:1);
+ if(movementCost>actor.speedFeet+actor.dashFeet-actor.movementSpentFeet)throw Error('Move exceeds remaining movement');
  if(Object.entries(battle.participants).some(([id,p])=>id!==actorId&&p.hp>0&&p.x===x&&p.y===y))throw Error('Square occupied');
- return save(campaign,{...battle,participants:{...battle.participants,[actorId]:{...actor,x,y,movementSpentFeet:actor.movementSpentFeet+steps*5}},pendingOpportunity:candidates.length?{moverId:actorId,attackerIds:candidates,from:{x:actor.x,y:actor.y},to:{x,y}}:undefined,log:[...battle.log,actorId+' moved to '+x+','+y+(candidates.length?' · potential opportunity attackers: '+candidates.join(', '):'')]});
+ return save(campaign,{...battle,participants:{...battle.participants,[actorId]:{...actor,x,y,movementSpentFeet:actor.movementSpentFeet+movementCost}},pendingOpportunity:candidates.length?{moverId:actorId,attackerIds:candidates,from:{x:actor.x,y:actor.y},to:{x,y}}:undefined,log:[...battle.log,actorId+' moved to '+x+','+y+(candidates.length?' · potential opportunity attackers: '+candidates.join(', '):'')]});
 }
 export function endCompanionTurn(campaign:Campaign,actorId:string):Campaign{
  const battle=activeActor(campaign,actorId);
