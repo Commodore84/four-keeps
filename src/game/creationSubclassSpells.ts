@@ -33,3 +33,20 @@ export function alwaysPreparedSubclassSpells(subclassId:string|undefined,level:n
 export function isAlwaysPreparedSubclassSpell(subclassId:string|undefined,level:number,spellName:string):boolean{
  return alwaysPreparedSubclassSpells(subclassId,level).includes(spellName);
 }
+
+/** 2024 Circle of the Land: choose a terrain at each Long Rest, not permanently at subclass selection.
+ * Source: D&D Beyond Basic Rules (2024), Druid, Circle of the Land Spells.
+ */
+export const LAND_CIRCLE_SPELLS:Readonly<Record<string,Readonly<Record<number,readonly string[]>>>>={
+ arid:{3:['Blur','Burning Hands','Fire Bolt'],5:['Fireball'],7:['Blight'],9:['Wall of Stone']},
+ polar:{3:['Fog Cloud','Hold Person','Ray of Frost'],5:['Sleet Storm'],7:['Ice Storm'],9:['Cone of Cold']},
+ temperate:{3:['Misty Step','Shocking Grasp','Sleep'],5:['Lightning Bolt'],7:['Freedom of Movement'],9:['Tree Stride']},
+ tropical:{3:['Acid Splash','Ray of Sickness','Web'],5:['Stinking Cloud'],7:['Polymorph'],9:['Insect Plague']}
+};
+export type LandTerrain=keyof typeof LAND_CIRCLE_SPELLS;
+export function landCirclePreparedSpells(terrain:string|undefined,level:number):string[]{
+ if(!terrain||!Number.isInteger(level)||level<3||level>20)return [];
+ const table=LAND_CIRCLE_SPELLS[terrain];
+ if(!table)return [];
+ return Object.entries(table).filter(([unlock])=>Number(unlock)<=level).flatMap(([,spells])=>spells);
+}
