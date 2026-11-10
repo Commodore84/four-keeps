@@ -74,6 +74,21 @@ export const HALF_CASTER_SLOTS:readonly (readonly number[])[]=[
  [],[2],[2],[3],[3],[4,2],[4,2],[4,3],[4,3],[4,3,2],[4,3,2],
  [4,3,3],[4,3,3],[4,3,3,1],[4,3,3,1],[4,3,3,2],[4,3,3,2],[4,3,3,3],[4,3,3,3],[4,3,3,3,1],[4,3,3,3,1]
 ];
+/** 2024 PHB class feature tables, levels 1–20; excludes always-prepared feature spells. */
+export const PREPARED_SPELL_PROGRESSION:Readonly<Record<string,readonly number[]>>={
+ bard:[4,5,6,7,9,10,11,12,14,15,16,16,17,17,18,18,19,20,21,22],
+ cleric:[4,5,6,7,9,10,11,12,14,15,16,16,17,17,18,18,19,20,21,22],
+ druid:[4,5,6,7,9,10,11,12,14,15,16,16,17,17,18,18,19,20,21,22],
+ paladin:[2,3,4,5,6,6,7,7,9,9,10,10,11,11,12,12,14,14,15,15],
+ ranger:[2,3,4,5,6,6,7,7,9,9,10,10,11,11,12,12,14,14,15,15],
+ sorcerer:[2,4,6,7,9,10,11,12,14,15,16,16,17,17,18,18,19,20,21,22],
+ warlock:[2,3,4,5,6,7,8,9,10,10,11,11,12,12,13,13,14,14,15,15],
+ wizard:[4,5,6,7,9,10,11,12,14,15,16,16,17,18,19,21,22,23,24,25]
+};
+export function preparedSpellsAtLevel(classId:string,level:number):number|null{
+ if(!Number.isInteger(level)||level<1||level>20)return null;
+ return PREPARED_SPELL_PROGRESSION[classId]?.[level-1]??null;
+}
 export interface SpellcastingProgression {ability:'Int'|'Wis'|'Cha';kind:'full'|'half'|'pact';slots:readonly number[];cantrips:number|null;preparedSpells:number|null}
 const spellAbility:Record<string,'Int'|'Wis'|'Cha'>={bard:'Cha',cleric:'Wis',druid:'Wis',paladin:'Cha',ranger:'Wis',sorcerer:'Cha',warlock:'Cha',wizard:'Int'};
 const fullCasters=new Set(['bard','cleric','druid','sorcerer','wizard']);
@@ -83,7 +98,7 @@ export function spellcastingAtLevel(classId:string,level:number):SpellcastingPro
  if(!Number.isInteger(level)||level<1||level>20||!spellAbility[classId])return null;
  const ability=spellAbility[classId];
  const cantrips=cantripProgression[classId]?.[Math.min(level,10)-1]??null;
- if(classId==='warlock')return {ability,kind:'pact',slots:[warlockSlots[level]],cantrips,preparedSpells:null};
+ if(classId==='warlock')return {ability,kind:'pact',slots:[warlockSlots[level]],cantrips,preparedSpells:preparedSpellsAtLevel(classId,level)};
  if(fullCasters.has(classId))return {ability,kind:'full',slots:FULL_CASTER_SLOTS[level],cantrips,preparedSpells:null};
  return {ability,kind:'half',slots:HALF_CASTER_SLOTS[level],cantrips:null,preparedSpells:null};
 }
