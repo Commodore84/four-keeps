@@ -206,3 +206,17 @@ test('spell choices show full inline descriptions without per-spell DM buttons',
  await expect(page.getByRole('button',{name:'Full spell rules with DM'})).toHaveCount(0);
  await expect(page.getByLabel('Ask DM')).toBeVisible();
 });
+
+test('character builder shows species, background, class, and choice rules inline',async ({page})=>{
+ const now='2026-11-10T00:00:00.000Z';
+ const base={schemaVersion:1,id:'guide-test',status:'draft',rules:{edition:'2024',allowCompatibleLegacy:true},identity:{name:'Guide Tester',pronouns:'',appearance:'',personality:'',backstory:'',portrait:null},selections:{speciesId:'elf',lineageId:'wood-elf',backgroundId:'sage',classId:'warlock',classChoices:{}},createdAt:now,updatedAt:now};
+ await page.addInitScript(value=>{if(!localStorage.getItem('four-keeps-character-drafts-v1'))localStorage.setItem('four-keeps-character-drafts-v1',JSON.stringify([{...value,step:'origins'}]));},base);
+ await page.goto('/four-keeps/');
+ await page.getByRole('button',{name:'My Characters'}).click();
+ await page.getByRole('button',{name:/Guide Tester/}).click();
+ await expect(page.getByText(/Your walking Speed increases to 35 feet/)).toBeVisible();
+ await expect(page.getByText(/Choose two Wizard cantrips and one level-one Wizard spell/)).toBeVisible();
+ await page.getByRole('button',{name:'Class',exact:true}).click();
+ await expect(page.getByText(/Pact Magic slots refresh on Short Rests/)).toBeVisible();
+ await expect(page.getByText(/Warlock spell slots return on a Short or Long Rest/)).toBeVisible();
+});
