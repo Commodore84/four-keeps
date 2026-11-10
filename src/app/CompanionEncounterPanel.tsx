@@ -1,0 +1,30 @@
+import {useState} from 'react';
+import type {Campaign} from '../game/campaign';
+import {startCompanionEncounter,moveCompanion,endCompanionTurn,damageCompanion,conditionCompanion,finishCompanionEncounter} from '../game/companionEncounter';
+import type {DamageType} from '../game/subclassCombatRules';
+export function CompanionEncounterPanel({campaign,saving,onChange}:{campaign:Campaign;saving:boolean;onChange:(next:Campaign,message:string)=>void}){
+ const [rolls,setRolls]=useState<Record<string,string>>({});
+ const [hp,setHp]=useState<Record<string,string>>({});
+ const [coords,setCoords]=useState<Record<string,{x:string;y:string}>>({});
+ const [target,setTarget]=useState('');
+ const [damage,setDamage]=useState('5');
+ const [damageType,setDamageType]=useState<DamageType>('Fire');
+ const [condition,setCondition]=useState<'Charmed'|'Poisoned'>('Charmed');
+ const [aura,setAura]=useState('');
+ const [feedback,setFeedback]=useState('');
+ const ids=Object.keys(campaign.subclassActors??{});
+ const battle=campaign.companionEncounter;
+ const active=battle?.status==='active'?battle.order[battle.turnIndex]:undefined;
+ const apply=(fn:()=>Campaign,message:string)=>{try{onChange(fn(),message);setFeedback(message)}catch(error){setFeedback(String(error))}};
+ return <section aria-label="Companion encounter" className="rounded-xl border border-white/15 p-3 space-y-3">
+ <h3 className="font-semibold">Companion encounter (experimental)</h3>
+ <p className="text-xs opacity-75">Separate from Nighthawk’s combat. Initiative, HP, positions and damage are manually adjudicated. No automatic attacks, movement costs, opportunity attacks, or death saves yet.</p>
+ {!active&&<><p>Registered participants: {ids.length}</p>{ids.map((id,i)=><div key={id} className="flex flex-wrap items-center gap-2"><span>{id}</span><label>Initiative<input aria-label={'Initiative '+id} type="number" min="1" max="40" className="w-16 bg-black/30" value={rolls[id]??'10'} onChange={e=>setRolls(v=>({...v,[id]:e.target.value}))}/></label><label>HP<input aria-label={'HP '+id} type="number" min="1" className="w-16 bg-black/30" value={hp[id]??'20'} onChange={e=>setHp(v=>({...v,[id]:e.target.value}))}/></label><label>X<input aria-label={'Start X '+id} type="number" min="0" max="19" className="w-12 bg-black/30" value={coords[id]?.x??String(i*2)} onChange={e=>setCoords(v=>({...v,[id]:{x:e.target.value,y:v[id]?.y??'0'}}))}/></label><label>Y<input aria-label={'Start Y '+id} type="number" min="0" max="19" className="w-12 bg-black/30" value={coords[id]?.y??'0'} onChange={e=>setCoords(v=>({...v,[id]:{x:v[id]?.x??String(i*2),y:e.target.value}}))}/></label></div>)}<button disabled={saving||ids.length===0} onClick={()=>apply(()=>startCompanionEncounter(campaign,Object.fromEntries(ids.map(id=>[id,Number(rolls[id]??10)])),Object.fromEntries(ids.map((id,i)=>[id,{x:Number(coords[id]?.x??i*2),y:Number(coords[id]?.y??0)}])),Object.fromEntries(ids.map(id=>[id,Number(hp[id]??20)]))),'Companion encounter started')}>Start companion encounter</button></>}
+ {active&&battle&&<><p>Round {battle.round} · Active turn: <strong>{active}</strong></p><div className="space-y-1">{battle.order.map(id=>{const actor=battle.participants[id];return <p key={id}>{id}: {actor.hp}/{actor.maxHp} HP · ({actor.x},{actor.y}) · initiative {actor.initiative} · {actor.conditions.join(', ')||'No conditions'}</p>})}</div>
+ <div className="flex flex-wrap gap-2"><label>Move X<input aria-label="Move X" type="number" className="w-14 bg-black/30" value={coords[active]?.x??String(battle.participants[active].x)} onChange={e=>setCoords(v=>({...v,[active]:{x:e.target.value,y:v[active]?.y??String(battle.participants[active].y)}}))}/></label><label>Move Y<input aria-label="Move Y" type="number" className="w-14 bg-black/30" value={coords[active]?.y??String(battle.participants[active].y)} onChange={e=>setCoords(v=>({...v,[active]:{x:v[active]?.x??String(battle.participants[active].x),y:e.target.value}}))}/></label><button disabled={saving} onClick={()=>apply(()=>moveCompanion(campaign,active,Number(coords[active]?.x??battle.participants[active].x),Number(coords[active]?.y??battle.participants[active].y)),'Actor moved')}>Move active actor</button><button disabled={saving} onClick={()=>{setCoords({});apply(()=>endCompanionTurn(campaign,active),'Turn ended')}}>End companion turn</button></div>
+ <div className="flex flex-wrap gap-2"><label>Target<select aria-label="Companion target" value={target} onChange={e=>setTarget(e.target.value)}><option value="">Choose target</option>{battle.order.map(id=><option key={id}>{id}</option>)}</select></label><label>Damage<input aria-label="Companion damage" type="number" min="0" value={damage} onChange={e=>setDamage(e.target.value)}/></label><label>Type<select aria-label="Companion damage type" value={damageType} onChange={e=>setDamageType(e.target.value as DamageType)}>{(['Fire','Cold','Lightning','Poison','Force','Slashing','Radiant'] as DamageType[]).map(t=><option key={t}>{t}</option>)}</select></label><button disabled={saving||!target} onClick={()=>apply(()=>damageCompanion(campaign,target,Number(damage),damageType),'Damage adjudicated')}>Apply damage</button></div>
+ <div className="flex flex-wrap gap-2"><label>Condition<select aria-label="Companion condition" value={condition} onChange={e=>setCondition(e.target.value as typeof condition)}><option>Charmed</option><option>Poisoned</option></select></label><label>Aura source<select aria-label="Companion aura source" value={aura} onChange={e=>setAura(e.target.value)}><option value="">No aura</option>{battle.order.filter(id=>campaign.subclassActors?.[id]?.subclassId==='paladin-devotion').map(id=><option key={id}>{id}</option>)}</select></label><button disabled={saving||!target} onClick={()=>apply(()=>conditionCompanion(campaign,target,condition,aura||undefined),'Condition adjudicated')}>Apply condition</button></div>
+ <p aria-label="Companion last event">{battle.log.at(-1)}</p><button disabled={saving} onClick={()=>apply(()=>finishCompanionEncounter(campaign),'Encounter finished')}>Finish companion encounter</button></>}
+ {feedback&&<p role="status">{feedback}</p>}
+ </section>
+}
