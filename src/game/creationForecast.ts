@@ -113,13 +113,13 @@ export function activeMysticArcanumAtLevel(forecast:AdvancementForecast,level:nu
  for(const plan of [...forecast.levels].filter(p=>p.level<=level).sort((a,b)=>a.level-b.level)){
   for(const id of plan.plannedSpellIds??[]){
    const spell=spells.find(item=>item.id===id);
-   if(spell&&spell.level>=6&&spell.level<=9&&[11,13,15,17][spell.level-6]===plan.level)active.set(spell.level,id);
+   if(spell&&spell.classes.includes('warlock')&&spell.level>=6&&spell.level<=9&&[11,13,15,17][spell.level-6]===plan.level)active.set(spell.level,id);
   }
   const from=plan.arcanumReplacementFromId,to=plan.arcanumReplacementToId;
   if(!from||!to)continue;
   const oldSpell=spells.find(item=>item.id===from);
   const newSpell=spells.find(item=>item.id===to);
-  if(oldSpell&&newSpell&&oldSpell.level===newSpell.level&&oldSpell.level>=6&&oldSpell.level<=9&&newSpell.classes.includes('warlock')&&from!==to&&active.get(oldSpell.level)===from)active.set(oldSpell.level,to);
+  if(oldSpell&&newSpell&&oldSpell.level===newSpell.level&&oldSpell.level>=6&&oldSpell.level<=9&&oldSpell.classes.includes('warlock')&&newSpell.classes.includes('warlock')&&plan.level>=[11,13,15,17][oldSpell.level-6]&&from!==to&&active.get(oldSpell.level)===from)active.set(oldSpell.level,to);
  }
  return [...active.values()];
 }
@@ -131,7 +131,7 @@ export function forecastArcanumReplacementWarnings(forecast:AdvancementForecast)
  for(const plan of [...forecast.levels].sort((a,b)=>a.level-b.level)){
   for(const id of plan.plannedSpellIds??[]){
    const spell=spells.find(item=>item.id===id);
-   if(spell&&spell.level>=6&&spell.level<=9&&[11,13,15,17][spell.level-6]===plan.level)active.set(spell.level,id);
+   if(spell&&spell.classes.includes('warlock')&&spell.level>=6&&spell.level<=9&&[11,13,15,17][spell.level-6]===plan.level)active.set(spell.level,id);
   }
   const from=plan.arcanumReplacementFromId,to=plan.arcanumReplacementToId;
   if(!from&&!to)continue;
