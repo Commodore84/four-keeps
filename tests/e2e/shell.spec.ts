@@ -220,3 +220,18 @@ test('character builder shows species, background, class, and choice rules inlin
  await expect(page.getByText(/Pact Magic slots refresh on Short Rests/)).toBeVisible();
  await expect(page.getByText(/Warlock spell slots return on a Short or Long Rest/)).toBeVisible();
 });
+
+test('all Warlock subclass options are readable without selecting one at level one',async ({page})=>{
+ const now='2026-11-10T00:00:00.000Z';
+ const draft={schemaVersion:1,id:'subclass-preview',status:'draft',rules:{edition:'2024',allowCompatibleLegacy:true},step:'class',identity:{name:'Warlock Preview',pronouns:'',appearance:'',personality:'',backstory:'',portrait:null},selections:{speciesId:'human',backgroundId:'sage',classId:'warlock',classChoices:{}},createdAt:now,updatedAt:now};
+ await page.addInitScript(value=>{if(!localStorage.getItem('four-keeps-character-drafts-v1'))localStorage.setItem('four-keeps-character-drafts-v1',JSON.stringify([value]));},draft);
+ await page.goto('/four-keeps/');
+ await page.getByRole('button',{name:'My Characters'}).click();
+ await page.getByRole('button',{name:/Warlock Preview/}).click();
+ const section=page.getByLabel('Subclass options preview');
+ await expect(section.getByText('Archfey',{exact:true})).toBeVisible();
+ await expect(section.getByText('Celestial',{exact:true})).toBeVisible();
+ await expect(section.getByText('Fiend',{exact:true})).toBeVisible();
+ await expect(section.getByText('Great Old One',{exact:true})).toBeVisible();
+ await expect(section.getByText(/you will choose a subclass when you reach level 3/)).toBeVisible();
+});
