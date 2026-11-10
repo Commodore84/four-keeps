@@ -12,6 +12,15 @@ const build=()=>{
 };
 const start=()=>startCompanionEncounter(build(),{paladin:15,druid:12,fiend:9},{paladin:{x:0,y:0},druid:{x:1,y:0},fiend:{x:5,y:5}},{paladin:30,druid:22,fiend:25});
 describe('isolated companion encounter vertical slice',()=>{
+ it('rejects reserved, case-colliding and unsafe registered identities',()=>{
+  const c=newCampaign('Identity test');
+  const state=initialSubclassCombatState('paladin','paladin-devotion',7,2);
+  expect(()=>registerSubclassActor(c,'NIGHTHAWK',state)).toThrow('reserved');
+  expect(()=>registerSubclassActor(c,'__proto__',state)).toThrow('reserved');
+  const registered=registerSubclassActor(c,'Paladin',state);
+  expect(()=>registerSubclassActor(registered,'paladin',state)).toThrow('already registered');
+ });
+
  it('unifies Nighthawk and companions in shared initiative without changing prototype combat',()=>{
   const original=start();
   const c=startUnifiedEncounter({...original,companionEncounter:undefined},{nighthawk:20,paladin:18,fiend:12},{nighthawk:{x:0,y:2},paladin:{x:0,y:0},fiend:{x:5,y:5}},{paladin:20,fiend:25});
