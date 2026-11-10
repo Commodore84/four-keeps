@@ -248,7 +248,7 @@ test('future-level forecast grows sequentially and saves subclass plans',async (
  await page.getByLabel('Level 2 notes').fill('Practice invocations');
  await page.getByRole('button',{name:'See level 3'}).click();
  await page.getByLabel('Planned subclass').selectOption('warlock-archfey');
- await expect(page.getByText(/A patron from the Feywild/)).toBeVisible();
+ await expect(page.getByText(/A patron from the Feywild/).first()).toBeVisible();
  await page.reload();
  await page.getByRole('button',{name:'My Characters'}).click();
  await page.getByRole('button',{name:/Forecast Warlock/}).click();
