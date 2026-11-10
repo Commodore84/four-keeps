@@ -27,6 +27,10 @@ export interface ClassDefinition {
 const skills=['Acrobatics','Animal Handling','Arcana','Athletics','Deception','History','Insight','Intimidation','Investigation','Medicine','Nature','Perception','Performance','Persuasion','Religion','Sleight of Hand','Stealth','Survival'];
 const martial=['Battleaxe','Club','Dagger','Dart','Flail','Glaive','Greataxe','Greatclub','Greatsword','Halberd','Handaxe','Javelin','Lance','Light Hammer','Longsword','Mace','Maul','Morningstar','Pike','Quarterstaff','Rapier','Scimitar','Shortsword','Sickle','Spear','Trident','War Pick','Warhammer','Whip','Light Crossbow','Dart','Shortbow','Sling','Blowgun','Hand Crossbow','Heavy Crossbow','Longbow','Musket','Pistol'].filter((x,i,a)=>a.indexOf(x)===i);
 const choice=(id:string,label:string,count:number,options:readonly string[],kind:ChoiceDefinition['kind']):ChoiceDefinition=>({id,label,count,options,kind});
+const masteryEligible:Record<string,string[]>={
+ barbarian:['Battleaxe','Greataxe','Greatsword','Handaxe','Maul','Scimitar','Shortsword','Spear','Warhammer'],
+ fighter:[],paladin:[],ranger:[],rogue:['Club','Dagger','Dart','Hand Crossbow','Light Crossbow','Light Hammer','Rapier','Scimitar','Shortbow','Shortsword','Sickle','Sling','Whip']
+};
 const c=(id:string,name:string,summary:string,hitDie:number,primary:string,saves:string,armor:string,weapons:string,tools:string,skillCount:number,skillOptions:string,startingEquipment:string,features:[number,string][],extra:ChoiceDefinition[]=[]):ClassDefinition=>({
  id,name,summary,source:'PHB2024',hitDie,primaryAbilities:primary.split(','),savingThrows:saves.split(','),armor:armor?armor.split(','):[],weapons:weapons?weapons.split(','):[],tools:tools?tools.split(','):[],skillCount,skillOptions:skillOptions.split(','),startingEquipment,
  features:features.map(([level,names])=>({level,names:names.split('|')})),
@@ -49,10 +53,46 @@ export const CLASSES:ClassDefinition[]=[
 export function classChoices(classId:string,skillsChosen:string[]=[]):ChoiceDefinition[]{
  const cls=CLASSES.find(x=>x.id===classId);
  if(!cls)return [];
- return cls.choices.map(d=>d.id==='expertise'?{...d,options:[...skillsChosen,'Thieves Tools']}:d);
+ return cls.choices.map(d=>{
+  if(d.id==='expertise')return {...d,options:[...skillsChosen,...(cls.id==='rogue'?['Thieves Tools']:[])]};
+  if(d.id==='weapon-mastery'&&masteryEligible[cls.id]?.length)return {...d,options:masteryEligible[cls.id]};
+  return d;
+ });
 }
 export function validateClass(classId:string|undefined,selections:ChoiceSelections):string[]{
  const cls=CLASSES.find(c=>c.id===classId);
  return cls?validateChoices(classChoices(cls.id,selections['class-skills']??[]),selections):['Choose a supported class.'];
 }
 export function classSummary(classId:string){return CLASSES.find(c=>c.id===classId);}
+
+export const FULL_CASTER_SLOTS:readonly (readonly number[])[]=[
+ [],[2],[3],[4,2],[4,3],[4,3,2],[4,3,3],[4,3,3,1],[4,3,3,2],[4,3,3,3,1],[4,3,3,3,2],
+ [4,3,3,3,2,1],[4,3,3,3,2,1],[4,3,3,3,2,1,1],[4,3,3,3,2,1,1],[4,3,3,3,2,1,1,1],
+ [4,3,3,3,2,1,1,1],[4,3,3,3,2,1,1,1,1],[4,3,3,3,3,1,1,1,1],[4,3,3,3,3,2,1,1,1],[4,3,3,3,3,2,2,1,1]
+];
+export const HALF_CASTER_SLOTS:readonly (readonly number[])[]=[
+ [],[2],[2],[3],[3],[4,2],[4,2],[4,3],[4,3],[4,3,2],[4,3,2],
+ [4,3,3],[4,3,3],[4,3,3,1],[4,3,3,1],[4,3,3,2],[4,3,3,2],[4,3,3,3],[4,3,3,3],[4,3,3,3,1],[4,3,3,3,1]
+];
+export interface SpellcastingProgression {ability:'Int'|'Wis'|'Cha';kind:'full'|'half'|'pact';slots:readonly number[];cantrips:number|null;preparedSpells:number|null}
+const spellAbility:Record<string,'Int'|'Wis'|'Cha'>={bard:'Cha',cleric:'Wis',druid:'Wis',paladin:'Cha',ranger:'Wis',sorcerer:'Cha',warlock:'Cha',wizard:'Int'};
+const fullCasters=new Set(['bard','cleric','druid','sorcerer','wizard']);
+const cantripProgression:Record<string,number[]>={bard:[2,2,2,3,3,3,3,3,3,4],cleric:[3,3,3,4,4,4,4,4,4,5],druid:[2,2,2,3,3,3,3,3,3,4],sorcerer:[4,4,4,5,5,5,5,5,5,6],wizard:[3,3,3,4,4,4,4,4,4,5],warlock:[2,2,2,3,3,3,3,3,3,4]};
+const warlockSlots=[0,1,2,2,2,2,2,2,2,2,2,3,3,3,3,3,3,4,4,4,4];
+export function spellcastingAtLevel(classId:string,level:number):SpellcastingProgression|null {
+ if(!Number.isInteger(level)||level<1||level>20||!spellAbility[classId])return null;
+ const ability=spellAbility[classId];
+ const cantrips=cantripProgression[classId]?.[Math.min(level,10)-1]??null;
+ if(classId==='warlock')return {ability,kind:'pact',slots:[warlockSlots[level]],cantrips,preparedSpells:null};
+ if(fullCasters.has(classId))return {ability,kind:'full',slots:FULL_CASTER_SLOTS[level],cantrips,preparedSpells:null};
+ return {ability,kind:'half',slots:HALF_CASTER_SLOTS[level],cantrips:null,preparedSpells:null};
+}
+export function validateClassAgainstBackground(classId:string|undefined,selections:ChoiceSelections,backgroundSkills:readonly string[]):string[]{
+ const errors=validateClass(classId,selections);
+ const chosen=selections['class-skills']??[];
+ const duplicates=chosen.filter(skill=>backgroundSkills.includes(skill));
+ if(duplicates.length)errors.push('Duplicate background and class skill proficiency: '+duplicates.join(', ')+'. Choose different class skills.');
+ return errors;
+}
+// Features not listed in the curated catalog must not be inferred as absent from a class.
+// Complete 1–20 feature schedules and subclass spell tables require a separately verified data pass.
