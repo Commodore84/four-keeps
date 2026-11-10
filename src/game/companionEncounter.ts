@@ -10,7 +10,7 @@ export interface CompanionEncounter {
  round:number;
  turnIndex:number;
  order:string[];
- participants:Record<string,{x:number;y:number;hp:number;maxHp:number;initiative:number;conditions:('Charmed'|'Poisoned')[];speedFeet:number;movementSpentFeet:number;actionUsed:boolean;bonusActionUsed:boolean;dashFeet:number;disengaged:boolean;dodging:boolean;reactionUsed?:boolean;concentratingOn?:string;consumables?:Record<string,number>;faction?:string;reachFeet?:number}>;
+ participants:Record<string,{x:number;y:number;hp:number;maxHp:number;initiative:number;conditions:('Charmed'|'Poisoned'|'Blinded'|'Deafened'|'Frightened'|'Grappled'|'Incapacitated'|'Invisible'|'Paralyzed'|'Petrified'|'Prone'|'Restrained'|'Stunned'|'Unconscious'|'Exhaustion')[];speedFeet:number;movementSpentFeet:number;actionUsed:boolean;bonusActionUsed:boolean;dashFeet:number;disengaged:boolean;dodging:boolean;reactionUsed?:boolean;concentratingOn?:string;consumables?:Record<string,number>;faction?:string;reachFeet?:number}>;
  obstacles?:{x:number;y:number}[];
  cover?:{x:number;y:number}[];
  pendingOpportunity?:{moverId:string;attackerIds:string[];from:{x:number;y:number};to:{x:number;y:number}};
@@ -194,7 +194,16 @@ export function recordCompanionReaction(campaign:Campaign,actorId:string,descrip
  if(!description.trim()||description.length>160)throw Error('Reaction requires a short DM description');
  return save(campaign,{...battle,participants:{...battle.participants,[actorId]:{...actor,reactionUsed:true}},log:[...battle.log,actorId+' reaction: '+description.trim()+' (DM adjudicated)']});
 }
-export function removeCompanionCondition(campaign:Campaign,targetId:string,condition:'Charmed'|'Poisoned'):Campaign{
+export type CompanionCondition=CompanionEncounter['participants'][string]['conditions'][number];
+/** DM-confirmed condition assignment; automatic immunity is enforced for existing Charmed/Poisoned rules. */
+export function applyCompanionCondition(campaign:Campaign,targetId:string,condition:CompanionCondition):Campaign{
+ if(condition==='Charmed'||condition==='Poisoned')return conditionCompanion(campaign,targetId,condition);
+ const battle=encounter(campaign),actor=battle.participants[targetId];
+ if(!actor)throw Error('Unknown condition target');
+ const conditions=[...new Set([...actor.conditions,condition])];
+ return save(campaign,{...battle,participants:{...battle.participants,[targetId]:{...actor,conditions,concentratingOn:condition==='Incapacitated'||condition==='Unconscious'||condition==='Stunned'||condition==='Paralyzed'?undefined:actor.concentratingOn}},log:[...battle.log,targetId+' gained '+condition+' (DM adjudicated)']});
+}
+export function removeCompanionCondition(campaign:Campaign,targetId:string,condition:CompanionCondition):Campaign{
  const battle=encounter(campaign),actor=battle.participants[targetId];
  if(!actor)throw Error('Unknown condition target');
  return save(campaign,{...battle,participants:{...battle.participants,[targetId]:{...actor,conditions:actor.conditions.filter(c=>c!==condition)}},log:[...battle.log,targetId+' ended '+condition+' (DM adjudicated)']});
