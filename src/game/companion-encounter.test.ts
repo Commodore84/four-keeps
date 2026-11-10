@@ -1,7 +1,7 @@
 import {describe,it,expect} from 'vitest';
 import {newCampaign,registerSubclassActor,chooseSubclassResistance} from './campaign';
 import {initialSubclassCombatState} from './subclassCombatRules';
-import {startCompanionEncounter,moveCompanion,endCompanionTurn,damageCompanion,conditionCompanion,finishCompanionEncounter,attackCompanion,setCompanionSpeed ,useCompanionAction,setCompanionObstacles,companionLineOfSight,companionOpportunityAttackEligible,setCompanionCover,companionCoverStatus,companionPartySnapshot,startUnifiedEncounter,synchronizeNighthawkHitPoints,recordCompanionReaction,removeCompanionCondition,nighthawkEncounterStatistics,useCompanionBonusAction,setCompanionConcentration,companionConcentrationSaveDC,resolveCompanionConcentrationSave,setCompanionConsumable,spendCompanionConsumable,spendUnifiedNighthawkSpellSlot,resolveCompanionOpportunityAttack,nighthawkEncounterInventory} from './companionEncounter';
+import {startCompanionEncounter,moveCompanion,endCompanionTurn,damageCompanion,conditionCompanion,finishCompanionEncounter,attackCompanion,setCompanionSpeed ,useCompanionAction,setCompanionObstacles,companionLineOfSight,companionOpportunityAttackEligible,setCompanionCover,companionCoverStatus,companionPartySnapshot,startUnifiedEncounter,synchronizeNighthawkHitPoints,recordCompanionReaction,removeCompanionCondition,nighthawkEncounterStatistics,useCompanionBonusAction,setCompanionConcentration,companionConcentrationSaveDC,resolveCompanionConcentrationSave,setCompanionConsumable,spendCompanionConsumable,spendUnifiedNighthawkSpellSlot,resolveCompanionOpportunityAttack,nighthawkEncounterInventory,companionOpportunityCandidates} from './companionEncounter';
 const build=()=>{
  let c=newCampaign('Companion test');
  c=registerSubclassActor(c,'paladin',initialSubclassCombatState('paladin','paladin-devotion',7,3));
@@ -12,6 +12,20 @@ const build=()=>{
 };
 const start=()=>startCompanionEncounter(build(),{paladin:15,druid:12,fiend:9},{paladin:{x:0,y:0},druid:{x:1,y:0},fiend:{x:5,y:5}},{paladin:30,druid:22,fiend:25});
 describe('isolated companion encounter vertical slice',()=>{
+ it('detects potential opportunity attacks when leaving adjacency, not when approaching or Disengaged',()=>{
+  let c=start();
+  const battle=c.companionEncounter!;
+  expect(companionOpportunityCandidates(battle,'paladin',{x:0,y:0},{x:0,y:1})).toEqual([]);
+  expect(companionOpportunityCandidates(battle,'paladin',{x:0,y:0},{x:0,y:2})).toEqual(['druid']);
+  c=moveCompanion(c,'paladin',0,2);
+  expect(c.companionEncounter?.pendingOpportunity?.attackerIds).toEqual(['druid']);
+  expect(c.companionEncounter?.pendingOpportunity?.moverId).toBe('paladin');
+  let d=start();
+  d=useCompanionAction(d,'paladin','Disengage');
+  d=moveCompanion(d,'paladin',0,2);
+  expect(d.companionEncounter?.pendingOpportunity).toBeUndefined();
+ });
+
  it('exposes campaign-owned ammunition and gear without mutating inventory',()=>{
   const c={...build(),equipment:{daggers:2,arrows:17,caltrops:1,ballBearings:1},inventoryLedger:{currency:{CP:0,SP:0,EP:0,GP:0,PP:0},gear:[{name:'Healing Potion',quantity:2}]}};
   const snapshot=nighthawkEncounterInventory(c);
