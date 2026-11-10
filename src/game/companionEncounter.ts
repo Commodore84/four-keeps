@@ -454,7 +454,7 @@ export function finishCompanionEncounter(campaign:Campaign):Campaign{
 export function attackCompanion(campaign:Campaign,attackerId:string,targetId:string,roll:number,attackModifier:number,targetAC:number,damageRoll:number,damageModifier:number,damageType:DamageType,rangeFeet?:number,secondD20?:number):Campaign{
  const battle=activeActor(campaign,attackerId);
  const attacker=battle.participants[attackerId],target=battle.participants[targetId];
- if(!target||attackerId===targetId||attacker.hp<=0||target.hp<=0)throw Error('Invalid attacker or target');
+ if(!target||attackerId===targetId||attacker.hp<=0||(target.hp<=0&&(!target.conditions.includes('Unconscious')||target.deathSaves?.dead)))throw Error('Invalid attacker or target');
  if(attacker.actionUsed)throw Error('Action already used this turn');
  if(cannotAct(attacker))throw Error('Condition prevents action');
  if((battle.cover??[]).some(p=>p.x===target.x&&p.y===target.y))throw Error('Target has annotated cover: DM must supply adjusted AC and clear cover annotation before attack');
@@ -469,6 +469,7 @@ export function attackCompanion(campaign:Campaign,attackerId:string,targetId:str
  const effectiveRoll=attackAdvantage&&attackDisadvantage?roll:attackDisadvantage?Math.min(roll,secondD20!):attackAdvantage?Math.max(roll,secondD20!):roll;
  const critical=effectiveRoll===20;
  const hit=critical||(effectiveRoll!==1&&effectiveRoll+attackModifier>=targetAC);
+ const criticalHit=hit&&(critical||(target.conditions.includes('Unconscious')&&distanceFeet<=5));
  const used={...attacker,actionUsed:true};
  const participants={...battle.participants,[attackerId]:used};
  let dealt=0;
@@ -476,9 +477,9 @@ export function attackCompanion(campaign:Campaign,attackerId:string,targetId:str
   // Caller supplies total rolled damage dice, including doubled dice on a critical hit.
   const raw=Math.max(0,damageRoll+damageModifier);
   dealt=(targetId==='nighthawk'&&battle.mode==='unified')||target.actorKind==='enemy'?raw:adjudicateSubclassActorDamage(campaign,targetId,raw,damageType);
-  participants[targetId]=damagedActor(target,dealt,critical);
+  participants[targetId]=damagedActor(target,dealt,criticalHit);
  }
- return save(campaign,{...battle,participants,log:[...battle.log,attackerId+' attack d20 '+effectiveRoll+(target.dodging?' (Dodge disadvantage)':'')+(critical?' critical hit':hit?' hit':' miss')+' vs '+targetId+' AC '+targetAC+(hit?'; '+dealt+' '+damageType+' damage':'')]});
+ return save(campaign,{...battle,participants,log:[...battle.log,attackerId+' attack d20 '+effectiveRoll+(target.dodging?' (Dodge disadvantage)':'')+(criticalHit?' critical hit':hit?' hit':' miss')+' vs '+targetId+' AC '+targetAC+(hit?'; '+dealt+' '+damageType+' damage':'')]});
 }
 export function setCompanionSpeed(campaign:Campaign,actorId:string,speedFeet:number):Campaign{
  const battle=encounter(campaign),actor=battle.participants[actorId];
