@@ -5,6 +5,7 @@ import type {DamageType} from './subclassCombatRules';
 /** Isolated companion skirmish. Never mutates Campaign.combat (the Nighthawk training encounter). */
 export interface CompanionEncounter {
  status:'active'|'completed';
+ mode?:'companions'|'unified';
  round:number;
  turnIndex:number;
  order:string[];
@@ -20,7 +21,7 @@ function encounter(campaign:Campaign):CompanionEncounter{
 function activeActor(campaign:Campaign,actorId:string):CompanionEncounter{
  const battle=encounter(campaign);
  if(battle.order[battle.turnIndex]!==actorId)throw Error('Not this actor’s turn');
- if(!campaign.subclassActors?.[actorId])throw Error('Actor is not registered');
+ if(!(actorId==='nighthawk'&&battle.mode==='unified')&&!campaign.subclassActors?.[actorId])throw Error('Actor is not registered');
  return battle;
 }
 function save(campaign:Campaign,battle:CompanionEncounter):Campaign{
@@ -38,7 +39,7 @@ export function startCompanionEncounter(campaign:Campaign,initiative:Record<stri
   participants[id]={...position,hp,maxHp:hp,initiative:roll,conditions:[],speedFeet:30,movementSpentFeet:0,actionUsed:false,bonusActionUsed:false,dashFeet:0,disengaged:false,dodging:false};
  }
  const order=ids.sort((a,b)=>participants[b].initiative-participants[a].initiative||a.localeCompare(b));
- return save(campaign,{status:'active',round:1,turnIndex:0,order,participants,obstacles:[],cover:[],log:['Companion encounter started.']});
+ return save(campaign,{status:'active',mode:'companions',round:1,turnIndex:0,order,participants,obstacles:[],cover:[],log:['Companion encounter started.']});
 }
 type Cell={x:number;y:number};
 const key=(p:Cell)=>p.x+','+p.y;
@@ -105,6 +106,24 @@ export function companionOpportunityAttackEligible(campaign:Campaign,actorId:str
  if(!actor)throw Error('Unknown actor');
  return !actor.disengaged;
 }
+/** Opt-in unified skirmish. Nighthawk's existing Campaign.combat remains untouched. */
+export function startUnifiedEncounter(campaign:Campaign,initiative:Record<string,number>,positions:Record<string,{x:number;y:number}>,hitPoints:Record<string,number>):Campaign{
+ if(!campaign.character)throw Error('Nighthawk character statistics unavailable');
+ if(!Object.hasOwn(initiative,'nighthawk'))throw Error('Unified encounter requires Nighthawk');
+ const companionIds=Object.keys(initiative).filter(id=>id!=='nighthawk');
+ if(companionIds.some(id=>!Object.hasOwn(campaign.subclassActors??{},id)))throw Error('Unregistered companion');
+ const base=startCompanionEncounter(campaign,Object.fromEntries(companionIds.map(id=>[id,initiative[id]])),Object.fromEntries(companionIds.map(id=>[id,positions[id]])),Object.fromEntries(companionIds.map(id=>[id,hitPoints[id]])));
+ const battle=base.companionEncounter!;
+ const position=positions.nighthawk,roll=initiative.nighthawk;
+ const character=campaign.character;
+ const hp=character.currentHitPoints??character.maxHitPoints;
+ const maxHp=character.maxHitPoints,speed=character.speed;
+ if(!position||!valid(position)||Object.values(battle.participants).some(p=>p.x===position.x&&p.y===position.y))throw Error('Invalid Nighthawk position');
+ if(!Number.isInteger(roll)||roll<1||roll>40||!Number.isInteger(hp)||!Number.isInteger(maxHp)||hp!<1||maxHp!<1||hp!>maxHp!||!Number.isInteger(speed)||speed!<0||speed!>120||speed!%5!==0)throw Error('Invalid Nighthawk character statistics');
+ const participants={...battle.participants,nighthawk:{...position,hp:hp!,maxHp:maxHp!,initiative:roll,conditions:[] as ('Charmed'|'Poisoned')[],speedFeet:speed!,movementSpentFeet:0,actionUsed:false,bonusActionUsed:false,dashFeet:0,disengaged:false,dodging:false}};
+ const order=Object.keys(participants).sort((a,b)=>participants[b].initiative-participants[a].initiative||a.localeCompare(b));
+ return save(campaign,{...battle,mode:'unified',participants,order,log:['Unified encounter started; Nighthawk prototype combat preserved.']});
+}
 export function moveCompanion(campaign:Campaign,actorId:string,x:number,y:number):Campaign{
  const battle=activeActor(campaign,actorId),actor=battle.participants[actorId];
  if(!valid({x,y}))throw Error('Destination outside 20×20 arena');
@@ -164,7 +183,7 @@ export function attackCompanion(campaign:Campaign,attackerId:string,targetId:str
  if(hit){
   // Caller supplies total rolled damage dice, including doubled dice on a critical hit.
   const raw=Math.max(0,damageRoll+damageModifier);
-  dealt=adjudicateSubclassActorDamage(campaign,targetId,raw,damageType);
+  dealt=targetId==='nighthawk'&&battle.mode==='unified'?raw:adjudicateSubclassActorDamage(campaign,targetId,raw,damageType);
   participants[targetId]={...target,hp:Math.max(0,target.hp-dealt)};
  }
  return save(campaign,{...battle,participants,log:[...battle.log,attackerId+' attack d20 '+effectiveRoll+(target.dodging?' (Dodge disadvantage)':'')+(critical?' critical hit':hit?' hit':' miss')+' vs '+targetId+' AC '+targetAC+(hit?'; '+dealt+' '+damageType+' damage':'')]});
