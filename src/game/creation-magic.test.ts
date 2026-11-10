@@ -1,5 +1,5 @@
 import {describe,it,expect} from 'vitest';
-import {SPELLS,SPELL_BY_ID,SPELL_COUNTS,INVOCATIONS,emptyMagic,spellOptions,toggleSpell,validateMagic,spellStats} from './creationMagic';
+import {SPELLS,SPELL_BY_ID,SPELL_COUNTS,INVOCATIONS,emptyMagic,spellOptions,toggleSpell,validateMagic,spellStats,emptyOriginMagic,magicInitiateClass,innateOriginSpells,validateOriginMagic} from './creationMagic';
 describe('level-one spell choices',()=>{
  it('has unique spell ids and valid class membership',()=>{expect(new Set(SPELLS.map(x=>x.id)).size).toBe(SPELLS.length);for(const s of SPELLS){expect([0,1]).toContain(s.level);expect(s.classes.length).toBeGreaterThan(0)}});
  it('provides all eight spellcasting classes and noncaster validation',()=>{expect(Object.keys(SPELL_COUNTS)).toHaveLength(8);expect(validateMagic('fighter',emptyMagic())).toEqual([]);expect(validateMagic('fighter',{...emptyMagic(),cantrips:['mage-hand']})).toHaveLength(1)});
@@ -8,4 +8,10 @@ describe('level-one spell choices',()=>{
  it('requires one valid warlock invocation',()=>{const m={...emptyMagic(),cantrips:['eldritch-blast','minor-illusion'],prepared:['hex','armor-of-agathys'],invocations:['Pact of the Tome']};expect(validateMagic('warlock',m)).toEqual([]);expect(validateMagic('warlock',{...m,invocations:['Bogus']})).not.toEqual([]);expect(INVOCATIONS).toContain('Pact of the Tome')});
  it('calculates spell save DC and attack bonus',()=>{const scores={Str:10,Dex:14,Con:12,Int:16,Wis:15,Cha:8};expect(spellStats('wizard',scores)).toEqual({dc:13,attack:5,slots:[2]});expect(spellStats('fighter',scores)).toBeNull()});
  it('toggles spells without exceeding limits and preserves legal options',()=>{expect(toggleSpell(['hex'],'hex',2)).toEqual([]);expect(toggleSpell(['hex','armor-of-agathys'],'witch-bolt',2)).toHaveLength(2);expect(spellOptions('warlock',0).some(s=>s.id==='eldritch-blast')).toBe(true);expect(SPELL_BY_ID['hex'].level).toBe(1)});
+});
+
+describe('origin-granted magic',()=>{
+ it('grants fixed level-one lineage cantrips',()=>{expect(innateOriginSpells('elf','wood-elf')).toEqual(['druidcraft']);expect(innateOriginSpells('tiefling','infernal')).toEqual(['fire-bolt']);expect(innateOriginSpells('human')).toEqual([])});
+ it('recognizes the three 2024 Magic Initiate backgrounds',()=>{expect(magicInitiateClass('sage')).toBe('wizard');expect(magicInitiateClass('acolyte')).toBe('cleric');expect(magicInitiateClass('guide')).toBe('druid');expect(magicInitiateClass('farmer')).toBeNull()});
+ it('validates independent background cantrips and spell',()=>{const origin={cantrips:['fire-bolt','mage-hand'],spell:'find-familiar',ability:'Int' as const};expect(validateOriginMagic('sage',origin)).toEqual([]);expect(validateOriginMagic('sage',{...origin,cantrips:['fire-bolt','fire-bolt']})).not.toEqual([]);expect(validateOriginMagic('guide',origin)).not.toEqual([]);expect(validateOriginMagic('sage',emptyOriginMagic())).not.toEqual([]);expect(validateOriginMagic('farmer',emptyOriginMagic())).toEqual([])});
 });
