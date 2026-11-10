@@ -1,7 +1,7 @@
 import {describe,it,expect} from 'vitest';
 import {newCampaign,registerSubclassActor,chooseSubclassResistance} from './campaign';
 import {initialSubclassCombatState} from './subclassCombatRules';
-import {startCompanionEncounter,moveCompanion,endCompanionTurn,damageCompanion,conditionCompanion,finishCompanionEncounter,attackCompanion,setCompanionSpeed ,useCompanionAction,setCompanionObstacles,companionLineOfSight,companionOpportunityAttackEligible,setCompanionCover,companionCoverStatus,companionPartySnapshot,startUnifiedEncounter,synchronizeNighthawkHitPoints,recordCompanionReaction,removeCompanionCondition} from './companionEncounter';
+import {startCompanionEncounter,moveCompanion,endCompanionTurn,damageCompanion,conditionCompanion,finishCompanionEncounter,attackCompanion,setCompanionSpeed ,useCompanionAction,setCompanionObstacles,companionLineOfSight,companionOpportunityAttackEligible,setCompanionCover,companionCoverStatus,companionPartySnapshot,startUnifiedEncounter,synchronizeNighthawkHitPoints,recordCompanionReaction,removeCompanionCondition,nighthawkEncounterStatistics,useCompanionBonusAction,setCompanionConcentration,companionConcentrationSaveDC,setCompanionConsumable,spendCompanionConsumable} from './companionEncounter';
 const build=()=>{
  let c=newCampaign('Companion test');
  c=registerSubclassActor(c,'paladin',initialSubclassCombatState('paladin','paladin-devotion',7,3));
@@ -12,6 +12,34 @@ const build=()=>{
 };
 const start=()=>startCompanionEncounter(build(),{paladin:15,druid:12,fiend:9},{paladin:{x:0,y:0},druid:{x:1,y:0},fiend:{x:5,y:5}},{paladin:30,druid:22,fiend:25});
 describe('isolated companion encounter vertical slice',()=>{
+ it('derives Nighthawk defense and ability modifiers without guessing weapon proficiency',()=>{
+  const stats=nighthawkEncounterStatistics(newCampaign('Stats'));
+  expect(stats.armorClass).toBe(14);
+  expect(stats.dexterityModifier).toBe(3);
+  expect(stats.proficiencyBonus).toBe(2);
+  expect(stats.weaponAttackModifier).toBeNull();
+ });
+ it('spends only verified bonus actions and tracks actor-specific consumables',()=>{
+  let c=start();
+  expect(()=>useCompanionBonusAction(c,'paladin','feature',false)).toThrow('eligibility');
+  c=useCompanionBonusAction(c,'paladin','verified feature',true);
+  expect(()=>useCompanionBonusAction(c,'paladin','again',true)).toThrow('unavailable');
+  c=setCompanionConsumable(c,'paladin','Potion',2);
+  c=spendCompanionConsumable(c,'paladin','Potion');
+  expect(c.companionEncounter?.participants.paladin.consumables?.Potion).toBe(1);
+  expect(c.companionEncounter?.participants.fiend.consumables).toBeUndefined();
+ });
+ it('tracks concentration save DC and ends concentration on zero HP',()=>{
+  let c=start();
+  c=setCompanionConcentration(c,'paladin','Bless');
+  expect(companionConcentrationSaveDC(30)).toBe(15);
+  c=damageCompanion(c,'paladin',4,'Fire');
+  expect(c.companionEncounter?.log.at(-1)).toContain('DC 10');
+  expect(c.companionEncounter?.participants.paladin.concentratingOn).toBe('Bless');
+  c=damageCompanion(c,'paladin',100,'Fire');
+  expect(c.companionEncounter?.participants.paladin.concentratingOn).toBeUndefined();
+ });
+
  it('syncs unified Nighthawk HP only on explicit command and never changes legacy combat',()=>{
   const original={...start(),companionEncounter:undefined};
   let c=startUnifiedEncounter(original,{nighthawk:20,paladin:10},{nighthawk:{x:0,y:2},paladin:{x:0,y:0}},{paladin:20});
