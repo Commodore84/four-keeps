@@ -231,6 +231,11 @@ export function spendCompanionConsumable(campaign:Campaign,actorId:string,item:s
  return save(campaign,{...battle,participants:{...battle.participants,[actorId]:{...actor,consumables:{...actor.consumables,[item]:(actor.consumables?.[item]??0)-1}}},log:[...battle.log,actorId+' consumed '+item+' (item effect DM adjudicated)']});
 }
 /** Character-sheet level-one slots are authoritative. Spending is opt-in and does not touch legacy combat. */
+/** Read-only inventory bridge. Campaign inventory is never duplicated or consumed implicitly. */
+export function nighthawkEncounterInventory(campaign:Campaign){
+ const gear=(campaign.inventoryLedger?.gear??[]).filter(item=>Number.isInteger(item.quantity)&&item.quantity>=0).map(item=>({name:item.name,quantity:item.quantity}));
+ return {gear,ammunition:{arrows:campaign.equipment?.arrows??null},weapons:{daggers:campaign.equipment?.daggers??null},supplies:{caltrops:campaign.equipment?.caltrops??null,ballBearings:campaign.equipment?.ballBearings??null},authoritativeSource:'campaign' as const};
+}
 export function spendUnifiedNighthawkSpellSlot(campaign:Campaign,spell:string):Campaign{
  const battle=activeActor(campaign,'nighthawk'),actor=battle.participants.nighthawk;
  const character=campaign.character,slots=character?.spellSlots;
