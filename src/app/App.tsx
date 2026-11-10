@@ -225,6 +225,28 @@ function Party({ campaign, onRoll, onSaveRoll, onAwardXP, onLevelUp, onLevelThre
       </section>
       {lastRoll && <p role="status" className="mt-3 rounded-lg border border-gold/30 p-3 text-sm">{lastRoll.text}</p>}
     </div>
+      {(stats.level ?? 1) < 3 && <section aria-label="Spells and spell slots" className="rounded-xl border border-gold/35 bg-panel p-5 space-y-4">
+        <div><p className="eyebrow">Arcane Trickster · Unlocks at Level 3</p><h3 className="mt-1 font-serif text-2xl">Spells</h3><p className="mt-2 text-sm text-parchment/70">Spellcasting is not yet available to Nighthawk. Preview spells below; your actual spells and spell slots will appear here when you reach Level 3.</p></div>
+        {([['Cantrip previews',['Mage Hand','Minor Illusion','Mind Sliver']],['Level 1 spell previews',['Find Familiar','Disguise Self','Tasha’s Hideous Laughter']]] as const).map(([group,spells])=><div key={group} className="space-y-2">
+          <h4 className="font-semibold">{group}</h4>
+          {spells.map(spell=><div key={spell} className="overflow-hidden rounded-xl border border-white/15 bg-ink/30">
+            <button type="button" aria-expanded={selectedSpell===spell} onClick={()=>setSelectedSpell(selectedSpell===spell?null:spell)} className="w-full p-3 text-left">
+              <span className="flex items-center justify-between gap-2"><strong className="text-sm">{spell}</strong><span className="text-xs text-gold">{selectedSpell===spell?'Hide details':'Show details'}</span></span>
+              <span className="mt-2 block text-xs text-parchment/65">{spellSheetMetadata[spell]?.time} · {spellSheetMetadata[spell]?.range} · {spellSheetMetadata[spell]?.duration}</span>
+            </button>
+            {selectedSpell===spell&&<div className="space-y-3 border-t border-gold/25 p-3">
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                <div><span className="text-parchment/55">Casting time</span><p>{spellSheetMetadata[spell]?.time}</p></div>
+                <div><span className="text-parchment/55">Range</span><p>{spellSheetMetadata[spell]?.range}</p></div>
+                <div><span className="text-parchment/55">Duration</span><p>{spellSheetMetadata[spell]?.duration}</p></div>
+                <div><span className="text-parchment/55">Components</span><p>{spellSheetMetadata[spell]?.components}</p></div>
+              </div>
+              <p className="text-sm leading-6">{spellSummaries[spell]}</p>
+              <p className="text-xs text-parchment/60">Preview only. This spell is not yet available to cast. Full rules and spell selection become relevant at Level 3.</p>
+            </div>}
+          </div>)}
+        </div>)}
+      </section>}
       {(stats.level ?? 1) >= 3 && <section aria-label="Spells and spell slots" className="rounded-xl border border-gold/35 bg-panel p-5 space-y-4">
         <div><p className="eyebrow">Arcane Trickster</p><h3 className="mt-1 font-serif text-2xl">Spells</h3><p className="mt-1 text-xs text-parchment/65">INT spellcasting · Save DC {8+stats.proficiencyBonus+abilityModifier(stats.scores.int)} · Spell attack {signed(stats.proficiencyBonus+abilityModifier(stats.scores.int))}</p></div>
         <div className="rounded-xl border border-gold/30 bg-ink/40 p-4"><div className="flex items-center justify-between gap-3"><h4 className="font-semibold">Level 1 spell slots</h4><span className="font-semibold tabular-nums text-gold">{Math.max(0,(stats.spellSlots?.level1??2)-(stats.spellSlots?.usedLevel1??0))} / {stats.spellSlots?.level1??2} available</span></div>
