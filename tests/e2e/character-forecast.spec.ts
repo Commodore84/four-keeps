@@ -61,6 +61,8 @@ test('planned subclass persists across reload',async({page})=>{
  await page.getByLabel('Planned subclass').selectOption('paladin-devotion');
  await expect(page.getByLabel('Planned subclass')).toHaveValue('paladin-devotion');
  await page.reload();
+ await page.getByRole('button',{name:'My Characters'}).click();
+ await page.getByRole('button',{name:/Subclass Persistence/}).click();
  await expect(page.getByLabel('Planned subclass')).toHaveValue('paladin-devotion');
 });
 test('Mystic Arcanum replacement controls save selected existing and replacement spells',async({page})=>{
@@ -81,6 +83,8 @@ test('Mystic Arcanum replacement controls save selected existing and replacement
  await replacement.selectOption(newId!);
  await expect(replacement).toHaveValue(newId!);
  await page.reload();
+ await page.getByRole('button',{name:'My Characters'}).click();
+ await page.getByRole('button',{name:/Arcanum Interaction/}).click();
  await expect(page.getByLabel('Level 12 Mystic Arcanum to replace')).toHaveValue(oldId!);
  await expect(page.getByLabel('Level 12 Mystic Arcanum replacement')).toHaveValue(newId!);
 });
