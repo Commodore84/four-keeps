@@ -1,7 +1,7 @@
 import {describe,it,expect} from 'vitest';
 import {newCampaign,registerSubclassActor,chooseSubclassResistance} from './campaign';
 import {initialSubclassCombatState} from './subclassCombatRules';
-import {startCompanionEncounter,moveCompanion,endCompanionTurn,damageCompanion,conditionCompanion,finishCompanionEncounter,attackCompanion,setCompanionSpeed ,useCompanionAction,setCompanionObstacles,companionLineOfSight,companionOpportunityAttackEligible,setCompanionCover,companionCoverStatus,companionPartySnapshot,startUnifiedEncounter,synchronizeNighthawkHitPoints,recordCompanionReaction,removeCompanionCondition,nighthawkEncounterStatistics,useCompanionBonusAction,setCompanionConcentration,companionConcentrationSaveDC,resolveCompanionConcentrationSave,setCompanionConsumable,spendCompanionConsumable,spendUnifiedNighthawkSpellSlot,resolveCompanionOpportunityAttack,nighthawkEncounterInventory,companionOpportunityCandidates,spendUnifiedNighthawkInventory,setCompanionTactics,applyCompanionCondition,nighthawkEquipmentReferences,addCompanionEnemy,companionConditionEffects,setNighthawkEncounterLoadout,resolveCompanionSavingThrow,nighthawkEquippedAttack,nighthawkEquippedDefense,standCompanionFromProne,attackCompanionWithVerifiedStats,resolveCompanionDeathSave,healCompanion,configureEnemyTactic,previewEnemyTurn,refreshNighthawkEncounterStatistics,executeEnemyMovementTurn,stabilizeCompanion,recoverStableCompanion,attackWithThrownEquippedWeapon,executeEnemyMoveAndAttackTurn,executeEnemyAttackTurn,dismissEnemyOpportunityReactions,recoverEncounterThrownWeapons,recoverEncounterAmmunition,resumeEnemyInterruptedMovement,configureEnemyRangedAttack,executeEnemyRangedAttackTurn} from './companionEncounter';
+import {startCompanionEncounter,moveCompanion,endCompanionTurn,damageCompanion,conditionCompanion,finishCompanionEncounter,attackCompanion,setCompanionSpeed ,useCompanionAction,setCompanionObstacles,companionLineOfSight,companionOpportunityAttackEligible,setCompanionCover,companionCoverStatus,companionPartySnapshot,startUnifiedEncounter,synchronizeNighthawkHitPoints,recordCompanionReaction,removeCompanionCondition,nighthawkEncounterStatistics,useCompanionBonusAction,setCompanionConcentration,companionConcentrationSaveDC,resolveCompanionConcentrationSave,setCompanionConsumable,spendCompanionConsumable,spendUnifiedNighthawkSpellSlot,resolveCompanionOpportunityAttack,nighthawkEncounterInventory,companionOpportunityCandidates,spendUnifiedNighthawkInventory,setCompanionTactics,applyCompanionCondition,nighthawkEquipmentReferences,addCompanionEnemy,companionConditionEffects,setNighthawkEncounterLoadout,resolveCompanionSavingThrow,nighthawkEquippedAttack,nighthawkEquippedDefense,standCompanionFromProne,attackCompanionWithVerifiedStats,resolveCompanionDeathSave,healCompanion,configureEnemyTactic,previewEnemyTurn,refreshNighthawkEncounterStatistics,executeEnemyMovementTurn,stabilizeCompanion,recoverStableCompanion,attackWithThrownEquippedWeapon,executeEnemyMoveAndAttackTurn,executeEnemyAttackTurn,dismissEnemyOpportunityReactions,recoverEncounterThrownWeapons,recoverEncounterAmmunition,resumeEnemyInterruptedMovement,configureEnemyRangedAttack,executeEnemyRangedAttackTurn,previewCompanionMovement} from './companionEncounter';
 const build=()=>{
  let c=newCampaign('Companion test');
  c=registerSubclassActor(c,'paladin',initialSubclassCombatState('paladin','paladin-devotion',7,3));
@@ -12,6 +12,40 @@ const build=()=>{
 };
 const start=()=>startCompanionEncounter(build(),{paladin:15,druid:12,fiend:9},{paladin:{x:0,y:0},druid:{x:1,y:0},fiend:{x:5,y:5}},{paladin:30,druid:22,fiend:25});
 describe('isolated companion encounter vertical slice',()=>{
+ it('previews an unobstructed movement path without mutating campaign or legacy combat',()=>{
+  const base=build();
+  const c=startUnifiedEncounter(base,{nighthawk:20,paladin:10},{nighthawk:{x:0,y:0},paladin:{x:0,y:5}},{paladin:20});
+  const before=JSON.stringify(c);
+  const preview=previewCompanionMovement(c,'nighthawk',3,0);
+  expect(preview.path[0]).toEqual({x:0,y:0});
+  expect(preview.path.at(-1)).toEqual({x:3,y:0});
+  expect(preview.costFeet).toBe(15);
+  expect(preview.remainingFeet).toBe(20);
+  expect(preview.error).toBeUndefined();
+  expect(JSON.stringify(c)).toBe(before);
+  expect(c.combat).toEqual(base.combat);
+ });
+ it('previews blocked squares and insufficient movement without mutating encounter',()=>{
+  let c=startUnifiedEncounter(build(),{nighthawk:20,paladin:10},{nighthawk:{x:0,y:0},paladin:{x:0,y:5}},{paladin:20});
+  c=setCompanionObstacles(c,[{x:1,y:0}]);
+  expect(previewCompanionMovement(c,'nighthawk',1,0).error).toMatch(/No unobstructed path/);
+  const far=previewCompanionMovement(c,'nighthawk',19,19);
+  expect(far.error).toBe('Insufficient movement');
+  expect(far.costFeet).toBeGreaterThan(far.availableFeet);
+  expect(previewCompanionMovement(c,'paladin',1,5).error).toBe('Not the active turn');
+ });
+ it('previews opportunity reach-exit threat before movement and survives serialization',()=>{
+  let c=startUnifiedEncounter(build(),{nighthawk:20,paladin:10},{nighthawk:{x:0,y:0},paladin:{x:1,y:1}},{paladin:20});
+  c=addCompanionEnemy(c,'goblin1',15,{x:1,y:0},12,13,4);
+  c=endCompanionTurn(c,'nighthawk');
+  const before=JSON.stringify(c);
+  const preview=previewCompanionMovement(c,'goblin1',5,0);
+  expect(preview.opportunityAttackerIds).toContain('paladin');
+  expect(preview.firstThreatEdge).toBeDefined();
+  expect(JSON.stringify(c)).toBe(before);
+  expect(previewCompanionMovement(JSON.parse(before) as typeof c,'goblin1',5,0).firstThreatEdge).toEqual(preview.firstThreatEdge);
+ });
+
  it('resolves reaction at pre-exit square once and resumes without spending the enemy action',()=>{
   const base=build();
   let c=startUnifiedEncounter(base,{nighthawk:20,paladin:10},{nighthawk:{x:7,y:0},paladin:{x:1,y:1}},{paladin:20});
