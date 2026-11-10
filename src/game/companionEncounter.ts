@@ -9,7 +9,7 @@ export interface CompanionEncounter {
  round:number;
  turnIndex:number;
  order:string[];
- participants:Record<string,{x:number;y:number;hp:number;maxHp:number;initiative:number;conditions:('Charmed'|'Poisoned')[];speedFeet:number;movementSpentFeet:number;actionUsed:boolean;bonusActionUsed:boolean;dashFeet:number;disengaged:boolean;dodging:boolean}>;
+ participants:Record<string,{x:number;y:number;hp:number;maxHp:number;initiative:number;conditions:('Charmed'|'Poisoned')[];speedFeet:number;movementSpentFeet:number;actionUsed:boolean;bonusActionUsed:boolean;dashFeet:number;disengaged:boolean;dodging:boolean;reactionUsed?:boolean}>;
  obstacles?:{x:number;y:number}[];
  cover?:{x:number;y:number}[];
  log:string[];
@@ -36,7 +36,7 @@ export function startCompanionEncounter(campaign:Campaign,initiative:Record<stri
   const roll=initiative[id],position=positions[id],hp=hitPoints[id];
   if(!Number.isInteger(roll)||roll<1||roll>40||!position||!Number.isInteger(position.x)||!Number.isInteger(position.y)||position.x<0||position.y<0||position.x>19||position.y>19||!Number.isInteger(hp)||hp<1||hp>500)throw Error('Invalid initiative, position or hit points');
   if(Object.values(participants).some(p=>p.x===position.x&&p.y===position.y))throw Error('Actors cannot share a starting square');
-  participants[id]={...position,hp,maxHp:hp,initiative:roll,conditions:[],speedFeet:30,movementSpentFeet:0,actionUsed:false,bonusActionUsed:false,dashFeet:0,disengaged:false,dodging:false};
+  participants[id]={...position,hp,maxHp:hp,initiative:roll,conditions:[],speedFeet:30,movementSpentFeet:0,actionUsed:false,bonusActionUsed:false,dashFeet:0,disengaged:false,dodging:false,reactionUsed:false};
  }
  const order=ids.sort((a,b)=>participants[b].initiative-participants[a].initiative||a.localeCompare(b));
  return save(campaign,{status:'active',mode:'companions',round:1,turnIndex:0,order,participants,obstacles:[],cover:[],log:['Companion encounter started.']});
@@ -121,12 +121,13 @@ export function startUnifiedEncounter(campaign:Campaign,initiative:Record<string
  const maxHp=character.maxHitPoints,speed=character.speed;
  if(!position||!valid(position)||Object.values(battle.participants).some(p=>p.x===position.x&&p.y===position.y))throw Error('Invalid Nighthawk position');
  if(!Number.isInteger(roll)||roll<1||roll>40||!Number.isInteger(hp)||!Number.isInteger(maxHp)||hp!<1||maxHp!<1||hp!>maxHp!||!Number.isInteger(speed)||speed!<0||speed!>120||speed!%5!==0)throw Error('Invalid Nighthawk character statistics');
- const participants:CompanionEncounter['participants']={...battle.participants,nighthawk:{...position,hp:hp!,maxHp:maxHp!,initiative:roll,conditions:[] as ('Charmed'|'Poisoned')[],speedFeet:speed!,movementSpentFeet:0,actionUsed:false,bonusActionUsed:false,dashFeet:0,disengaged:false,dodging:false}};
+ const participants:CompanionEncounter['participants']={...battle.participants,nighthawk:{...position,hp:hp!,maxHp:maxHp!,initiative:roll,conditions:[] as ('Charmed'|'Poisoned')[],speedFeet:speed!,movementSpentFeet:0,actionUsed:false,bonusActionUsed:false,dashFeet:0,disengaged:false,dodging:false,reactionUsed:false}};
  const order=Object.keys(participants).sort((a,b)=>participants[b].initiative-participants[a].initiative||a.localeCompare(b));
  return save(campaign,{...battle,mode:'unified',participants,order,log:['Unified encounter started; Nighthawk prototype combat preserved.']});
 }
 export function moveCompanion(campaign:Campaign,actorId:string,x:number,y:number):Campaign{
  const battle=activeActor(campaign,actorId),actor=battle.participants[actorId];
+ if(actor.hp<=0)throw Error('Actor at zero HP cannot move');
  if(!valid({x,y}))throw Error('Destination outside 20×20 arena');
  if(Object.entries(battle.participants).some(([id,p])=>id!==actorId&&p.hp>0&&p.x===x&&p.y===y))throw Error('Square occupied');
  const steps=pathSteps(battle,actor,{x,y},actorId);
@@ -137,7 +138,7 @@ export function moveCompanion(campaign:Campaign,actorId:string,x:number,y:number
 export function endCompanionTurn(campaign:Campaign,actorId:string):Campaign{
  const battle=activeActor(campaign,actorId);
  const next=(battle.turnIndex+1)%battle.order.length;
- const nextId=battle.order[next];const participant=battle.participants[nextId];return save(campaign,{...battle,participants:{...battle.participants,[nextId]:{...participant,movementSpentFeet:0,actionUsed:false,bonusActionUsed:false,dashFeet:0,disengaged:false,dodging:false}},turnIndex:next,round:battle.round+(next===0?1:0),log:[...battle.log,actorId+' ended turn']});
+ const nextId=battle.order[next];const participant=battle.participants[nextId];return save(campaign,{...battle,participants:{...battle.participants,[nextId]:{...participant,movementSpentFeet:0,actionUsed:false,bonusActionUsed:false,dashFeet:0,disengaged:false,dodging:false,reactionUsed:false}},turnIndex:next,round:battle.round+(next===0?1:0),log:[...battle.log,actorId+' ended turn']});
 }
 export function damageCompanion(campaign:Campaign,targetId:string,amount:number,type:DamageType):Campaign{
  const battle=encounter(campaign),actor=battle.participants[targetId];
@@ -157,6 +158,28 @@ export function conditionCompanion(campaign:Campaign,targetId:string,condition:'
  const permitted=!(condition==='Charmed'&&(withinDevotionAura||ownAura))&&(targetId==='nighthawk'&&battle.mode==='unified'?true:adjudicateSubclassActorCondition(campaign,targetId,condition,{auraActive:ownAura,withinDevotionAura:ownAura}));
  if(!permitted)return save(campaign,{...battle,log:[...battle.log,targetId+' is immune to '+condition]});
  return save(campaign,{...battle,participants:{...battle.participants,[targetId]:{...actor,conditions:[...new Set([...actor.conditions,condition])]}},log:[...battle.log,targetId+' gained '+condition]});
+}
+/** Explicitly reconcile Nighthawk encounter HP to the character sheet.
+ * This is opt-in to prevent overwriting changes made by the legacy combat prototype.
+ */
+export function synchronizeNighthawkHitPoints(campaign:Campaign):Campaign{
+ const battle=encounter(campaign),actor=battle.participants.nighthawk;
+ if(battle.mode!=='unified'||!actor||!campaign.character)throw Error('No unified Nighthawk to synchronize');
+ if(!Number.isInteger(actor.hp)||actor.hp<0||actor.hp>actor.maxHp)throw Error('Invalid encounter hit points');
+ return {...campaign,character:{...campaign.character,currentHitPoints:actor.hp},companionEncounter:{...battle,log:[...battle.log,'Nighthawk HP synchronized to character sheet']},updatedAt:new Date().toISOString()};
+}
+/** Manually recorded reactions are actor-scoped; the DM adjudicates triggers and effects. */
+export function recordCompanionReaction(campaign:Campaign,actorId:string,description:string):Campaign{
+ const battle=encounter(campaign),actor=battle.participants[actorId];
+ if(!actor||actor.hp<=0)throw Error('Invalid reaction actor');
+ if(actor.reactionUsed)throw Error('Reaction already used');
+ if(!description.trim()||description.length>160)throw Error('Reaction requires a short DM description');
+ return save(campaign,{...battle,participants:{...battle.participants,[actorId]:{...actor,reactionUsed:true}},log:[...battle.log,actorId+' reaction: '+description.trim()+' (DM adjudicated)']});
+}
+export function removeCompanionCondition(campaign:Campaign,targetId:string,condition:'Charmed'|'Poisoned'):Campaign{
+ const battle=encounter(campaign),actor=battle.participants[targetId];
+ if(!actor)throw Error('Unknown condition target');
+ return save(campaign,{...battle,participants:{...battle.participants,[targetId]:{...actor,conditions:actor.conditions.filter(c=>c!==condition)}},log:[...battle.log,targetId+' ended '+condition+' (DM adjudicated)']});
 }
 export function finishCompanionEncounter(campaign:Campaign):Campaign{
  const battle=encounter(campaign);
