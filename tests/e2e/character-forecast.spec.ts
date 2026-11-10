@@ -24,6 +24,7 @@ test('forecast level selector and automatic spells are rendered for a saved Pala
  await expect(page.getByLabel('Character advancement forecast')).toBeVisible();
  await expect(page.getByText('Your Future Character')).toBeVisible();
  await expect(page.getByText(/Find Steed/).first()).toBeVisible();
+ await expect(page.getByLabel('Level 3 subclass feature')).toContainText('Sacred Weapon');
  await page.reload();
  await page.getByRole('button',{name:'My Characters'}).click();
  await page.getByRole('button',{name:/Forecast Test Paladin/}).click();
@@ -40,6 +41,7 @@ test('forecast UI changes Druid terrain and displays the resulting always-prepar
  await page.getByRole('button',{name:'My Characters'}).click();
  await page.getByRole('button',{name:/Terrain Druid.*Resume draft/}).click();
  await expect(page.getByLabel('Planned subclass')).toHaveValue('druid-land');
+ await expect(page.getByLabel('Level 3 subclass feature')).toContainText('Land’s Aid');
  await page.getByLabel('Level 3 Circle of the Land terrain').selectOption('arid');
  await expect(page.getByLabel('Level 5 Circle of the Land terrain')).toHaveValue('arid');
  await page.getByLabel('Level 5 Circle of the Land terrain').selectOption('polar');
@@ -59,6 +61,7 @@ test('forecast UI displays Warlock Mystic Arcanum replacement selectors',async({
  await page.reload();
  await page.getByRole('button',{name:'My Characters'}).click();
  await page.getByRole('button',{name:/Arcanum Warlock.*Resume draft/}).click();
+ await expect(page.getByLabel('Level 3 subclass feature')).toContainText('Dark One’s Blessing');
  await expect(page.getByLabel('Level 12 Mystic Arcanum to replace')).toBeVisible();
  await expect(page.getByLabel('Level 12 Mystic Arcanum replacement')).toBeVisible();
 });
