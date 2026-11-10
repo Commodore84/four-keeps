@@ -216,7 +216,7 @@ test('character builder shows species, background, class, and choice rules inlin
  await page.getByRole('button',{name:/Guide Tester/}).click();
  await expect(page.getByText(/Your walking Speed increases to 35 feet/)).toBeVisible();
  await expect(page.getByText(/Choose two Wizard cantrips and one level-one Wizard spell/)).toBeVisible();
- await page.getByRole('button',{name:'Class',exact:true}).click();
+ await page.getByRole('button',{name:/4\\. Class/}).click();
  await expect(page.getByText(/Pact Magic slots refresh on Short Rests/)).toBeVisible();
  await expect(page.getByText(/Warlock spell slots return on a Short or Long Rest/)).toBeVisible();
 });
@@ -250,6 +250,8 @@ test('future-level forecast grows sequentially and saves subclass plans',async (
  await page.getByLabel('Planned subclass').selectOption('warlock-archfey');
  await expect(page.getByText(/A patron from the Feywild/)).toBeVisible();
  await page.reload();
+ await page.getByRole('button',{name:'My Characters'}).click();
+ await page.getByRole('button',{name:/Forecast Warlock/}).click();
  await expect(page.getByLabel('Planned subclass')).toHaveValue('warlock-archfey');
  await expect(page.getByLabel('Level 2 notes')).toHaveValue('Practice invocations');
 });
