@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1120 300" role="img" aria-label="Four Keeps"><g transform="translate(0 16) scale(.96)"><defs><linearGradient id="stone" x1="0" x2="1"><stop stop-color="#77787a"/><stop offset=".52" stop-color="#d2d0cb"/><stop offset="1" stop-color="#f4f0e9"/></linearGradient></defs>
+<g stroke="#c8c5c0" stroke-width="2" stroke-linejoin="miter">
+<path d="M14 235 82 209 124 179 163 199 228 155 284 193 350 171 407 198 468 151 535 208 605 237" fill="none" stroke-width="8"/>
+<path d="M75 213 117 181 163 196 230 158 284 195 352 173 407 200 470 154 537 210 603 239" fill="none" stroke="#77787a" stroke-width="3"/>
+<path d="M97 195 100 112 94 112 94 97 108 97 108 105 122 105 122 94 136 94 136 104 150 104 150 96 164 96 164 113 158 113 161 194" fill="url(#stone)"/>
+<path d="M197 169 199 65 190 65 190 44 205 44 205 54 222 54 222 41 238 41 238 52 255 52 255 42 271 42 271 65 264 65 266 176" fill="url(#stone)"/>
+<path d="M309 185 311 133 294 133 347 79 398 133 383 133 387 184" fill="url(#stone)"/>
+<path d="M453 154 456 87 450 87 450 69 464 69 464 77 477 77 477 67 492 67 492 77 507 77 507 70 521 70 521 88 514 88 519 169" fill="url(#stone)"/>
+</g>
+<g fill="#17191c"><rect x="111" y="127" width="5" height="12"/><rect x="137" y="125" width="5" height="12"/><rect x="129" y="151" width="5" height="7"/><path d="M221 97q5-12 10 0v18h-10z"/><path d="M246 98q5-12 10 0v18h-10z"/><rect x="334" y="147" width="5" height="20"/><rect x="359" y="147" width="5" height="20"/><rect x="470" y="103" width="5" height="15"/><rect x="495" y="103" width="5" height="15"/></g>
+<path d="M229 42V12" stroke="#f4f0e9" stroke-width="3"/><circle cx="229" cy="11" r="4" fill="#f4f0e9"/><path d="M232 17q15-8 29 1t27-1q-14 18-29 11t-27 0z" fill="#f4f0e9"/>
+<path d="M14 235 140 203 228 155 285 198 347 174 411 204 470 154 605 237 528 217 470 182 408 220 349 190 287 218 228 175 142 224z" fill="#15171a" stroke="#d4d1ca" stroke-width="3"/></g><text x="675" y="128" font-family="Georgia,serif" font-size="122" fill="#f5f1ea">Four</text><text x="710" y="250" font-family="Georgia,serif" font-size="122" fill="#f5f1ea">Keeps</text></svg>
