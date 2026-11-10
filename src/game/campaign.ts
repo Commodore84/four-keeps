@@ -8,6 +8,8 @@ export interface Campaign {
   /** Reserved for future non-Nighthawk actors; never implicitly applied to the Rogue prototype. */
   subclassActors?:Record<string,SubclassCombatState>;
   companionEncounter?:CompanionEncounter;
+  /** Explicitly verified equipped items from the shared equipment catalog; distinct from carried inventory. */
+  encounterLoadout?:{weaponId?:string;armorId?:string;shieldId?:string};
   id: string;
   title: string;
   location: string;
