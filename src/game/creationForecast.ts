@@ -51,10 +51,30 @@ export function toggleForecastSpell(forecast:AdvancementForecast,classId:string,
  const subclassId=plannedLevel(forecast,3).subclassId;
  const eligible=forecastSpellOptions(classId,subclassId,level).find(spell=>spell.id===spellId);
  if(!eligible)return forecast;
+ if(!(plannedLevel(forecast,level).plannedSpellIds??[]).includes(spellId)&&forecast.levels.some(plan=>plan.level!==level&&(plan.plannedSpellIds??[]).includes(spellId)))return forecast;
+ if(!(plannedLevel(forecast,level).plannedSpellIds??[]).includes(spellId)&&forecastSpellSelectionWarnings(classId,forecast,level,spellId).length)return forecast;
  const plan=plannedLevel(forecast,level);
  const previous=plan.plannedSpellIds??[];
  const plannedSpellIds=previous.includes(spellId)?previous.filter(id=>id!==spellId):[...previous,spellId];
  return updateLevelPlan(forecast,level,{plannedSpellIds});
+}
+/** Limits are applied only where the existing rules data establishes a reliable cap.
+ * The curated catalog does not yet encode per-class prepared-spell advancement,
+ * so applying an invented universal one-spell-per-level cap would be incorrect. */
+export function forecastSpellSelectionWarnings(classId:string,forecast:AdvancementForecast,level:number,spellId:string):string[]{
+ const spell=forecastSpellOptions(classId,plannedLevel(forecast,3).subclassId,level).find(item=>item.id===spellId);
+ if(!spell)return ['Level '+level+': spell is not eligible.'];
+ const previous=plannedLevel(forecast,level).plannedSpellIds??[];
+ if(previous.includes(spellId))return [];
+ const selected=previous.map(id=>[...SPELLS,...HIGHER_LEVEL_FORECAST_SPELLS].find(item=>item.id===id)).filter((item):item is NonNullable<typeof item>=>Boolean(item));
+ if(classId==='warlock'&&spell.level>=6&&selected.some(item=>item.level===spell.level))return ['Level '+level+': only one Mystic Arcanum spell of level '+spell.level+' may be selected.'];
+ const current=spellcastingAtLevel(classId,level);
+ const prior=spellcastingAtLevel(classId,level-1);
+ if(spell.level===0&&current?.cantrips!==null&&current?.cantrips!==undefined){
+  const gained=Math.max(0,current.cantrips-(prior?.cantrips??0));
+  if(selected.filter(item=>item.level===0).length>=gained)return ['Level '+level+': no additional class cantrip choices are available at this level.'];
+ }
+ return [];
 }
 export function forecastSpellWarnings(classId:string,forecast:AdvancementForecast):string[]{
  const warnings:string[]=[];
@@ -64,6 +84,7 @@ export function forecastSpellWarnings(classId:string,forecast:AdvancementForecas
   for(const id of plan.plannedSpellIds??[]){
    if(!forecastSpellOptions(classId,subclassId,plan.level).some(spell=>spell.id===id))warnings.push('Level '+plan.level+': spell '+id+' is not eligible for the selected class, subclass, or level.');
    if(seen.has(id))warnings.push('Level '+plan.level+': spell '+id+' was already selected at an earlier level.');
+   warnings.push(...forecastSpellSelectionWarnings(classId,{...forecast,levels:forecast.levels.map(p=>p.level===plan.level?{...p,plannedSpellIds:(p.plannedSpellIds??[]).filter(x=>x!==id)}:p)},plan.level,id));
    seen.add(id);
   }
  }
