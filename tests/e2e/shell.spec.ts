@@ -373,7 +373,7 @@ test('companion encounter initiative, turn, resistance and persistence stay isol
  await panel.getByRole('button',{name:'Start companion encounter'}).click();
  await expect(panel).toContainText('Active turn: paladin');
  await panel.getByLabel('Companion target').selectOption('druid');
- await panel.getByLabel('Companion damage').fill('11');
+ await panel.getByLabel('Companion damage',{exact:true}).fill('11');
  await panel.getByLabel('Companion damage type').selectOption('Cold');
  await panel.getByRole('button',{name:'Apply damage'}).click();
  await expect(panel).toContainText('druid: 15/20 HP');
