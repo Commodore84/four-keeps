@@ -88,7 +88,7 @@ export function previewCompanionMovement(campaign:Campaign,actorId:string,x:numb
  if(actor.hp<=0||actor.conditions.some(c=>IMMOBILE.includes(c)))return {...initial,error:'Actor cannot move'};
  if(!valid({x,y}))return {...initial,error:'Destination outside encounter grid'};
  try{
-  const path=pathRoute(battle,actor,{x,y},actorId);
+  const path=pathRoute(battle,actor,{x,y},actorId).map(p=>({x:p.x,y:p.y}));
   const costFeet=(path.length-1)*5*(actor.conditions.includes('Prone')?2:1);
   const edges=path.slice(1).map((to,i)=>({from:path[i],to,attackers:companionOpportunityCandidates(battle,actorId,path[i],to)}));
   const first=edges.find(e=>e.attackers.length>0);
