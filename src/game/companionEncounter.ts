@@ -225,7 +225,14 @@ export function resumeEnemyInterruptedMovement(campaign:Campaign,enemyId:string)
  const actor=battle.participants[enemyId];
  const cleared=save(campaign,{...battle,pendingOpportunity:undefined});
  if(actor.hp<=0||actor.conditions.some(c=>IMMOBILE.includes(c)))return save(cleared,{...cleared.companionEncounter!,log:[...battle.log,enemyId+' could not resume interrupted movement']});
- return moveCompanion(cleared,enemyId,pending.destination.x,pending.destination.y);
+ // The DM already adjudicated this exact reach-exit edge. Cross it once
+ // without re-triggering the same opportunity; subsequent edges remain checked.
+ const step=pending.to;
+ const cost=actor.conditions.includes('Prone')?10:5;
+ if(!valid(step)||Math.max(Math.abs(actor.x-step.x),Math.abs(actor.y-step.y))!==1||actor.movementSpentFeet+cost>actor.speedFeet+actor.dashFeet||Object.entries(battle.participants).some(([id,p])=>id!==enemyId&&p.hp>0&&p.x===step.x&&p.y===step.y)||(battle.obstacles??[]).some(p=>p.x===step.x&&p.y===step.y))throw Error('Interrupted reach-exit square no longer traversable');
+ const crossed=save(cleared,{...cleared.companionEncounter!,participants:{...battle.participants,[enemyId]:{...actor,x:step.x,y:step.y,movementSpentFeet:actor.movementSpentFeet+cost}},log:[...battle.log,enemyId+' crossed DM-adjudicated reach-exit edge to '+step.x+','+step.y]});
+ if(step.x===pending.destination.x&&step.y===pending.destination.y)return crossed;
+ return moveCompanion(crossed,enemyId,pending.destination.x,pending.destination.y);
 }
 export function executeEnemyAttackTurn(campaign:Campaign,enemyId:string,roll:number,damageRoll:number,damageType:DamageType,secondD20?:number):Campaign{
  const battle=activeActor(campaign,enemyId),enemy=battle.participants[enemyId];
