@@ -309,6 +309,39 @@ export function setNighthawkEncounterLoadout(campaign:Campaign,slot:'weaponId'|'
  if(!owned)throw Error('Item is not verified in campaign inventory');
  return {...save(campaign,{...battle,log:[...battle.log,'Nighthawk equipped verified '+item.name+' for encounter reference']}),encounterLoadout:{...campaign.encounterLoadout,[slot]:itemId}};
 }
+/** Derived only from a verified equipped item and the Rogue character sheet.
+ * Dice are never rolled here. Rogue weapon proficiency follows the builder's catalog.
+ */
+export function nighthawkEquippedAttack(campaign:Campaign){
+ const character=campaign.character, id=campaign.encounterLoadout?.weaponId;
+ const item=ITEMS.find(entry=>entry.id===id&&entry.category==='weapon');
+ if(!character||!item||!item.damage)return null;
+ const owned=(campaign.inventoryLedger?.gear??[]).some(entry=>entry.quantity>0&&entry.name.toLowerCase()===item.name.toLowerCase())||(item.id==='dagger'&&(campaign.equipment?.daggers??0)>0);
+ if(!owned)return null;
+ const finesse=item.properties?.includes('Finesse');
+ const ranged=item.properties?.some(p=>p==='Ammunition'||p.startsWith('Range '))||['shortbow','longbow','light-crossbow','heavy-crossbow','hand-crossbow'].includes(item.id);
+ const dex=abilityModifier(character.scores.dex),str=abilityModifier(character.scores.str);
+ const abilityModifierUsed=ranged?dex:finesse?Math.max(str,dex):str;
+ // Only the Rogue's explicitly verified simple, finesse and light proficiencies.
+ const trained=item.weaponGroup==='simple'||!!item.properties?.some(p=>p==='Finesse'||p==='Light');
+ return {weaponId:item.id,name:item.name,damageDice:item.damage,attackModifier:abilityModifierUsed+(trained?character.proficiencyBonus:0),damageModifier:abilityModifierUsed,proficient:trained,ability:ranged?'Dexterity':finesse&&dex>=str?'Dexterity':'Strength'};
+}
+/** Armor class is computed from explicitly equipped, owned and catalogued gear.
+ * If no verified armor is equipped, preserve the character sheet AC as the source.
+ */
+export function nighthawkEquippedDefense(campaign:Campaign){
+ const character=campaign.character;
+ if(!character)return null;
+ const armor=ITEMS.find(item=>item.id===campaign.encounterLoadout?.armorId&&item.category==='armor');
+ const shield=ITEMS.find(item=>item.id===campaign.encounterLoadout?.shieldId&&item.category==='shield');
+ const owned=(name:string)=>(campaign.inventoryLedger?.gear??[]).some(g=>g.quantity>0&&g.name.toLowerCase()===name.toLowerCase());
+ const validArmor=armor&&owned(armor.name)?armor:null;
+ const validShield=shield&&owned(shield.name)?shield:null;
+ if(!validArmor)return {armorClass:character.armorClass??null,source:'character-sheet' as const};
+ const dex=abilityModifier(character.scores.dex);
+ const armorClass=validArmor.baseAC!+Math.min(dex,validArmor.dexCap??99)+(validShield?2:0);
+ return {armorClass,source:'verified-loadout' as const};
+}
 export function nighthawkEquipmentReferences(campaign:Campaign){
  const names=new Set((campaign.inventoryLedger?.gear??[]).filter(g=>g.quantity>0).map(g=>g.name.toLowerCase()));
  if((campaign.equipment?.daggers??0)>0)names.add('dagger');
