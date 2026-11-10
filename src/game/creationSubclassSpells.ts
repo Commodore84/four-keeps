@@ -12,6 +12,18 @@ export const SUBCLASS_PREPARED_SPELLS:Readonly<Record<string,Readonly<Record<num
   7:['Arcane Eye','Wall of Fire'],
   9:['Flame Strike','Scrying']
  },
+ 'cleric-trickery':{
+  3:['Charm Person','Disguise Self','Invisibility','Pass without Trace'],
+  5:['Hypnotic Pattern','Nondetection'],
+  7:['Confusion','Dimension Door'],
+  9:['Dominate Person','Modify Memory']
+ },
+ 'cleric-war':{
+  3:['Guiding Bolt','Magic Weapon','Shield of Faith','Spiritual Weapon'],
+  5:['Crusader\'s Mantle','Spirit Guardians'],
+  7:['Fire Shield','Freedom of Movement'],
+  9:['Hold Monster','Steel Wind Strike']
+ },
  'warlock-fiend':{
   3:['Burning Hands','Command','Scorching Ray','Suggestion'],
   5:['Fireball','Stinking Cloud'],
