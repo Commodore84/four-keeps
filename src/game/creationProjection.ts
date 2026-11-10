@@ -71,7 +71,7 @@ export function projectCharacterLevel(classId:string,baseScores:Scores,forecast:
  assumptions.push('HP assumes fixed average hit-die increases; no rolled HP or additional feat effects');
  if(fullCasters.has(classId)||halfCasters.has(classId)||classId==='warlock')assumptions.push('Spell slots are class-only; no multiclassing, items, or special recovery effects');
  if(thirdCaster)assumptions.push('Subclass spell slots are projected; spell selections, cantrips and casting components remain unimplemented');
- return {level:safeLevel,proficiencyBonus,hitPoints,hitPointsLabel:'Estimated HP',scores,modifiers,spellSlots,pactSlotLevel,spellAttack,spellSaveDC,subclassName,criticalHitMinimum,unarmoredArmorClass,subclassBonuses,subclassResources,improvementLevels,mysticArcanumLevels:classId==='warlock'?mysticArcanumLevel(safeLevel):[],assumptions};
+ return {level:safeLevel,proficiencyBonus,hitPoints,hitPointsLabel:'Estimated HP',scores,modifiers,spellSlots,pactSlotLevel,spellAttack,spellSaveDC,subclassName,criticalHitMinimum,unarmoredArmorClass,subclassBonuses,subclassResistances,subclassConditionImmunities,subclassResources,improvementLevels,mysticArcanumLevels:classId==='warlock'?mysticArcanumLevel(safeLevel):[],assumptions};
 }
 export function applyAbilityIncrease(forecast:AdvancementForecast,level:number,ability:Ability,delta:-1|1):AdvancementForecast{
  if(!forecastImprovementLevels('fighter').includes(level))return forecast;
