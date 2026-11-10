@@ -2,11 +2,11 @@ import {mysticArcanumLevel} from './creationProgression';
 import {subclassesForClass} from './creationSubclasses';
 import {spellcastingAtLevel,classSummary} from './creationClasses';
 import {ABILITIES,modifier,type Scores,type Ability} from './creationAbilities';
-import {plannedLevel,type AdvancementForecast} from './creationForecast';
+import {plannedLevel,landTerrainAtLevel,type AdvancementForecast} from './creationForecast';
 export interface ProjectedLevel {
  level:number;proficiencyBonus:number;hitPoints:number;hitPointsLabel:string;scores:Scores;modifiers:Scores;
  spellSlots:{spellLevel:number;count:number}[];pactSlotLevel:number|null;spellAttack:number|null;spellSaveDC:number|null;
- subclassName:string|null;criticalHitMinimum:number;unarmoredArmorClass:number|null;subclassBonuses:string[];subclassResources:{name:string;maximum:number;recovery:string}[];improvementLevels:number[];mysticArcanumLevels:number[];assumptions:string[];
+ subclassName:string|null;criticalHitMinimum:number;unarmoredArmorClass:number|null;subclassBonuses:string[];subclassResistances:string[];subclassConditionImmunities:string[];subclassResources:{name:string;maximum:number;recovery:string}[];improvementLevels:number[];mysticArcanumLevels:number[];assumptions:string[];
 }
 const THIRD_CASTER_SLOTS:readonly number[][]=[
  [],[],[],[2],[3],[3],[3],[4,2],[4,2],[4,2],[4,3],[4,3],[4,3],[4,3,2],[4,3,2],[4,3,2],[4,3,3],[4,3,3],[4,3,3],[4,3,3,1],[4,3,3,1]
@@ -44,10 +44,25 @@ export function projectCharacterLevel(classId:string,baseScores:Scores,forecast:
  const spellSaveDC=spellAttack===null?null:8+spellAttack;
  const subclassName=safeLevel>=3?subclassesForClass(classId).find(x=>x.id===selected)?.name??null:null;
  const subclassBonuses:string[]=[];
+ const subclassResistances:string[]=[];
+ const subclassConditionImmunities:string[]=[];
+ if(selected==='paladin-devotion'&&safeLevel>=7){
+  subclassConditionImmunities.push('Charmed (you and allies within Aura of Protection; aura inactive while Incapacitated)');
+ }
+ if(selected==='druid-land'&&safeLevel>=10){
+  subclassConditionImmunities.push('Poisoned');
+  const terrain=landTerrainAtLevel(forecast,safeLevel);
+  const resistance=terrain?({arid:'Fire',polar:'Cold',temperate:'Lightning',tropical:'Poison'} as const)[terrain]:undefined;
+  if(resistance)subclassResistances.push(resistance+' (Circle of the Land: '+terrain+')');
+  else assumptions.push('Circle of the Land resistance requires a terrain choice after a Long Rest');
+ }
+ if(selected==='warlock-fiend'&&safeLevel>=10)assumptions.push('Fiendish Resilience damage resistance is chosen after each Short or Long Rest; no type is assumed in the forecast');
+
  const subclassResources:{name:string;maximum:number;recovery:string}[]=[];
  if(safeLevel>=3&&selected==='fighter-battle-master')subclassResources.push({name:'Superiority Dice',maximum:safeLevel>=15?6:safeLevel>=7?5:4,recovery:'Short or Long Rest'});
  if(safeLevel>=3&&selected==='fighter-psi-warrior')subclassResources.push({name:'Psionic Energy Dice',maximum:2*proficiencyBonus,recovery:'Long Rest; one die also restored by a Bonus Action once per Short or Long Rest'});
  if(safeLevel>=3&&selected==='rogue-soulknife')subclassResources.push({name:'Psionic Energy Dice',maximum:2*proficiencyBonus,recovery:'Long Rest; one die also restored by a Bonus Action once per Short or Long Rest'});
+ if(safeLevel>=6&&selected==='warlock-fiend')subclassResources.push({name:'Dark One’s Own Luck (d10)',maximum:Math.max(1,modifier(scores.Cha)),recovery:'Long Rest'});
  if(safeLevel>=3&&selected==='warlock-celestial')subclassResources.push({name:'Healing Light dice',maximum:1+safeLevel,recovery:'Long Rest'});
  const criticalHitMinimum=selected==='fighter-champion'&&safeLevel>=15?18:selected==='fighter-champion'&&safeLevel>=3?19:20;
  if(criticalHitMinimum<20)subclassBonuses.push('Weapon and Unarmed Strike critical hits on '+criticalHitMinimum+'–20');
