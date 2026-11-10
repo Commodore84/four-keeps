@@ -11,7 +11,7 @@ export interface CompanionEncounter {
  round:number;
  turnIndex:number;
  order:string[];
- participants:Record<string,{x:number;y:number;hp:number;maxHp:number;initiative:number;conditions:('Charmed'|'Poisoned'|'Blinded'|'Deafened'|'Frightened'|'Grappled'|'Incapacitated'|'Invisible'|'Paralyzed'|'Petrified'|'Prone'|'Restrained'|'Stunned'|'Unconscious'|'Exhaustion')[];speedFeet:number;movementSpentFeet:number;actionUsed:boolean;bonusActionUsed:boolean;dashFeet:number;disengaged:boolean;dodging:boolean;reactionUsed?:boolean;concentratingOn?:string;consumables?:Record<string,number>;faction?:string;reachFeet?:number}>;
+ participants:Record<string,{x:number;y:number;hp:number;maxHp:number;initiative:number;conditions:('Charmed'|'Poisoned'|'Blinded'|'Deafened'|'Frightened'|'Grappled'|'Incapacitated'|'Invisible'|'Paralyzed'|'Petrified'|'Prone'|'Restrained'|'Stunned'|'Unconscious'|'Exhaustion')[];speedFeet:number;movementSpentFeet:number;actionUsed:boolean;bonusActionUsed:boolean;dashFeet:number;disengaged:boolean;dodging:boolean;reactionUsed?:boolean;concentratingOn?:string;consumables?:Record<string,number>;faction?:string;reachFeet?:number;actorKind?:'party'|'enemy';armorClass?:number;attackModifier?:number;constitutionSaveModifier?:number}>;
  obstacles?:{x:number;y:number}[];
  cover?:{x:number;y:number}[];
  pendingOpportunity?:{moverId:string;attackerIds:string[];from:{x:number;y:number};to:{x:number;y:number}};
@@ -24,7 +24,7 @@ function encounter(campaign:Campaign):CompanionEncounter{
 function activeActor(campaign:Campaign,actorId:string):CompanionEncounter{
  const battle=encounter(campaign);
  if(battle.order[battle.turnIndex]!==actorId)throw Error('Not this actor’s turn');
- if(!(actorId==='nighthawk'&&battle.mode==='unified')&&!campaign.subclassActors?.[actorId])throw Error('Actor is not registered');
+ if(!(actorId==='nighthawk'&&battle.mode==='unified')&&!campaign.subclassActors?.[actorId]&&battle.participants[actorId]?.actorKind!=='enemy')throw Error('Actor is not registered');
  return battle;
 }
 function save(campaign:Campaign,battle:CompanionEncounter):Campaign{
@@ -136,6 +136,17 @@ export function companionOpportunityCandidates(battle:CompanionEncounter,moverId
  return Object.entries(battle.participants).filter(([id,actor])=>id!==moverId&&actor.hp>0&&!actor.reactionUsed&&(!mover.faction||!actor.faction||mover.faction!==actor.faction)&&within(actor,from,actor.reachFeet??5)&&!within(actor,to,actor.reachFeet??5)).map(([id])=>id);
 }
 /** Explicit faction and melee reach configuration. Unset factions remain unknown. */
+/** Explicit DM-defined enemy. Statistics are required; no monster stat block is invented. */
+export function addCompanionEnemy(campaign:Campaign,id:string,initiative:number,position:Cell,hp:number,armorClass:number,attackModifier:number,speedFeet=30,reachFeet=5):Campaign{
+ const battle=encounter(campaign),name=id.trim();
+ if(!/^[a-zA-Z][a-zA-Z0-9_-]{1,39}$/.test(name)||battle.participants[name]||campaign.subclassActors?.[name]||name==='nighthawk')throw Error('Invalid or duplicate enemy ID');
+ if(!valid(position)||Object.values(battle.participants).some(p=>p.hp>0&&p.x===position.x&&p.y===position.y))throw Error('Invalid or occupied enemy position');
+ if(![initiative,hp,armorClass,attackModifier,speedFeet,reachFeet].every(Number.isInteger)||initiative<1||initiative>40||hp<1||hp>500||armorClass<1||armorClass>40||attackModifier< -20||attackModifier>30||speedFeet<0||speedFeet>120||speedFeet%5!==0||reachFeet<5||reachFeet>30||reachFeet%5!==0)throw Error('Invalid enemy statistics');
+ const participants={...battle.participants,[name]:{...position,hp,maxHp:hp,initiative,armorClass,attackModifier,speedFeet,reachFeet,actorKind:'enemy' as const,faction:'enemies',conditions:[] as CompanionCondition[],movementSpentFeet:0,actionUsed:false,bonusActionUsed:false,dashFeet:0,disengaged:false,dodging:false,reactionUsed:false}};
+ const currentId=battle.order[battle.turnIndex];
+ const order=Object.keys(participants).sort((a,b)=>participants[b].initiative-participants[a].initiative||a.localeCompare(b));
+ return save(campaign,{...battle,participants,order,turnIndex:order.indexOf(currentId),log:[...battle.log,'Enemy '+name+' joined initiative with DM-supplied statistics']});
+}
 export function setCompanionTactics(campaign:Campaign,actorId:string,faction:string,reachFeet:number):Campaign{
  const battle=encounter(campaign),actor=battle.participants[actorId];
  if(!actor||!faction.trim()||faction.length>40||!Number.isInteger(reachFeet)||reachFeet<5||reachFeet>30||reachFeet%5!==0)throw Error('Invalid actor faction or reach');
@@ -161,7 +172,7 @@ export function endCompanionTurn(campaign:Campaign,actorId:string):Campaign{
 export function damageCompanion(campaign:Campaign,targetId:string,amount:number,type:DamageType):Campaign{
  const battle=encounter(campaign),actor=battle.participants[targetId];
  if(!actor||!Number.isInteger(amount)||amount<0||amount>1000)throw Error('Invalid damage target or amount');
- const taken=targetId==='nighthawk'&&battle.mode==='unified'?amount:adjudicateSubclassActorDamage(campaign,targetId,amount,type);
+ const taken=(targetId==='nighthawk'&&battle.mode==='unified')||actor.actorKind==='enemy'?amount:adjudicateSubclassActorDamage(campaign,targetId,amount,type);
  const hp=Math.max(0,actor.hp-taken);
  const concentrationNote=actor.concentratingOn&&taken>0?' Concentration save required (DC '+companionConcentrationSaveDC(taken)+')'+(hp===0?'; concentration ends at 0 HP':''):'';
  return save(campaign,{...battle,participants:{...battle.participants,[targetId]:{...actor,hp,concentratingOn:hp===0?undefined:actor.concentratingOn}},log:[...battle.log,targetId+' took '+taken+' '+type+' damage'+(taken!==amount?' (resisted)':'')+concentrationNote]});
@@ -174,7 +185,7 @@ export function conditionCompanion(campaign:Campaign,targetId:string,condition:'
  const auraActive=!!source&&source.subclassId==='paladin-devotion'&&source.level>=7&&!!aura&&aura.hp>0;
  const withinDevotionAura=auraActive&&Math.max(Math.abs(aura!.x-actor.x),Math.abs(aura!.y-actor.y))<=2;
  const ownAura=campaign.subclassActors?.[targetId]?.subclassId==='paladin-devotion'&&campaign.subclassActors[targetId].level>=7&&actor.hp>0;
- const permitted=!(condition==='Charmed'&&(withinDevotionAura||ownAura))&&(targetId==='nighthawk'&&battle.mode==='unified'?true:adjudicateSubclassActorCondition(campaign,targetId,condition,{auraActive:ownAura,withinDevotionAura:ownAura}));
+ const permitted=!(condition==='Charmed'&&(withinDevotionAura||ownAura))&&((targetId==='nighthawk'&&battle.mode==='unified')||actor.actorKind==='enemy'?true:adjudicateSubclassActorCondition(campaign,targetId,condition,{auraActive:ownAura,withinDevotionAura:ownAura}));
  if(!permitted)return save(campaign,{...battle,log:[...battle.log,targetId+' is immune to '+condition]});
  return save(campaign,{...battle,participants:{...battle.participants,[targetId]:{...actor,conditions:[...new Set([...actor.conditions,condition])]}},log:[...battle.log,targetId+' gained '+condition]});
 }
@@ -310,7 +321,7 @@ export function resolveCompanionOpportunityAttack(campaign:Campaign,attackerId:s
  if(!companionLineOfSight(battle,attacker,target))throw Error('Opportunity target not visible');
  const hit=roll===20||(roll!==1&&roll+modifier>=targetAC);
  const raw=hit?Math.max(0,damage+damageModifier):0;
- const taken=targetId==='nighthawk'&&battle.mode==='unified'?raw:adjudicateSubclassActorDamage(campaign,targetId,raw,damageType);
+ const taken=(targetId==='nighthawk'&&battle.mode==='unified')||target.actorKind==='enemy'?raw:adjudicateSubclassActorDamage(campaign,targetId,raw,damageType);
  return save(campaign,{...battle,participants:{...battle.participants,[attackerId]:{...attacker,reactionUsed:true},[targetId]:{...target,hp:Math.max(0,target.hp-taken),concentratingOn:target.hp<=taken?undefined:target.concentratingOn}},log:[...battle.log,attackerId+' opportunity attack vs '+targetId+': '+(hit?'hit for '+taken:'miss')+' (DM verified reach trigger)']});
 }
 export function finishCompanionEncounter(campaign:Campaign):Campaign{
