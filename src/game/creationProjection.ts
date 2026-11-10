@@ -1,10 +1,12 @@
+import {mysticArcanumLevel} from './creationProgression';
+import {subclassesForClass} from './creationSubclasses';
 import {spellcastingAtLevel,classSummary} from './creationClasses';
 import {ABILITIES,modifier,type Scores,type Ability} from './creationAbilities';
 import {plannedLevel,type AdvancementForecast} from './creationForecast';
 export interface ProjectedLevel {
  level:number;proficiencyBonus:number;hitPoints:number;hitPointsLabel:string;scores:Scores;modifiers:Scores;
  spellSlots:{spellLevel:number;count:number}[];pactSlotLevel:number|null;spellAttack:number|null;spellSaveDC:number|null;
- subclassName:string|null;improvementLevels:number[];assumptions:string[];
+ subclassName:string|null;improvementLevels:number[];mysticArcanumLevels:number[];assumptions:string[];
 }
 const fullCasters=new Set(['bard','cleric','druid','sorcerer','wizard']);
 const halfCasters=new Set(['paladin','ranger']);
@@ -38,11 +40,11 @@ export function projectCharacterLevel(classId:string,baseScores:Scores,forecast:
  const spellAttack=spellAbility?proficiencyBonus+modifier(scores[spellAbility]):null;
  const spellSaveDC=spellAttack===null?null:8+spellAttack;
  const selected=plannedLevel(forecast,3).subclassId;
- const subclassName=safeLevel>=3&&selected?selected.split('-').slice(1).map(x=>x[0].toUpperCase()+x.slice(1)).join(' '):null;
+ const subclassName=safeLevel>=3?subclassesForClass(classId).find(x=>x.id===selected)?.name??null:null;
  assumptions.push('HP assumes fixed average hit-die increases; no rolled HP or additional feat effects');
  if(fullCasters.has(classId)||halfCasters.has(classId)||classId==='warlock')assumptions.push('Spell slots are class-only; no multiclassing, items, or special recovery effects');
  if(classId==='rogue'||classId==='fighter')assumptions.push('Subclass spellcasting is not yet included in the projection');
- return {level:safeLevel,proficiencyBonus,hitPoints,hitPointsLabel:'Estimated HP',scores,modifiers,spellSlots,pactSlotLevel,spellAttack,spellSaveDC,subclassName,improvementLevels,assumptions};
+ return {level:safeLevel,proficiencyBonus,hitPoints,hitPointsLabel:'Estimated HP',scores,modifiers,spellSlots,pactSlotLevel,spellAttack,spellSaveDC,subclassName,improvementLevels,mysticArcanumLevels:classId==='warlock'?mysticArcanumLevel(safeLevel):[],assumptions};
 }
 export function applyAbilityIncrease(forecast:AdvancementForecast,level:number,ability:Ability,delta:-1|1):AdvancementForecast{
  if(!forecastImprovementLevels('fighter').includes(level))return forecast;
