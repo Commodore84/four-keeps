@@ -14,7 +14,7 @@ describe('class spell preparation and replacement forecasts',()=>{
   const same=updateLevelPlan(partial,5,{replacementWithSpellId:options[0].id});
   expect(forecastReplacementWarnings('bard',same)[0]).toContain('different');
   const valid=updateLevelPlan(same,5,{replacementWithSpellId:options[1].id});
-  expect(forecastReplacementWarnings('bard',valid)[0]).toContain('not established');
+  expect(forecastReplacementWarnings('bard',valid)[0]).toContain('not in the level-one prepared spells');
   expect(validateForecast('bard',valid).length).toBeGreaterThan(0);
  });
  it('recognizes level-one prepared spells as valid replacement ownership',()=>{
