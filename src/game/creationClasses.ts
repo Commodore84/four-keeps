@@ -99,8 +99,8 @@ export function spellcastingAtLevel(classId:string,level:number):SpellcastingPro
  const ability=spellAbility[classId];
  const cantrips=cantripProgression[classId]?.[Math.min(level,10)-1]??null;
  if(classId==='warlock')return {ability,kind:'pact',slots:[warlockSlots[level]],cantrips,preparedSpells:preparedSpellsAtLevel(classId,level)};
- if(fullCasters.has(classId))return {ability,kind:'full',slots:FULL_CASTER_SLOTS[level],cantrips,preparedSpells:null};
- return {ability,kind:'half',slots:HALF_CASTER_SLOTS[level],cantrips:null,preparedSpells:null};
+ if(fullCasters.has(classId))return {ability,kind:'full',slots:FULL_CASTER_SLOTS[level],cantrips,preparedSpells:preparedSpellsAtLevel(classId,level)};
+ return {ability,kind:'half',slots:HALF_CASTER_SLOTS[level],cantrips:null,preparedSpells:preparedSpellsAtLevel(classId,level)};
 }
 export function validateClassAgainstBackground(classId:string|undefined,selections:ChoiceSelections,backgroundSkills:readonly string[]):string[]{
  const errors=validateClass(classId,selections);
