@@ -281,6 +281,23 @@ export function resolveCompanionDeathSave(campaign:Campaign,actorId:string,roll:
  return save(campaign,{...battle,participants:{...battle.participants,[actorId]:{...actor,hp,deathSaves:hp>0?undefined:deathSaves,conditions:hp>0?actor.conditions.filter(c=>c!=='Unconscious'):actor.conditions}},log:[...battle.log,actorId+' death save '+roll+': '+(hp>0?'regained 1 HP':dead?'dead':stable?'stable':deathSaves.successes+' successes, '+deathSaves.failures+' failures')]});
 }
 /** DM-recorded healing resets death saves on regaining HP, never writes to legacy combat. */
+/** 2024 stabilize: a creature at zero HP becomes stable without healing.
+ * Damage breaks stability; healing restores consciousness as normal.
+ */
+export function stabilizeCompanion(campaign:Campaign,actorId:string):Campaign{
+ const battle=encounter(campaign),actor=battle.participants[actorId];
+ if(!actor||actor.actorKind==='enemy'||actor.hp!==0||actor.deathSaves?.dead)throw Error('Cannot stabilize this actor');
+ if(actor.deathSaves?.stable)throw Error('Actor is already stable');
+ return save(campaign,{...battle,participants:{...battle.participants,[actorId]:{...actor,deathSaves:{successes:0,failures:0,stable:true,dead:false},conditions:[...new Set([...actor.conditions,'Unconscious' as const])]}},log:[...battle.log,actorId+' stabilized at 0 HP']});
+}
+/** A stable creature can regain 1 HP after 1d4 hours; the DM supplies the
+ * elapsed hours and actual 1d4 result rather than an invented roll.
+ */
+export function recoverStableCompanion(campaign:Campaign,actorId:string,elapsedHours:number,recoveryD4:number):Campaign{
+ const battle=encounter(campaign),actor=battle.participants[actorId];
+ if(!actor||actor.hp!==0||!actor.deathSaves?.stable||actor.deathSaves.dead||!Number.isInteger(recoveryD4)||recoveryD4<1||recoveryD4>4||!Number.isFinite(elapsedHours)||elapsedHours<recoveryD4)throw Error('Stable recovery requirements not met');
+ return healCompanion(campaign,actorId,1);
+}
 export function healCompanion(campaign:Campaign,actorId:string,amount:number):Campaign{
  const battle=encounter(campaign),actor=battle.participants[actorId];
  if(!actor||!Number.isInteger(amount)||amount<1||amount>1000||actor.deathSaves?.dead)throw Error('Invalid healing');
