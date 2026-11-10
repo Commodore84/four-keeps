@@ -156,3 +156,23 @@ test('wizard spellbook and prepared choices persist after reload', async ({page}
  await page.getByRole('button',{name:/Spell Browser Hero/}).click();
  await expect(page.getByText('Level-one spell choices valid and saved.')).toBeVisible();
 });
+
+test('point buy begins at eight and blocks overspending',async ({page})=>{
+ const now='2026-11-10T00:00:00.000Z';
+ const draft={schemaVersion:1,id:'pointbuy-browser-test',status:'draft',rules:{edition:'2024',allowCompatibleLegacy:true},step:'abilities',identity:{name:'Point Buy Hero',pronouns:'',appearance:'',personality:'',backstory:'',portrait:null},selections:{speciesId:'human',backgroundId:'farmer',classId:'fighter',classChoices:{}},createdAt:now,updatedAt:now};
+ await page.addInitScript(value=>{if(!localStorage.getItem('four-keeps-character-drafts-v1'))localStorage.setItem('four-keeps-character-drafts-v1',JSON.stringify([value]));},draft);
+ await page.goto('/four-keeps/');
+ await page.getByRole('button',{name:'My Characters'}).click();
+ await page.getByRole('button',{name:/Point Buy Hero/}).click();
+ await page.getByRole('button',{name:'Point Buy'}).click();
+ await expect(page.getByText(/Points remaining:/)).toContainText('27 / 27');
+ for(const ability of ['Str','Dex','Con'])for(let i=0;i<7;i++)await page.getByRole('button',{name:'Increase '+ability}).click();
+ await expect(page.getByText(/Points remaining:/)).toContainText('0 / 27');
+ await expect(page.getByRole('button',{name:'Increase Int'})).toBeDisabled();
+ await page.getByRole('button',{name:'Decrease Str'}).click();
+ await expect(page.getByText(/Points remaining:/)).toContainText('2 / 27');
+ await page.reload();
+ await page.getByRole('button',{name:'My Characters'}).click();
+ await page.getByRole('button',{name:/Point Buy Hero/}).click();
+ await expect(page.getByText(/Points remaining:/)).toContainText('2 / 27');
+});
