@@ -123,3 +123,13 @@ test('level-six Fiend forecast displays Charisma-based Dark One’s Own Luck use
  await page.getByRole('button',{name:/Fiend Luck Warlock/}).click();
  await expect(page.getByLabel('Level 6 projected character sheet')).toContainText('Dark One’s Own Luck');
 });
+
+test('Devotion forecast labels level-seven charm immunity without claiming live combat enforcement',async({page})=>{
+ await page.goto('/four-keeps/');
+ await page.evaluate(()=>localStorage.setItem('four-keeps-character-drafts-v1',JSON.stringify([{schemaVersion:1,id:'devotion-aura',status:'draft',rules:{edition:'2024',allowCompatibleLegacy:false},identity:{name:'Devotion Aura Paladin'},selections:{classId:'paladin'},step:'forecast',forecast:{targetLevel:7,levels:[{level:3,subclassId:'paladin-devotion'}]},createdAt:'2026-11-10T00:00:00.000Z',updatedAt:'2026-11-10T00:00:00.000Z'}])));
+ await page.reload();
+ await page.getByRole('button',{name:'My Characters'}).click();
+ await page.getByRole('button',{name:/Devotion Aura Paladin/}).click();
+ await expect(page.getByLabel('Level 7 projected character sheet')).toContainText('Condition immunity: Charmed');
+ await expect(page.getByLabel('Level 6 projected character sheet')).not.toContainText('Condition immunity: Charmed');
+});
