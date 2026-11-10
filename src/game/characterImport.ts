@@ -6,7 +6,7 @@ import {ITEM_BY_ID} from './creationEquipment';
 import {SPELL_BY_ID} from './creationMagic';
 const skillNames=new Set<Skill>(['Acrobatics','Animal Handling','Arcana','Athletics','Deception','History','Insight','Intimidation','Investigation','Medicine','Nature','Perception','Performance','Persuasion','Religion','Sleight of Hand','Stealth','Survival']);
 const lower=(value:string)=>value.toLowerCase() as keyof CharacterStats['scores'];
-export function campaignFromCharacterDraft(draft:CharacterDraft,title:string,id=crypto.randomUUID(),now=new Date().toISOString()):Campaign{
+export function campaignFromCharacterDraft(draft:CharacterDraft,title:string,id:string=crypto.randomUUID(),now=new Date().toISOString()):Campaign{
  if(draft.schemaVersion!==1||draft.status!=='draft'||draft.rules.edition!=='2024')throw Error('Unsupported character draft');
  const errors=reviewErrors(draft);
  if(errors.length)throw Error('Character is incomplete: '+errors.join(' '));
