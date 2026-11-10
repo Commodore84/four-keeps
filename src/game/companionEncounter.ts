@@ -210,12 +210,18 @@ export function endCompanionTurn(campaign:Campaign,actorId:string):Campaign{
 /** 2024 death saves are tracked independently of campaign.character and legacy combat.
  * Natural 20 restores 1 HP; natural 1 causes two failures; other rolls use DC 10.
  */
-function damagedActor(actor:CompanionEncounter['participants'][string],taken:number):CompanionEncounter['participants'][string]{
+/** Zero-HP damage follows 2024 death-save failures and massive-damage rules.
+ * Damage totals are DM-rolled; a critical hit at zero HP causes two failed saves.
+ */
+function damagedActor(actor:CompanionEncounter['participants'][string],taken:number,critical=false):CompanionEncounter['participants'][string]{
  const hp=Math.max(0,actor.hp-taken);
  if(hp>0||actor.actorKind==='enemy')return {...actor,hp,concentratingOn:hp===0?undefined:actor.concentratingOn};
  const previous=actor.deathSaves;
- const failures=Math.min(3,(previous?.failures??0)+(actor.hp===0&&taken>0?1:0));
- return {...actor,hp,concentratingOn:undefined,conditions:[...new Set([...actor.conditions,'Unconscious' as const])],deathSaves:{successes:previous?.successes??0,failures,stable:false,dead:previous?.dead===true||failures===3}};
+ const excess=Math.max(0,taken-actor.hp);
+ const instantDeath=taken>0&&excess>=actor.maxHp;
+ const failures=Math.min(3,(previous?.failures??0)+(actor.hp===0&&taken>0?(critical?2:1):0));
+ const dead=previous?.dead===true||instantDeath||failures>=3;
+ return {...actor,hp,concentratingOn:undefined,conditions:[...new Set([...actor.conditions,'Unconscious' as const])],deathSaves:{successes:previous?.successes??0,failures,stable:!dead&&taken===0&&(previous?.stable??false),dead}};
 }
 export function resolveCompanionDeathSave(campaign:Campaign,actorId:string,roll:number):Campaign{
  const battle=activeActor(campaign,actorId),actor=battle.participants[actorId];
@@ -241,9 +247,9 @@ export function damageCompanion(campaign:Campaign,targetId:string,amount:number,
  const taken=(targetId==='nighthawk'&&battle.mode==='unified')||actor.actorKind==='enemy'?amount:adjudicateSubclassActorDamage(campaign,targetId,amount,type);
  const hp=Math.max(0,actor.hp-taken);
  const existing=actor.deathSaves;
- const deathSaves=actor.actorKind==='enemy'?undefined:hp===0?{successes:existing?.successes??0,failures:Math.min(3,(existing?.failures??0)+(actor.hp===0&&taken>0?1:0)),stable:false,dead:(existing?.dead??false)||(actor.hp===0&&taken>0&&(existing?.failures??0)+1>=3)}:undefined;
+ const updated=damagedActor(actor,taken);
  const concentrationNote=actor.concentratingOn&&taken>0?' Concentration save required (DC '+companionConcentrationSaveDC(taken)+')'+(hp===0?'; concentration ends at 0 HP':''):'';
- return save(campaign,{...battle,participants:{...battle.participants,[targetId]:{...actor,hp,concentratingOn:hp===0?undefined:actor.concentratingOn,deathSaves,conditions:hp===0&&actor.actorKind!=='enemy'?[...new Set([...actor.conditions,'Unconscious' as const])]:actor.conditions}},log:[...battle.log,targetId+' took '+taken+' '+type+' damage'+(taken!==amount?' (resisted)':'')+concentrationNote]});
+ return save(campaign,{...battle,participants:{...battle.participants,[targetId]:updated},log:[...battle.log,targetId+' took '+taken+' '+type+' damage'+(taken!==amount?' (resisted)':'')+concentrationNote]});
 }
 export function conditionCompanion(campaign:Campaign,targetId:string,condition:'Charmed'|'Poisoned',auraSourceId?:string):Campaign{
  const battle=encounter(campaign),actor=battle.participants[targetId];
@@ -470,7 +476,7 @@ export function attackCompanion(campaign:Campaign,attackerId:string,targetId:str
   // Caller supplies total rolled damage dice, including doubled dice on a critical hit.
   const raw=Math.max(0,damageRoll+damageModifier);
   dealt=(targetId==='nighthawk'&&battle.mode==='unified')||target.actorKind==='enemy'?raw:adjudicateSubclassActorDamage(campaign,targetId,raw,damageType);
-  participants[targetId]=damagedActor(target,dealt);
+  participants[targetId]=damagedActor(target,dealt,critical);
  }
  return save(campaign,{...battle,participants,log:[...battle.log,attackerId+' attack d20 '+effectiveRoll+(target.dodging?' (Dodge disadvantage)':'')+(critical?' critical hit':hit?' hit':' miss')+' vs '+targetId+' AC '+targetAC+(hit?'; '+dealt+' '+damageType+' damage':'')]});
 }
