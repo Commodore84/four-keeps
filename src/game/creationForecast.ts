@@ -81,7 +81,7 @@ export function forecastSpellSelectionWarnings(classId:string,forecast:Advanceme
  if(previous.includes(spellId))return [];
  const selected=previous.map(id=>[...SPELLS,...HIGHER_LEVEL_FORECAST_SPELLS].find(item=>item.id===id)).filter((item):item is NonNullable<typeof item>=>Boolean(item));
  if(classId==='warlock'&&spell.level>=6&&selected.some(item=>item.level===spell.level))return ['Level '+level+': only one Mystic Arcanum spell of level '+spell.level+' may be selected.'];
- if(classId!=='wizard'&&spell.level>0&&spell.level<=5){
+ if(preparedSpellsAtLevel(classId,level)!==null&&classId!=='wizard'&&spell.level>0&&spell.level<=5){
   const cap=Math.max(0,(preparedSpellsAtLevel(classId,level)??0)-(preparedSpellsAtLevel(classId,level-1)??0));
   if(selected.filter(item=>item.level>0&&item.level<=5).length>=cap)return ['Level '+level+': no additional prepared-spell choices are gained at this level (limit '+cap+').'];
  }
