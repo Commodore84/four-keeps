@@ -1,3 +1,4 @@
+import type {CompanionEncounter} from './companionEncounter';
 import {finishSubclassRest,resolveSubclassDamage,canApplyCondition,selectFiendResistance,spendDarkOnesOwnLuck,type SubclassCombatState,type DamageType,type Terrain} from './subclassCombatRules';
 import { prototypeNighthawk, abilityModifier, type CharacterStats, type Skill, skillAbility } from './checks';
 import { emptyWorld, mergeWorld, normalizeWorld, type WorldState } from './world';
