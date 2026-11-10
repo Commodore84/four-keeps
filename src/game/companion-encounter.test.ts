@@ -16,7 +16,7 @@ describe('isolated companion encounter vertical slice',()=>{
   let c=start();
   expect(()=>setCompanionObstacles(c,[{x:0,y:0}])).toThrow('overlaps');
   c=setCompanionObstacles(c,[{x:0,y:1},{x:1,y:1},{x:2,y:1}]);
-  expect(()=>moveCompanion(c,'paladin',0,2)).toThrow('remaining movement');
+  expect(()=>moveCompanion(c,'paladin',0,2)).toThrow('No unobstructed path');
   expect(c.companionEncounter?.participants.paladin.movementSpentFeet).toBe(0);
   expect(c.combat).toEqual(start().combat);
  });
