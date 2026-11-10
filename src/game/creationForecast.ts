@@ -39,12 +39,12 @@ export function forecastForClass(classId:string,forecast:AdvancementForecast){
   return {level,plan,features,subclass,subclassChoices:level===3?subclassesForClass(classId):[],abilityImprovement:(classId==='fighter'?[4,6,8,12,14,16]:classId==='rogue'?[4,8,10,12,16]:[4,8,12,16]).includes(level)};
  });
 }
-export function validateForecast(classId:string,forecast:AdvancementForecast):string[]{
+export function validateForecast(classId:string,forecast:AdvancementForecast,initialPreparedSpellIds:readonly string[]=[]):string[]{
  if(!Number.isInteger(forecast.targetLevel)||forecast.targetLevel<1||forecast.targetLevel>LEVEL_CAP)return ['Forecast level must be between 1 and 20.'];
  const options=subclassesForClass(classId);
  const subclassId=plannedLevel(forecast,3).subclassId;
  const errors=subclassId&&!options.some(s=>s.id===subclassId)?['Planned subclass does not belong to the current class.']:[];
- return [...errors,...forecastSpellWarnings(classId,forecast),...forecastReplacementWarnings(classId,forecast)];
+ return [...errors,...forecastSpellWarnings(classId,forecast),...forecastReplacementWarnings(classId,forecast,initialPreparedSpellIds)];
 }
 
 /** Curated, incomplete spell catalog. Forecast selections are not prepared spells. */
@@ -106,7 +106,7 @@ export function forecastSpellWarnings(classId:string,forecast:AdvancementForecas
 }
 
 /** Replacement intent is recorded independently; it never mutates prepared spells. */
-export function forecastReplacementWarnings(classId:string,forecast:AdvancementForecast):string[]{
+export function forecastReplacementWarnings(classId:string,forecast:AdvancementForecast,initialPreparedSpellIds:readonly string[]=[]):string[]{
  const policy=forecastSpellPolicy(classId);
  const warnings:string[]=[];
  for(const plan of forecast.levels){
@@ -119,7 +119,7 @@ export function forecastReplacementWarnings(classId:string,forecast:AdvancementF
   const options=forecastSpellOptions(classId,subclassId,plan.level);
   if(!options.some(spell=>spell.id===to&&spell.level>0))warnings.push('Level '+plan.level+': replacement spell is not eligible for this class and level.');
   if(![...SPELLS,...HIGHER_LEVEL_FORECAST_SPELLS].some(spell=>spell.id===from))warnings.push('Level '+plan.level+': original spell is not in the curated catalog.');
-  if(!forecast.levels.some(p=>p.level<plan.level&&(p.plannedSpellIds??[]).includes(from)))warnings.push('Level '+plan.level+': original spell is not established by an earlier forecast choice; level-one prepared spells are not yet linked.');
+  if(!initialPreparedSpellIds.includes(from)&&!forecast.levels.some(p=>p.level<plan.level&&(p.plannedSpellIds??[]).includes(from)))warnings.push('Level '+plan.level+': original spell is not in the level-one prepared spells or earlier forecast selections.');
  }
  return warnings;
 }
