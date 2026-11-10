@@ -112,7 +112,7 @@ export function forecastReplacementWarnings(classId:string,forecast:AdvancementF
  for(const plan of forecast.levels){
   const from=plan.replacementSpellId,to=plan.replacementWithSpellId;
   if(!from&&!to)continue;
-  if(!policy){warnings.push('Level '+plan.level+': this class has no supported forecast spell-replacement operation.');continue;}
+  if(!policy||classId==='wizard'){warnings.push('Level '+plan.level+': Wizard spellbook preparation changes are handled after a Long Rest, not by this level-up replacement planner.');continue;}
   if(!from||!to){warnings.push('Level '+plan.level+': choose both the spell to replace and its replacement.');continue;}
   if(from===to){warnings.push('Level '+plan.level+': replacement must be a different spell.');continue;}
   const subclassId=plannedLevel(forecast,3).subclassId;
