@@ -1,0 +1,37 @@
+import {describe,it,expect} from 'vitest';
+import {createCharacterDraft} from '../app/CharacterCreator';
+import {reviewErrors} from './creationReview';
+import {campaignFromCharacterDraft,characterDraftImportOptions} from './characterImport';
+import {beginAdventureSession} from './adventureSession';
+import {isCampaign,newCampaign} from './campaign';
+function validRogue(){
+ const d=createCharacterDraft();
+ d.identity.name='Raven';
+ d.identity.backstory='A scholar from the borderlands';
+ d.selections.speciesId='elf';d.selections.lineageId='wood-elf';d.selections.backgroundId='sage';d.selections.classId='rogue';
+ d.selections.classChoices={'class-skills':['Stealth','Perception','Acrobatics','Investigation'],'expertise':['Stealth','Perception'],'weapon-mastery':['Dagger','Shortbow']};
+ d.selections.abilities={method:'standard',base:{Str:8,Dex:15,Con:14,Int:13,Wis:12,Cha:10},bonusMode:'two-one',bonuses:{Int:2,Dex:1},rolls:[],rollDice:[]};
+ d.selections.equipment={classPackage:0,backgroundPackage:0,purchases:{},equipped:{weapons:[]}};
+ return d;
+}
+describe('validated character draft to campaign import',()=>{
+ it('rejects incomplete and invalid drafts without creating campaigns',()=>{
+  const d=createCharacterDraft();
+  expect(characterDraftImportOptions([d])[0].valid).toBe(false);
+  expect(()=>campaignFromCharacterDraft(d,'New Campaign')).toThrow('incomplete');
+  expect(newCampaign('Legacy').characterIdentity).toBeUndefined();
+ });
+ it('imports a fully reviewed character with identity, stats and equipment',()=>{
+  const d=validRogue();
+  expect(reviewErrors(d)).toEqual([]);
+  const c=campaignFromCharacterDraft(d,'Raven adventure','raven-campaign','2026-11-10T00:00:00.000Z');
+  expect(c.characterIdentity).toMatchObject({name:'Raven',classId:'rogue',speciesId:'elf',lineageId:'wood-elf',draftId:d.id});
+  expect(c.character).toMatchObject({scores:{str:8,dex:16,con:14,int:15,wis:12,cha:10},level:1,maxHitPoints:10,currentHitPoints:10,speed:35,proficiencyBonus:2});
+  expect(c.character?.proficientSkills).toContain('Stealth');
+  expect(c.combat).toBeUndefined();
+  expect(c.journal[0].text).toContain('Raven');
+  expect(isCampaign(c)).toBe(true);
+  expect(JSON.parse(JSON.stringify(c)).characterIdentity.name).toBe('Raven');
+  expect(beginAdventureSession(c).characterIdentity?.name).toBe('Raven');
+ });
+});
