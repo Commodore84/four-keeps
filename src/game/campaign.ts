@@ -10,6 +10,7 @@ export interface Campaign {
   subclassActors?:Record<string,SubclassCombatState>;
   companionEncounter?:CompanionEncounter;
   adventureSession?:AdventureSession;
+  characterIdentity?:{name:string;speciesId:string;lineageId?:string;backgroundId:string;classId:string;draftId:string;pronouns:string;appearance:string;personality:string;backstory:string};
   /** Explicitly verified equipped items from the shared equipment catalog; distinct from carried inventory. */
   encounterLoadout?:{weaponId?:string;armorId?:string;shieldId?:string};
   id: string;
