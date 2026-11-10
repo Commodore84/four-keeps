@@ -1,7 +1,7 @@
 import {describe,it,expect} from 'vitest';
 import {SPECIES,BACKGROUNDS} from './creationOrigins';
 import {CLASSES,classChoices} from './creationClasses';
-import {SPECIES_TRAITS,LINEAGE_DETAILS,ORIGIN_FEATS,CLASS_OVERVIEW,CLASS_FEATURE_DETAILS,CHOICE_DETAILS,SKILL_DETAILS,choiceExplanation} from './creationRulesGuide';
+import {SPECIES_TRAITS,LINEAGE_DETAILS,ORIGIN_FEATS,CLASS_OVERVIEW,CHOICE_DETAILS,SKILL_DETAILS,choiceExplanation} from './creationRulesGuide';
 describe('character creation rules guide coverage',()=>{
  it('explains every 2024 species trait and lineage',()=>{for(const species of SPECIES){for(const trait of species.traits)expect(SPECIES_TRAITS[trait]?.length,trait).toBeGreaterThan(30);for(const lineage of species.lineages??[])expect(LINEAGE_DETAILS[lineage.id]?.length,lineage.id).toBeGreaterThan(70)}});
  it('explains every origin feat and background skill',()=>{for(const bg of BACKGROUNDS){expect(ORIGIN_FEATS[bg.feat]?.length,bg.feat).toBeGreaterThan(80);for(const skill of bg.skills)expect(SKILL_DETAILS[skill]?.length,skill).toBeGreaterThan(25)}});
