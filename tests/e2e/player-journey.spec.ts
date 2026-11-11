@@ -19,8 +19,9 @@ test('fighter creation to adventure, NPC, combat, rewards, save and resume',asyn
  await page.getByRole('button',{name:'Player',exact:true}).click();
  await expect(page.getByLabel('Imported player character')).toContainText('Fighter');
  await expect(page.getByText('Review provisional ability scores',{exact:true})).toHaveCount(0);
+ await page.getByRole('button',{name:'Dev',exact:true}).click();
  const manager=page.getByLabel('Subclass actor manager');await manager.getByLabel('New subclass actor ID').fill('ally');await manager.getByRole('button',{name:'Register subclass actor'}).click();
- await page.getByRole('button',{name:'Adventure',exact:true}).click();
+ await page.getByRole('button',{name:'Dev',exact:true}).click();
  const session=page.getByLabel('Adventure session',{exact:true});
  await session.getByRole('button',{name:'Start frontier adventure'}).click();await session.getByRole('button',{name:'Speak with the watchkeeper'}).click();
  await session.getByRole('button',{name:'Travel to Old Crossroads'}).click();await session.getByRole('button',{name:'Travel to Old Watchtower'}).click();
@@ -33,7 +34,7 @@ test('fighter creation to adventure, NPC, combat, rewards, save and resume',asyn
  await session.getByRole('button',{name:'Finish companion encounter'}).click();
  await session.getByLabel('Encounter reward XP').fill('75');await session.getByLabel('Encounter reward gold').fill('12');await session.getByLabel('Encounter reward item',{exact:true}).fill('Tower token');
  await session.getByRole('button',{name:'Save encounter rewards'}).click();await expect(session).toContainText('Rewards saved: 75 XP');
- await page.reload();await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await page.reload();await page.getByRole('button',{name:'Continue Adventure'}).click();await page.getByRole('button',{name:'Dev',exact:true}).click();
  await expect(session).toContainText('Rewards saved: 75 XP');await expect(session.getByRole('button',{name:'Save encounter rewards'})).toHaveCount(0);
  await session.getByRole('button',{name:'Resume exploration after encounter'}).click();await expect(session.getByLabel('Adventure session status')).toContainText('exploring');
  await page.getByRole('button',{name:'Player',exact:true}).click();await expect(page.getByLabel('Imported player character')).toContainText('75 XP');await expect(page.getByLabel('Combat and vital statistics')).toContainText('HP 9/12');await expect(page.getByLabel('Player class resources')).toContainText('Second Wind: 1/2');await expect(page.getByLabel('Equipment and inventory')).toContainText('Tower token ×1');
