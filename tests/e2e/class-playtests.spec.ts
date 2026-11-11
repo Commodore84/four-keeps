@@ -49,7 +49,7 @@ for(const id of ['fighter','rogue','cleric','wizard'] as const)test(id+' complet
  await quick.getByRole('checkbox').check();await quick.getByRole('button',{name:'Start verified encounter'}).click();const battle=session.getByLabel('Companion encounter',{exact:true});
  await expect(battle.getByLabel('Verified equipped combat calculations')).toContainText(config[id].weapon);expect((await saved(page)).subclassActors).toBeUndefined();
  if(id==='fighter')await battle.getByRole('button',{name:/Spend Second Wind/}).click();
- if(id==='rogue'){await battle.getByLabel('Nighthawk campaign item',{exact:true}).selectOption('daggers');await battle.getByLabel('Campaign item quantity',{exact:true}).fill('1');await battle.getByRole('button',{name:'Spend campaign inventory'}).click();}
+ if(id==='rogue'){await battle.getByLabel('Character campaign item',{exact:true}).selectOption('daggers');await battle.getByLabel('Campaign item quantity',{exact:true}).fill('1');await battle.getByRole('button',{name:'Spend campaign inventory'}).click();}
  if(id==='cleric'){
   await battle.getByRole('button',{name:'Cast origin spell without a slot'}).click();await expect(battle.getByLabel('Unified spell slots')).toContainText('2 remaining');
   await battle.getByRole('button',{name:'End companion turn'}).click();await battle.getByRole('button',{name:'End companion turn'}).click();
@@ -115,4 +115,91 @@ test('AI-led opening, world memory and saved pending action retry survive reload
  expect(final.pendingAdventureAction).toBeUndefined();
  expect(final.journal.filter((e:any)=>e.id===pendingId+'-player')).toHaveLength(1);
  expect(final.world.clues[0].evidence).toBe('reported');
+});
+
+
+test('newly created fighter completes organic AI encounter, saves rewards and resumes AI exploration',async({page})=>{
+ test.setTimeout(90000);
+ const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));
+ await createAndImport(page,'fighter');
+ const original=await saved(page);
+ expect(original.characterIdentity.name).toBe('fighter Hero');
+ await page.evaluate(()=>{localStorage.setItem('four-keeps-access-code','browser-test-code');localStorage.setItem('four-keeps-dm-mode','on');});
+ await page.reload();await page.getByRole('button',{name:'Continue Adventure'}).click();
+ const calls:any[]=[];
+ await page.route('**/api/dm',async route=>{
+  const request=route.request().postDataJSON();calls.push(request);
+  const opening=request.opening;
+  const combat=!opening && request.message.includes('approach the bridge');
+  await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({
+   narration:opening?'The old bridge is watched by the town guard.':combat?'A highway robber draws a sword and attacks.':'The guard acknowledges your return and the bridge is safe.',
+   combatStart:combat?{enemyName:'Highway robber'}:null,newFacts:combat?['A highway robber attacked the bridge']:['The bridge is safe after the battle'],
+   worldUpdates:combat?{clues:[{text:'A robber attacked the bridge',evidence:'confirmed',source:'Fighter'}]}:{quests:[{title:'Secure the bridge',status:'completed',objective:'Defeat the robber',notes:['The bridge is safe']}]}
+  })});
+ });
+ await page.getByRole('button',{name:'Begin AI-led adventure'}).click();
+ await expect(page.getByLabel('Adventure',{exact:true})).toContainText('The old bridge');
+ await page.getByLabel('Message the Dungeon Master').fill('I approach the bridge cautiously.');
+ await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
+ await expect(page.getByText('Opponent: Highway robber',{exact:false})).toBeVisible();
+ await expect(page.getByRole('button',{name:'Send message to Dungeon Master'})).toBeDisabled();
+ await page.reload();await page.getByRole('button',{name:'Continue Adventure'}).click();
+ const before=await saved(page);
+ expect(before.adventureSession.pendingEncounter.enemyName).toBe('Highway robber');
+ expect(before.location).toBe(original.location);
+ expect(before.characterBuild).toEqual(original.characterBuild);
+ await page.getByLabel('Quick player initiative').fill('18');
+ await page.getByLabel('Quick enemy initiative').fill('12');
+ await page.getByLabel('Quick enemy hp').fill('10');
+ await page.getByLabel('Quick enemy ac').fill('12');
+ await page.getByLabel('Quick enemy attack bonus').fill('3');
+ await page.getByLabel('Quick enemy damage bonus').fill('1');
+ await page.getByLabel('Quick enemy damage dice').fill('1d6');
+ await page.getByRole('checkbox',{name:/DM confirms this encounter/i}).check();
+ await page.getByRole('button',{name:'Start verified encounter'}).click();
+ const session=page.getByLabel('Adventure session',{exact:true});
+ await expect(session.getByLabel('Adventure session status')).toContainText('fighter Hero');
+ const battle=session.getByLabel('Companion encounter');
+ await expect(battle).toContainText('fighter Hero');
+ await expect(page.getByRole('button',{name:'Send message to Dungeon Master'})).toBeDisabled();
+ await battle.getByRole('button',{name:/Spend Second Wind/}).click();
+ await battle.getByLabel('Companion target',{exact:true}).selectOption('nighthawk');
+ await battle.getByLabel('Companion damage',{exact:true}).fill('3');
+ await battle.getByRole('button',{name:'Apply damage',exact:true}).click();
+ await battle.getByRole('button',{name:'Finish companion encounter'}).click();
+ await session.getByLabel('Encounter reward XP').fill('45');
+ await session.getByLabel('Encounter reward gold').fill('7');
+ await session.getByLabel('Encounter reward item',{exact:true}).fill('Bridge token');
+ await session.getByRole('button',{name:'Save encounter rewards'}).click();
+ await expect(session).toContainText('Rewards saved: 45 XP');
+ await page.reload();await page.getByRole('button',{name:'Continue Adventure'}).click();
+ const afterBattle=await saved(page);
+ expect(afterBattle.character.currentHitPoints).toBe(config.fighter.hp-3);
+ expect(afterBattle.character.resources['Second Wind'].used).toBe(1);
+ expect(afterBattle.inventoryLedger.currency.GP).toBe((original.inventoryLedger?.currency?.GP??0)+7);
+ expect(afterBattle.inventoryLedger.gear).toEqual(expect.arrayContaining([expect.objectContaining({name:'Bridge token',quantity:1})]));
+ expect(afterBattle.characterBuild).toEqual(original.characterBuild);
+ expect(afterBattle.location).toBe(original.location);
+ expect(afterBattle.companionEncounter.settlement.xp).toBe(45);
+ await page.getByLabel('Adventure session',{exact:true}).getByRole('button',{name:'Resume exploration after encounter'}).click();
+ await expect.poll(async()=> (await saved(page)).adventureSession.status).toBe('exploring');
+ await page.getByLabel('Message the Dungeon Master').fill('I return to the guard. What happens next?');
+ await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
+ await expect(page.getByLabel('Adventure',{exact:true})).toContainText('The guard acknowledges your return');
+ const last=await saved(page);
+ expect(last.characterIdentity).toEqual(original.characterIdentity);
+ expect(last.characterBuild).toEqual(original.characterBuild);
+ expect(last.character.currentHitPoints).toBe(config.fighter.hp-3);
+ expect(last.character.resources['Second Wind'].used).toBe(1);
+ expect(last.location).toBe(original.location);
+ expect(last.adventureSession.status).toBe('exploring');
+ expect(last.inventoryLedger.currency.GP).toBe(afterBattle.inventoryLedger.currency.GP);
+ expect(last.companionEncounter.settlement).toEqual(afterBattle.companionEncounter.settlement);
+ expect(last.worldFacts).toContain('A highway robber attacked the bridge');
+ expect(last.worldFacts).toContain('The bridge is safe after the battle');
+ expect(last.world.quests.some((q:any)=>q.title==='Secure the bridge')).toBe(true);
+ expect(calls.at(-1).gameState.characterIdentity.name).toBe('fighter Hero');
+ expect(calls.at(-1).gameState.sharedEncounter.status).toBe('completed');
+ expect(calls.at(-1).gameState.location).toBe(original.location);
+ expect(errors).toEqual([]);
 });

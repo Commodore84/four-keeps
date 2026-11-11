@@ -1,8 +1,11 @@
+import type {Campaign} from './campaign';
 import {describe,it,expect} from 'vitest';
 import {newCampaign,registerSubclassActor} from './campaign';
 import {initialSubclassCombatState} from './subclassCombatRules';
 import {beginAdventureSession,travelAdventure,interactAdventure,enterAdventureEncounter,resumeAdventureExploration,proposeAdventureEncounter,enterSoloAdventureEncounter} from './adventureSession';
-import {finishCompanionEncounter} from './companionEncounter';
+import {finishCompanionEncounter,damageCompanion,spendPlayerResource} from './companionEncounter';
+import {settleEncounterRewards} from './encounterRewards';
+import {prepareAdventureAction,commitAdventureAction} from './adventureOrchestrator';
 describe('persistent adventure session',()=>{
  const base=()=>newCampaign('Frontier Test','adventure-test','2026-11-10T00:00:00.000Z');
  it('starts with the saved character and keeps legacy combat untouched',()=>{
@@ -76,5 +79,38 @@ describe('organic AI combat handoff for an imported character',()=>{
   const c=make();
   expect(proposeAdventureEncounter(c,'  ','action-1')).toBe(c);
   expect(proposeAdventureEncounter(c,'Bandit','')).toBe(c);
+ });
+});
+
+
+describe('organic encounter completion and narrative continuity',()=>{
+ it('synchronizes HP and resources, settles rewards once, and resumes without moving the imported character',()=>{
+  const initial=beginAdventureSession(newCampaign('Continuity','continuity'));
+  const imported:Campaign={...initial,characterIdentity:{name:'Aster',speciesId:'elf',backgroundId:'criminal',classId:'fighter',draftId:'aster-draft',pronouns:'',appearance:'',personality:'',backstory:''},character:{...initial.character!,resources:{'Second Wind':{maximum:2,used:0,recovery:'short'}}}};
+  const proposal=proposeAdventureEncounter(imported,'Bridge robber','action-bridge');
+  const encounter=enterSoloAdventureEncounter(proposal,{playerInitiative:18,enemyInitiative:12,enemyId:'enemy-bridge-robber',hitPoints:10,armorClass:12,attackModifier:3,damageModifier:1,damageDice:'1d6'});
+  const spent=spendPlayerResource(encounter,'Second Wind');
+  const injured=damageCompanion(spent,'nighthawk',3,'Slashing');
+  const completed=finishCompanionEncounter(injured);
+  expect(completed.character?.currentHitPoints).toBe(imported.character!.currentHitPoints!-3);
+  expect(completed.character?.resources?.['Second Wind'].used).toBe(1);
+  expect(()=>resumeAdventureExploration(completed)).toThrow('Record encounter rewards');
+  const settled=settleEncounterRewards(completed,{xp:45,gold:7,items:[{name:'Bridge token',quantity:1}]});
+  expect(()=>settleEncounterRewards(settled,{xp:45,gold:7,items:[]})).toThrow('already recorded');
+  const resumed=resumeAdventureExploration(settled);
+  expect(resumed.location).toBe(imported.location);
+  expect(resumed.characterIdentity).toEqual(imported.characterIdentity);
+  expect(resumed.character?.currentHitPoints).toBe(imported.character!.currentHitPoints!-3);
+  expect(resumed.character?.resources?.['Second Wind'].used).toBe(1);
+  expect(resumed.inventoryLedger?.currency.GP).toBe((imported.inventoryLedger?.currency.GP??0)+7);
+  expect(resumed.adventureSession?.status).toBe('exploring');
+  expect(()=>resumeAdventureExploration(resumed)).toThrow('Finish the linked encounter');
+  const pending=prepareAdventureAction(resumed,'Speak to the guard','after-combat');
+  const narrated=commitAdventureAction(pending,'after-combat','The guard thanks Aster.');
+  expect(narrated.characterIdentity).toEqual(imported.characterIdentity);
+  expect(narrated.location).toBe(imported.location);
+  expect(narrated.companionEncounter?.settlement).toEqual(settled.companionEncounter?.settlement);
+  expect(commitAdventureAction(narrated,'after-combat','A duplicate response')).toBe(narrated);
+  expect(JSON.parse(JSON.stringify(narrated)).adventureSession.status).toBe('exploring');
  });
 });
