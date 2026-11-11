@@ -61,6 +61,13 @@ export function proposeAdventureEncounter(campaign:Campaign,enemyName:unknown,ac
  return {...campaign,updatedAt:now,adventureSession:{...session,pendingEncounter:{enemyName:enemyName.trim(),actionId}}};
 }
 
+/** A player may reject a proposed fight without rewriting the DM's saved narration. */
+export function declineAdventureEncounter(campaign:Campaign,actionId:string,now=new Date().toISOString()):Campaign{
+ const session=campaign.adventureSession;
+ if(!campaign.characterIdentity||!session||session.status!=='exploring'||!session.pendingEncounter||session.pendingEncounter.actionId!==actionId)throw Error('The encounter proposal is no longer pending');
+ return {...campaign,updatedAt:now,adventureSession:{...session,pendingEncounter:undefined},journal:[...campaign.journal,{id:'declined-encounter-'+actionId,kind:'system',createdAt:now,text:'Player declined the proposed combat encounter; exploration continues.'}]};
+}
+
 export function proposedEnemyActorId(name:string):string{
  const slug=name.toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'').slice(0,30).replace(/-+$/,'');
  return 'enemy-'+(slug||'opponent');
@@ -72,6 +79,9 @@ export function enterSoloAdventureEncounter(campaign:Campaign,setup:AdventureEnc
  const session=campaign.adventureSession;
  if(!session||session.status!=='exploring'||(!session.pendingEncounter&&session.site!=='watchtower'))throw Error('A confirmed hostile encounter or watchtower setup is required');
  if(session.pendingEncounter&&setup.enemyId!==proposedEnemyActorId(session.pendingEncounter.enemyName))throw Error('Encounter opponent must match the DM proposal');
+ if(campaign.companionEncounter?.status==='active')throw Error('Finish the active encounter first');
+ if(!Number.isInteger(setup.playerInitiative)||setup.playerInitiative<1||setup.playerInitiative>40||!Number.isInteger(setup.enemyInitiative)||setup.enemyInitiative<1||setup.enemyInitiative>40)throw Error('Enter initiative totals between 1 and 40');
+ if(!setup.enemyId.trim()||!Number.isInteger(setup.hitPoints)||setup.hitPoints<1||setup.hitPoints>500||!Number.isInteger(setup.armorClass)||setup.armorClass<1||setup.armorClass>40||!Number.isInteger(setup.attackModifier)||setup.attackModifier< -20||setup.attackModifier>30||!Number.isInteger(setup.damageModifier)||setup.damageModifier< -20||setup.damageModifier>30||!/^\d{1,2}d\d{1,3}(?:\s+[a-z]+)?$/i.test(setup.damageDice.trim()))throw Error('Enter verified enemy statistics and damage dice (for example, 1d6)');
  const started=startUnifiedEncounter(campaign,{nighthawk:setup.playerInitiative},{nighthawk:{x:1,y:1}},{});
  const next=addCompanionEnemy(started,setup.enemyId,setup.enemyInitiative,{x:2,y:1},setup.hitPoints,setup.armorClass,setup.attackModifier,30,5,setup.damageModifier,setup.damageDice);
  return {...next,updatedAt:now,adventureSession:{...session,status:'encounter',pendingEncounter:undefined,encounterActorId:setup.enemyId},journal:[...next.journal,{id:crypto.randomUUID(),kind:'system',createdAt:now,text:'DM-confirmed encounter started with the saved player and '+setup.enemyId+'.'}]};

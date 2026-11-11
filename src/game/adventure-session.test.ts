@@ -2,7 +2,7 @@ import type {Campaign} from './campaign';
 import {describe,it,expect} from 'vitest';
 import {newCampaign,registerSubclassActor} from './campaign';
 import {initialSubclassCombatState} from './subclassCombatRules';
-import {beginAdventureSession,travelAdventure,interactAdventure,enterAdventureEncounter,resumeAdventureExploration,proposeAdventureEncounter,enterSoloAdventureEncounter} from './adventureSession';
+import {beginAdventureSession,travelAdventure,interactAdventure,enterAdventureEncounter,resumeAdventureExploration,proposeAdventureEncounter,declineAdventureEncounter,enterSoloAdventureEncounter} from './adventureSession';
 import {finishCompanionEncounter,damageCompanion,spendPlayerResource} from './companionEncounter';
 import {settleEncounterRewards} from './encounterRewards';
 import {prepareAdventureAction,commitAdventureAction} from './adventureOrchestrator';
@@ -112,5 +112,34 @@ describe('organic encounter completion and narrative continuity',()=>{
   expect(narrated.companionEncounter?.settlement).toEqual(settled.companionEncounter?.settlement);
   expect(commitAdventureAction(narrated,'after-combat','A duplicate response')).toBe(narrated);
   expect(JSON.parse(JSON.stringify(narrated)).adventureSession.status).toBe('exploring');
+ });
+});
+
+describe('organic encounter retry and rejection safety',()=>{
+ const character=()=>({...beginAdventureSession(newCampaign('Encounter safety','encounter-safety')),characterIdentity:{name:'Raven',speciesId:'elf',backgroundId:'criminal',classId:'rogue',draftId:'raven',pronouns:'',appearance:'',personality:'',backstory:''}});
+ const stats={playerInitiative:18,enemyInitiative:12,enemyId:'enemy-road-bandit',hitPoints:11,armorClass:12,attackModifier:3,damageModifier:1,damageDice:'1d6'};
+ it('declines a false positive without changing HP, location or world facts and rejects stale actions',()=>{
+  const start=character(),pending=proposeAdventureEncounter(start,'Road bandit','action-1');
+  expect(()=>declineAdventureEncounter(pending,'stale-action')).toThrow('no longer pending');
+  const declined=declineAdventureEncounter(pending,'action-1');
+  expect(declined.adventureSession?.pendingEncounter).toBeUndefined();
+  expect(declined.character).toEqual(start.character);
+  expect(declined.location).toBe(start.location);
+  expect(declined.world).toEqual(start.world);
+  expect(declined.journal.at(-1)?.id).toBe('declined-encounter-action-1');
+  expect(()=>declineAdventureEncounter(declined,'action-1')).toThrow('no longer pending');
+  expect(()=>enterSoloAdventureEncounter(declined,stats)).toThrow('required');
+  const next=proposeAdventureEncounter(declined,'Road bandit','action-2');
+  expect(next.adventureSession?.pendingEncounter?.actionId).toBe('action-2');
+  expect(JSON.parse(JSON.stringify(declined)).adventureSession.status).toBe('exploring');
+ });
+ it('does not mutate the proposal or launch combat for invalid initiative and enemy statistics',()=>{
+  const pending=proposeAdventureEncounter(character(),'Road bandit','action-1');
+  for(const change of [{playerInitiative:0},{enemyInitiative:41},{hitPoints:0},{armorClass:41},{attackModifier:100},{damageModifier:-30},{damageDice:'unknown'}]){
+   expect(()=>enterSoloAdventureEncounter(pending,{...stats,...change})).toThrow();
+   expect(pending.companionEncounter).toBeUndefined();
+   expect(pending.adventureSession?.pendingEncounter?.actionId).toBe('action-1');
+  }
+  expect(enterSoloAdventureEncounter(pending,stats).adventureSession?.status).toBe('encounter');
  });
 });

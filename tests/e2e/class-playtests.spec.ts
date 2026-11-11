@@ -203,3 +203,38 @@ test('newly created fighter completes organic AI encounter, saves rewards and re
  expect(calls.at(-1).gameState.location).toBe(original.location);
  expect(errors).toEqual([]);
 });
+
+test('organic combat proposal can be declined and AI narration resumes without losing state',async({page})=>{
+ test.setTimeout(90000);
+ await page.addInitScript(()=>{localStorage.setItem('four-keeps-access-code','browser-test-code');localStorage.setItem('four-keeps-dm-mode','on');});
+ await createAndImport(page,'fighter');
+ let calls=0;
+ await page.route('**/api/dm',async route=>{
+  calls++;
+  await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({narration:calls===1?'A watchman greets you.':calls===2?'A suspicious stranger reaches for a sword.':'The stranger lowers the sword and walks away.',combatStart:calls===2?{enemyName:'Suspicious stranger'}:null,newFacts:['The watchman is present'],worldUpdates:{}})});
+ });
+ await page.getByRole('button',{name:'Begin AI-led adventure'}).click();
+ const initial=await saved(page);
+ await page.getByLabel('Message the Dungeon Master').fill('I question the stranger.');
+ await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
+ await expect(page.getByText('Opponent: Suspicious stranger',{exact:false})).toBeVisible();
+ await expect(page.getByRole('button',{name:'Send message to Dungeon Master'})).toBeDisabled();
+ await expect(page.getByRole('button',{name:'Decline encounter and continue exploring'})).toBeVisible();
+ await page.getByRole('button',{name:'Decline encounter and continue exploring'}).click();
+ const declined=await saved(page);
+ expect(declined.adventureSession.status).toBe('exploring');
+ expect(declined.adventureSession.pendingEncounter).toBeUndefined();
+ expect(declined.character).toEqual(initial.character);
+ expect(declined.location).toBe(initial.location);
+ expect(declined.companionEncounter).toBeUndefined();
+ expect(declined.journal.some((event:any)=>event.id.startsWith('declined-encounter-'))).toBe(true);
+ await page.getByLabel('Message the Dungeon Master').fill('I explain that I do not want a fight.');
+ await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
+ await expect(page.getByLabel('Adventure',{exact:true})).toContainText('The stranger lowers the sword');
+ const resumed=await saved(page);
+ expect(resumed.character).toEqual(initial.character);
+ expect(resumed.location).toBe(initial.location);
+ expect(resumed.adventureSession.status).toBe('exploring');
+ expect(resumed.worldFacts).toContain('The watchman is present');
+ expect(calls).toBe(3);
+});
