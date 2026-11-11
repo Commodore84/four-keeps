@@ -1,5 +1,5 @@
 import type {Campaign} from './campaign';
-import {startUnifiedEncounter} from './companionEncounter';
+import {startUnifiedEncounter,addCompanionEnemy} from './companionEncounter';
 export type AdventureSite='frontier'|'crossroads'|'watchtower';
 export interface AdventureSession {
  status:'exploring'|'encounter';site:AdventureSite;characterSource:'campaign-character';
@@ -50,4 +50,14 @@ export function resumeAdventureExploration(campaign:Campaign,now=new Date().toIS
  if(!session||session.status!=='encounter'||campaign.companionEncounter?.status!=='completed')throw Error('Finish the linked encounter before exploring');
  if(campaign.characterIdentity&&!campaign.companionEncounter?.settlement)throw Error('Record encounter rewards, including zero rewards, before exploring');
  return {...campaign,adventureSession:{...session,status:'exploring'},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:'The encounter ended. Exploration resumes at '+ADVENTURE_SITES[session.site].name+'.',createdAt:now}]};
+}
+
+export interface AdventureEncounterSetup {playerInitiative:number;enemyInitiative:number;enemyId:string;hitPoints:number;armorClass:number;attackModifier:number;damageModifier:number;damageDice:string}
+/** One handoff, using only the existing encounter engine and DM-confirmed inputs. */
+export function enterSoloAdventureEncounter(campaign:Campaign,setup:AdventureEncounterSetup,now=new Date().toISOString()):Campaign{
+ const session=campaign.adventureSession;
+ if(!session||session.status!=='exploring'||session.site!=='watchtower')throw Error('Reach the watchtower before entering an encounter');
+ const started=startUnifiedEncounter(campaign,{nighthawk:setup.playerInitiative},{nighthawk:{x:1,y:1}},{});
+ const next=addCompanionEnemy(started,setup.enemyId,setup.enemyInitiative,{x:2,y:1},setup.hitPoints,setup.armorClass,setup.attackModifier,30,5,setup.damageModifier,setup.damageDice);
+ return {...next,updatedAt:now,adventureSession:{...session,status:'encounter',encounterActorId:setup.enemyId},journal:[...next.journal,{id:crypto.randomUUID(),kind:'system',createdAt:now,text:'DM-confirmed watchtower encounter started with the saved player and '+setup.enemyId+'.'}]};
 }

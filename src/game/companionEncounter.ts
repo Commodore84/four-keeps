@@ -1,3 +1,4 @@
+import {SPELL_BY_ID} from './creationMagic';
 import type {Campaign} from './campaign';
 import {adjudicateSubclassActorCondition,adjudicateSubclassActorDamage} from './campaign';
 import type {DamageType} from './subclassCombatRules';
@@ -147,11 +148,10 @@ export function companionOpportunityAttackEligible(campaign:Campaign,actorId:str
 /** Opt-in unified skirmish. Nighthawk's existing Campaign.combat remains untouched. */
 export function startUnifiedEncounter(campaign:Campaign,initiative:Record<string,number>,positions:Record<string,{x:number;y:number}>,hitPoints:Record<string,number>):Campaign{
  if(!campaign.character)throw Error('Nighthawk character statistics unavailable');
- if(!Object.keys(initiative).some(id=>id!=='nighthawk'))throw Error('Unified encounter requires at least one registered companion');
  if(!Object.hasOwn(initiative,'nighthawk'))throw Error('Unified encounter requires Nighthawk');
  const companionIds=Object.keys(initiative).filter(id=>id!=='nighthawk');
  if(companionIds.some(id=>!Object.hasOwn(campaign.subclassActors??{},id)))throw Error('Unregistered companion');
- const base=startCompanionEncounter(campaign,Object.fromEntries(companionIds.map(id=>[id,initiative[id]])),Object.fromEntries(companionIds.map(id=>[id,positions[id]])),Object.fromEntries(companionIds.map(id=>[id,hitPoints[id]])));
+ const base=companionIds.length?startCompanionEncounter(campaign,Object.fromEntries(companionIds.map(id=>[id,initiative[id]])),Object.fromEntries(companionIds.map(id=>[id,positions[id]])),Object.fromEntries(companionIds.map(id=>[id,hitPoints[id]]))):startSoloPlayerEncounterBase(campaign);
  const battle=base.companionEncounter!;
  const position=positions.nighthawk,roll=initiative.nighthawk;
  const character=campaign.character;
@@ -789,4 +789,20 @@ export function spendPlayerResource(campaign:Campaign,name:string,amount=1):Camp
  const pool=campaign.character?.resources?.[name];
  if(!pool||!Number.isInteger(amount)||amount<1||pool.used+amount>pool.maximum||cannotAct(actor)||actor.hp<=0)throw Error('Player resource unavailable');
  return {...save(campaign,{...battle,log:[...battle.log,'Player spent '+amount+' '+name+'; effect requires DM adjudication']}),character:{...campaign.character!,resources:{...campaign.character!.resources,[name]:{...pool,used:pool.used+amount}}}};
+}
+
+function startSoloPlayerEncounterBase(campaign:Campaign):Campaign{
+ if(campaign.companionEncounter?.status==='active')throw Error('Finish the existing encounter first');
+ if(campaign.adventureSession?.status==='encounter')throw Error('Resume exploration before starting another encounter');
+ return save(campaign,{id:crypto.randomUUID(),status:'active',mode:'unified',round:1,turnIndex:0,order:[],participants:{},obstacles:[],cover:[],log:[]});
+}
+
+/** The background's recorded free cast is independent of class spell slots. */
+export function spendPlayerOriginSpell(campaign:Campaign):Campaign{
+ const battle=activeActor(campaign,'nighthawk'),actor=battle.participants.nighthawk;
+ const origin=campaign.characterBuild?.selections.originMagic,spell=origin?.spell?SPELL_BY_ID[origin.spell]:undefined;
+ const pool=campaign.character?.resources?.['Magic Initiate'];
+ if(battle.mode!=='unified'||!spell||!pool||pool.used>=pool.maximum||actor.hp<=0||actor.actionUsed||cannotAct(actor))throw Error('Origin spell cast unavailable');
+ const spent=spendPlayerResource(campaign,'Magic Initiate');
+ return save(spent,{...battle,participants:{...battle.participants,nighthawk:{...actor,actionUsed:true}},log:[...battle.log,'Player used Magic Initiate for '+spell.name+'; no class slot spent (effect DM adjudicated)']});
 }

@@ -11,7 +11,7 @@ function validatedCharacter(value) {
   const scores = value.scores;
   if (!scores || typeof scores !== 'object' || !Object.keys(SCORES).every(key => Number.isInteger(scores[key]) && scores[key] >= 1 && scores[key] <= 30)) return DEFAULT_CHARACTER;
   if (!Number.isInteger(value.proficiencyBonus) || value.proficiencyBonus < 2 || value.proficiencyBonus > 9 || !Array.isArray(value.proficientSkills) || !value.proficientSkills.every(s => SKILLS.includes(s))) return DEFAULT_CHARACTER;
-  return {scores:Object.fromEntries(Object.keys(SCORES).map(key => [key,scores[key]])),proficiencyBonus:value.proficiencyBonus,proficientSkills:[...new Set(value.proficientSkills)]};
+  return {scores:Object.fromEntries(Object.keys(SCORES).map(key => [key,scores[key]])),proficiencyBonus:value.proficiencyBonus,proficientSkills:[...new Set(value.proficientSkills)],expertiseSkills:Array.isArray(value.expertiseSkills)?value.expertiseSkills.filter(s=>SKILLS.includes(s)&&value.proficientSkills.includes(s)):[]};
 }
 const DC = { easy:10, moderate:15, hard:20, veryHard:25 };
 const secret = () => createHash('sha256').update(process.env.OPENAI_API_KEY + ':four-keeps-check-v1').digest();
@@ -34,7 +34,7 @@ function adjudicate(value,dice) {
   if (!Array.isArray(dice) || dice.length !== (value.mode === 'normal' ? 1 : 2) || dice.some(n => !Number.isInteger(n) || n < 1 || n > 20)) throw Error('Invalid dice');
   const kept = value.mode === 'advantage' ? Math.max(...dice) : value.mode === 'disadvantage' ? Math.min(...dice) : dice[0];
   const character = validatedCharacter(value.character);
-  const modifier = Math.floor((character.scores[SKILL_ABILITIES[value.skill]]-10)/2)+(character.proficientSkills.includes(value.skill)?character.proficiencyBonus:0);
+  const modifier = Math.floor((character.scores[SKILL_ABILITIES[value.skill]]-10)/2)+(character.expertiseSkills?.includes(value.skill)?2*character.proficiencyBonus:character.proficientSkills.includes(value.skill)?character.proficiencyBonus:0);
   const total = kept+modifier;
   return { skill:value.skill,mode:value.mode,dice,kept,modifier,total,success:total>=value.dc };
 }
@@ -79,7 +79,13 @@ export default async function handler(req, res) {
   const adventureContext=rawAdventure && Object.hasOwn(siteNames,rawAdventure.site) && ['exploring','encounter'].includes(rawAdventure.status) ? {site:rawAdventure.site,location:siteNames[rawAdventure.site],status:rawAdventure.status,visited:Array.isArray(rawAdventure.visited)?rawAdventure.visited.filter(id=>Object.hasOwn(siteNames,id)).slice(0,3):[],recentInteractions:Array.isArray(rawAdventure.interactions)?rawAdventure.interactions.slice(-5).filter(e=>e&&typeof e.response==='string').map(e=>e.response.slice(0,250)):[]} : null;
   const rawIdentity=state.characterIdentity && typeof state.characterIdentity==='object'?state.characterIdentity:null;
   const characterIdentity=rawIdentity && typeof rawIdentity.name==='string' && typeof rawIdentity.classId==='string'?{name:rawIdentity.name.slice(0,100),classId:rawIdentity.classId.slice(0,40),speciesId:String(rawIdentity.speciesId??'').slice(0,40),backgroundId:String(rawIdentity.backgroundId??'').slice(0,40)}:null;
-  const gameState = { adventureContext,characterIdentity,combat:body.gameState?.combat??null, latestPendingSpell, concentration, spellEffects, level:Number.isInteger(rawCharacter.level)?rawCharacter.level:1, subclass:rawCharacter.subclass==='Arcane Trickster'?'Arcane Trickster':null, preparedSpells:spells, cantrips, spellSlots:safeSlots, familiar, elapsedMinutes:Number.isSafeInteger(state.elapsedMinutes)&&state.elapsedMinutes>=0?state.elapsedMinutes:0, recentEvents };
+  const strings=(v,max=12)=>Array.isArray(v)?v.filter(s=>typeof s==='string').slice(0,max).map(s=>s.slice(0,80)):[];
+  const rawBuild=state.playerBuild&&typeof state.playerBuild==='object'?state.playerBuild:{};
+  const playerBuild={classChoices:Object.fromEntries(Object.entries(rawBuild.classChoices??{}).slice(0,8).map(([key,v])=>[key.slice(0,40),strings(v,4)])),spellbook:strings(rawBuild.spellbook,6),invocations:strings(rawBuild.invocations,4),originMagic:rawBuild.originMagic&&typeof rawBuild.originMagic.spell==='string'?{spell:rawBuild.originMagic.spell.slice(0,80),ability:String(rawBuild.originMagic.ability).slice(0,3)}:null};
+  const resources=Object.fromEntries(Object.entries(rawCharacter.resources??{}).slice(0,10).filter(([,p])=>p&&Number.isInteger(p.maximum)&&Number.isInteger(p.used)&&p.used>=0&&p.used<=p.maximum).map(([name,p])=>[name.slice(0,80),{maximum:p.maximum,used:p.used}]));
+  const shared=state.sharedEncounter;
+  const sharedEncounter=shared&&['active','completed'].includes(shared.status)?{status:shared.status,round:shared.round,activeActor:String(shared.activeActor??'').slice(0,40),participants:Array.isArray(shared.participants)?shared.participants.filter(p=>p&&typeof p==='object').slice(0,8).map(p=>({id:String(p.id).slice(0,40),hp:p.hp,maxHp:p.maxHp,conditions:strings(p.conditions)})):[]}:null;
+  const gameState = { playerBuild,resources,sharedEncounter,currentHitPoints:rawCharacter.currentHitPoints,maxHitPoints:rawCharacter.maxHitPoints,adventureContext,characterIdentity,combat:body.gameState?.combat??null, latestPendingSpell, concentration, spellEffects, level:Number.isInteger(rawCharacter.level)?rawCharacter.level:1, subclass:rawCharacter.subclass==='Arcane Trickster'?'Arcane Trickster':null, preparedSpells:spells, cantrips, spellSlots:safeSlots, familiar, elapsedMinutes:Number.isSafeInteger(state.elapsedMinutes)&&state.elapsedMinutes>=0?state.elapsedMinutes:0, recentEvents };
   const world = body.world && typeof body.world === 'object' ? body.world : {};
   const facts = Array.isArray(body.worldFacts) ? body.worldFacts.filter((fact) => typeof fact === 'string').slice(-60).map((fact) => fact.slice(0, 220)) : [];
   const history = Array.isArray(body.history) ? body.history.slice(-MAX_TURNS) : [];
@@ -107,7 +113,7 @@ export default async function handler(req, res) {
     const requested = !checkResult && !combatAdjudication && parsed.checkRequest && typeof parsed.checkRequest === 'object' ? parsed.checkRequest : null;
     const checkRequest = requested && SKILLS.includes(requested.skill) && Object.hasOwn(DC,requested.difficulty) ? { skill:requested.skill, mode:['normal','advantage','disadvantage'].includes(requested.mode) ? requested.mode : 'normal', reason:typeof requested.reason === 'string' ? requested.reason.slice(0,160) : 'Resolve the uncertain action', token:sealCheck({skill:requested.skill,mode:['normal','advantage','disadvantage'].includes(requested.mode) ? requested.mode : 'normal',dc:DC[requested.difficulty],character,issuedAt:Date.now()}) } : null;
     const newFacts = Array.isArray(parsed.newFacts) ? parsed.newFacts.filter((fact) => typeof fact === 'string').slice(0, 4).map((fact) => fact.slice(0, 220)) : [];
-    const combatStart = !checkResult && !combatAdjudication && !gameState?.combat && parsed.combatStart && typeof parsed.combatStart.enemyName === 'string' && parsed.combatStart.enemyName.trim() ? {enemyName:parsed.combatStart.enemyName.trim().slice(0,60)} : null;
+    const combatStart = !characterIdentity && !adventureContext && !sharedEncounter && !checkResult && !combatAdjudication && !gameState?.combat && parsed.combatStart && typeof parsed.combatStart.enemyName === 'string' && parsed.combatStart.enemyName.trim() ? {enemyName:parsed.combatStart.enemyName.trim().slice(0,60)} : null;
     return res.status(200).json({ narration: parsed.narration.trim(), combatStart, newFacts, checkRequest:combatStart?null:checkRequest, checkResult, worldUpdates: parsed.worldUpdates && typeof parsed.worldUpdates === 'object' ? parsed.worldUpdates : {}, model: MODEL });
   } catch {
     return res.status(502).json({ error: 'The Dungeon Master is temporarily unavailable.' });

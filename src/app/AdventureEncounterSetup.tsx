@@ -1,0 +1,14 @@
+import {useState} from 'react';
+import type {Campaign} from '../game/campaign';
+import {enterSoloAdventureEncounter,type AdventureEncounterSetup} from '../game/adventureSession';
+export function AdventureEncounterSetupPanel({campaign,saving,onChange}:{campaign:Campaign;saving:boolean;onChange:(next:Campaign,message:string)=>Promise<boolean>|boolean|void}){
+ const [values,setValues]=useState({playerInitiative:'',enemyInitiative:'',enemyId:'watchtower-opponent',hitPoints:'',armorClass:'',attackModifier:'',damageModifier:'',damageDice:''});
+ const [verified,setVerified]=useState(false),[error,setError]=useState('');
+ const fields=[['playerInitiative','Player initiative'],['enemyInitiative','Enemy initiative'],['enemyId','Enemy identifier'],['hitPoints','Enemy HP'],['armorClass','Enemy AC'],['attackModifier','Enemy attack bonus'],['damageModifier','Enemy damage bonus'],['damageDice','Enemy damage dice']] as const;
+ const context=campaign.adventureSession?.interactions.at(-1)?.response;
+ return <section aria-label="Quick adventure encounter" className="space-y-3 rounded border border-gold/30 p-3"><h5 className="font-semibold">Start an encounter with your character</h5><p>No companion registration needed. Enter the DM-confirmed opponent statistics and initiative rolls; the player uses the saved class, HP and equipped gear. The opponent starts adjacent with 30 ft speed and 5 ft reach; use the encounter controls to adjust those values if needed.</p>{context&&<p>Latest scene evidence: {context}</p>}{campaign.journal.filter(e=>e.kind==='dm').at(-1)&&<p>Latest DM narration: {campaign.journal.filter(e=>e.kind==='dm').at(-1)!.text}</p>}
+ <div className="grid gap-2 sm:grid-cols-2">{fields.map(([key,label])=><label key={key}>{label}<input aria-label={'Quick '+label.toLowerCase()} className="block w-full rounded bg-ink p-2" type={key==='enemyId'||key==='damageDice'?'text':'number'} value={values[key]} onChange={e=>setValues({...values,[key]:e.target.value})}/></label>)}</div>
+ <label className="flex gap-2"><input type="checkbox" checked={verified} onChange={e=>setVerified(e.target.checked)}/>DM confirms this encounter and the supplied statistics</label>
+ <button disabled={saving||!verified||Object.values(values).some(v=>!v.trim())} className="rounded border border-gold/40 px-3 py-2" onClick={async()=>{try{const setup=Object.fromEntries(Object.entries(values).map(([key,value])=>[key,key==='enemyId'||key==='damageDice'?value:Number(value)])) as unknown as AdventureEncounterSetup;const persisted=await onChange(enterSoloAdventureEncounter(campaign,setup),'Encounter entered');if(persisted===false)throw Error('Encounter could not be saved; try again.');setError('');}catch(e){setError(String(e));}}}>Start verified encounter</button>{error&&<p role="alert">{error}</p>}
+ </section>;
+}

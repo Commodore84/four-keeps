@@ -1,3 +1,4 @@
+import {campaignPlayerContext} from '../game/campaignContext';
 import {ImportedCharacterSheet} from './ImportedCharacterSheet';
 import {CompanionEncounterPanel} from './CompanionEncounterPanel';
 import {AdventureSessionPanel} from './AdventureSessionPanel';
@@ -121,7 +122,7 @@ const tabs = [
   { id: 'settings', label: 'Settings', Icon: Settings },
 ] as const;
 
-function Adventure({ campaign, fullHistory, onToggleHistory, onAdventureChange, saving }: { campaign: Campaign | null; fullHistory: boolean; onToggleHistory: () => void; onAdventureChange:(next:Campaign,message:string)=>void; saving:boolean }) {
+function Adventure({ campaign, fullHistory, onToggleHistory, onAdventureChange, saving }: { campaign: Campaign | null; fullHistory: boolean; onToggleHistory: () => void; onAdventureChange:(next:Campaign,message:string)=>Promise<boolean>|boolean|void; saving:boolean }) {
   const endRef = useRef<HTMLDivElement>(null);
   const lastTurn = campaign?.journal.filter((entry) => entry.kind === 'player' || entry.kind === 'dm').at(-1)?.id;
   useEffect(() => { if (lastTurn) endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' }); }, [lastTurn]);
@@ -143,7 +144,7 @@ function Adventure({ campaign, fullHistory, onToggleHistory, onAdventureChange, 
     <div ref={endRef}/>
   </section>;
 }
-function Party({ campaign, onRoll, onSaveRoll, onAwardXP, onLevelUp, onLevelThree, onReconcile, onUndoReconcile, onRestore, onCastSpell, onEndConcentration, onAdjustEquipment, onUpdateInventory, onSubclassChange, saving }: { campaign: Campaign | null; onRoll: (skill: Skill, mode: RollMode) => void; onSaveRoll: (ability: typeof abilities[number], mode: RollMode) => void; onAwardXP: (amount: number, reason: string) => void; onLevelUp: (hpGain: number) => void; onLevelThree: (hpGain: number, cantrips: string[], spells: string[]) => void; onReconcile: () => void; onUndoReconcile: () => void; onRestore: () => void; onCastSpell: (spell: string, ritual: boolean, components: boolean, target: string) => void; onEndConcentration: () => void; onAdjustEquipment: (item:'daggers'|'arrows'|'caltrops'|'ballBearings',delta:number)=>void; onUpdateInventory:(ledger:NonNullable<Campaign['inventoryLedger']>)=>void; onSubclassChange:(next:Campaign,message:string)=>void; saving: boolean }) {
+function Party({ campaign, onRoll, onSaveRoll, onAwardXP, onLevelUp, onLevelThree, onReconcile, onUndoReconcile, onRestore, onCastSpell, onEndConcentration, onAdjustEquipment, onUpdateInventory, onSubclassChange, saving }: { campaign: Campaign | null; onRoll: (skill: Skill, mode: RollMode) => void; onSaveRoll: (ability: typeof abilities[number], mode: RollMode) => void; onAwardXP: (amount: number, reason: string) => void; onLevelUp: (hpGain: number) => void; onLevelThree: (hpGain: number, cantrips: string[], spells: string[]) => void; onReconcile: () => void; onUndoReconcile: () => void; onRestore: () => void; onCastSpell: (spell: string, ritual: boolean, components: boolean, target: string) => void; onEndConcentration: () => void; onAdjustEquipment: (item:'daggers'|'arrows'|'caltrops'|'ballBearings',delta:number)=>void; onUpdateInventory:(ledger:NonNullable<Campaign['inventoryLedger']>)=>void; onSubclassChange:(next:Campaign,message:string)=>Promise<boolean>|boolean|void; saving: boolean }) {
   const [mode, setMode] = useState<RollMode>('normal');
   const [testXP, setTestXP] = useState('300');
   const [hpChoice, setHpChoice] = useState('7');
@@ -557,7 +558,7 @@ export function App() {
       const history = locked.journal.filter(entry => entry.kind === 'player' || entry.kind === 'dm').slice(-12)
         .map(entry => ({ role: entry.kind === 'player' ? 'user' : 'assistant', content: entry.text }));
       const response = await fetch('/api/dm', { method:'POST', headers:{ 'Content-Type':'application/json','x-four-keeps-access':accessCode },
-        body:JSON.stringify({ checkToken:pending.token, dice, character:locked.character ?? prototypeNighthawk, gameState:{ familiar:locked.familiar ?? null, elapsedMinutes:locked.elapsedMinutes ?? 0, concentration:locked.concentration??null, spellEffects:(locked.spellEffects??[]).slice(-12), recentEvents:locked.journal.filter(e=>e.kind==='system').slice(-8).map(e=>e.text) }, history, worldFacts:locked.worldFacts ?? [], world:locked.world ?? emptyWorld() }) });
+        body:JSON.stringify({ checkToken:pending.token, dice, character:locked.character ?? prototypeNighthawk, gameState:{ ...campaignPlayerContext(locked), familiar:locked.familiar ?? null, elapsedMinutes:locked.elapsedMinutes ?? 0, concentration:locked.concentration??null, spellEffects:(locked.spellEffects??[]).slice(-12), recentEvents:locked.journal.filter(e=>e.kind==='system').slice(-8).map(e=>e.text) }, history, worldFacts:locked.worldFacts ?? [], world:locked.world ?? emptyWorld() }) });
       const result: { narration?:string; newFacts?:string[]; worldUpdates?:unknown; checkResult?:{skill:string;dice:number[];kept:number;modifier:number;total:number;success:boolean}; error?:string } = await response.json();
       if (!response.ok || !result.narration || !result.checkResult) throw new Error(result.error || 'Check resolution failed');
       const r = result.checkResult;
@@ -588,6 +589,7 @@ export function App() {
     const testDamage=/^\s*(?:test damage|damage test)\s+(\d+)\s*$/i.exec(draft);
     if(testDamage){const amount=Number(testDamage[1]);if(amount>=1&&amount<=100){setPendingTestDamage(amount);return;}}
     const lower=draft.toLowerCase();
+    if(campaign?.characterIdentity){await sendToDM();return;}
     const explicit=/\b(short rest|long rest)\b/.exec(lower);
     const natural=/\b(rest|resting|rests|sleep|sleeping|nap|napping|bed down|turn in for the night|take a break|lie down|lay down)\b/.test(lower) && /\b(want|would like|i'd like|try|take|start|begin|settle|spend|sleep|rest|resting|nap|bed|turn|lie|lay)\b/.test(lower);
     const shortTime=/\b(an? hour|one hour|60 minutes|short rest|nap|brief break)\b/.test(lower);
@@ -665,7 +667,7 @@ export function App() {
       const history = current.journal.filter((entry) => entry.kind === 'player' || entry.kind === 'dm')
         .slice(-12).map((entry) => ({ role: entry.kind === 'player' ? 'user' : 'assistant', content: entry.text }));
       const response = await fetch('/api/dm', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-four-keeps-access': accessCode },
-        body: JSON.stringify({ message, character:current.character ?? prototypeNighthawk, gameState:{ adventureSession:current.adventureSession??null, characterIdentity:current.characterIdentity??null, location:current.location, combat:current.combat??null, familiar:current.familiar ?? null, elapsedMinutes:current.elapsedMinutes ?? 0, concentration:current.concentration??null, spellEffects:(current.spellEffects??[]).slice(-12), recentEvents:current.journal.filter(e=>e.kind==='system').slice(-8).map(e=>e.text) }, history, worldFacts: current.worldFacts ?? [], world: current.world ?? emptyWorld() }) });
+        body: JSON.stringify({ message, character:current.character ?? prototypeNighthawk, gameState:{ ...campaignPlayerContext(current), adventureSession:current.adventureSession??null, characterIdentity:current.characterIdentity??null, location:current.location, combat:current.combat??null, familiar:current.familiar ?? null, elapsedMinutes:current.elapsedMinutes ?? 0, concentration:current.concentration??null, spellEffects:(current.spellEffects??[]).slice(-12), recentEvents:current.journal.filter(e=>e.kind==='system').slice(-8).map(e=>e.text) }, history, worldFacts: current.worldFacts ?? [], world: current.world ?? emptyWorld() }) });
       const result: { narration?: string; newFacts?: string[]; worldUpdates?: unknown; checkRequest?: { skill:string; mode:'normal'|'advantage'|'disadvantage'; reason:string; token:string } | null; combatStart?:{enemyName:string}|null; error?: string } = await response.json();
       if (!response.ok || !result.narration) throw new Error(result.error || 'DM request failed');
       const narrated = addExchange(current, message, result.narration, new Date().toISOString(), result.newFacts ?? [], result.worldUpdates, result.checkRequest ?? undefined);
@@ -1079,13 +1081,13 @@ export function App() {
   }
 
   async function saveSubclassActor(next:Campaign,message:string){
-    if(saving||!campaign||next.id!==campaign.id)return;
+    if(saving||!campaign||next.id!==campaign.id)return false;
     setSaving(true);
-    try{await localCampaignStorage.save(next);setCampaign(next);setCampaigns(items=>items.map(item=>item.id===next.id?next:item));setNotice(message)}
-    catch(error){setNotice('Subclass save failed: '+String(error))}
+    try{await localCampaignStorage.save(next);setCampaign(next);setCampaigns(items=>items.map(item=>item.id===next.id?next:item));setNotice(message);return true;}
+    catch(error){setNotice('Campaign save failed: '+String(error));return false;}
     finally{setSaving(false)}
   }
-  const content = { adventure: campaign?.combat && campaign.combat.status!=='completed' ? null : <Adventure campaign={campaign} fullHistory={fullHistory} onToggleHistory={() => setFullHistory(value => !value)} onAdventureChange={(next,message)=>void saveSubclassActor(next,message)} saving={saving}/>, party: <Party campaign={campaign} saving={saving} onRoll={(skill,mode) => void saveSkillRoll(skill,mode)} onSaveRoll={(ability,mode) => void saveSavingThrow(ability,mode)} onAwardXP={(amount,reason) => void updateProgress('award',amount,reason)} onLevelUp={hp => void updateProgress('level',hp)} onLevelThree={(hp,cantrips,spells) => void updateProgress('level3',hp,'',cantrips,spells)} onReconcile={() => void updateProgress('reconcile')} onUndoReconcile={() => void updateProgress('undoReconcile')} onRestore={() => void updateProgress('restore')} onCastSpell={(spell,ritual,components,target)=>void castSpell(spell,ritual,components,target)} onEndConcentration={()=>void endConcentration()} onAdjustEquipment={(item,delta)=>void changeEquipment(item,delta)} onUpdateInventory={ledger=>void updateInventoryLedger(ledger)} onSubclassChange={(next,message)=>void saveSubclassActor(next,message)}/> , journal: <Journal campaign={campaign}/>, map: <WorldMap campaign={campaign}/>, settings: <section className="space-y-4"><h2 className="font-serif text-2xl">Settings</h2><p className="text-sm text-parchment/60">Manage campaigns, backups, and Dungeon Master access below.</p></section> };
+  const content = { adventure: campaign?.combat && campaign.combat.status!=='completed' ? null : <Adventure campaign={campaign} fullHistory={fullHistory} onToggleHistory={() => setFullHistory(value => !value)} onAdventureChange={saveSubclassActor} saving={saving}/>, party: <Party campaign={campaign} saving={saving} onRoll={(skill,mode) => void saveSkillRoll(skill,mode)} onSaveRoll={(ability,mode) => void saveSavingThrow(ability,mode)} onAwardXP={(amount,reason) => void updateProgress('award',amount,reason)} onLevelUp={hp => void updateProgress('level',hp)} onLevelThree={(hp,cantrips,spells) => void updateProgress('level3',hp,'',cantrips,spells)} onReconcile={() => void updateProgress('reconcile')} onUndoReconcile={() => void updateProgress('undoReconcile')} onRestore={() => void updateProgress('restore')} onCastSpell={(spell,ritual,components,target)=>void castSpell(spell,ritual,components,target)} onEndConcentration={()=>void endConcentration()} onAdjustEquipment={(item,delta)=>void changeEquipment(item,delta)} onUpdateInventory={ledger=>void updateInventoryLedger(ledger)} onSubclassChange={saveSubclassActor}/> , journal: <Journal campaign={campaign}/>, map: <WorldMap campaign={campaign}/>, settings: <section className="space-y-4"><h2 className="font-serif text-2xl">Settings</h2><p className="text-sm text-parchment/60">Manage campaigns, backups, and Dungeon Master access below.</p></section> };
   if(portalScreen!=='adventure')return <div className="min-h-dvh bg-ink text-parchment">
     <div className="mx-auto min-h-dvh w-full max-w-3xl space-y-5 px-5 pb-12 pt-[max(2rem,env(safe-area-inset-top))]">
       <header className="flex flex-col items-center gap-2 border-b border-gold/20 pb-6">

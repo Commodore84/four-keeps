@@ -1,3 +1,4 @@
+import {initialPlayerResources} from './playerRecovery';
 import type {CharacterDraft} from '../app/CharacterCreator';
 import {reviewCharacter,reviewErrors} from './creationReview';
 import {newCampaign,type Campaign} from './campaign';
@@ -17,7 +18,7 @@ export function campaignFromCharacterDraft(draft:CharacterDraft,title:string,id:
  const expertise=(draft.selections.classId==='rogue'?draft.selections.classChoices?.expertise??[]:[]).filter((skill):skill is Skill=>skillNames.has(skill as Skill));
  const slots=spellcastingAtLevel(draft.selections.classId!,1)?.slots[0]??0;
  const cls=classSummary(draft.selections.classId!);
- const character:CharacterStats={classId:cls!.id,savingThrowProficiencies:cls!.savingThrows.map(s=>s.toLowerCase()) as CharacterStats['savingThrowProficiencies'],weaponProficiencies:[...cls!.weapons,...((cls!.id==='cleric'&&(draft.selections.classChoices?.['divine-order']??[]).includes('Protector'))||(cls!.id==='druid'&&(draft.selections.classChoices?.['primal-order']??[]).includes('Warden'))?['Martial']:[])],resources:initialPlayerResources(cls!.id,scores.cha),scores,proficiencyBonus:2,proficientSkills:review.skills.filter((skill):skill is Skill=>skillNames.has(skill as Skill)),expertiseSkills:expertise,spellSlots:slots?{level1:slots,usedLevel1:0}:undefined,level:1,maxHitPoints:review.hitPoints,currentHitPoints:review.hitPoints,armorClass:review.armorClass,speed:review.origins.speed,
+ const character:CharacterStats={classId:cls!.id,savingThrowProficiencies:cls!.savingThrows.map(s=>s.toLowerCase()) as CharacterStats['savingThrowProficiencies'],weaponProficiencies:[...cls!.weapons,...((cls!.id==='cleric'&&(draft.selections.classChoices?.['divine-order']??[]).includes('Protector'))||(cls!.id==='druid'&&(draft.selections.classChoices?.['primal-order']??[]).includes('Warden'))?['Martial']:[])],resources:{...initialPlayerResources(cls!.id,scores.cha),...(draft.selections.originMagic?.spell?{'Magic Initiate':{maximum:1,used:0,recovery:'long' as const}}:{})},scores,proficiencyBonus:2,proficientSkills:review.skills.filter((skill):skill is Skill=>skillNames.has(skill as Skill)),expertiseSkills:expertise,spellSlots:slots?{level1:slots,usedLevel1:0}:undefined,level:1,maxHitPoints:review.hitPoints,currentHitPoints:review.hitPoints,armorClass:review.armorClass,speed:review.origins.speed,
  cantrips:[...new Set([...review.spells.cantrips,...review.spells.originCantrips,...review.spells.innate])],
  preparedSpells:[...new Set([...review.spells.prepared,...(review.spells.originSpell?[review.spells.originSpell]:[])])]};
  const eq=draft.selections.equipment!;
@@ -26,7 +27,7 @@ export function campaignFromCharacterDraft(draft:CharacterDraft,title:string,id:
  const ledger={currency:{CP:Math.round(review.remainingGold*100),SP:0,EP:0,GP:0,PP:0},gear};
  const counted=(id:string)=>items.find(item=>item.name===ITEM_BY_ID[id]?.name)?.quantity??0;
  const base=newCampaign(title,id,now);
- return {...base,character,characterIdentity:{name:draft.identity.name.trim(),speciesId:draft.selections.speciesId!,lineageId:draft.selections.lineageId,backgroundId:draft.selections.backgroundId!,classId:draft.selections.classId!,draftId:draft.id,pronouns:draft.identity.pronouns,appearance:draft.identity.appearance,personality:draft.identity.personality,backstory:draft.identity.backstory},
+ return {...base,character,hitDiceRemaining:1,characterBuild:structuredClone(draft),characterIdentity:{name:draft.identity.name.trim(),speciesId:draft.selections.speciesId!,lineageId:draft.selections.lineageId,backgroundId:draft.selections.backgroundId!,classId:draft.selections.classId!,draftId:draft.id,pronouns:draft.identity.pronouns,appearance:draft.identity.appearance,personality:draft.identity.personality,backstory:draft.identity.backstory},
  inventoryLedger:ledger,equipment:{daggers:counted('dagger'),arrows:counted('arrows'),caltrops:counted('caltrops'),ballBearings:counted('ball-bearings')},
  encounterLoadout:{weaponId:eq.equipped.weapons[0],armorId:eq.equipped.armor,shieldId:eq.equipped.shield},
  journal:[{id:id+'-intro',kind:'system',text:draft.identity.name.trim()+' begins a new adventure at Frontier Village.',createdAt:now}]};
@@ -36,18 +37,4 @@ export function characterDraftImportOptions(drafts:CharacterDraft[]):{id:string;
 }
 export function preparedSpellNamesFromDraft(draft:CharacterDraft):string[]{
  return (draft.selections.magic?.prepared??[]).map(id=>SPELL_BY_ID[id]?.name??id);
-}
-
-/** Level-one resource pools; effects remain explicitly adjudicated by the DM. */
-function initialPlayerResources(classId:string,charisma:number):NonNullable<CharacterStats['resources']>{
- switch(classId){
- case 'barbarian':return {Rage:{maximum:2,used:0,recovery:'long'}};
- case 'bard':return {'Bardic Inspiration':{maximum:Math.max(1,Math.floor((charisma-10)/2)),used:0,recovery:'long'}};
- case 'fighter':return {'Second Wind':{maximum:2,used:0,recovery:'long'}};
- case 'ranger':return {'Favored Enemy':{maximum:2,used:0,recovery:'long'}};
- case 'sorcerer':return {'Innate Sorcery':{maximum:2,used:0,recovery:'long'}};
- case 'wizard':return {'Arcane Recovery':{maximum:1,used:0,recovery:'long'}};
- case 'paladin':return {'Lay on Hands':{maximum:5,used:0,recovery:'long'}};
- default:return {};
- }
 }

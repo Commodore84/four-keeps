@@ -1,4 +1,5 @@
-import {validPlayerState} from './playerState';
+import type {CharacterDraft} from '../app/CharacterCreator';
+import {validPlayerState,validCampaignBuild} from './playerState';
 import type {CompanionEncounter} from './companionEncounter';
 import type {AdventureSession} from './adventureSession';
 import {finishSubclassRest,resolveSubclassDamage,canApplyCondition,selectFiendResistance,spendDarkOnesOwnLuck,type SubclassCombatState,type DamageType,type Terrain} from './subclassCombatRules';
@@ -7,6 +8,8 @@ import { emptyWorld, mergeWorld, normalizeWorld, type WorldState } from './world
 export interface JournalEntry { id: string; text: string; createdAt: string; kind: 'note' | 'system' | 'player' | 'dm' }
 export interface Campaign {
   schemaVersion: 1;
+  /** Original reviewed build; independent of later draft edits and advancement plans. */
+  characterBuild?:CharacterDraft;
   /** Reserved for future non-Nighthawk actors; never implicitly applied to the Rogue prototype. */
   subclassActors?:Record<string,SubclassCombatState>;
   companionEncounter?:CompanionEncounter;
@@ -58,7 +61,7 @@ export function addNote(campaign: Campaign, text: string, id: string = crypto.ra
 export function isCampaign(value: unknown): value is Campaign {
   if (!value || typeof value !== 'object') return false;
   const c = value as Partial<Campaign>;
-  return c.schemaVersion === 1 && typeof c.id === 'string' && typeof c.title === 'string'
+  return validCampaignBuild(c) && c.schemaVersion === 1 && typeof c.id === 'string' && typeof c.title === 'string'
     && typeof c.location === 'string' && typeof c.createdAt === 'string'
     && typeof c.updatedAt === 'string' && (c.character === undefined || (typeof c.character === 'object' && c.character !== null && validPlayerState(c.character) && ['str','dex','con','int','wis','cha'].every(a => Number.isInteger(c.character?.scores?.[a as keyof CharacterStats['scores']]) && c.character!.scores[a as keyof CharacterStats['scores']] >= 1 && c.character!.scores[a as keyof CharacterStats['scores']] <= 30) && Number.isInteger(c.character.proficiencyBonus) && c.character.proficiencyBonus >= 2 && c.character.proficiencyBonus <= 9 && Array.isArray(c.character.proficientSkills) && c.character.proficientSkills.every(s => typeof s === 'string'))) && (c.characterIdentity === undefined || (typeof c.characterIdentity.name === 'string' && c.characterIdentity.name.trim().length > 0 && typeof c.characterIdentity.classId === 'string' && typeof c.characterIdentity.speciesId === 'string' && typeof c.characterIdentity.backgroundId === 'string' && typeof c.characterIdentity.draftId === 'string'))
     && (c.adventureSession === undefined || (['exploring','encounter'].includes(c.adventureSession.status) && ['frontier','crossroads','watchtower'].includes(c.adventureSession.site) && c.adventureSession.characterSource === 'campaign-character' && Array.isArray(c.adventureSession.visited) && c.adventureSession.visited.every(site => ['frontier','crossroads','watchtower'].includes(site)) && Array.isArray(c.adventureSession.interactions) && c.adventureSession.interactions.every(entry => ['frontier','crossroads','watchtower'].includes(entry.site) && typeof entry.choice === 'string' && typeof entry.response === 'string')))
