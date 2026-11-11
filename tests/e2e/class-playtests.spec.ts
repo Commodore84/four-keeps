@@ -1,6 +1,13 @@
 import {test,expect,type Page} from '@playwright/test';
+async function navigate(page:Page,tab:'Adventure'|'Player'|'Journal'|'Map'|'Settings'){
+ const menu=page.getByRole('button',{name:'Open navigation menu'});
+ await menu.waitFor({state:'visible',timeout:2500}).catch(()=>{});
+ if(await menu.count()===0){if(tab==='Settings'){await page.getByRole('button',{name:'Settings',exact:true}).click();return;}throw new Error('Navigation menu is unavailable on the portal screen');}
+ if(await menu.getAttribute('aria-expanded')!=='true')await menu.click();
+ await page.getByRole('navigation',{name:'Primary navigation'}).getByRole('button',{name:tab,exact:true}).click();
+}
 async function openDevelopment(page:Page){
- await page.getByRole('button',{name:'Settings',exact:true}).click();
+ await navigate(page,'Settings');
  const panel=page.getByLabel('Development section');
  if(!(await panel.getByLabel('Legacy campaign creation').isVisible()))await panel.locator('summary').first().click();
 }
@@ -49,7 +56,7 @@ for(const id of ['fighter','rogue','cleric','wizard'] as const)test(id+' complet
  if(id==='wizard'){
   await page.evaluate(()=>{localStorage.setItem('four-keeps-access-code','browser-only-test-code');localStorage.setItem('four-keeps-dm-mode','on');});await page.reload();await page.getByRole('button',{name:'Continue Adventure'}).click();let sent:any;
   await page.route('**/api/dm',async route=>{sent=route.request().postDataJSON();await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({narration:'The reported footprints remain uncertain.',newFacts:[],worldUpdates:{},combatStart:null})});});
-  await page.getByLabel('Message the Dungeon Master').fill('What does the watchkeeper report mean here?');await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();await page.getByRole('button',{name:'Adventure',exact:true}).click();await expect(page.getByLabel('Adventure',{exact:true})).toContainText('The reported footprints remain uncertain.');await openDevelopment(page);expect(sent.gameState.playerBuild.spellbook).toContain('magic-missile');expect(sent.gameState.characterIdentity.classId).toBe('wizard');
+  await page.getByLabel('Message the Dungeon Master').fill('What does the watchkeeper report mean here?');await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();await navigate(page,'Adventure');await expect(page.getByLabel('Adventure',{exact:true})).toContainText('The reported footprints remain uncertain.');await openDevelopment(page);expect(sent.gameState.playerBuild.spellbook).toContain('magic-missile');expect(sent.gameState.characterIdentity.classId).toBe('wizard');
  }
  const quick=session.getByLabel('Quick adventure encounter');for(const [field,value] of Object.entries({'player initiative':'20','enemy initiative':'10','enemy identifier':'tower-guard','enemy hp':'3','enemy ac':'10','enemy attack bonus':'2','enemy damage bonus':'1','enemy damage dice':'1d4'}))await quick.getByLabel('Quick '+field,{exact:true}).fill(value);
  await quick.getByRole('checkbox').check();await quick.getByRole('button',{name:'Start verified encounter'}).click();const battle=session.getByLabel('Companion encounter',{exact:true});
@@ -73,7 +80,7 @@ for(const id of ['fighter','rogue','cleric','wizard'] as const)test(id+' complet
  c=await saved(page);expect(c.hitDiceRemaining).toBe(0);expect(c.character.currentHitPoints).toBe(config[id].hp);if(id==='fighter')expect(c.character.resources['Second Wind'].used).toBe(0);if(id==='wizard'){expect(c.character.resources['Arcane Recovery'].used).toBe(1);expect(c.character.spellSlots.usedLevel1).toBe(0);}if(id==='cleric')expect(c.character.spellSlots.usedLevel1).toBe(1);
  await rest.getByRole('checkbox',{name:/DM confirms safe/}).check();await rest.getByRole('button',{name:'Complete long rest'}).click();await expect.poll(async()=>(await saved(page)).hitDiceRemaining).toBe(1);await page.reload();await page.getByRole('button',{name:'Continue Adventure'}).click();c=await saved(page);expect(c.hitDiceRemaining).toBe(1);expect(c.character.currentHitPoints).toBe(config[id].hp);expect(c.characterBuild).toEqual(snapshot);expect(c.xp).toBe(30);if(c.character.spellSlots)expect(c.character.spellSlots.usedLevel1).toBe(0);for(const pool of Object.values(c.character.resources??{}) as any[])expect(pool.used).toBe(0);
  if(id==='fighter'){await openDevelopment(page);const again=session.getByLabel('Player rest recovery');await again.getByRole('checkbox',{name:/DM confirms safe/}).check();await expect(again.getByRole('button',{name:'Complete long rest'})).toBeDisabled();await again.getByRole('checkbox',{name:/Include 960 minutes/}).check();await again.getByRole('button',{name:'Complete long rest'}).click();await expect(again.getByRole('status')).toHaveText('Rest completed and saved.');expect((await saved(page)).elapsedMinutes).toBe(1980);}
- await page.getByRole('button',{name:'Player',exact:true}).click();await expect(page.getByLabel('Saved character build')).toContainText('Saved level-one choices');expect(errors).toEqual([]);
+ await navigate(page,'Player');await expect(page.getByLabel('Saved character build')).toContainText('Saved level-one choices');expect(errors).toEqual([]);
 });
 
 test('rest save failure preserves Hit Dice, reports the failure, and permits a successful retry',async({page})=>{

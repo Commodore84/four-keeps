@@ -1,6 +1,13 @@
 import { test, expect, type Page } from '@playwright/test';
+async function navigate(page:Page,tab:'Adventure'|'Player'|'Journal'|'Map'|'Settings'){
+ const menu=page.getByRole('button',{name:'Open navigation menu'});
+ await menu.waitFor({state:'visible',timeout:2500}).catch(()=>{});
+ if(await menu.count()===0){if(tab==='Settings'){await page.getByRole('button',{name:'Settings',exact:true}).click();return;}throw new Error('Navigation menu is unavailable on the portal screen');}
+ if(await menu.getAttribute('aria-expanded')!=='true')await menu.click();
+ await page.getByRole('navigation',{name:'Primary navigation'}).getByRole('button',{name:tab,exact:true}).click();
+}
 async function openDevelopment(page:Page){
- await page.getByRole('button',{name:'Settings',exact:true}).click();
+ await navigate(page,'Settings');
  const panel=page.getByLabel('Development section');
  if(!(await panel.getByLabel('Legacy campaign creation').isVisible()))await panel.locator('summary').first().click();
 }
@@ -10,34 +17,34 @@ async function createLegacyCampaign(page:Page,title:string) {
  await openDevelopment(page);
  await page.getByLabel('Legacy campaign creation').getByLabel('New campaign name').fill(title);
  await page.getByLabel('Legacy campaign creation').getByRole('button',{name:'New',exact:true}).click();
- await page.getByRole('button',{name:'Settings',exact:true}).click();
+ await navigate(page,'Settings');
 }
 
 
 test('creates a local campaign and restores its journal after reload', async ({ page }) => {
   await page.goto('/four-keeps/');
   await expect(page.getByRole('heading', { name: 'Four Keeps' })).toBeVisible();
-  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await navigate(page,'Settings');
   await createLegacyCampaign(page,'Browser journal smoke');
-  await page.getByRole('button', { name: 'Adventure', exact: true }).click();
+  await navigate(page,'Adventure');
   await expect(page.getByText('Campaign saved on this device', { exact: false })).toBeVisible();
   await page.getByLabel('Message the Dungeon Master').fill('I inspect the road.');
-  await page.getByRole('button', { name: 'Player', exact: true }).click();
+  await navigate(page,'Player');
   await expect(page.getByLabel('Message the Dungeon Master')).toHaveValue('I inspect the road.');
   await page.getByRole('button', { name: 'Send message to Dungeon Master' }).click();
-  await page.getByRole('button', { name: 'Journal', exact: true }).click();
+  await navigate(page,'Journal');
   await expect(page.getByText('I inspect the road.')).toBeVisible();
   await page.reload();
   await page.getByRole('button', { name: 'Continue Adventure' }).click();
-  await page.getByRole('button', { name: 'Journal', exact: true }).click();
+  await navigate(page,'Journal');
   await expect(page.getByText('I inspect the road.')).toBeVisible();
 });
 
 test('training encounter starts, rolls initiative, and survives reload', async ({ page }) => {
   await page.goto('/four-keeps/');
-  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await navigate(page,'Settings');
   await createLegacyCampaign(page,'Browser combat smoke');
-  await page.getByRole('button', { name: 'Adventure', exact: true }).click();
+  await navigate(page,'Adventure');
   await openDevelopment(page);
   await page.getByRole('button', { name: 'Start encounter training' }).click();
   await expect(page.getByRole('button', { name: 'Roll initiative (d20 + DEX)' })).toBeVisible();
@@ -53,12 +60,12 @@ test('training encounter starts, rolls initiative, and survives reload', async (
 
 test('navigation preserves unsent draft and a saved campaign after reload', async ({ page }) => {
   await page.goto('/four-keeps/');
-  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await navigate(page,'Settings');
   await createLegacyCampaign(page,'Browser persistence');
-  await page.getByRole('button', { name: 'Adventure', exact: true }).click();
+  await navigate(page,'Adventure');
   await page.getByLabel('Message the Dungeon Master').fill('Draft before navigating');
-  await page.getByRole('button', { name: 'Map', exact: true }).click();
-  await page.getByRole('button', { name: 'Adventure', exact: true }).click();
+  await navigate(page,'Map');
+  await navigate(page,'Adventure');
   await expect(page.getByLabel('Message the Dungeon Master')).toHaveValue('Draft before navigating');
   await page.reload();
   await expect(page.getByText('Browser persistence')).toBeVisible();
@@ -66,7 +73,7 @@ test('navigation preserves unsent draft and a saved campaign after reload', asyn
 
 test('campaign deletion requires confirmation and preserves other campaigns', async ({ page }) => {
   await page.goto('/four-keeps/');
-  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await navigate(page,'Settings');
   await createLegacyCampaign(page,'Keep this campaign');
   await createLegacyCampaign(page,'Delete this campaign');
   await page.getByRole('button', { name: 'Delete selected campaign' }).click();
@@ -80,7 +87,7 @@ test('campaign deletion requires confirmation and preserves other campaigns', as
   await expect(page.getByLabel('Active campaign').locator('option')).toHaveCount(1);
   await expect(page.getByLabel('Active campaign')).toContainText('Keep this campaign');
   await page.reload();
-  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await navigate(page,'Settings');
   await expect(page.getByLabel('Active campaign').locator('option')).toHaveCount(1);
   await page.getByRole('button', { name: 'Delete selected campaign' }).click();
   await page.getByRole('button', { name: 'Confirm delete' }).click();
@@ -92,9 +99,9 @@ test('campaign deletion requires confirmation and preserves other campaigns', as
 
 test('combat replaces persistent DM composer with optional Ask DM and header resources', async ({ page }) => {
   await page.goto('/four-keeps/');
-  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await navigate(page,'Settings');
   await createLegacyCampaign(page,'Combat UI regression');
-  await page.getByRole('button', { name: 'Adventure', exact: true }).click();
+  await navigate(page,'Adventure');
   await openDevelopment(page);
   await page.getByRole('button', { name: 'Start encounter training' }).click();
   await expect(page.getByLabel('Message the Dungeon Master')).toHaveCount(0);
@@ -112,9 +119,9 @@ test('illustrated forest map displays terrain-aligned grid without a legend', as
   expect((await request.get('/forest-ruins-test.svg')).status()).toBe(200);
   expect((await request.get('/dragon-sigil.svg')).status()).toBe(200);
   await page.goto('/four-keeps/');
-  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await navigate(page,'Settings');
   await createLegacyCampaign(page,'Forest map browser test');
-  await page.getByRole('button', { name: 'Adventure', exact: true }).click();
+  await navigate(page,'Adventure');
   await openDevelopment(page);
   await page.getByRole('button', { name: 'Start encounter training' }).click();
   await page.getByRole('button', { name: 'Roll initiative (d20 + DEX)' }).click();
@@ -289,9 +296,9 @@ test('projected warlock sheet recalculates from provisional level-four ability c
 
 test('registered subclass actors persist in campaign and remain separate from Nighthawk',async({page})=>{
  await page.goto('/four-keeps/');
- await page.getByRole('button',{name:'Settings',exact:true}).click();
+ await navigate(page,'Settings');
  await createLegacyCampaign(page,'Subclass actor persistence');
- await page.getByRole('button',{name:'Adventure',exact:true}).click();
+ await navigate(page,'Adventure');
  await page.evaluate(async()=>{
   const db=await new Promise<IDBDatabase>((resolve,reject)=>{const request=indexedDB.open('four-keeps-local',1);request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(request.error);});
   await new Promise<void>((resolve,reject)=>{
@@ -313,9 +320,9 @@ test('registered subclass actors persist in campaign and remain separate from Ni
 
 test('player registers and manages a Fiend actor without modifying Nighthawk',async({page})=>{
  await page.goto('/four-keeps/');
- await page.getByRole('button',{name:'Settings',exact:true}).click();
+ await navigate(page,'Settings');
  await createLegacyCampaign(page,'Fiend manager browser');
- await page.getByRole('button',{name:'Adventure',exact:true}).click();
+ await navigate(page,'Adventure');
  await openDevelopment(page);
  const manager=page.getByLabel('Subclass actor manager');
  await manager.getByLabel('New subclass actor ID').fill('companion-fiend');
@@ -340,14 +347,14 @@ test('player registers and manages a Fiend actor without modifying Nighthawk',as
  await expect(saved).toContainText('Dark One’s Own Luck: 2 remaining');
  await saved.getByRole('button',{name:'Long Rest'}).click();
  await expect(saved).toContainText('Dark One’s Own Luck: 3 remaining');
- await page.getByRole('button',{name:'Player',exact:true}).click();
+ await navigate(page,'Player');
  await expect(page.getByRole('heading',{name:'Player Character'})).toBeVisible();
 });
 test('Druid terrain changes only on Long Rest and persists',async({page})=>{
  await page.goto('/four-keeps/');
- await page.getByRole('button',{name:'Settings',exact:true}).click();
+ await navigate(page,'Settings');
  await createLegacyCampaign(page,'Land manager browser');
- await page.getByRole('button',{name:'Adventure',exact:true}).click();
+ await navigate(page,'Adventure');
  await openDevelopment(page);
  const manager=page.getByLabel('Subclass actor manager');
  await manager.getByLabel('New subclass actor ID').fill('companion-druid');
@@ -365,9 +372,9 @@ test('Druid terrain changes only on Long Rest and persists',async({page})=>{
 
 test('companion encounter initiative, turn, resistance and persistence stay isolated from Nighthawk',async({page})=>{
  await page.goto('/four-keeps/');
- await page.getByRole('button',{name:'Settings',exact:true}).click();
+ await navigate(page,'Settings');
  await createLegacyCampaign(page,'Companion encounter browser');
- await page.getByRole('button',{name:'Adventure',exact:true}).click();
+ await navigate(page,'Adventure');
  await openDevelopment(page);
  const manager=page.getByLabel('Subclass actor manager');
  await manager.getByLabel('New subclass actor ID').fill('paladin');
@@ -395,15 +402,15 @@ test('companion encounter initiative, turn, resistance and persistence stay isol
  await openDevelopment(page);
  await expect(page.getByRole('region',{name:'Companion encounter',exact:true})).toContainText('Active turn: druid');
  await expect(page.getByRole('region',{name:'Companion encounter',exact:true})).toContainText('druid: 15/20 HP');
- await page.getByRole('button',{name:'Player',exact:true}).click();
+ await navigate(page,'Player');
  await expect(page.getByRole('heading',{name:'Player Character'})).toBeVisible();
 });
 
 test('companion attack consumes action and movement budget persists across reload',async({page})=>{
  await page.goto('/four-keeps/');
- await page.getByRole('button',{name:'Settings',exact:true}).click();
+ await navigate(page,'Settings');
  await createLegacyCampaign(page,'Companion attacks browser');
- await page.getByRole('button',{name:'Adventure',exact:true}).click();
+ await navigate(page,'Adventure');
  await openDevelopment(page);
  const manager=page.getByLabel('Subclass actor manager');
  for(const [id,subclass] of [['paladin','paladin-devotion'],['fiend','warlock-fiend']] as const){
@@ -437,9 +444,9 @@ test('companion attack consumes action and movement budget persists across reloa
 
 test('companion grid Dash and attack range checks persist after reload',async({page})=>{
  await page.goto('/four-keeps/');
- await page.getByRole('button',{name:'Settings',exact:true}).click();
+ await navigate(page,'Settings');
  await createLegacyCampaign(page,'Companion Dash browser');
- await page.getByRole('button',{name:'Adventure',exact:true}).click();
+ await navigate(page,'Adventure');
  await openDevelopment(page);
  const manager=page.getByLabel('Subclass actor manager');
  await manager.getByLabel('New subclass actor ID').fill('paladin');
@@ -459,9 +466,9 @@ test('companion grid Dash and attack range checks persist after reload',async({p
 
 test('companion obstacles block attacks and persist across reload',async({page})=>{
  await page.goto('/four-keeps/');
- await page.getByRole('button',{name:'Settings',exact:true}).click();
+ await navigate(page,'Settings');
  await createLegacyCampaign(page,'Companion obstacles browser');
- await page.getByRole('button',{name:'Adventure',exact:true}).click();
+ await navigate(page,'Adventure');
  await openDevelopment(page);
  const manager=page.getByLabel('Subclass actor manager');
  for(const id of ['paladin','fiend']){
@@ -490,9 +497,9 @@ test('companion obstacles block attacks and persist across reload',async({page})
 
 test('companion cover annotations persist and keep Nighthawk separate',async({page})=>{
  await page.goto('/four-keeps/');
- await page.getByRole('button',{name:'Settings',exact:true}).click();
+ await navigate(page,'Settings');
  await createLegacyCampaign(page,'Companion cover browser');
- await page.getByRole('button',{name:'Adventure',exact:true}).click();
+ await navigate(page,'Adventure');
  await openDevelopment(page);
  const manager=page.getByLabel('Subclass actor manager');
  await manager.getByLabel('New subclass actor ID').fill('paladin');
@@ -512,9 +519,9 @@ test('companion cover annotations persist and keep Nighthawk separate',async({pa
 
 test('companion mobile quick movement spends five feet and respects arena bounds',async({page})=>{
  await page.goto('/four-keeps/');
- await page.getByRole('button',{name:'Settings',exact:true}).click();
+ await navigate(page,'Settings');
  await createLegacyCampaign(page,'Quick movement browser');
- await page.getByRole('button',{name:'Adventure',exact:true}).click();
+ await navigate(page,'Adventure');
  await openDevelopment(page);
  const manager=page.getByLabel('Subclass actor manager');
  await manager.getByLabel('New subclass actor ID').fill('paladin');
@@ -530,9 +537,9 @@ test('companion mobile quick movement spends five feet and respects arena bounds
 
 test('opt-in unified Nighthawk encounter shares initiative and survives reload',async({page})=>{
  await page.goto('/four-keeps/');
- await page.getByRole('button',{name:'Settings',exact:true}).click();
+ await navigate(page,'Settings');
  await createLegacyCampaign(page,'Unified party browser');
- await page.getByRole('button',{name:'Adventure',exact:true}).click();
+ await navigate(page,'Adventure');
  await openDevelopment(page);
  const manager=page.getByLabel('Subclass actor manager');
  await manager.getByLabel('New subclass actor ID').fill('paladin');
@@ -555,9 +562,9 @@ test('opt-in unified Nighthawk encounter shares initiative and survives reload',
 
 test('unified reaction and explicit Nighthawk HP sync persist after reload',async({page})=>{
  await page.goto('/four-keeps/');
- await page.getByRole('button',{name:'Settings',exact:true}).click();
+ await navigate(page,'Settings');
  await createLegacyCampaign(page,'Unified HP sync browser');
- await page.getByRole('button',{name:'Adventure',exact:true}).click();
+ await navigate(page,'Adventure');
  await openDevelopment(page);
  const manager=page.getByLabel('Subclass actor manager');
  await manager.getByLabel('New subclass actor ID').fill('paladin');
@@ -579,9 +586,9 @@ test('unified reaction and explicit Nighthawk HP sync persist after reload',asyn
 
 test('unified actor resources and derived statistics persist in browser',async({page})=>{
  await page.goto('/four-keeps/');
- await page.getByRole('button',{name:'Settings',exact:true}).click();
+ await navigate(page,'Settings');
  await createLegacyCampaign(page,'Unified resource browser');
- await page.getByRole('button',{name:'Adventure',exact:true}).click();
+ await navigate(page,'Adventure');
  await openDevelopment(page);
  const manager=page.getByLabel('Subclass actor manager');
  await manager.getByLabel('New subclass actor ID').fill('paladin');
@@ -606,9 +613,9 @@ test('unified actor resources and derived statistics persist in browser',async({
 
 test('manual concentration save resolution records success and failure',async({page})=>{
  await page.goto('/four-keeps/');
- await page.getByRole('button',{name:'Settings',exact:true}).click();
+ await navigate(page,'Settings');
  await createLegacyCampaign(page,'Concentration save browser');
- await page.getByRole('button',{name:'Adventure',exact:true}).click();
+ await navigate(page,'Adventure');
  await openDevelopment(page);
  const manager=page.getByLabel('Subclass actor manager');
  await manager.getByLabel('New subclass actor ID').fill('paladin');
@@ -626,9 +633,9 @@ test('manual concentration save resolution records success and failure',async({p
 
 test('DM-verified opportunity reaction consumes only the attacker reaction',async({page})=>{
  await page.goto('/four-keeps/');
- await page.getByRole('button',{name:'Settings',exact:true}).click();
+ await navigate(page,'Settings');
  await createLegacyCampaign(page,'Opportunity browser');
- await page.getByRole('button',{name:'Adventure',exact:true}).click();
+ await navigate(page,'Adventure');
  await openDevelopment(page);
  const manager=page.getByLabel('Subclass actor manager');
  await manager.getByLabel('New subclass actor ID').fill('paladin');
@@ -646,9 +653,9 @@ test('DM-verified opportunity reaction consumes only the attacker reaction',asyn
 
 test('unified campaign ammunition spending rejects missing campaign equipment',async({page})=>{
  await page.goto('/four-keeps/');
- await page.getByRole('button',{name:'Settings',exact:true}).click();
+ await navigate(page,'Settings');
  await createLegacyCampaign(page,'Ammunition browser');
- await page.getByRole('button',{name:'Adventure',exact:true}).click();
+ await navigate(page,'Adventure');
  await openDevelopment(page);
  const manager=page.getByLabel('Subclass actor manager');
  await manager.getByLabel('New subclass actor ID').fill('paladin');
@@ -668,9 +675,9 @@ test('unified campaign ammunition spending rejects missing campaign equipment',a
 
 test('DM condition and actor faction controls persist in encounter',async({page})=>{
  await page.goto('/four-keeps/');
- await page.getByRole('button',{name:'Settings',exact:true}).click();
+ await navigate(page,'Settings');
  await createLegacyCampaign(page,'Condition browser');
- await page.getByRole('button',{name:'Adventure',exact:true}).click();
+ await navigate(page,'Adventure');
  await openDevelopment(page);
  const manager=page.getByLabel('Subclass actor manager');
  await manager.getByLabel('New subclass actor ID').fill('paladin');
@@ -692,9 +699,9 @@ test('DM condition and actor faction controls persist in encounter',async({page}
 
 test('enemy actor with DM-supplied combat statistics persists after reload',async({page})=>{
  await page.goto('/four-keeps/');
- await page.getByRole('button',{name:'Settings',exact:true}).click();
+ await navigate(page,'Settings');
  await createLegacyCampaign(page,'Enemy actor browser');
- await page.getByRole('button',{name:'Adventure',exact:true}).click();
+ await navigate(page,'Adventure');
  await openDevelopment(page);
  const manager=page.getByLabel('Subclass actor manager');
  await manager.getByLabel('New subclass actor ID').fill('paladin');
@@ -713,9 +720,9 @@ test('enemy actor with DM-supplied combat statistics persists after reload',asyn
 
 test('prone standing consumes movement and persists across reload',async({page})=>{
  await page.goto('/four-keeps/');
- await page.getByRole('button',{name:'Settings',exact:true}).click();
+ await navigate(page,'Settings');
  await createLegacyCampaign(page,'Prone lifecycle browser');
- await page.getByRole('button',{name:'Adventure',exact:true}).click();
+ await navigate(page,'Adventure');
  await openDevelopment(page);
  const manager=page.getByLabel('Subclass actor manager');
  await manager.getByLabel('New subclass actor ID').fill('paladin');
@@ -736,9 +743,9 @@ test('prone standing consumes movement and persists across reload',async({page})
 
 test('enemy damage profile and healing controls persist in encounter UI',async({page})=>{
  await page.goto('/four-keeps/');
- await page.getByRole('button',{name:'Settings',exact:true}).click();
+ await navigate(page,'Settings');
  await createLegacyCampaign(page,'Enemy damage and healing browser');
- await page.getByRole('button',{name:'Adventure',exact:true}).click();
+ await navigate(page,'Adventure');
  await openDevelopment(page);
  const manager=page.getByLabel('Subclass actor manager');
  await manager.getByLabel('New subclass actor ID').fill('paladin');
@@ -760,9 +767,9 @@ test('enemy damage profile and healing controls persist in encounter UI',async({
 
 test('enemy tactic selection persists through reload without autonomous attacks',async({page})=>{
  await page.goto('/four-keeps/');
- await page.getByRole('button',{name:'Settings',exact:true}).click();
+ await navigate(page,'Settings');
  await createLegacyCampaign(page,'Persistent enemy tactics');
- await page.getByRole('button',{name:'Adventure',exact:true}).click();
+ await navigate(page,'Adventure');
  await openDevelopment(page);
  const manager=page.getByLabel('Subclass actor manager');
  await manager.getByLabel('New subclass actor ID').fill('paladin');
@@ -784,9 +791,9 @@ test('enemy tactic selection persists through reload without autonomous attacks'
 
 test('DM-approved enemy movement turn persists across campaign reload',async({page})=>{
  await page.goto('/four-keeps/');
- await page.getByRole('button',{name:'Settings',exact:true}).click();
+ await navigate(page,'Settings');
  await createLegacyCampaign(page,'Enemy movement persistence');
- await page.getByRole('button',{name:'Adventure',exact:true}).click();
+ await navigate(page,'Adventure');
  await openDevelopment(page);
  const manager=page.getByLabel('Subclass actor manager');
  await manager.getByLabel('New subclass actor ID').fill('paladin');
@@ -808,9 +815,9 @@ test('DM-approved enemy movement turn persists across campaign reload',async({pa
 
 test('DM-rolled enemy move and attack resolves and persists after reload',async({page})=>{
  await page.goto('/four-keeps/');
- await page.getByRole('button',{name:'Settings',exact:true}).click();
+ await navigate(page,'Settings');
  await createLegacyCampaign(page,'Enemy attack persistence');
- await page.getByRole('button',{name:'Adventure',exact:true}).click();
+ await navigate(page,'Adventure');
  await openDevelopment(page);
  const manager=page.getByLabel('Subclass actor manager');
  await manager.getByLabel('New subclass actor ID').fill('paladin');
@@ -838,9 +845,9 @@ test('DM-rolled enemy move and attack resolves and persists after reload',async(
 test('mobile tactical grid selects a square and persists movement after reload',async({page})=>{
  await page.setViewportSize({width:390,height:844});
  await page.goto('/four-keeps/');
- await page.getByRole('button',{name:'Settings',exact:true}).click();
+ await navigate(page,'Settings');
  await createLegacyCampaign(page,'Tactical grid persistence');
- await page.getByRole('button',{name:'Adventure',exact:true}).click();
+ await navigate(page,'Adventure');
  await openDevelopment(page);
  const manager=page.getByLabel('Subclass actor manager');
  await manager.getByLabel('New subclass actor ID').fill('paladin');
@@ -860,9 +867,9 @@ test('mobile tactical grid selects a square and persists movement after reload',
 
 test('DM-configured ranged enemy attack persists verified HP and range after reload',async({page})=>{
  await page.goto('/four-keeps/');
- await page.getByRole('button',{name:'Settings',exact:true}).click();
+ await navigate(page,'Settings');
  await createLegacyCampaign(page,'Ranged enemy persistence');
- await page.getByRole('button',{name:'Adventure',exact:true}).click();
+ await navigate(page,'Adventure');
  await openDevelopment(page);
  const manager=page.getByLabel('Subclass actor manager');
  await manager.getByLabel('New subclass actor ID').fill('paladin');
@@ -891,9 +898,9 @@ test('DM-configured ranged enemy attack persists verified HP and range after rel
 test('mobile tactical preview shows movement cost and selects enemy target without moving',async({page})=>{
  await page.setViewportSize({width:390,height:844});
  await page.goto('/four-keeps/');
- await page.getByRole('button',{name:'Settings',exact:true}).click();
+ await navigate(page,'Settings');
  await createLegacyCampaign(page,'Tactical targeting preview');
- await page.getByRole('button',{name:'Adventure',exact:true}).click();
+ await navigate(page,'Adventure');
  await openDevelopment(page);
  const manager=page.getByLabel('Subclass actor manager');
  await manager.getByLabel('New subclass actor ID').fill('paladin');
@@ -921,9 +928,9 @@ test('mobile tactical preview shows movement cost and selects enemy target witho
 
 test('tactical path preview identifies reach-exit opportunity threats before committing movement',async({page})=>{
  await page.goto('/four-keeps/');
- await page.getByRole('button',{name:'Settings',exact:true}).click();
+ await navigate(page,'Settings');
  await createLegacyCampaign(page,'Reach exit preview');
- await page.getByRole('button',{name:'Adventure',exact:true}).click();
+ await navigate(page,'Adventure');
  await openDevelopment(page);
  const manager=page.getByLabel('Subclass actor manager');
  await manager.getByLabel('New subclass actor ID').fill('paladin');
@@ -943,9 +950,9 @@ test('tactical path preview identifies reach-exit opportunity threats before com
 
 test('frontier adventure travels, records interactions and resumes from campaign save',async({page})=>{
  await page.goto('/four-keeps/');
- await page.getByRole('button',{name:'Settings',exact:true}).click();
+ await navigate(page,'Settings');
  await createLegacyCampaign(page,'Frontier session persistence');
- await page.getByRole('button',{name:'Adventure',exact:true}).click();
+ await navigate(page,'Adventure');
  await openDevelopment(page);
  const session=page.getByLabel('Adventure session',{exact:true});
  await session.getByRole('button',{name:'Start frontier adventure'}).click();
@@ -963,14 +970,14 @@ test('frontier adventure travels, records interactions and resumes from campaign
 });
 test('frontier encounter handoff uses registered companion and resumes after completed encounter',async({page})=>{
  await page.goto('/four-keeps/');
- await page.getByRole('button',{name:'Settings',exact:true}).click();
+ await navigate(page,'Settings');
  await createLegacyCampaign(page,'Linked adventure encounter');
- await page.getByRole('button',{name:'Adventure',exact:true}).click();
+ await navigate(page,'Adventure');
  await openDevelopment(page);
  const manager=page.getByLabel('Subclass actor manager');
  await manager.getByLabel('New subclass actor ID').fill('paladin');
  await manager.getByRole('button',{name:'Register subclass actor'}).click();
- await page.getByRole('button',{name:'Adventure',exact:true}).click();
+ await navigate(page,'Adventure');
  await openDevelopment(page);
  const session=page.getByLabel('Adventure session',{exact:true});
  await session.getByRole('button',{name:'Start frontier adventure'}).click();
@@ -1017,7 +1024,7 @@ test('validated character draft becomes a persistent campaign without replacing 
  await page.getByRole('button',{name:'Continue Adventure'}).click();
  await openDevelopment(page);
  await expect(page.getByLabel('Adventure session status')).toContainText('Raven');
- await page.getByRole('button',{name:'Settings',exact:true}).click();
+ await navigate(page,'Settings');
  await createLegacyCampaign(page,'Legacy Nighthawk');
  await openDevelopment(page);
  await expect(page.getByLabel('Adventure session',{exact:true})).not.toContainText('Raven');
@@ -1027,9 +1034,9 @@ test('adventure DM request carries authoritative location and interaction contex
  await page.goto('/four-keeps/');
  await page.evaluate(()=>{localStorage.setItem('four-keeps-access-code','browser-test-code');localStorage.setItem('four-keeps-dm-mode','on');});
  await page.reload();
- await page.getByRole('button',{name:'Settings',exact:true}).click();
+ await navigate(page,'Settings');
  await createLegacyCampaign(page,'DM scene integration');
- await page.getByRole('button',{name:'Adventure',exact:true}).click();
+ await navigate(page,'Adventure');
  await openDevelopment(page);
  const session=page.getByLabel('Adventure session',{exact:true});
  await session.getByRole('button',{name:'Start frontier adventure'}).click();
@@ -1040,7 +1047,7 @@ test('adventure DM request carries authoritative location and interaction contex
   request=route.request().postDataJSON();
   await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({narration:'The crossroads remain quiet.',combatStart:{enemyName:'Unverified enemy'},newFacts:[],worldUpdates:{}})});
  });
- await page.getByRole('button',{name:'Adventure',exact:true}).click();
+ await navigate(page,'Adventure');
  await page.getByLabel('Message the Dungeon Master').fill('What can I see from the crossroads?');
  await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
  await expect(page.getByLabel('Adventure',{exact:true})).toContainText('The crossroads remain quiet.');
@@ -1100,12 +1107,12 @@ test('AI combat proposal for imported character persists and enters verified com
 
 test('development utilities are isolated from the normal Adventure and Player tabs',async({page})=>{
  await page.goto('/four-keeps/');
- await page.getByRole('button',{name:'Settings',exact:true}).click();
+ await navigate(page,'Settings');
  await createLegacyCampaign(page,'Development isolation');
- await page.getByRole('button',{name:'Adventure',exact:true}).click();
+ await navigate(page,'Adventure');
  await expect(page.getByRole('button',{name:'Start encounter training'})).toHaveCount(0);
  await expect(page.getByLabel('Adventure session',{exact:true})).toHaveCount(0);
- await page.getByRole('button',{name:'Player',exact:true}).click();
+ await navigate(page,'Player');
  await expect(page.getByLabel('Subclass actor manager')).toHaveCount(0);
  await expect(page.getByLabel('Companion encounter setup')).toHaveCount(0);
  await expect(page.getByText('Development: XP and level-up testing')).toHaveCount(0);
@@ -1116,19 +1123,27 @@ test('development utilities are isolated from the normal Adventure and Player ta
  await expect(page.getByText('Development: XP and level-up testing')).toBeVisible();
 });
 
-test('mobile navigation fits five tabs and development remains collapsed at the bottom of Settings',async({page})=>{
+test('mobile hamburger navigation preserves five destinations and collapsed development settings',async({page})=>{
  await page.setViewportSize({width:375,height:812});
  await page.goto('/four-keeps/');
- await page.getByRole('button',{name:'Settings',exact:true}).click();
+ await navigate(page,'Settings');
+ const menu=page.getByRole('button',{name:'Open navigation menu'});
+ await expect(menu).toHaveAttribute('aria-expanded','false');
+ await expect(page.getByRole('navigation',{name:'Primary navigation'})).toHaveCount(0);
+ await menu.click();
  const nav=page.getByRole('navigation',{name:'Primary navigation'});
  await expect(nav.getByRole('button')).toHaveCount(5);
  await expect(nav.getByRole('button',{name:'Dev',exact:true})).toHaveCount(0);
+ await expect(nav.getByRole('button',{name:'Settings'})).toHaveAttribute('aria-current','page');
+ await nav.getByRole('button',{name:'Journal'}).click();
+ await expect(menu).toHaveAttribute('aria-expanded','false');
+ await expect(page.getByRole('navigation',{name:'Primary navigation'})).toHaveCount(0);
+ await navigate(page,'Settings');
  const panel=page.getByLabel('Development section');
- await expect(panel).toBeVisible();
  await expect(panel.getByLabel('Legacy campaign creation')).toBeHidden();
  await panel.locator('summary').first().click();
  await expect(panel.getByLabel('Legacy campaign creation')).toBeVisible();
- const bounds=await nav.boundingBox();
+ const bounds=await menu.boundingBox();
  expect(bounds).not.toBeNull();
  expect(bounds!.x+bounds!.width).toBeLessThanOrEqual(376);
 });
