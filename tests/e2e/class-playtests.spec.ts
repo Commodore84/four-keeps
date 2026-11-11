@@ -76,3 +76,41 @@ test('rest save failure preserves Hit Dice, reports the failure, and permits a s
  await rest.getByRole('button',{name:'Complete short rest'}).click();await expect(rest.getByRole('status')).toContainText('Rest could not be saved');expect((await saved(page)).hitDiceRemaining).toBe(1);await expect(rest.getByRole('checkbox',{name:/DM confirms safe/})).toBeChecked();
  await page.evaluate(()=>{IDBDatabase.prototype.transaction=(window as any).__originalTransaction;delete (window as any).__originalTransaction;});await rest.getByRole('button',{name:'Complete short rest'}).click();await expect(rest.getByRole('status')).toHaveText('Rest completed and saved.');expect((await saved(page)).hitDiceRemaining).toBe(0);
 });
+
+test('AI-led opening, world memory and saved pending action retry survive reload',async({page})=>{
+ test.setTimeout(90000);
+ test.setTimeout(90000);
+ await createAndImport(page,'fighter');
+ await expect.poll(async()=>Boolean((await saved(page))?.characterIdentity)).toBe(true);
+ await page.evaluate(()=>{localStorage.setItem('four-keeps-access-code','browser-test-code');localStorage.setItem('four-keeps-dm-mode','on');});
+ await page.reload();await page.getByRole('button',{name:'Continue Adventure'}).click();
+ let requests:any[]=[];let fail=false;
+ await page.route('**/api/dm',async route=>{
+   const body=route.request().postDataJSON();requests.push(body);
+   if(fail){await route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({error:'Temporary outage'})});return;}
+   await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({narration:body.opening?'A bell tolls from the abandoned keep.':'Mira says the bell rang at dusk.',newFacts:['A bell rang at dusk'],worldUpdates:{npcs:[{name:'Mira',role:'Watchkeeper',location:'Frontier Village',relationship:'neutral',notes:['Knows the old road']}],clues:[{text:'A stranger passed at dusk',evidence:'reported',source:'Mira'}]},combatStart:null})});
+ });
+ await page.getByRole('button',{name:'Begin AI-led adventure'}).click();
+ await expect(page.getByLabel('Adventure',{exact:true})).toContainText('A bell tolls from the abandoned keep.');
+ await expect(page.getByLabel('Adventure journal')).toContainText('1 people · 1 clues');
+ await page.getByLabel('Adventure journal').locator('summary').click();
+ await expect(page.getByLabel('Adventure journal')).toContainText('Mira');
+ await expect(page.getByLabel('Adventure journal')).toContainText('reported');
+ await page.reload();await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await expect(page.getByLabel('Adventure',{exact:true})).toContainText('A bell tolls from the abandoned keep.');
+ await expect(page.getByRole('button',{name:'Begin AI-led adventure'})).toHaveCount(0);
+ fail=true;
+ await page.getByLabel('Message the Dungeon Master').fill('Ask Mira about the bell');
+ await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
+ await expect(page.getByRole('button',{name:'Retry saved action'})).toBeVisible();
+ const pendingId=(await saved(page)).pendingAdventureAction.id;
+ await page.reload();await page.getByRole('button',{name:'Continue Adventure'}).click();
+ fail=false;
+ await page.getByRole('button',{name:'Retry saved action'}).click();
+ await expect(page.getByLabel('Adventure',{exact:true})).toContainText('Mira says the bell rang at dusk.');
+ expect(requests.at(-1).actionId).toBe(pendingId);
+ const final=await saved(page);
+ expect(final.pendingAdventureAction).toBeUndefined();
+ expect(final.journal.filter((e:any)=>e.id===pendingId+'-player')).toHaveLength(1);
+ expect(final.world.clues[0].evidence).toBe('reported');
+});

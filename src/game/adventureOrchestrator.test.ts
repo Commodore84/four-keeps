@@ -1,6 +1,6 @@
 import {describe,it,expect} from 'vitest';
 import {newCampaign} from './campaign';
-import {prepareAdventureOpening,commitAdventureOpening,needsAdventureOpening} from './adventureOrchestrator';
+import {prepareAdventureOpening,commitAdventureOpening,needsAdventureOpening,prepareAdventureAction,commitAdventureAction,adventureMemory} from './adventureOrchestrator';
 
 describe('AI adventure opening orchestration',()=>{
   const make=()=>({...newCampaign('Journey','opening-test','2026-01-01T00:00:00Z'),characterIdentity:{name:'Aster',speciesId:'human',backgroundId:'sage',classId:'wizard',draftId:'draft',pronouns:'',appearance:'',personality:'',backstory:''}});
@@ -21,5 +21,29 @@ describe('AI adventure opening orchestration',()=>{
   it('rejects an empty or unstarted opening',()=>{
     expect(()=>commitAdventureOpening(make(),'Hello')).toThrow();
     expect(()=>commitAdventureOpening(prepareAdventureOpening(make()),'  ')).toThrow();
+  });
+});
+
+describe('persistent AI adventure actions',()=>{
+  const campaign=()=>prepareAdventureOpening({...newCampaign('Journey','action-test','2026-01-01T00:00:00Z'),characterIdentity:{name:'Aster',speciesId:'human',backgroundId:'sage',classId:'wizard',draftId:'draft',pronouns:'',appearance:'',personality:'',backstory:''}});
+  it('persists pending intent and retries the same ID without duplicate turns',()=>{
+    const pending=prepareAdventureAction(campaign(),'I ask the guard about the bell','turn-1');
+    expect(prepareAdventureAction(pending,'I ask the guard about the bell','turn-1')).toBe(pending);
+    expect(()=>prepareAdventureAction(pending,'Another action','turn-2')).toThrow();
+    const committed=commitAdventureAction(pending,'turn-1','The guard lowers his voice.');
+    expect(committed.pendingAdventureAction).toBeUndefined();
+    expect(committed.journal.filter(e=>e.id.startsWith('turn-1'))).toHaveLength(2);
+    expect(commitAdventureAction(committed,'turn-1','Duplicate')).toBe(committed);
+    expect(()=>commitAdventureAction(pending,'other-id','Stale')).toThrow();
+  });
+  it('remembers structured NPCs and reported clues without upgrading their certainty',()=>{
+    const pending=prepareAdventureAction(campaign(),'Who was here?','turn-3');
+    const done=commitAdventureAction(pending,'turn-3','A witness saw a figure.',undefined,['A bell rang at dusk'],{
+      npcs:[{name:'Mira',role:'Guard',location:'Frontier Village',relationship:'neutral',notes:['Knows the road']}],
+      clues:[{text:'A hooded figure was seen',evidence:'reported',source:'Mira'}]
+    });
+    expect(adventureMemory(done).npcs[0].name).toBe('Mira');
+    expect(adventureMemory(done).clues[0].evidence).toBe('reported');
+    expect(adventureMemory(done).establishedFacts).toContain('A bell rang at dusk');
   });
 });
