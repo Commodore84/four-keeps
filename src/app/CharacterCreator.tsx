@@ -63,7 +63,6 @@ export function CharacterCreator(){
   const [drafts,setDrafts]=useState<CharacterDraft[]>([]);
   const [selected,setSelected]=useState<string|null>(null);
   const [error,setError]=useState('');
-  const [dmQuestion,setDmQuestion]=useState('');
   useEffect(()=>{setDrafts(readCharacterDrafts());},[]);
   const draft=drafts.find(item=>item.id===selected);
   function persist(next:CharacterDraft[]){
@@ -283,7 +282,7 @@ export function CharacterCreator(){
           <p className="text-xs text-parchment/60">Forecasts are saved locally with this draft, do not modify level-one stats, and do not apply any choices to a campaign.</p>
         </div>})()}
       </div>}
-      <AskDM key={draft.id} draft={draft} initialQuestion={dmQuestion}/>
+      <AskDM key={draft.id} draft={draft} initialQuestion=""/>
       <p className="text-xs text-parchment/55">Draft only · not attached to a campaign · cannot enter play until all required choices are valid</p>
     </>}
   </section>;
