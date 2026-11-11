@@ -1,4 +1,4 @@
-import { parseDungeonMasterResponse } from './dm-response.js';
+import { readProviderNarration, parseDungeonMasterResponse } from './dm-response.js';
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto';
 // Vercel serverless function. Never expose OPENAI_API_KEY to the browser.
 const MAX_TURNS = 10;
@@ -79,7 +79,7 @@ export default async function handler(req, res) {
   const latestPendingSpell = [...spellEffects].reverse().find(e=>e.status==='awaiting-adjudication') ?? null;
   const rawAdventure=state.adventureSession && typeof state.adventureSession==='object'?state.adventureSession:null;
   const siteNames={frontier:'Frontier Village',crossroads:'Old Crossroads',watchtower:'Old Watchtower'};
-  const adventureContext=rawAdventure && Object.hasOwn(siteNames,rawAdventure.site) && ['exploring','encounter'].includes(rawAdventure.status) ? {site:rawAdventure.site,location:siteNames[rawAdventure.site],status:rawAdventure.status,visited:Array.isArray(rawAdventure.visited)?rawAdventure.visited.filter(id=>Object.hasOwn(siteNames,id)).slice(0,3):[],recentInteractions:Array.isArray(rawAdventure.interactions)?rawAdventure.interactions.slice(-5).filter(e=>e&&typeof e.response==='string').map(e=>e.response.slice(0,250)):[]} : null;
+  const adventureContext=rawAdventure && Object.hasOwn(siteNames,rawAdventure.site) && ['exploring','encounter'].includes(rawAdventure.status) ? {site:rawAdventure.site,location:siteNames[rawAdventure.site],status:rawAdventure.status,pendingEncounter:Boolean(rawAdventure.pendingEncounter),visited:Array.isArray(rawAdventure.visited)?rawAdventure.visited.filter(id=>Object.hasOwn(siteNames,id)).slice(0,3):[],recentInteractions:Array.isArray(rawAdventure.interactions)?rawAdventure.interactions.slice(-5).filter(e=>e&&typeof e.response==='string').map(e=>e.response.slice(0,250)):[]} : null;
   const rawIdentity=state.characterIdentity && typeof state.characterIdentity==='object'?state.characterIdentity:null;
   const characterIdentity=rawIdentity && typeof rawIdentity.name==='string' && typeof rawIdentity.classId==='string'?{name:rawIdentity.name.slice(0,100),classId:rawIdentity.classId.slice(0,40),speciesId:String(rawIdentity.speciesId??'').slice(0,40),backgroundId:String(rawIdentity.backgroundId??'').slice(0,40)}:null;
   const strings=(v,max=12)=>Array.isArray(v)?v.filter(s=>typeof s==='string').slice(0,max).map(s=>s.slice(0,80)):[];
@@ -88,6 +88,7 @@ export default async function handler(req, res) {
   const resources=Object.fromEntries(Object.entries(rawCharacter.resources??{}).slice(0,10).filter(([,p])=>p&&Number.isInteger(p.maximum)&&Number.isInteger(p.used)&&p.used>=0&&p.used<=p.maximum).map(([name,p])=>[name.slice(0,80),{maximum:p.maximum,used:p.used}]));
   const shared=state.sharedEncounter;
   const sharedEncounter=shared&&['active','completed'].includes(shared.status)?{status:shared.status,round:shared.round,activeActor:String(shared.activeActor??'').slice(0,40),participants:Array.isArray(shared.participants)?shared.participants.filter(p=>p&&typeof p==='object').slice(0,8).map(p=>({id:String(p.id).slice(0,40),hp:p.hp,maxHp:p.maxHp,conditions:strings(p.conditions)})):[]}:null;
+  const sharedEncounterActive = sharedEncounter?.status === 'active';
   const gameState = { playerBuild,resources,sharedEncounter,currentHitPoints:rawCharacter.currentHitPoints,maxHitPoints:rawCharacter.maxHitPoints,adventureContext,characterIdentity,combat:body.gameState?.combat??null, latestPendingSpell, concentration, spellEffects, level:Number.isInteger(rawCharacter.level)?rawCharacter.level:1, subclass:rawCharacter.subclass==='Arcane Trickster'?'Arcane Trickster':null, preparedSpells:spells, cantrips, spellSlots:safeSlots, familiar, elapsedMinutes:Number.isSafeInteger(state.elapsedMinutes)&&state.elapsedMinutes>=0?state.elapsedMinutes:0, recentEvents };
   const world = body.world && typeof body.world === 'object' ? body.world : {};
   const facts = Array.isArray(body.worldFacts) ? body.worldFacts.filter((fact) => typeof fact === 'string').slice(-60).map((fact) => fact.slice(0, 220)) : [];
@@ -102,12 +103,9 @@ export default async function handler(req, res) {
       signal: AbortSignal.timeout(25000),
     });
     const data = await response.json();
-    if (!response.ok) { console.error('OpenAI response error', response.status, data.error?.code, data.error?.message); return res.status(response.status === 429 ? 429 : 502).json({ error: response.status === 429 ? 'AI is temporarily rate-limited.' : 'AI service could not complete this request (' + (data.error?.code || response.status) + ').' }); }
-    const narration = (data.output || []).flatMap((item) => item.type === 'message' ? (item.content || []) : [])
-      .filter((part) => part.type === 'output_text').map((part) => part.text).join('\n').trim();
-    if (!narration) return res.status(502).json({ error: 'AI returned no narration.' });
+    if (!response.ok) { console.error('OpenAI response error', response.status); return res.status(response.status === 429 ? 429 : 502).json({ error: response.status === 429 ? 'AI is temporarily rate-limited.' : 'AI service could not complete this request (' + (data.error?.code || response.status) + ').' }); }
     let parsed;
-    try { parsed = parseDungeonMasterResponse(narration); }
+    try { parsed = parseDungeonMasterResponse(readProviderNarration(data)); }
     catch(error) { return res.status(502).json({ error: error.message }); }
     if (restRequest) {
       const approved = parsed.restDecision === 'approved';
@@ -115,14 +113,14 @@ export default async function handler(req, res) {
     }
     const requested = !opening && !checkResult && !combatAdjudication && parsed.checkRequest && typeof parsed.checkRequest === 'object' ? parsed.checkRequest : null;
     const checkRequest = requested && SKILLS.includes(requested.skill) && Object.hasOwn(DC,requested.difficulty) ? { skill:requested.skill, mode:['normal','advantage','disadvantage'].includes(requested.mode) ? requested.mode : 'normal', reason:typeof requested.reason === 'string' ? requested.reason.slice(0,160) : 'Resolve the uncertain action', token:sealCheck({skill:requested.skill,mode:['normal','advantage','disadvantage'].includes(requested.mode) ? requested.mode : 'normal',dc:DC[requested.difficulty],character,issuedAt:Date.now()}) } : null;
-    const clarificationRequest = !opening && !restRequest && !checkResult && !combatAdjudication && !sharedEncounter && parsed.clarificationRequest && typeof parsed.clarificationRequest.question==='string' && parsed.clarificationRequest.question.trim() ? {question:parsed.clarificationRequest.question.trim().slice(0,300)} : null;
+    const clarificationRequest = !opening && !restRequest && !checkResult && !combatAdjudication && !sharedEncounterActive && parsed.clarificationRequest && typeof parsed.clarificationRequest.question==='string' && parsed.clarificationRequest.question.trim() ? {question:parsed.clarificationRequest.question.trim().slice(0,300)} : null;
     if(clarificationRequest){
       if(clarification?.answer)return res.status(502).json({error:'The Dungeon Master repeated an answered clarification. Retry the confirmed action; nothing was changed.'});
       return res.status(200).json({narration:parsed.narration,clarificationRequest,combatStart:null,checkRequest:null,newFacts:[],worldUpdates:{},travelDestination:null,model:MODEL});
     }
     const newFacts = Array.isArray(parsed.newFacts) ? parsed.newFacts.filter((fact) => typeof fact === 'string').slice(0, 4).map((fact) => fact.slice(0, 220)) : [];
-    const travelDestination = !opening && adventureContext?.status === 'exploring' && !checkResult && !combatAdjudication && !restRequest && !sharedEncounter && typeof parsed.travelDestination === 'string' && ({frontier:['crossroads'],crossroads:['frontier','watchtower'],watchtower:['crossroads']}[adventureContext.site]??[]).includes(parsed.travelDestination) ? parsed.travelDestination : null;
-    const combatStart = !opening && (!adventureContext || (characterIdentity && adventureContext.status === 'exploring' && !adventureContext.pendingEncounter)) && !sharedEncounter && !checkResult && !combatAdjudication && !gameState?.combat && parsed.combatStart && typeof parsed.combatStart.enemyName === 'string' && parsed.combatStart.enemyName.trim() ? {enemyName:parsed.combatStart.enemyName.trim().slice(0,60)} : null;
+    const travelDestination = !opening && adventureContext?.status === 'exploring' && !checkResult && !combatAdjudication && !restRequest && !sharedEncounterActive && typeof parsed.travelDestination === 'string' && ({frontier:['crossroads'],crossroads:['frontier','watchtower'],watchtower:['crossroads']}[adventureContext.site]??[]).includes(parsed.travelDestination) ? parsed.travelDestination : null;
+    const combatStart = !opening && (!adventureContext || (characterIdentity && adventureContext.status === 'exploring' && !adventureContext.pendingEncounter)) && !sharedEncounterActive && !checkResult && !combatAdjudication && !gameState?.combat && parsed.combatStart && typeof parsed.combatStart.enemyName === 'string' && parsed.combatStart.enemyName.trim() ? {enemyName:parsed.combatStart.enemyName.trim().slice(0,60)} : null;
     return res.status(200).json({ narration: parsed.narration.trim(), combatStart, travelDestination, newFacts, checkRequest:combatStart?null:checkRequest, checkResult, worldUpdates: parsed.worldUpdates && typeof parsed.worldUpdates === 'object' ? parsed.worldUpdates : {}, model: MODEL });
   } catch {
     return res.status(502).json({ error: 'The Dungeon Master is temporarily unavailable.' });

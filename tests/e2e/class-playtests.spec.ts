@@ -94,15 +94,14 @@ test('rest save failure preserves Hit Dice, reports the failure, and permits a s
 
 test('AI-led opening, world memory and saved pending action retry survive reload',async({page})=>{
  test.setTimeout(90000);
- test.setTimeout(90000);
  await createAndImport(page,'fighter');
  await expect.poll(async()=>Boolean((await saved(page))?.characterIdentity)).toBe(true);
  await page.evaluate(()=>{localStorage.setItem('four-keeps-access-code','browser-test-code');localStorage.setItem('four-keeps-dm-mode','on');});
  await page.reload();await page.getByRole('button',{name:'Continue Adventure'}).click();
- let requests:any[]=[];let fail=false;
+ const requests:any[]=[];let failure:string|null=null;
  await page.route('**/api/dm',async route=>{
    const body=route.request().postDataJSON();requests.push(body);
-   if(fail){await route.fulfill({status:502,contentType:'application/json',body:JSON.stringify({error:'The Dungeon Master proposed an incomplete encounter. Retry the action; no enemy statistics or dice were invented.'})});return;}
+   if(failure){await route.fulfill({status:502,contentType:'application/json',body:JSON.stringify({error:failure})});return;}
    await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({narration:body.opening?'A bell tolls from the abandoned keep.':'Mira says the bell rang at dusk.',newFacts:['A bell rang at dusk'],worldUpdates:{npcs:[{name:'Mira',role:'Watchkeeper',location:'Frontier Village',relationship:'neutral',notes:['Knows the old road']}],clues:[{text:'A stranger passed at dusk',evidence:'reported',source:'Mira'}]},combatStart:null})});
  });
  await page.getByRole('button',{name:'Begin AI-led adventure'}).click();
@@ -114,13 +113,22 @@ test('AI-led opening, world memory and saved pending action retry survive reload
  await page.reload();await page.getByRole('button',{name:'Continue Adventure'}).click();
  await expect(page.getByLabel('Adventure',{exact:true})).toContainText('A bell tolls from the abandoned keep.');
  await expect(page.getByRole('button',{name:'Begin AI-led adventure'})).toHaveCount(0);
- fail=true;
+ const beforeFailure=await saved(page);
+ failure='The Dungeon Master response was incomplete. Retry your action.';
  await page.getByLabel('Message the Dungeon Master').fill('Ask Mira about the bell');
  await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
  await expect(page.getByRole('button',{name:'Retry saved action'})).toBeVisible();
- const pendingId=(await saved(page)).pendingAdventureAction.id;
+ const pending=await saved(page);
+ const pendingId=pending.pendingAdventureAction.id;
+ expect(pending.journal).toEqual(beforeFailure.journal);
+ expect(pending.world).toEqual(beforeFailure.world);
+ expect(pending.adventureSession).toEqual(beforeFailure.adventureSession);
  await page.reload();await page.getByRole('button',{name:'Continue Adventure'}).click();
- fail=false;
+ failure='The Dungeon Master proposed an incomplete encounter. Retry the action.';
+ await page.getByRole('button',{name:'Retry saved action'}).click();
+ await expect(page.getByText(/proposed an incomplete encounter/)).toBeVisible();
+ expect((await saved(page)).pendingAdventureAction.id).toBe(pendingId);
+ failure=null;
  await page.getByRole('button',{name:'Retry saved action'}).click();
  await expect(page.getByLabel('Adventure',{exact:true})).toContainText('Mira says the bell rang at dusk.');
  expect(requests.at(-1).actionId).toBe(pendingId);
@@ -143,10 +151,11 @@ test('newly created fighter completes organic AI encounter, saves rewards and re
  await page.route('**/api/dm',async route=>{
   const request=route.request().postDataJSON();calls.push(request);
   const opening=request.opening;
-  const combat=!opening && request.message.includes('approach the bridge');
+  const secondFight=!opening && request.message.includes('investigate the riverbank');
+  const combat=!opening && (request.message.includes('approach the bridge') || secondFight);
   await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({
-   narration:opening?'The old bridge is watched by the town guard.':combat?'A highway robber draws a sword and attacks.':'The guard acknowledges your return and the bridge is safe.',
-   combatStart:combat?{enemyName:'Highway robber'}:null,newFacts:combat?['A highway robber attacked the bridge']:['The bridge is safe after the battle'],
+   narration:opening?'The old bridge is watched by the town guard.':secondFight?'A poacher blocks the riverbank with a drawn blade.':combat?'A highway robber draws a sword and attacks.':'The guard acknowledges your return and the bridge is safe.',
+   combatStart:combat?{enemyName:secondFight?'Poacher':'Highway robber'}:null,newFacts:combat?['A highway robber attacked the bridge']:['The bridge is safe after the battle'],
    worldUpdates:combat?{clues:[{text:'A robber attacked the bridge',evidence:'confirmed',source:'Fighter'}]}:{quests:[{title:'Secure the bridge',status:'completed',objective:'Defeat the robber',notes:['The bridge is safe']}]}
   })});
  });
@@ -220,6 +229,12 @@ test('newly created fighter completes organic AI encounter, saves rewards and re
  expect(calls.at(-1).gameState.characterIdentity.name).toBe('fighter Hero');
  expect(calls.at(-1).gameState.sharedEncounter.status).toBe('completed');
  expect(calls.at(-1).gameState.location).toBe(original.location);
+ await page.getByLabel('Message the Dungeon Master').fill('I investigate the riverbank.');
+ await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
+ await expect(page.getByText('Opponent: Poacher',{exact:false})).toBeVisible();
+ await expect.poll(async()=> (await saved(page)).adventureSession.pendingEncounter?.enemyName).toBe('Poacher');
+ expect(calls.at(-1).gameState.sharedEncounter.status).toBe('completed');
+ expect((await saved(page)).companionEncounter.settlement).toEqual(afterBattle.companionEncounter.settlement);
  expect(errors).toEqual([]);
 });
 

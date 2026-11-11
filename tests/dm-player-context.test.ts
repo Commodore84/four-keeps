@@ -2,9 +2,9 @@ import {afterEach,it,expect,vi} from 'vitest';
 import handler from '../api/dm.js';
 afterEach(()=>{vi.unstubAllEnvs();vi.unstubAllGlobals();});
 function response(){return {code:0,body:null as any,setHeader:vi.fn(),status(code:number){this.code=code;return this;},json(body:any){this.body=body;return this;}};}
-function setup(output:any){
+function setup(output:any,status='completed',partType='output_text'){
  vi.stubEnv('FOUR_KEEPS_ACCESS_CODE','test-access-code-at-least-sixteen');vi.stubEnv('OPENAI_API_KEY','test-key-not-a-credential');
- const fetch=vi.fn(async()=>({ok:true,json:async()=>({output:[{type:'message',content:[{type:'output_text',text:JSON.stringify(output)}]}]})}));vi.stubGlobal('fetch',fetch);return fetch;
+ const fetch=vi.fn(async()=>({ok:true,json:async()=>({status,output:[{type:'message',content:[{type:partType,text:JSON.stringify(output)}]}]})}));vi.stubGlobal('fetch',fetch);return fetch;
 }
 const character={scores:{str:8,dex:16,con:14,int:14,wis:12,cha:10},proficiencyBonus:2,proficientSkills:['Stealth'],expertiseSkills:['Stealth'],resources:{'Second Wind':{maximum:2,used:1}},currentHitPoints:7,maxHitPoints:12};
 const req=(body:any)=>({method:'POST',headers:{'x-four-keeps-access':'test-access-code-at-least-sixteen'},body});
@@ -37,4 +37,50 @@ it('fails safely when the provider repeats a question already answered',async()=
  expect(res.code).toBe(502);expect(res.body.error).toContain('repeated an answered clarification');
  const body=JSON.parse(fetch.mock.calls[0][1].body);
  expect(body.input[0].content).toContain('Yes, I attack.');
+});
+
+it.each(['incomplete','failed','in_progress'])('rejects a %s provider response even when its partial text is valid JSON',async status=>{
+ setup({narration:'The encounter begins.',combatStart:{enemyName:'Guard'},newFacts:['The gate opened']},status);
+ const res=response();
+ await handler(req({message:'Open the gate',character}),res);
+ expect(res.code).toBe(502);
+ expect(res.body).toEqual({error:'The Dungeon Master response was incomplete. Retry your action.'});
+});
+
+it('rejects a provider refusal without exposing its text as narration',async()=>{
+ setup('provider refusal','completed','refusal');
+ const res=response();
+ await handler(req({message:'Open the gate',character}),res);
+ expect(res.code).toBe(502);
+ expect(res.body).toEqual({error:'The Dungeon Master could not answer this action. Retry your action.'});
+});
+
+const exploration = {
+ characterIdentity:{name:'Aster',classId:'fighter'},
+ adventureSession:{site:'frontier',status:'exploring'},
+ sharedEncounter:{status:'completed',round:2}
+};
+
+it.each([
+ ['combatStart',{enemyName:'A second guard'}],
+ ['travelDestination','crossroads'],
+ ['clarificationRequest',{question:'Which guard do you mean?'}],
+])('allows %s after a completed fight while preserving its context',async (field,value)=>{
+ const fetch=setup({narration:'A new scene unfolds.',[field]:value});
+ const res=response();
+ await handler(req({message:'I continue',character,gameState:exploration}),res);
+ expect(res.code).toBe(200);
+ expect(res.body[field]).toEqual(value);
+ expect(JSON.parse(fetch.mock.calls[0][1].body).input[0].content).toContain('"sharedEncounter":{"status":"completed"');
+});
+
+it.each([
+ {sharedEncounter:{status:'active',round:2}},
+ {adventureSession:{site:'frontier',status:'exploring',pendingEncounter:{enemyName:'Guard'}}}
+])('suppresses a second encounter proposal while an encounter is active or pending',async state=>{
+ setup({narration:'A new enemy approaches.',combatStart:{enemyName:'Another guard'}});
+ const res=response();
+ await handler(req({message:'I continue',character,gameState:{...exploration,...state}}),res);
+ expect(res.code).toBe(200);
+ expect(res.body.combatStart).toBeNull();
 });
