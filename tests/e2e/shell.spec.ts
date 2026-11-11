@@ -1132,7 +1132,9 @@ test('mobile hamburger navigation preserves five destinations and collapsed deve
  await expect(page.getByRole('navigation',{name:'Primary navigation'})).toHaveCount(0);
  await menu.click();
  const nav=page.getByRole('navigation',{name:'Primary navigation'});
- await expect(nav.getByRole('button')).toHaveCount(5);
+ await expect(nav.getByRole('button')).toHaveCount(6);
+ await expect(nav.getByRole('button',{name:'Home',exact:true})).toBeVisible();
+ await expect(page.locator('header > div').first().getByRole('button',{name:'Home',exact:true})).toHaveCount(0);
  await expect(nav.getByRole('button',{name:'Dev',exact:true})).toHaveCount(0);
  await expect(nav.getByRole('button',{name:'Settings'})).toHaveAttribute('aria-current','page');
  await nav.getByRole('button',{name:'Journal'}).click();
@@ -1146,4 +1148,16 @@ test('mobile hamburger navigation preserves five destinations and collapsed deve
  const bounds=await menu.boundingBox();
  expect(bounds).not.toBeNull();
  expect(bounds!.x+bounds!.width).toBeLessThanOrEqual(376);
+});
+
+test('Home navigation is inside the hamburger menu, not beside it',async({page})=>{
+ await page.setViewportSize({width:375,height:812});
+ await page.goto('/four-keeps/');
+ await createLegacyCampaign(page,'Menu Home Test');
+ const menu=page.getByRole('button',{name:'Open navigation menu'});
+ await expect(page.getByRole('banner').getByRole('button',{name:'Home',exact:true})).toHaveCount(0);
+ await menu.click();
+ await page.getByRole('navigation',{name:'Primary navigation'}).getByRole('button',{name:'Home',exact:true}).click();
+ await expect(page.getByLabel('Four Keeps landing page')).toBeVisible();
+ await expect(page.getByRole('button',{name:'Continue Adventure'})).toBeVisible();
 });
