@@ -17,6 +17,8 @@ describe('persistent adventure session',()=>{
   expect(asked.adventureSession).toEqual(pending.adventureSession);
   expect(()=>pauseAdventureForClarification(pending,'wrong','Question')).toThrow();
   const answered=answerAdventureClarification(JSON.parse(JSON.stringify(asked)),'Yes. I attack.');
+  expect(answerAdventureClarification(answered,'No, I changed my mind')).toEqual(answered);
+  expect(()=>pauseAdventureForClarification(answered,'dragon-action','Are you really sure?')).toThrow('already answered');
   expect(answered.pendingAdventureAction?.id).toBe('dragon-action');
   const resolved={...commitAdventureAction(answered,'dragon-action','You charge forward.'),pendingClarification:undefined};
   expect(resolved.pendingAdventureAction).toBeUndefined();

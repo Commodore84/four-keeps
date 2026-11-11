@@ -20,3 +20,21 @@ it('preserves imported Rogue expertise across signed check request and dice adju
 it('reports unavailable AI configuration without calling a provider',async()=>{
  vi.stubEnv('FOUR_KEEPS_ACCESS_CODE','');const fetch=vi.fn();vi.stubGlobal('fetch',fetch);const res=response();await handler(req({message:'Hello'}),res);expect(res.code).toBe(503);expect(fetch).not.toHaveBeenCalled();
 });
+
+it('returns a clarification without applying proposed world changes, combat, or checks',async()=>{
+ const fetch=setup({narration:'Which gate?',clarificationRequest:{question:'Do you mean the north gate?'},combatStart:{enemyName:'Guard'},newFacts:['Gate opened'],travelDestination:'crossroads',checkRequest:{skill:'Stealth',difficulty:'easy',mode:'normal',reason:'Gate'},worldUpdates:{quests:[{title:'Open gate',status:'completed',objective:'Enter'}]}}),res=response();
+ await handler(req({message:'Go through the gate',character,gameState:{characterIdentity:{name:'Aster',classId:'fighter'},adventureSession:{site:'frontier',status:'exploring'}}}),res);
+ expect(res.code).toBe(200);
+ expect(res.body.clarificationRequest.question).toBe('Do you mean the north gate?');
+ expect(res.body.combatStart).toBeNull();expect(res.body.checkRequest).toBeNull();
+ expect(res.body.newFacts).toEqual([]);expect(res.body.worldUpdates).toEqual({});expect(res.body.travelDestination).toBeNull();
+ const body=JSON.parse(fetch.mock.calls[0][1].body);
+ expect(body.instructions).toContain('clarificationRequest (null or {question: string})');
+});
+it('fails safely when the provider repeats a question already answered',async()=>{
+ const fetch=setup({narration:'Are you sure?',clarificationRequest:{question:'Are you sure?'}}),res=response();
+ await handler(req({message:'Attack dragon',clarification:{question:'Are you sure?',answer:'Yes, I attack.'},character,gameState:{characterIdentity:{name:'Aster',classId:'fighter'},adventureSession:{site:'frontier',status:'exploring'}}}),res);
+ expect(res.code).toBe(502);expect(res.body.error).toContain('repeated an answered clarification');
+ const body=JSON.parse(fetch.mock.calls[0][1].body);
+ expect(body.input[0].content).toContain('Yes, I attack.');
+});

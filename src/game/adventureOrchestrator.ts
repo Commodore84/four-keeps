@@ -69,10 +69,12 @@ export function commitAdventureAction(campaign:Campaign,actionId:string,narratio
 export function pauseAdventureForClarification(campaign:Campaign,actionId:string,question:string):Campaign {
  if(!campaign.pendingAdventureAction||campaign.pendingAdventureAction.id!==actionId)throw Error('Clarification does not match the pending action.');
  if(!question.trim())throw Error('Clarification question is required.');
+ if(campaign.pendingClarification?.answer)throw Error('The DM cannot repeat a clarification already answered.');
  return {...campaign,pendingClarification:{actionId,question:question.trim()}};
 }
 export function answerAdventureClarification(campaign:Campaign,answer:string):Campaign {
  if(!campaign.pendingClarification||!campaign.pendingAdventureAction||campaign.pendingClarification.actionId!==campaign.pendingAdventureAction.id)throw Error('No pending clarification.');
  if(!answer.trim())throw Error('Clarification answer is required.');
+ if(campaign.pendingClarification.answer)return campaign;
  return {...campaign,pendingClarification:{...campaign.pendingClarification,answer:answer.trim()}};
 }
