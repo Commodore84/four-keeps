@@ -257,3 +257,38 @@ test('organic combat proposal can be declined and AI narration resumes without l
  expect(resumed.worldFacts).toContain('The watchman is present');
  expect(calls).toBe(3);
 });
+
+test('DM clarification pauses dangerous action, persists answer, and resumes exactly once',async({page})=>{
+ test.setTimeout(90000);
+ await page.addInitScript(()=>{localStorage.setItem('four-keeps-access-code','browser-test-code');localStorage.setItem('four-keeps-dm-mode','on')});
+ await createAndImport(page,'fighter');
+ const calls:any[]=[];
+ await page.route('**/api/dm',async route=>{
+  const body=route.request().postDataJSON();calls.push(body);
+  const response=body.opening?{narration:'You see a dragon on a distant ridge.',newFacts:[],worldUpdates:{},combatStart:null}
+   : !body.clarification?.answer?{narration:'Before you attack, one question.',clarificationRequest:{question:'Are you sure you want to attack that dragon with a dagger?'},newFacts:[],worldUpdates:{},combatStart:null}
+   : {narration:'You draw your dagger and approach. The dragon notices you.',newFacts:[],worldUpdates:{},combatStart:null};
+  await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(response)});
+ });
+ await page.getByRole('button',{name:'Begin AI-led adventure'}).click();
+ await page.getByLabel('Message the Dungeon Master').fill('I attack the dragon with my dagger');
+ await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
+ await expect(page.getByLabel('Dungeon Master clarification')).toContainText('Are you sure');
+ const paused=await saved(page);
+ expect(paused.pendingAdventureAction.message).toBe('I attack the dragon with my dagger');
+ expect(paused.journal.filter((e:any)=>e.text.includes('I attack the dragon'))).toHaveLength(0);
+ await page.getByRole('button',{name:'Open navigation menu'}).click();
+ await page.getByRole('navigation',{name:'Primary navigation'}).getByRole('button',{name:'Home'}).click();
+ await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await expect(page.getByLabel('Dungeon Master clarification')).toContainText('Are you sure');
+ await page.getByLabel('Answer the Dungeon Master').fill('Yes, I know it is dangerous. I attack.');
+ await page.getByRole('button',{name:'Confirm and continue'}).click();
+ await expect(page.getByLabel('Dungeon Master clarification')).toHaveCount(0);
+ await expect(page.getByLabel('Adventure',{exact:true})).toContainText('The dragon notices you.');
+ const final=await saved(page);
+ expect(final.pendingAdventureAction).toBeUndefined();
+ expect(final.pendingClarification).toBeUndefined();
+ expect(final.journal.filter((e:any)=>e.text.includes('I attack the dragon'))).toHaveLength(1);
+ expect(calls.at(-1).clarification.answer).toContain('Yes, I know');
+ expect(calls.at(-1).actionId).toBe(calls.at(-2).actionId);
+});

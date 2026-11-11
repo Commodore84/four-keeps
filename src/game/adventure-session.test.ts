@@ -5,9 +5,24 @@ import {initialSubclassCombatState} from './subclassCombatRules';
 import {beginAdventureSession,travelAdventure,interactAdventure,enterAdventureEncounter,resumeAdventureExploration,proposeAdventureEncounter,declineAdventureEncounter,enterSoloAdventureEncounter} from './adventureSession';
 import {finishCompanionEncounter,damageCompanion,spendPlayerResource} from './companionEncounter';
 import {settleEncounterRewards} from './encounterRewards';
-import {prepareAdventureAction,commitAdventureAction} from './adventureOrchestrator';
+import {prepareAdventureAction,commitAdventureAction,pauseAdventureForClarification,answerAdventureClarification} from './adventureOrchestrator';
 describe('persistent adventure session',()=>{
  const base=()=>newCampaign('Frontier Test','adventure-test','2026-11-10T00:00:00.000Z');
+ it('pauses clarification without advancing world and resolves the original action once',()=>{
+  const initial=beginAdventureSession(base());
+  const pending=prepareAdventureAction(initial,'Attack the dragon with my dagger','dragon-action');
+  const asked=pauseAdventureForClarification(pending,'dragon-action','Are you sure?');
+  expect(asked.journal).toEqual(pending.journal);
+  expect(asked.world).toEqual(pending.world);
+  expect(asked.adventureSession).toEqual(pending.adventureSession);
+  expect(()=>pauseAdventureForClarification(pending,'wrong','Question')).toThrow();
+  const answered=answerAdventureClarification(JSON.parse(JSON.stringify(asked)),'Yes. I attack.');
+  expect(answered.pendingAdventureAction?.id).toBe('dragon-action');
+  const resolved={...commitAdventureAction(answered,'dragon-action','You charge forward.'),pendingClarification:undefined};
+  expect(resolved.pendingAdventureAction).toBeUndefined();
+  expect(resolved.pendingClarification).toBeUndefined();
+  expect(commitAdventureAction(resolved,'dragon-action','Duplicate')).toEqual(resolved);
+ });
  it('starts with the saved character and keeps legacy combat untouched',()=>{
   const c=base(),next=beginAdventureSession(c);
   expect(next.adventureSession).toMatchObject({site:'frontier',status:'exploring',characterSource:'campaign-character'});

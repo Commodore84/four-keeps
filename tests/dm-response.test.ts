@@ -6,5 +6,9 @@ describe('DM live response contract',()=>{
  it('rejects empty narration and malformed combat handoffs',()=>{
   for(const value of [{narration:' '},{narration:'Fight',combatStart:{}},{narration:'Fight',combatStart:{enemyName:' '}},{narration:'Fight',combatStart:{enemyName:3}},{narration:'Fight',combatStart:{enemyName:'X'.repeat(61)}}])expect(()=>parse(JSON.stringify(value))).toThrow();
  });
+ it('accepts clarification questions and rejects empty clarification payloads',()=>{
+  expect(parse(JSON.stringify({narration:'Before you move, one question.',clarificationRequest:{question:'Do you mean the north gate?'}})).clarificationRequest.question).toBe('Do you mean the north gate?');
+  expect(()=>parse(JSON.stringify({narration:'Question',clarificationRequest:{question:' '}}))).toThrow('invalid clarification');
+ });
  it('permits narration without an encounter',()=>expect(parse(JSON.stringify({narration:'You return to the crossroads.',combatStart:null})).narration).toBe('You return to the crossroads.'));
 });

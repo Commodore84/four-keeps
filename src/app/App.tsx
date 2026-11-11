@@ -1,6 +1,6 @@
 import {mergeWorld} from '../game/world';
 import {travelAdventure,proposeAdventureEncounter,type AdventureSite} from '../game/adventureSession';
-import {OPENING_INTENT,prepareAdventureOpening,commitAdventureOpening,needsAdventureOpening,adventureMemory,prepareAdventureAction,commitAdventureAction} from '../game/adventureOrchestrator';
+import {OPENING_INTENT,prepareAdventureOpening,commitAdventureOpening,needsAdventureOpening,adventureMemory,prepareAdventureAction, pauseAdventureForClarification, answerAdventureClarification,commitAdventureAction} from '../game/adventureOrchestrator';
 import {campaignPlayerContext} from '../game/campaignContext';
 import {ImportedCharacterSheet} from './ImportedCharacterSheet';
 import {CompanionEncounterPanel} from './CompanionEncounterPanel';
@@ -150,7 +150,7 @@ function Adventure({ campaign, fullHistory, onToggleHistory, onAdventureChange, 
         {(campaign.world?.clues??[]).length>0 && <section><h4 className="font-semibold">Clues</h4>{campaign.world!.clues.map(c=><p key={c.id}>{c.text} <span className="text-parchment/60">({c.evidence})</span></p>)}</section>}
       </div>
     </details>}
-    {campaign?.pendingAdventureAction && <p role="status" className="text-sm text-gold">Unfinished action saved: {campaign.pendingAdventureAction.message}. <button type="button" disabled={saving} onClick={()=>void onRetryAction()} className="underline text-gold">Retry saved action</button></p>}
+    {campaign?.pendingAdventureAction && !campaign.pendingClarification && <p role="status" className="text-sm text-gold">Unfinished action saved: {campaign.pendingAdventureAction.message}. <button type="button" disabled={saving} onClick={()=>void onRetryAction()} className="underline text-gold">Retry saved action</button></p>}
     {allTurns.length > 6 && <button type="button" onClick={onToggleHistory} className="w-full rounded-lg border border-gold/30 px-4 py-3 text-sm text-gold">{fullHistory ? "Show recent conversation" : "View full conversation history ("+allTurns.length+" messages)"}</button>}
     
     {turns.length === 0 && <div className="rounded-xl border border-white/10 bg-panel p-5 space-y-3">
@@ -392,6 +392,7 @@ function WorldMap({campaign}:{campaign:Campaign|null}) {
  </section>;
 }
 export function App() {
+  const [clarificationDraft,setClarificationDraft]=useState('');
   const [activeView, setActiveView] = useState<View>('adventure');
   const [navigationOpen,setNavigationOpen]=useState(false);
   const [selectedCharacterDraft,setSelectedCharacterDraft]=useState('');
@@ -727,6 +728,7 @@ export function App() {
   async function sendToDM(override?:Campaign, messageOverride?:string, alreadySaving=false) {
     const current=override??campaign;
     const message=messageOverride??(campaign?.pendingAdventureAction?.message??draft);
+    if (current?.pendingClarification && !current.pendingClarification.answer) {setNotice('Answer the Dungeon Master clarification before continuing.');return;}
     if ((!alreadySaving && saving) || adventureRequestRef.current || !current || !message.trim() || current.pendingCheck || current.adventureSession?.pendingEncounter || current.characterIdentity && current.adventureSession?.status==='encounter') return;
     if (!accessCode) { setNotice('Enter your game access code first.'); return; }
     adventureRequestRef.current=true;
@@ -744,11 +746,18 @@ export function App() {
       const memory=adventureMemory(prepared);
       const history=memory.recentConversation;
       const response = await fetch('/api/dm', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-four-keeps-access': accessCode },
-        body: JSON.stringify({ message:aiSession?prepared.pendingAdventureAction!.message:message, actionId, character:current.character ?? prototypeNighthawk, gameState:{ ...campaignPlayerContext(current), adventureSession:current.adventureSession??null, characterIdentity:current.characterIdentity??null, location:current.location, combat:current.combat??null, familiar:current.familiar ?? null, elapsedMinutes:current.elapsedMinutes ?? 0, concentration:current.concentration??null, spellEffects:(current.spellEffects??[]).slice(-12), recentEvents:current.journal.filter(e=>e.kind==='system').slice(-8).map(e=>e.text) }, history, worldFacts: memory.establishedFacts, world: current.world ?? emptyWorld(), adventureMemory:memory }) });
-      const result: { narration?: string; newFacts?: string[]; worldUpdates?: unknown; checkRequest?: { skill:string; mode:'normal'|'advantage'|'disadvantage'; reason:string; token:string } | null; combatStart?:{enemyName:string}|null; travelDestination?:string|null; error?: string } = await response.json();
+        body: JSON.stringify({ message:aiSession?prepared.pendingAdventureAction!.message:message, clarification:prepared.pendingClarification??null, actionId, character:current.character ?? prototypeNighthawk, gameState:{ ...campaignPlayerContext(current), adventureSession:current.adventureSession??null, characterIdentity:current.characterIdentity??null, location:current.location, combat:current.combat??null, familiar:current.familiar ?? null, elapsedMinutes:current.elapsedMinutes ?? 0, concentration:current.concentration??null, spellEffects:(current.spellEffects??[]).slice(-12), recentEvents:current.journal.filter(e=>e.kind==='system').slice(-8).map(e=>e.text) }, history, worldFacts: memory.establishedFacts, world: current.world ?? emptyWorld(), adventureMemory:memory }) });
+      const result: { narration?: string; newFacts?: string[]; worldUpdates?: unknown; checkRequest?: { skill:string; mode:'normal'|'advantage'|'disadvantage'; reason:string; token:string } | null; combatStart?:{enemyName:string}|null; clarificationRequest?:{question:string}|null; travelDestination?:string|null; error?: string } = await response.json();
       if (!response.ok || !result.narration) throw new Error(result.error || 'DM request failed');
+      if(aiSession && result.clarificationRequest) {
+        const next=pauseAdventureForClarification(prepared,actionId!,result.clarificationRequest.question);
+        await localCampaignStorage.save(next);
+        setCampaign(next);setCampaigns(items=>items.map(item=>item.id===next.id?next:item));
+        setNotice('The Dungeon Master needs clarification before resolving your action.');
+        return;
+      }
       const narrated = aiSession
-        ? {...commitAdventureAction(prepared,actionId!,result.narration,new Date().toISOString(),result.newFacts??[],result.worldUpdates),pendingCheck:result.checkRequest??undefined}
+        ? {...commitAdventureAction(prepared,actionId!,result.narration,new Date().toISOString(),result.newFacts??[],result.worldUpdates),pendingClarification:undefined,pendingCheck:result.checkRequest??undefined}
         : addExchange(current, message, result.narration, new Date().toISOString(), result.newFacts ?? [], result.worldUpdates, result.checkRequest ?? undefined);
       const travelled = result.travelDestination && current.adventureSession?.status==='exploring' && ['frontier','crossroads','watchtower'].includes(result.travelDestination)
         ? (()=>{try{return travelAdventure(narrated,result.travelDestination as AdventureSite)}catch{return narrated}})()
@@ -1567,8 +1576,9 @@ export function App() {
           </div>
           <p className="text-xs text-parchment/60">Changes are saved when you finish the rest. You may spend zero Hit Dice.</p>
         </div>}
+        {campaign?.pendingClarification && <section aria-label="Dungeon Master clarification" className="mx-4 mt-3 rounded-xl border border-gold/50 bg-panel p-4 space-y-3"><p className="text-sm font-semibold text-gold">The Dungeon Master asks</p><p>{campaign.pendingClarification.question}</p><p className="text-xs text-parchment/70">Nothing has happened yet. Your original action is saved.</p><form onSubmit={async event=>{event.preventDefault();if(!clarificationDraft.trim()||saving)return;setSaving(true);try{const next=answerAdventureClarification(campaign,clarificationDraft);await localCampaignStorage.save(next);setCampaign(next);setCampaigns(items=>items.map(item=>item.id===next.id?next:item));setClarificationDraft('');await sendToDM(next,undefined,true);setSaving(false);}catch(error){setNotice('Clarification save failed: '+String(error));setSaving(false);}}} className="flex gap-2"><input aria-label="Answer the Dungeon Master" className="min-w-0 flex-1 rounded-lg bg-black/30 p-2" value={clarificationDraft} onChange={e=>setClarificationDraft(e.target.value)} placeholder="Clarify or confirm your intent"/><button type="submit" disabled={saving||!clarificationDraft.trim()} className="rounded-lg bg-gold px-3 text-ink disabled:opacity-50">Confirm and continue</button></form>{campaign.pendingClarification.answer && <p role="status">Answer saved. <button type="button" className="underline" onClick={()=>void sendToDM()}>Retry confirmed action</button></p>}</section>}
         {pendingAdventureSpell && <div className="mx-4 mt-3 rounded-xl border border-gold/50 bg-panel p-4 space-y-3" role="group" aria-label="Confirm spell cast"><p className="eyebrow">Confirm Adventure spell</p><h3 className="font-serif text-xl">{pendingAdventureSpell.spell}{pendingAdventureSpell.ritual?' · Ritual':''}</h3><p className="text-sm text-parchment/80">{pendingAdventureSpell.intent}</p><p className="text-xs text-parchment/70">{pendingAdventureSpell.ritual?'No spell slot spent.':campaign?.character?.cantrips?.includes(pendingAdventureSpell.spell)?'Cantrip · no spell slot spent.':'Consumes one Level 1 spell slot.'}</p>{pendingAdventureSpell.spell==='Find Familiar' && <label className="flex gap-2 text-xs"><input type="checkbox" checked={adventureComponentsConfirmed} onChange={e=>setAdventureComponentsConfirmed(e.target.checked)}/> I have and consume the required 10 gp material components (inventory is not yet tracked).</label>}<div className="flex gap-2"><button type="button" className="flex-1 rounded-lg border border-white/30 p-3" onClick={()=>setPendingAdventureSpell(null)}>Edit action</button><button type="button" disabled={saving || (pendingAdventureSpell.spell==='Find Familiar'&&!adventureComponentsConfirmed)} className="flex-1 rounded-lg bg-gold p-3 font-semibold text-ink disabled:opacity-40" onClick={()=>void confirmAdventureSpell()}>Cast and continue</button></div></div>}
-        {activeView !== "settings" && activeView !== "map" && !(activeView==="adventure"&&campaign?.combat) && <form className="flex items-end gap-2 px-4 py-3" onSubmit={(event) => { event.preventDefault(); void (dmMode ? submitAdventure() : saveNote()); }}>
+        {activeView !== "settings" && activeView !== "map" && !(activeView==="adventure"&&campaign?.combat) && !campaign?.pendingClarification && <form className="flex items-end gap-2 px-4 py-3" onSubmit={(event) => { event.preventDefault(); void (dmMode ? submitAdventure() : saveNote()); }}>
           <button type="button" onClick={() => window.location.reload()} aria-label="Refresh Four Keeps" title="Refresh Four Keeps" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-white/20 bg-panel text-gold"><RefreshCw size={19}/></button>
           <label htmlFor="dm-input" className="sr-only">Message the Dungeon Master</label>
           <textarea id="dm-input" value={draft} onChange={(event) => { setDraft(event.target.value); setNotice(''); }} rows={1} placeholder={campaign ? (dmMode ? 'What does Nighthawk do?' : 'Write a journal note…') : 'Create a campaign first'} disabled={!campaign || saving || !!campaign.pendingCheck || !!pendingAdventureSpell || !!pendingRest} className="max-h-32 min-h-11 min-w-0 flex-1 resize-y rounded-xl border border-white/20 bg-panel px-3 py-3 text-base text-parchment placeholder:text-parchment/45 focus:border-gold focus:outline-none"/>

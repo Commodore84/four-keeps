@@ -63,3 +63,16 @@ export function commitAdventureAction(campaign:Campaign,actionId:string,narratio
     {id:actionId+'-dm',kind:'dm' as const,text:narration.trim(),createdAt:now}
   ]};
 }
+
+
+/** Clarification is not an action: preserve the original action ID and all world state. */
+export function pauseAdventureForClarification(campaign:Campaign,actionId:string,question:string):Campaign {
+ if(!campaign.pendingAdventureAction||campaign.pendingAdventureAction.id!==actionId)throw Error('Clarification does not match the pending action.');
+ if(!question.trim())throw Error('Clarification question is required.');
+ return {...campaign,pendingClarification:{actionId,question:question.trim()}};
+}
+export function answerAdventureClarification(campaign:Campaign,answer:string):Campaign {
+ if(!campaign.pendingClarification||!campaign.pendingAdventureAction||campaign.pendingClarification.actionId!==campaign.pendingAdventureAction.id)throw Error('No pending clarification.');
+ if(!answer.trim())throw Error('Clarification answer is required.');
+ return {...campaign,pendingClarification:{...campaign.pendingClarification,answer:answer.trim()}};
+}
