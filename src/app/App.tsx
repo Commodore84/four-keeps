@@ -441,17 +441,30 @@ export function App() {
   }, [hideToast]);
 
   async function createCampaign() {
-    if (saving || !newTitle.trim()) return;
+    if (saving || !newTitle.trim() || !selectedCharacterDraft) return;
     setSaving(true);
     try {
       const selected=selectedCharacterDraft?readCharacterDrafts().find(d=>d.id===selectedCharacterDraft):undefined;
-      if(selectedCharacterDraft&&!selected)throw Error('Selected character draft no longer exists');
-      const next = selected?campaignFromCharacterDraft(selected,newTitle):newCampaign(newTitle);
+      if(!selected)throw Error('Select a fully validated level-one character before creating a campaign');
+      const next = campaignFromCharacterDraft(selected,newTitle);
       await localCampaignStorage.save(next);
       setCampaign(next);
       setCampaigns((items) => [next, ...items]);
       setNotice('Campaign saved on this device.');
       if(portalScreen==='new'){setActiveView('adventure');setPortalScreen('adventure');}
+    } catch (error) { setNotice('Could not save campaign: ' + String(error)); }
+    finally { setSaving(false); }
+  }
+
+  async function createLegacyDevelopmentCampaign() {
+    if (saving || loading || !newTitle.trim()) return;
+    setSaving(true);
+    try {
+      const next = newCampaign(newTitle);
+      await localCampaignStorage.save(next);
+      setCampaign(next);
+      setCampaigns(items => [next, ...items]);
+      setNotice('Campaign saved on this device.');
     } catch (error) { setNotice('Could not save campaign: ' + String(error)); }
     finally { setSaving(false); }
   }
@@ -1180,13 +1193,13 @@ export function App() {
       {portalScreen==='characters'&&<div className="space-y-3"><h2 className="font-serif text-2xl">My Characters</h2><CharacterCreator/></div>}
       {portalScreen==='new'&&<section className="space-y-4 rounded-xl border border-white/20 bg-panel p-4">
         <h2 className="font-serif text-2xl">New Adventure</h2>
-        <p className="text-sm text-parchment/65">Select a fully validated level-one character, or leave the prototype Nighthawk selected for legacy playtesting. Existing campaigns are never overwritten.</p>
+        <p className="text-sm text-parchment/65">Select a fully validated level-one character to begin. Create and complete a character under My Characters first. Existing campaigns are never overwritten.</p>
         <label className="block space-y-2 text-sm">Starting character<select aria-label="Starting character" value={selectedCharacterDraft} onChange={e=>setSelectedCharacterDraft(e.target.value)} className="w-full rounded-lg border border-white/20 bg-ink p-3">
-        <option value="">Prototype Nighthawk (legacy)</option>
+        <option value="">Choose a completed character</option>
         {characterDraftImportOptions(readCharacterDrafts()).map(item=><option key={item.id} value={item.id} disabled={!item.valid}>{item.name} · {item.classId}{item.valid?'':' (incomplete)'}</option>)}
         </select></label>
         <label className="block space-y-2 text-sm">Campaign name<input value={newTitle} onChange={event=>setNewTitle(event.target.value)} className="w-full rounded-lg border border-white/20 bg-ink p-3" placeholder="Campaign name"/></label>
-        <button type="button" disabled={saving||loading||!newTitle.trim()} onClick={()=>void createCampaign()} className="rounded-lg bg-gold px-4 py-3 font-semibold text-ink disabled:opacity-40">Create campaign</button>
+        <button type="button" disabled={saving||loading||!newTitle.trim()||!selectedCharacterDraft||!characterDraftImportOptions(readCharacterDrafts()).some(item=>item.id===selectedCharacterDraft&&item.valid)} onClick={()=>void createCampaign()} className="rounded-lg bg-gold px-4 py-3 font-semibold text-ink disabled:opacity-40">Create campaign</button>
       </section>}
       {portalScreen==='campaigns'&&<section className="space-y-3"><h2 className="font-serif text-2xl">My Campaigns</h2>
         {loading&&<p>Loading saved campaigns…</p>}
@@ -1244,11 +1257,6 @@ export function App() {
             </div> : <button type="button" disabled={saving || loading} onClick={() => setDeleteCampaignId(campaign.id)} className="rounded-lg border border-red-400/50 px-3 py-2 text-sm text-red-200 disabled:opacity-40">Delete selected campaign</button>}
           </div>}
           <div className="flex gap-2">
-            <label className="sr-only" htmlFor="campaign-title">New campaign name</label>
-            <input id="campaign-title" value={newTitle} onChange={(event) => setNewTitle(event.target.value)} placeholder="Campaign name" className="min-w-0 flex-1 rounded-lg border border-white/20 bg-ink px-3 py-2 text-base"/>
-            <button type="button" onClick={() => void createCampaign()} disabled={saving || loading || !newTitle.trim()} className="rounded-lg bg-gold px-3 py-2 text-sm font-semibold text-ink disabled:opacity-40">New</button>
-          </div>
-          <div className="flex gap-2">
             <button type="button" onClick={exportCampaign} disabled={!campaign || saving} className="rounded-lg border border-gold/40 px-3 py-2 text-sm text-gold disabled:opacity-40">Export backup</button>
             <button type="button" onClick={() => importInput.current?.click()} disabled={saving} className="rounded-lg border border-gold/40 px-3 py-2 text-sm text-gold disabled:opacity-40">Import backup</button>
             <input ref={importInput} type="file" accept=".json,application/json" className="hidden" aria-label="Select Four Keeps backup" onChange={(event) => { const file = event.target.files?.[0]; if (file) void importCampaign(file); }}/>
@@ -1285,7 +1293,7 @@ export function App() {
           </section>;
         })()}
         {content[activeView]}
-        {activeView==='development' && <section className="space-y-4" aria-label="Development tools"><h2 className="font-serif text-2xl">Development tools</h2><p className="text-sm text-parchment/65">Test-only features. Normal adventures and character sheets remain separate.</p>{content.adventure && cloneElement(content.adventure,{development:true})}{cloneElement(content.party,{development:true})}</section>}
+        {activeView==='development' && <section className="space-y-4" aria-label="Development tools"><h2 className="font-serif text-2xl">Development tools</h2><p className="text-sm text-parchment/65">Test-only features. Normal adventures and character sheets remain separate.</p><div className="rounded-xl border border-gold/30 bg-panel p-3 space-y-2" aria-label="Legacy campaign creation"><h3 className="font-semibold">Legacy prototype campaign (testing only)</h3><p className="text-xs text-parchment/65">Creates an isolated Nighthawk prototype for legacy regression testing. Normal new adventures require a validated character.</p><label className="block text-sm">New campaign name<input value={newTitle} onChange={event=>setNewTitle(event.target.value)} className="mt-2 w-full rounded-lg border border-white/20 bg-ink p-3"/></label><button type="button" onClick={()=>void createLegacyDevelopmentCampaign()} disabled={saving||loading||!newTitle.trim()} className="rounded-lg bg-gold px-3 py-2 font-semibold text-ink disabled:opacity-40">New</button></div>{content.adventure && cloneElement(content.adventure,{development:true})}{cloneElement(content.party,{development:true})}</section>}
         {activeView==='adventure' && campaign?.pendingCheck && <div className="mt-4 rounded-xl border border-gold/40 bg-panel p-4 space-y-2" role="group" aria-label="Pending skill check">
           <p className="eyebrow">Dungeon Master requests a check</p>
           <p className="font-serif text-xl">{campaign.pendingCheck.skill} · {campaign.pendingCheck.mode}</p>
