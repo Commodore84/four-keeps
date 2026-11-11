@@ -91,3 +91,14 @@ it('rejects contradictory combat and travel before the client can commit world s
  await handler(req({message:'I travel to the crossroads',character,gameState:{characterIdentity:{name:'Aster',classId:'fighter'},adventureSession:{site:'frontier',status:'exploring'}}}),res);
  expect(res.code).toBe(502);expect(res.body.error).toContain('conflicting combat and travel');
 });
+
+it('checks game access and AI configuration without calling the provider',async()=>{
+ const fetch=setup({narration:'unused'}),res=response();
+ await handler({method:'GET',headers:{'x-four-keeps-access':'test-access-code-at-least-sixteen'},body:{}},res);
+ expect(res.code).toBe(200);expect(res.body).toEqual({ready:true,provider:'configured',liveModelTested:false});expect(fetch).not.toHaveBeenCalled();
+});
+it('rejects incorrect access code on the token-free configuration check',async()=>{
+ const fetch=setup({narration:'unused'}),res=response();
+ await handler({method:'GET',headers:{'x-four-keeps-access':'incorrect'},body:{}},res);
+ expect(res.code).toBe(401);expect(fetch).not.toHaveBeenCalled();
+});

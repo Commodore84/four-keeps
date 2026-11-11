@@ -419,6 +419,8 @@ export function App() {
   const [saving, setSaving] = useState(false);
   const adventureRequestRef=useRef(false);
   const [accessCode, setAccessCode] = useState(() => { try { return localStorage.getItem('four-keeps-access-code') ?? sessionStorage.getItem('four-keeps-access-code') ?? ''; } catch { return ''; } });
+  const [dmConnection,setDmConnection] = useState('');
+  const [dmConnectionChecking,setDmConnectionChecking] = useState(false);
   const [dmMode, setDmMode] = useState(() => { try { return localStorage.getItem('four-keeps-dm-mode') === 'on'; } catch { return false; } });
   const importInput = useRef<HTMLInputElement>(null);
   const resolvingCheckRef = useRef(false);
@@ -693,6 +695,19 @@ export function App() {
       await sendToDM(next,action.intent,true);
     }catch(error){setNotice('Spell error: '+String(error));}
     finally{setSaving(false);}
+  }
+  async function checkDmConnection() {
+    if (!accessCode || dmConnectionChecking) return;
+    setDmConnectionChecking(true);
+    setDmConnection('Checking game access and AI configuration…');
+    try {
+      const response=await fetch('/api/dm',{method:'GET',headers:{'x-four-keeps-access':accessCode}});
+      const result=await response.json();
+      setDmConnection(response.ok&&result.ready
+        ? 'Game access and AI configuration verified. Live AI responses are not tested by this check.'
+        : 'Connection check failed: '+(result.error??'Unexpected response'));
+    } catch {setDmConnection('Connection check failed. Check network access and try again.');}
+    finally {setDmConnectionChecking(false);}
   }
   async function startAiAdventure() {
     if (!campaign || saving || !campaign.characterIdentity) return;
@@ -1283,8 +1298,11 @@ export function App() {
         {campaign && <section className="mb-4 rounded-xl border border-white/10 bg-panel p-4 space-y-3">
           <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={dmMode} onChange={(event) => setDmMode(event.target.checked)}/> AI Dungeon Master mode</label>
           {dmMode && <><label htmlFor="access-code" className="block text-xs text-parchment/70">Game access code (remembered on this device)</label>
-          <input id="access-code" type="password" autoComplete="off" value={accessCode} onFocus={(event) => { const input = event.currentTarget; const bringIntoView = () => input.scrollIntoView({ behavior: "smooth", block: "center" }); bringIntoView(); window.setTimeout(bringIntoView, 350); }} onChange={(event) => setAccessCode(event.target.value)} placeholder="Enter your private access code" className="w-full scroll-mt-40 scroll-mb-48 rounded-lg border border-white/20 bg-ink px-3 py-2 text-base"/>
-          <button type="button" onClick={() => { setAccessCode(''); setNotice('Saved access code cleared from this browser.'); }} className="rounded-lg border border-white/20 px-3 py-2 text-xs text-parchment/70">Forget access code</button><p className="text-xs text-parchment/55">Your access code stays in this browser until you clear it. Do not use this on a shared device. The rules engine resolves skill checks; combat and inventory are not yet connected.</p></>}
+          <input id="access-code" type="password" autoComplete="off" value={accessCode} onFocus={(event) => { const input = event.currentTarget; const bringIntoView = () => input.scrollIntoView({ behavior: "smooth", block: "center" }); bringIntoView(); window.setTimeout(bringIntoView, 350); }} onChange={(event) => {setAccessCode(event.target.value);setDmConnection('');}} placeholder="Enter your private access code" className="w-full scroll-mt-40 scroll-mb-48 rounded-lg border border-white/20 bg-ink px-3 py-2 text-base"/>
+          <p className="text-xs text-parchment/70">For your first iPhone playtest: enter the private game access code, check the connection, then open Adventure and choose Begin AI-led adventure on an imported character. The check does not spend AI tokens.</p>
+          <button type="button" disabled={!accessCode||dmConnectionChecking} onClick={()=>void checkDmConnection()} className="rounded-lg border border-gold/40 px-3 py-2 text-sm text-gold disabled:opacity-40">{dmConnectionChecking?'Checking…':'Check DM connection'}</button>
+          {dmConnection && <p role="status" aria-label="DM connection status" className="text-xs text-parchment/80">{dmConnection}</p>}
+          <button type="button" onClick={() => { setAccessCode(''); setDmConnection(''); setNotice('Saved access code cleared from this browser.'); }} className="rounded-lg border border-white/20 px-3 py-2 text-xs text-parchment/70">Forget access code</button><p className="text-xs text-parchment/55">Your access code stays in this browser until you clear it. Do not use this on a shared device. The rules engine resolves skill checks; combat and inventory are not yet connected.</p></>}
         </section>}
         <details aria-label="Development section" className="mb-5 rounded-xl border border-white/15 bg-panel p-4">
           <summary className="cursor-pointer font-serif text-lg">Development</summary>

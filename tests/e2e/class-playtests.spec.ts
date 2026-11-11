@@ -339,3 +339,23 @@ test('DM clarification pauses dangerous action, persists answer, and resumes exa
  expect(calls.at(-1).clarification.answer).toContain('Yes, I know');
  expect(calls.at(-1).actionId).toBe(calls.at(-2).actionId);
 });
+
+test('iPhone DM connection preflight verifies configuration without spending provider tokens',async({page})=>{
+ await page.setViewportSize({width:375,height:812});
+ await createAndImport(page,'fighter');
+ await navigate(page,'Settings');
+ await page.getByLabel('AI Dungeon Master mode').check();
+ const calls:any[]=[];
+ await page.route('**/api/dm',async route=>{
+  const req=route.request();calls.push({method:req.method(),access:req.headers()['x-four-keeps-access']});
+  await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({ready:true,provider:'configured',liveModelTested:false})});
+ });
+ await expect(page.getByRole('button',{name:'Check DM connection'})).toBeDisabled();
+ await page.getByLabel('Game access code (remembered on this device)').fill('browser-test-code');
+ await page.getByRole('button',{name:'Check DM connection'}).click();
+ await expect(page.getByLabel('DM connection status')).toContainText('Live AI responses are not tested');
+ expect(calls).toEqual([{method:'GET',access:'browser-test-code'}]);
+ await page.getByRole('button',{name:'Forget access code'}).click();
+ await expect(page.getByLabel('DM connection status')).toHaveCount(0);
+ await expect(page.getByRole('button',{name:'Check DM connection'})).toBeDisabled();
+});
