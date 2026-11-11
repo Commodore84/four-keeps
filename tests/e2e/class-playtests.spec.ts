@@ -102,7 +102,7 @@ test('AI-led opening, world memory and saved pending action retry survive reload
  let requests:any[]=[];let fail=false;
  await page.route('**/api/dm',async route=>{
    const body=route.request().postDataJSON();requests.push(body);
-   if(fail){await route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({error:'Temporary outage'})});return;}
+   if(fail){await route.fulfill({status:502,contentType:'application/json',body:JSON.stringify({error:'The Dungeon Master proposed an incomplete encounter. Retry the action; no enemy statistics or dice were invented.'})});return;}
    await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({narration:body.opening?'A bell tolls from the abandoned keep.':'Mira says the bell rang at dusk.',newFacts:['A bell rang at dusk'],worldUpdates:{npcs:[{name:'Mira',role:'Watchkeeper',location:'Frontier Village',relationship:'neutral',notes:['Knows the old road']}],clues:[{text:'A stranger passed at dusk',evidence:'reported',source:'Mira'}]},combatStart:null})});
  });
  await page.getByRole('button',{name:'Begin AI-led adventure'}).click();
