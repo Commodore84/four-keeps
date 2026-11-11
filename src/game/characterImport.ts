@@ -4,7 +4,7 @@ import {newCampaign,type Campaign} from './campaign';
 import type {CharacterStats,Skill} from './checks';
 import {ITEM_BY_ID} from './creationEquipment';
 import {SPELL_BY_ID} from './creationMagic';
-import {spellcastingAtLevel} from './creationClasses';
+import {classSummary,spellcastingAtLevel} from './creationClasses';
 const skillNames=new Set<Skill>(['Acrobatics','Animal Handling','Arcana','Athletics','Deception','History','Insight','Intimidation','Investigation','Medicine','Nature','Perception','Performance','Persuasion','Religion','Sleight of Hand','Stealth','Survival']);
 const lower=(value:string)=>value.toLowerCase() as keyof CharacterStats['scores'];
 export function campaignFromCharacterDraft(draft:CharacterDraft,title:string,id:string=crypto.randomUUID(),now=new Date().toISOString()):Campaign{
@@ -14,9 +14,10 @@ export function campaignFromCharacterDraft(draft:CharacterDraft,title:string,id:
  const review=reviewCharacter(draft);
  if(!review.hitPoints||review.hitPoints<1||!Number.isFinite(review.armorClass)||!review.origins.speed)throw Error('Invalid level-one character statistics');
  const scores=Object.fromEntries(review.scores.map(({ability,score})=>[lower(ability),score])) as CharacterStats['scores'];
- const expertise=(draft.selections.classChoices?.expertise??[]).filter((skill):skill is Skill=>skillNames.has(skill as Skill));
+ const expertise=(draft.selections.classId==='rogue'?draft.selections.classChoices?.expertise??[]:[]).filter((skill):skill is Skill=>skillNames.has(skill as Skill));
  const slots=spellcastingAtLevel(draft.selections.classId!,1)?.slots[0]??0;
- const character:CharacterStats={scores,proficiencyBonus:2,proficientSkills:review.skills.filter((skill):skill is Skill=>skillNames.has(skill as Skill)),expertiseSkills:expertise,spellSlots:slots?{level1:slots,usedLevel1:0}:undefined,level:1,maxHitPoints:review.hitPoints,currentHitPoints:review.hitPoints,armorClass:review.armorClass,speed:review.origins.speed,
+ const cls=classSummary(draft.selections.classId!);
+ const character:CharacterStats={classId:cls!.id,savingThrowProficiencies:cls!.savingThrows.map(s=>s.toLowerCase()) as CharacterStats['savingThrowProficiencies'],weaponProficiencies:[...cls!.weapons,...((cls!.id==='cleric'&&(draft.selections.classChoices?.['divine-order']??[]).includes('Protector'))||(cls!.id==='druid'&&(draft.selections.classChoices?.['primal-order']??[]).includes('Warden'))?['Martial']:[])],resources:initialPlayerResources(cls!.id,scores.cha),scores,proficiencyBonus:2,proficientSkills:review.skills.filter((skill):skill is Skill=>skillNames.has(skill as Skill)),expertiseSkills:expertise,spellSlots:slots?{level1:slots,usedLevel1:0}:undefined,level:1,maxHitPoints:review.hitPoints,currentHitPoints:review.hitPoints,armorClass:review.armorClass,speed:review.origins.speed,
  cantrips:[...new Set([...review.spells.cantrips,...review.spells.originCantrips,...review.spells.innate])],
  preparedSpells:[...new Set([...review.spells.prepared,...(review.spells.originSpell?[review.spells.originSpell]:[])])]};
  const eq=draft.selections.equipment!;
@@ -35,4 +36,18 @@ export function characterDraftImportOptions(drafts:CharacterDraft[]):{id:string;
 }
 export function preparedSpellNamesFromDraft(draft:CharacterDraft):string[]{
  return (draft.selections.magic?.prepared??[]).map(id=>SPELL_BY_ID[id]?.name??id);
+}
+
+/** Level-one resource pools; effects remain explicitly adjudicated by the DM. */
+function initialPlayerResources(classId:string,charisma:number):NonNullable<CharacterStats['resources']>{
+ switch(classId){
+ case 'barbarian':return {Rage:{maximum:2,used:0,recovery:'long'}};
+ case 'bard':return {'Bardic Inspiration':{maximum:Math.max(1,Math.floor((charisma-10)/2)),used:0,recovery:'long'}};
+ case 'fighter':return {'Second Wind':{maximum:2,used:0,recovery:'long'}};
+ case 'ranger':return {'Favored Enemy':{maximum:2,used:0,recovery:'long'}};
+ case 'sorcerer':return {'Innate Sorcery':{maximum:2,used:0,recovery:'long'}};
+ case 'wizard':return {'Arcane Recovery':{maximum:1,used:0,recovery:'long'}};
+ case 'paladin':return {'Lay on Hands':{maximum:5,used:0,recovery:'long'}};
+ default:return {};
+ }
 }

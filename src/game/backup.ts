@@ -1,3 +1,4 @@
+import {hydratePlayerState} from './playerState';
 import { isCampaign, type Campaign } from './campaign';
 
 export interface CampaignBackup {
@@ -19,5 +20,5 @@ export function parseBackup(text: string): Campaign {
     throw new Error('Unsupported or invalid Four Keeps backup.');
   }
   if (text.length > 5_000_000) throw new Error('Backup is too large.');
-  return backup.campaign;
+  return hydratePlayerState(backup.campaign);
 }

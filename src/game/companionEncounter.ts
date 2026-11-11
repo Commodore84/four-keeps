@@ -2,10 +2,13 @@ import type {Campaign} from './campaign';
 import {adjudicateSubclassActorCondition,adjudicateSubclassActorDamage} from './campaign';
 import type {DamageType} from './subclassCombatRules';
 import {abilityModifier} from './checks';
+import {classSummary} from './creationClasses';
 import {ITEMS} from './creationEquipment';
 
 /** Isolated companion skirmish. Never mutates Campaign.combat (the Nighthawk training encounter). */
 export interface CompanionEncounter {
+ id?:string;
+ settlement?:{xp:number;gold:number;items:{name:string;quantity:number}[];completedAt:string};
  status:'active'|'completed';
  mode?:'companions'|'unified';
  /** Last character-sheet HP observed at encounter creation or explicit synchronization. */
@@ -38,6 +41,7 @@ function save(campaign:Campaign,battle:CompanionEncounter):Campaign{
 }
 export function startCompanionEncounter(campaign:Campaign,initiative:Record<string,number>,positions:Record<string,{x:number;y:number}>,hitPoints:Record<string,number>):Campaign{
  if(campaign.companionEncounter?.status==='active')throw Error('Finish the existing companion encounter first');
+ if(campaign.adventureSession?.status==='encounter'&&campaign.companionEncounter?.status==='completed')throw Error('Resume exploration before starting another encounter');
  const ids=Object.keys(initiative);
  if(!ids.length||ids.some(id=>!campaign.subclassActors?.[id]))throw Error('All participants must be registered subclass actors');
  const participants:CompanionEncounter['participants']={};
@@ -48,7 +52,7 @@ export function startCompanionEncounter(campaign:Campaign,initiative:Record<stri
   participants[id]={...position,hp,maxHp:hp,initiative:roll,conditions:[],speedFeet:30,movementSpentFeet:0,actionUsed:false,bonusActionUsed:false,dashFeet:0,disengaged:false,dodging:false,reactionUsed:false};
  }
  const order=ids.sort((a,b)=>participants[b].initiative-participants[a].initiative||a.localeCompare(b));
- return save(campaign,{status:'active',mode:'companions',round:1,turnIndex:0,order,participants,obstacles:[],cover:[],log:['Companion encounter started.']});
+ return save(campaign,{id:crypto.randomUUID(),status:'active',mode:'companions',round:1,turnIndex:0,order,participants,obstacles:[],cover:[],log:['Companion encounter started.']});
 }
 type Cell={x:number;y:number};
 const key=(p:Cell)=>p.x+','+p.y;
@@ -155,7 +159,7 @@ export function startUnifiedEncounter(campaign:Campaign,initiative:Record<string
  const maxHp=character.maxHitPoints,speed=character.speed;
  if(!position||!valid(position)||Object.values(battle.participants).some(p=>p.x===position.x&&p.y===position.y))throw Error('Invalid Nighthawk position');
  if(!Number.isInteger(roll)||roll<1||roll>40||!Number.isInteger(hp)||!Number.isInteger(maxHp)||hp!<1||maxHp!<1||hp!>maxHp!||!Number.isInteger(speed)||speed!<0||speed!>120||speed!%5!==0)throw Error('Invalid Nighthawk character statistics');
- const participants:CompanionEncounter['participants']={...battle.participants,nighthawk:{...position,hp:hp!,maxHp:maxHp!,initiative:roll,conditions:[] as ('Charmed'|'Poisoned')[],speedFeet:speed!,movementSpentFeet:0,actionUsed:false,bonusActionUsed:false,dashFeet:0,disengaged:false,dodging:false,reactionUsed:false}};
+ const participants:CompanionEncounter['participants']={...battle.participants,nighthawk:{...position,hp:hp!,maxHp:maxHp!,initiative:roll,conditions:(character.conditions??[]) as CompanionCondition[],deathSaves:character.deathSaves,armorClass:character.armorClass,actorKind:'party',faction:'party',speedFeet:speed!,movementSpentFeet:0,actionUsed:false,bonusActionUsed:false,dashFeet:0,disengaged:false,dodging:false,reactionUsed:false}};
  const order=Object.keys(participants).sort((a,b)=>participants[b].initiative-participants[a].initiative||a.localeCompare(b));
  return save(campaign,{...battle,mode:'unified',nighthawkSheetHpSnapshot:hp!,participants,order,log:['Unified encounter started; Nighthawk prototype combat preserved.']});
 }
@@ -543,25 +547,27 @@ export function setNighthawkEncounterLoadout(campaign:Campaign,slot:'weaponId'|'
  const item=ITEMS.find(entry=>entry.id===itemId);
  const category=slot==='weaponId'?'weapon':slot==='armorId'?'armor':'shield';
  if(!item||item.category!==category)throw Error('Invalid equipment category');
- const owned=(campaign.inventoryLedger?.gear??[]).some(entry=>entry.name.toLowerCase()===item.name.toLowerCase()&&entry.quantity>0)||(item.id==='dagger'&&(campaign.equipment?.daggers??0)>0);
+ const owned=(campaign.inventoryLedger?.gear??[]).some(entry=>entry.name.toLowerCase()===item.name.toLowerCase()&&entry.quantity>0)||(!campaign.characterIdentity&&item.id==='dagger'&&(campaign.equipment?.daggers??0)>0);
  if(!owned)throw Error('Item is not verified in campaign inventory');
  return {...save(campaign,{...battle,log:[...battle.log,'Nighthawk equipped verified '+item.name+' for encounter reference']}),encounterLoadout:{...campaign.encounterLoadout,[slot]:itemId}};
 }
-/** Derived only from a verified equipped item and the Rogue character sheet.
- * Dice are never rolled here. Rogue weapon proficiency follows the builder's catalog.
+/** Derive equipped attacks from the saved class profile and shared equipment catalog.
+ * Dice are supplied by the caller; missing identity retains the legacy Rogue profile.
  */
 export function nighthawkEquippedAttack(campaign:Campaign){
  const character=campaign.character, id=campaign.encounterLoadout?.weaponId;
  const item=ITEMS.find(entry=>entry.id===id&&entry.category==='weapon');
  if(!character||!item||!item.damage)return null;
- const owned=(campaign.inventoryLedger?.gear??[]).some(entry=>entry.quantity>0&&entry.name.toLowerCase()===item.name.toLowerCase())||(item.id==='dagger'&&(campaign.equipment?.daggers??0)>0);
+ const owned=(campaign.inventoryLedger?.gear??[]).some(entry=>entry.quantity>0&&entry.name.toLowerCase()===item.name.toLowerCase())||(!campaign.characterIdentity&&item.id==='dagger'&&(campaign.equipment?.daggers??0)>0);
  if(!owned)return null;
  const finesse=item.properties?.includes('Finesse');
- const ranged=item.properties?.some(p=>p==='Ammunition'||p.startsWith('Range '))||['shortbow','longbow','light-crossbow','heavy-crossbow','hand-crossbow'].includes(item.id);
+ const ranged=item.properties?.some(p=>p.startsWith('Ammunition')||p.startsWith('Range '))||['shortbow','longbow','light-crossbow','heavy-crossbow','hand-crossbow'].includes(item.id);
  const dex=abilityModifier(character.scores.dex),str=abilityModifier(character.scores.str);
  const abilityModifierUsed=ranged?dex:finesse?Math.max(str,dex):str;
- // Only the Rogue's explicitly verified simple, finesse and light proficiencies.
- const trained=item.weaponGroup==='simple'||!!item.properties?.some(p=>p==='Finesse'||p==='Light');
+ // Explicit imported proficiencies take precedence over the legacy fallback.
+ const classId=campaign.characterIdentity?.classId??character.classId;
+ const proficiencies=character.weaponProficiencies??(classId?classSummary(classId)?.weapons??[]:['Simple','Martial (Finesse or Light)']);
+ const trained=proficiencies.includes(item.name)||proficiencies.includes(item.weaponGroup==='simple'?'Simple':'Martial')||(item.weaponGroup==='martial'&&((proficiencies.includes('Martial Light')&&!!item.properties?.includes('Light'))||(proficiencies.includes('Martial (Finesse or Light)')&&!!item.properties?.some(p=>p==='Finesse'||p==='Light'))));
  return {weaponId:item.id,name:item.name,damageDice:item.damage,attackModifier:abilityModifierUsed+(trained?character.proficiencyBonus:0),damageModifier:abilityModifierUsed,proficient:trained,ability:ranged?'Dexterity':finesse&&dex>=str?'Dexterity':'Strength'};
 }
 /** Armor class is computed from explicitly equipped, owned and catalogued gear.
@@ -582,12 +588,13 @@ export function nighthawkEquippedDefense(campaign:Campaign){
 }
 export function nighthawkEquipmentReferences(campaign:Campaign){
  const names=new Set((campaign.inventoryLedger?.gear??[]).filter(g=>g.quantity>0).map(g=>g.name.toLowerCase()));
- if((campaign.equipment?.daggers??0)>0)names.add('dagger');
+ if(!campaign.characterIdentity&&(campaign.equipment?.daggers??0)>0)names.add('dagger');
  return {armorClass:campaign.character?.armorClass??null,items:ITEMS.filter(item=>(item.category==='weapon'||item.category==='armor'||item.category==='shield')&&names.has(item.name.toLowerCase())).map(item=>({id:item.id,name:item.name,category:item.category,damage:item.damage??null,properties:item.properties??[],baseAC:item.baseAC??null})),equippedWeapon:campaign.encounterLoadout?.weaponId??null,equippedArmor:campaign.encounterLoadout?.armorId??null,equippedShield:campaign.encounterLoadout?.shieldId??null};
 }
 export function nighthawkEncounterInventory(campaign:Campaign){
  const gear=(campaign.inventoryLedger?.gear??[]).filter(item=>Number.isInteger(item.quantity)&&item.quantity>=0).map(item=>({name:item.name,quantity:item.quantity}));
- return {gear,ammunition:{arrows:campaign.equipment?.arrows??null},weapons:{daggers:campaign.equipment?.daggers??null},supplies:{caltrops:campaign.equipment?.caltrops??null,ballBearings:campaign.equipment?.ballBearings??null},authoritativeSource:'campaign' as const};
+ const quantity=(name:string,fallback:number|undefined)=>campaign.characterIdentity?gear.find(i=>i.name===name)?.quantity??0:fallback??null;
+ return {gear,ammunition:{arrows:quantity('Arrows',campaign.equipment?.arrows)},weapons:{daggers:quantity('Dagger',campaign.equipment?.daggers)},supplies:{caltrops:quantity('Caltrops',campaign.equipment?.caltrops),ballBearings:quantity('Ball Bearings',campaign.equipment?.ballBearings)},authoritativeSource:'campaign' as const};
 }
 /** Explicit campaign-authoritative inventory expenditure. Never touches prototype combat.
  * This records consumption only; any attack or item action must be adjudicated separately.
@@ -596,7 +603,8 @@ export function spendUnifiedNighthawkInventory(campaign:Campaign,item:string,qua
  const battle=encounter(campaign);
  if(battle.mode!=='unified'||!battle.participants.nighthawk)throw Error('Unified Nighthawk encounter required');
  if(!Number.isInteger(quantity)||quantity<1||quantity>100||!item.trim())throw Error('Invalid inventory expenditure');
- const name=item.trim();
+ const aliases:Record<string,string>={arrows:'Arrows',daggers:'Dagger',caltrops:'Caltrops',ballBearings:'Ball Bearings'};
+ const name=campaign.characterIdentity?(aliases[item.trim()]??item.trim()):item.trim();
  const equipmentKey=({arrows:'arrows',daggers:'daggers',caltrops:'caltrops',ballBearings:'ballBearings'} as Record<string,'arrows'|'daggers'|'caltrops'|'ballBearings'>)[name];
  if(equipmentKey){
   const available=campaign.equipment?.[equipmentKey];
@@ -613,7 +621,7 @@ export function spendUnifiedNighthawkSpellSlot(campaign:Campaign,spell:string):C
  const character=campaign.character,slots=character?.spellSlots;
  if(battle.mode!=='unified'||!character||!slots)throw Error('Nighthawk has no verified level-one spell slots');
  if(!spell.trim()||spell.length>100||!character.preparedSpells?.includes(spell.trim()))throw Error('Spell is not prepared');
- if(actor.hp<=0||actor.actionUsed)throw Error('Spell action unavailable');
+ if(actor.hp<=0||actor.actionUsed||cannotAct(actor))throw Error('Spell action unavailable');
  if(!Number.isInteger(slots.level1)||!Number.isInteger(slots.usedLevel1)||slots.usedLevel1>=slots.level1||slots.usedLevel1<0)throw Error('No level-one spell slots remaining');
  return {...save(campaign,{...battle,participants:{...battle.participants,nighthawk:{...actor,actionUsed:true}},log:[...battle.log,'Nighthawk expended level-one slot for '+spell.trim()+' (spell effect DM adjudicated)']}),character:{...character,spellSlots:{...slots,usedLevel1:slots.usedLevel1+1}}};
 }
@@ -634,7 +642,9 @@ export function resolveCompanionOpportunityAttack(campaign:Campaign,attackerId:s
 }
 export function finishCompanionEncounter(campaign:Campaign):Campaign{
  const battle=encounter(campaign);
- return save(campaign,{...battle,status:'completed',log:[...battle.log,'Companion encounter completed']});
+ const synced=battle.mode==='unified'?synchronizeNighthawkHitPoints(campaign):campaign;
+ const player=battle.participants.nighthawk;
+ return save({...synced,character:synced.character&&player?{...synced.character,conditions:[...player.conditions],deathSaves:player.deathSaves}:synced.character},{...synced.companionEncounter!,status:'completed',log:[...battle.log,'Companion encounter completed; player state saved']});
 }
 
 /** Manual d20 and damage dice inputs; no automatic attack modifiers or dice invented. */
@@ -693,7 +703,7 @@ export function attackCompanionWithVerifiedStats(campaign:Campaign,attackerId:st
   equipped?.weaponId==='sling'?'Sling Bullets':null;
  if(ammunitionWeapon&&!ammoName)throw Error('Equipped ammunition weapon has no verified ammunition mapping');
  const ammoKey=ammoName==='Arrows'?'arrows':null;
- const equipmentAvailable=ammoKey?(campaign.equipment?.arrows??0):0;
+ const equipmentAvailable=ammoKey&&!campaign.characterIdentity?(campaign.equipment?.arrows??0):0;
  const ledgerAvailable=ammoName?(campaign.inventoryLedger?.gear.find(g=>g.name===ammoName)?.quantity??0):0;
  if(ammoName&&equipmentAvailable+ledgerAvailable<1)throw Error('Insufficient campaign ammunition');
  const result=attackCompanion(campaign,attackerId,targetId,roll,attackModifier,targetAC,damageRoll,damageModifier,damageType,rangeFeet,secondD20);
@@ -733,10 +743,10 @@ export function attackWithThrownEquippedWeapon(campaign:Campaign,attackerId:stri
  if(!weapon?.properties?.some(p=>p.startsWith('Thrown ')))throw Error('Verified equipped thrown weapon required');
  const [normal,maximum]=(weapon.properties.find(p=>p.startsWith('Thrown '))?.replace('Thrown ','').split('/').map(Number)??[]);
  if(!Number.isInteger(rangeFeet)||rangeFeet<5||rangeFeet>maximum||rangeFeet>normal)throw Error('Thrown weapon range requires DM disadvantage adjudication');
- const available=(weapon.id==='dagger'?campaign.equipment?.daggers??0:0)+(campaign.inventoryLedger?.gear.find(g=>g.name===weapon.name)?.quantity??0);
+ const available=(weapon.id==='dagger'&&!campaign.characterIdentity?campaign.equipment?.daggers??0:0)+(campaign.inventoryLedger?.gear.find(g=>g.name===weapon.name)?.quantity??0);
  if(available<1)throw Error('Insufficient thrown weapons');
  const resolved=attackCompanionWithVerifiedStats(campaign,attackerId,targetId,roll,damageRoll,damageType,rangeFeet,secondD20);
- const source=weapon.id==='dagger'&&(campaign.equipment?.daggers??0)>0?'daggers':weapon.name;
+ const source=weapon.id==='dagger'&&!campaign.characterIdentity&&(campaign.equipment?.daggers??0)>0?'daggers':weapon.name;
  const spent=spendUnifiedNighthawkInventory(resolved,source,1);
  const current=spent.companionEncounter!;
  return save(spent,{...current,thrownWeaponsPendingRecovery:{...current.thrownWeaponsPendingRecovery,[source]:(current.thrownWeaponsPendingRecovery?.[source]??0)+1},log:[...current.log,'Thrown '+source+' awaiting DM recovery']});
@@ -769,4 +779,14 @@ export function useCompanionAction(campaign:Campaign,actorId:string,choice:'Dash
  const updated={...actor,actionUsed:true,dashFeet:choice==='Dash'?actor.dashFeet+actor.speedFeet:actor.dashFeet,disengaged:choice==='Disengage'||actor.disengaged,dodging:choice==='Dodge'||actor.dodging};
  const note=['Help','Search','Study','Influence','Ready','Utilize'].includes(choice)?' (requires DM adjudication; no mechanical benefit assumed)':'';
  return save(campaign,{...battle,participants:{...battle.participants,[actorId]:updated},log:[...battle.log,actorId+' used '+choice+note]});
+}
+
+/** Public player bridge. The nighthawk key is retained only for saved-encounter compatibility. */
+export const playerEquippedAttack=nighthawkEquippedAttack;
+export const playerEquippedDefense=nighthawkEquippedDefense;
+export function spendPlayerResource(campaign:Campaign,name:string,amount=1):Campaign{
+ const battle=activeActor(campaign,'nighthawk'),actor=battle.participants.nighthawk;
+ const pool=campaign.character?.resources?.[name];
+ if(!pool||!Number.isInteger(amount)||amount<1||pool.used+amount>pool.maximum||cannotAct(actor)||actor.hp<=0)throw Error('Player resource unavailable');
+ return {...save(campaign,{...battle,log:[...battle.log,'Player spent '+amount+' '+name+'; effect requires DM adjudication']}),character:{...campaign.character!,resources:{...campaign.character!.resources,[name]:{...pool,used:pool.used+amount}}}};
 }

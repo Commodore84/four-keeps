@@ -29,3 +29,6 @@ Vite is configured for the GitHub Pages subpath `/four-keeps/`.
 - `tests/e2e`: browser smoke tests
 
 Future milestones add Supabase Auth/PostgreSQL, serverless DM orchestration, companion behavior, and tactical maps. No API keys belong in the browser.
+
+Development status and guided playtest limits are recorded in
+[Four Keeps Development Progress](DEVELOPMENT_PROGRESS.md).

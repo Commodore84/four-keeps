@@ -38,3 +38,10 @@ describe('validated character draft to campaign import',()=>{
   expect(isCampaign({...session,adventureSession:{...session.adventureSession!,site:'unknown' as 'frontier'}})).toBe(false);
  });
 });
+
+it('imports Wizard slots and class saving throws without Rogue proficiency',()=>{
+ const d=validRogue();d.selections.classId='wizard';d.selections.classChoices={'class-skills':['Arcana','History'],expertise:['Arcana'],'divine-order':['Protector']};
+ d.selections.magic={cantrips:['fire-bolt','mage-hand','minor-illusion'],prepared:['alarm','burning-hands','charm-person','detect-magic'],spellbook:['alarm','burning-hands','charm-person','detect-magic','find-familiar','magic-missile'],invocations:[]};
+ const c=campaignFromCharacterDraft(d,'Wizard import');expect(c.character).toMatchObject({classId:'wizard',maxHitPoints:8,savingThrowProficiencies:['int','wis'],weaponProficiencies:['Simple'],spellSlots:{level1:2,usedLevel1:0}});
+ expect(c.character?.expertiseSkills).toEqual([]);expect(c.character?.weaponProficiencies).not.toContain('Martial');expect(c.character?.preparedSpells).toContain('Alarm');expect(c.character?.resources?.['Arcane Recovery'].maximum).toBe(1);
+});

@@ -39,7 +39,6 @@ export function interactAdventure(campaign:Campaign,choiceId:string,now=new Date
 export function enterAdventureEncounter(campaign:Campaign,companionId:string,initiative:{nighthawk:number;companion:number},companionHp:number,now=new Date().toISOString()):Campaign{
  const session=campaign.adventureSession;
  if(!session||session.status!=='exploring'||session.site!=='watchtower')throw Error('Reach the watchtower before entering an encounter');
- if(campaign.characterIdentity && campaign.characterIdentity.classId!=='rogue')throw Error('Linked encounter currently supports the Rogue prototype only; other imported classes require a class-neutral combat actor');
  if(!campaign.subclassActors?.[companionId])throw Error('Select a registered companion');
  if(!Number.isInteger(companionHp)||companionHp<1||companionHp>500)throw Error('Enter verified companion HP');
  if(campaign.companionEncounter?.status==='active')throw Error('Finish the active encounter first');
@@ -49,5 +48,6 @@ export function enterAdventureEncounter(campaign:Campaign,companionId:string,ini
 export function resumeAdventureExploration(campaign:Campaign,now=new Date().toISOString()):Campaign{
  const session=campaign.adventureSession;
  if(!session||session.status!=='encounter'||campaign.companionEncounter?.status!=='completed')throw Error('Finish the linked encounter before exploring');
+ if(campaign.characterIdentity&&!campaign.companionEncounter?.settlement)throw Error('Record encounter rewards, including zero rewards, before exploring');
  return {...campaign,adventureSession:{...session,status:'exploring'},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:'The encounter ended. Exploration resumes at '+ADVENTURE_SITES[session.site].name+'.',createdAt:now}]};
 }

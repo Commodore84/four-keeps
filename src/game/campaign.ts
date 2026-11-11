@@ -1,3 +1,4 @@
+import {validPlayerState} from './playerState';
 import type {CompanionEncounter} from './companionEncounter';
 import type {AdventureSession} from './adventureSession';
 import {finishSubclassRest,resolveSubclassDamage,canApplyCondition,selectFiendResistance,spendDarkOnesOwnLuck,type SubclassCombatState,type DamageType,type Terrain} from './subclassCombatRules';
@@ -59,7 +60,7 @@ export function isCampaign(value: unknown): value is Campaign {
   const c = value as Partial<Campaign>;
   return c.schemaVersion === 1 && typeof c.id === 'string' && typeof c.title === 'string'
     && typeof c.location === 'string' && typeof c.createdAt === 'string'
-    && typeof c.updatedAt === 'string' && (c.character === undefined || (typeof c.character === 'object' && c.character !== null && ['str','dex','con','int','wis','cha'].every(a => Number.isInteger(c.character?.scores?.[a as keyof CharacterStats['scores']]) && c.character!.scores[a as keyof CharacterStats['scores']] >= 1 && c.character!.scores[a as keyof CharacterStats['scores']] <= 30) && Number.isInteger(c.character.proficiencyBonus) && c.character.proficiencyBonus >= 2 && c.character.proficiencyBonus <= 9 && Array.isArray(c.character.proficientSkills) && c.character.proficientSkills.every(s => typeof s === 'string'))) && (c.characterIdentity === undefined || (typeof c.characterIdentity.name === 'string' && c.characterIdentity.name.trim().length > 0 && typeof c.characterIdentity.classId === 'string' && typeof c.characterIdentity.speciesId === 'string' && typeof c.characterIdentity.backgroundId === 'string' && typeof c.characterIdentity.draftId === 'string'))
+    && typeof c.updatedAt === 'string' && (c.character === undefined || (typeof c.character === 'object' && c.character !== null && validPlayerState(c.character) && ['str','dex','con','int','wis','cha'].every(a => Number.isInteger(c.character?.scores?.[a as keyof CharacterStats['scores']]) && c.character!.scores[a as keyof CharacterStats['scores']] >= 1 && c.character!.scores[a as keyof CharacterStats['scores']] <= 30) && Number.isInteger(c.character.proficiencyBonus) && c.character.proficiencyBonus >= 2 && c.character.proficiencyBonus <= 9 && Array.isArray(c.character.proficientSkills) && c.character.proficientSkills.every(s => typeof s === 'string'))) && (c.characterIdentity === undefined || (typeof c.characterIdentity.name === 'string' && c.characterIdentity.name.trim().length > 0 && typeof c.characterIdentity.classId === 'string' && typeof c.characterIdentity.speciesId === 'string' && typeof c.characterIdentity.backgroundId === 'string' && typeof c.characterIdentity.draftId === 'string'))
     && (c.adventureSession === undefined || (['exploring','encounter'].includes(c.adventureSession.status) && ['frontier','crossroads','watchtower'].includes(c.adventureSession.site) && c.adventureSession.characterSource === 'campaign-character' && Array.isArray(c.adventureSession.visited) && c.adventureSession.visited.every(site => ['frontier','crossroads','watchtower'].includes(site)) && Array.isArray(c.adventureSession.interactions) && c.adventureSession.interactions.every(entry => ['frontier','crossroads','watchtower'].includes(entry.site) && typeof entry.choice === 'string' && typeof entry.response === 'string')))
     && (c.xp === undefined || (Number.isInteger(c.xp) && c.xp >= 0)) && (c.xpAwards === undefined || (Array.isArray(c.xpAwards) && c.xpAwards.every(a => typeof a.id === 'string' && Number.isInteger(a.amount) && a.amount > 0 && typeof a.reason === 'string'))) && (c.pendingCheck === undefined || (typeof c.pendingCheck.skill === 'string' && typeof c.pendingCheck.token === 'string' && typeof c.pendingCheck.reason === 'string' && ['normal','advantage','disadvantage'].includes(c.pendingCheck.mode) && (c.pendingCheck.dice === undefined || (Array.isArray(c.pendingCheck.dice) && c.pendingCheck.dice.every(n => Number.isInteger(n) && n >= 1 && n <= 20))))) && (c.world === undefined || JSON.stringify(normalizeWorld(c.world)) === JSON.stringify(c.world)) && (c.worldFacts === undefined || (Array.isArray(c.worldFacts) && c.worldFacts.every((fact) => typeof fact === 'string'))) && Array.isArray(c.journal)
     && c.journal.every((entry) => entry && typeof entry.id === 'string' && typeof entry.text === 'string'
@@ -103,6 +104,7 @@ export function awardExperience(campaign: Campaign, amount: number, reason: stri
   return { ...campaign, xp, xpAwards: awards, updatedAt: new Date().toISOString(), journal: [...campaign.journal, { id: crypto.randomUUID(), kind: 'system', text: '+' + amount + ' XP — ' + reason.trim().slice(0,180), createdAt: new Date().toISOString() }] };
 }
 export function levelUpRogue(campaign: Campaign, hpGain: number): Campaign {
+  requireRogue(campaign);
   const character = campaign.character ?? structuredClone(prototypeNighthawk);
   const level = character.level ?? 1;
   if (level !== 1 || (campaign.xp ?? 0) < xpThresholds[1]) throw new Error('Level 2 is not unlocked');
@@ -116,6 +118,7 @@ export const tricksterSpells = ['Alarm','Burning Hands','Charm Person','Chromati
 export const ritualSpells = ['Alarm','Comprehend Languages','Detect Magic','Find Familiar','Identify','Illusory Script','Tenser’s Floating Disk','Unseen Servant'] as const;
 export const isRitualSpell = (spell: string): boolean => (ritualSpells as readonly string[]).includes(spell);
 export function levelUpArcaneTrickster(campaign: Campaign, hpGain: number, cantrips: string[], spells: string[]): Campaign {
+  requireRogue(campaign);
   const character = campaign.character ?? structuredClone(prototypeNighthawk);
   if ((character.level ?? 1) !== 2 || (campaign.xp ?? 0) < xpThresholds[2]) throw new Error('Level 3 is not unlocked');
   if (!Number.isInteger(hpGain) || hpGain < 3 || hpGain > 10) throw new Error('Invalid HP gain');
@@ -127,11 +130,13 @@ export function levelUpArcaneTrickster(campaign: Campaign, hpGain: number, cantr
 
 /** Explicit, reversible correction of provisional playtest scores. Never automatic. */
 export function reconcileNighthawkScores(campaign: Campaign): Campaign {
+  requireLegacyNighthawk(campaign);
   if (!campaign.character || campaign.preReconciliationScores) throw new Error('Scores already reconciled or character missing');
   const scores = { str: 8, dex: 17, con: 14, int: 16, wis: 10, cha: 8 };
   return { ...campaign, preReconciliationScores: structuredClone(campaign.character.scores), character: { ...campaign.character, scores }, updatedAt: new Date().toISOString(), journal: [...campaign.journal, { id: crypto.randomUUID(), kind: 'system', text: 'Player confirmed reconciliation of provisional ability scores: STR 8, DEX 17, CON 14, INT 16, WIS 10, CHA 8.', createdAt: new Date().toISOString() }] };
 }
 export function undoNighthawkScoreReconciliation(campaign: Campaign): Campaign {
+  requireLegacyNighthawk(campaign);
   if (!campaign.character || !campaign.preReconciliationScores) throw new Error('No previous scores to restore');
   return { ...campaign, character: { ...campaign.character, scores: structuredClone(campaign.preReconciliationScores) }, preReconciliationScores: undefined, updatedAt: new Date().toISOString(), journal: [...campaign.journal, { id: crypto.randomUUID(), kind: 'system', text: 'Restored prior playtest ability scores.', createdAt: new Date().toISOString() }] };
 }
@@ -140,6 +145,7 @@ export function undoNighthawkScoreReconciliation(campaign: Campaign): Campaign {
 export const concentrationSpells = ['Friends','Dancing Lights','Blade Ward','Tasha’s Hideous Laughter','Silent Image','Fog Cloud','Witch Bolt','Protection from Evil and Good','Expeditious Retreat','Detect Magic'] as const;
 export const spellRequiresConcentration = (spell: string): boolean => (concentrationSpells as readonly string[]).includes(spell);
 export function endNighthawkConcentration(campaign: Campaign): Campaign {
+  requireLegacyNighthawk(campaign);
   if (!campaign.concentration) throw new Error('Not concentrating');
   const now = new Date().toISOString();
   return {...campaign, combat:campaign.combat&&campaign.concentration.spell==='Tasha’s Hideous Laughter'?{...campaign.combat,laughterTarget:undefined}:campaign.combat, concentration:undefined, spellEffects:(campaign.spellEffects??[]).filter(e=>e.spell!==campaign.concentration?.spell || e.status!=='active'), updatedAt:now, journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:'Nighthawk ends concentration on '+campaign.concentration.spell+'.',createdAt:now}]};
@@ -158,6 +164,7 @@ export function availableCombatSpells(campaign:Campaign):string[] {
  return [...(ch.cantrips??[]),...(ch.preparedSpells??[])].filter(spell=>(combatActionSpells as readonly string[]).includes(spell));
 }
 export function castCombatMagicAction(campaign:Campaign,spell:string,target='',trueStrikeWeapon:'shortbow'|'dagger'='shortbow'):Campaign {
+  requireLegacyNighthawk(campaign);
  const c=campaign.combat;
  if(!c||c.status!=='initiative-set'||c.order?.[c.turnIndex??0]!=='Nighthawk')throw Error('Magic Action requires Nighthawk’s turn.');
  if(c.actionUsed||c.attack)throw Error('Action already used this turn.');
@@ -184,6 +191,7 @@ export function castCombatMagicAction(campaign:Campaign,spell:string,target='',t
 }
 /** Resolve a spell saving throw with the training dummy's +0 Intelligence/Wisdom save. */
 export function resolveCombatSpellSave(campaign:Campaign):Campaign {
+  requireLegacyNighthawk(campaign);
  const c=campaign.combat,pending=c?.pendingSpellSave;
  if(!c||!pending||c.status!=='initiative-set')throw Error('No spell saving throw pending.');
  const ch=campaign.character??prototypeNighthawk;
@@ -212,6 +220,7 @@ export function resolveCombatSpellSave(campaign:Campaign):Campaign {
 }
 /** A creature affected by Hideous Laughter repeats its Wisdom save with Advantage whenever it takes damage. */
 export function resolveLaughterDamageSave(campaign:Campaign,target:'first'|'second',damage:number):Campaign {
+  requireLegacyNighthawk(campaign);
  const c=campaign.combat;
  if(!c||c.laughterTarget!==target||damage<=0)return campaign;
  const hp=target==='second'?c.secondEnemy?.hp:c.enemyHp;
@@ -231,6 +240,7 @@ export function resolveLaughterDamageSave(campaign:Campaign,target:'first'|'seco
 }
 /** End-of-turn Wisdom save to end Tasha's Hideous Laughter on a training dummy. */
 export function resolveLaughterRepeatSave(campaign:Campaign):Campaign {
+  requireLegacyNighthawk(campaign);
  const c=campaign.combat,target=c?.laughterTarget;
  if(!c||!target||c.status!=='initiative-set')throw Error('No active Hideous Laughter condition.');
  const ch=campaign.character??prototypeNighthawk;
@@ -243,6 +253,7 @@ export function resolveLaughterRepeatSave(campaign:Campaign):Campaign {
  return {...campaign,combat:next,concentration:success&&campaign.concentration?.spell==='Tasha’s Hideous Laughter'?undefined:campaign.concentration,updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:'Hideous Laughter repeat save: '+roll+(penalty?' - '+penalty:'')+' vs DC '+dc+'. '+(success?'Condition ends.':'Target remains incapacitated.'),createdAt:now}]};
 }
 export function castNighthawkSpell(campaign: Campaign, spell: string, ritual: boolean, familiarComponentsConfirmed = false, target = ''): Campaign {
+  requireLegacyNighthawk(campaign);
   const character = campaign.character;
   if (!character || (character.level ?? 1) < 3 || character.subclass !== 'Arcane Trickster') throw new Error('Arcane Trickster spellcasting is not unlocked');
   const cantrip = character.cantrips?.includes(spell) ?? false;
@@ -283,6 +294,7 @@ export function longRestRestriction(campaign: Campaign): string | null {
   return minutes>0?'Long Rest recovery is available in '+Math.ceil(minutes/60)+' in-game hours. The DM can adjudicate waiting until then.':null;
 }
 export function advanceToLongRestEligibility(campaign: Campaign, minutes: number): Campaign {
+  requireLegacyNighthawk(campaign);
   const required=minutesUntilLongRestEligible(campaign);
   if(!Number.isInteger(minutes)||minutes!==required||minutes<0)throw new Error('Invalid Long Rest waiting period');
   if(minutes===0)return campaign;
@@ -293,6 +305,7 @@ export function advanceToLongRestEligibility(campaign: Campaign, minutes: number
     journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:'Nighthawk waits '+minutes+' minutes for Long Rest eligibility (DM approved uninterrupted waiting).',createdAt:now}]};
 }
 export function takeNighthawkRest(campaign: Campaign, kind: 'short'|'long', hitDiceToSpend = 0, hitDieRolls: number[] = []): Campaign {
+  requireLegacyNighthawk(campaign);
   if(kind==='long') {const restriction=longRestRestriction(campaign);if(restriction)throw new Error(restriction);}
   const character=campaign.character ?? prototypeNighthawk;
   const level=character.level??1;
@@ -315,6 +328,7 @@ export function takeNighthawkRest(campaign: Campaign, kind: 'short'|'long', hitD
 }
 
 export function applyNighthawkDamage(campaign: Campaign, amount: number, source: string): Campaign {
+  requireLegacyNighthawk(campaign);
   if(!Number.isInteger(amount)||amount<1||amount>1000)throw new Error('Damage must be a positive whole number');
   const character=campaign.character??prototypeNighthawk;
   const before=character.currentHitPoints??character.maxHitPoints??10;
@@ -324,6 +338,7 @@ export function applyNighthawkDamage(campaign: Campaign, amount: number, source:
 }
 
 export function adjustEquipment(campaign:Campaign,item:'daggers'|'arrows'|'caltrops'|'ballBearings',delta:number):Campaign {
+  requireLegacyNighthawk(campaign);
  if(campaign.combat)throw Error('Change equipment outside combat.');
  if(!Number.isInteger(delta)||Math.abs(delta)!==1)throw Error('Invalid quantity adjustment.');
  const equipment=campaign.equipment??{daggers:2,arrows:20,caltrops:0,ballBearings:0};
@@ -332,12 +347,14 @@ export function adjustEquipment(campaign:Campaign,item:'daggers'|'arrows'|'caltr
  return {...campaign,equipment:{...equipment,[item]:next},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:'Equipment adjusted: '+item+' '+equipment[item]+' → '+next+'.',createdAt:now}]};
 }
 export function replenishTrainingEquipment(campaign:Campaign):Campaign {
+  requireLegacyNighthawk(campaign);
  const combat=campaign.combat;
  if(!combat||combat.enemyName!=='Training Dummy')throw Error('Training resupply is only available during training encounters.');
  const now=new Date().toISOString();
  return {...campaign,combat:{...combat,arrowsRemaining:20,daggersAvailable:2,daggersThrown:0},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:'Training resupply: 20 practice arrows and 2 practice daggers ready.',createdAt:now}]};
 }
 export function beginDuel(campaign:Campaign, enemyName:string):Campaign {
+  requireLegacyNighthawk(campaign);
   if(campaign.combat)return campaign;
   const clean=enemyName.trim().slice(0,60);
   if(!clean)throw Error('Encounter requires an opponent');
@@ -346,6 +363,7 @@ export function beginDuel(campaign:Campaign, enemyName:string):Campaign {
   return {...campaign,...(clean==='Training Dummy'?{character:{...(campaign.character??prototypeNighthawk),currentHitPoints:(campaign.character??prototypeNighthawk).maxHitPoints??10}}:{}),combat:{journalStartIndex:campaign.journal.length+1,status:'awaiting-initiative',enemyName:clean,enemyInitiative:enemyRoll+1,round:1,...(clean==='Training Dummy'?{trainingStartingHp:(campaign.character??prototypeNighthawk).maxHitPoints??10}:{})},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:'Combat begins: Nighthawk vs '+clean+'. Enemy initiative rolled privately. Nighthawk must roll initiative.',createdAt:now}]};
 }
 export function rollDuelInitiative(campaign:Campaign):Campaign {
+  requireLegacyNighthawk(campaign);
   const combat=campaign.combat;
   if(!combat||combat.status!=='awaiting-initiative')throw Error('No initiative roll pending');
   const dex=(campaign.character??prototypeNighthawk).scores.dex;
@@ -395,6 +413,7 @@ function refreshOwlForNighthawkTurn(c:NonNullable<Campaign['combat']>):NonNullab
  return {...c.owl,movementUsed:0,actionUsed:false,helpTarget:c.owl.helpRound!==undefined&&c.owl.helpRound<c.round?undefined:c.owl.helpTarget,helpRound:c.owl.helpRound!==undefined&&c.owl.helpRound<c.round?undefined:c.owl.helpRound};
 }
 export function moveOwl(campaign:Campaign,x:number,y:number):Campaign {
+  requireLegacyNighthawk(campaign);
  const c=campaign.combat,owl=c?.owl;
  if(!c||c.status!=='initiative-set'||c.order?.[c.turnIndex??0]!=='Nighthawk'||!owl)throw Error('Owl can move only during Nighthawk’s turn.');
  if(!Number.isInteger(x)||!Number.isInteger(y)||x<0||y<0||x>=trainingMapSize||y>=trainingMapSize)throw Error('Outside the training grid.');
@@ -407,6 +426,7 @@ export function moveOwl(campaign:Campaign,x:number,y:number):Campaign {
  return {...campaign,combat:next,updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:'Owl flies '+cost+' ft to ('+(x+1)+', '+(y+1)+'). Flyby prevents opportunity attacks.',createdAt:now}]};
 }
 export function owlTurnAction(campaign:Campaign,action:'dash'|'disengage'|'dodge'):Campaign {
+  requireLegacyNighthawk(campaign);
  const c=campaign.combat,owl=c?.owl;
  if(!c||c.status!=='initiative-set'||c.order?.[c.turnIndex??0]!=='Nighthawk'||!owl)throw Error('Owl can act only during Nighthawk’s turn.');
  if(owl.actionUsed)throw Error('Owl already used its action.');
@@ -418,6 +438,7 @@ export function owlTurnAction(campaign:Campaign,action:'dash'|'disengage'|'dodge
  return {...campaign,combat:next,updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:description,createdAt:now}]};
 }
 export function owlHelp(campaign:Campaign,target:'first'|'second'):Campaign {
+  requireLegacyNighthawk(campaign);
  const c=campaign.combat,owl=c?.owl;
  if(!c||c.status!=='initiative-set'||c.order?.[c.turnIndex??0]!=='Nighthawk'||!owl)throw Error('Owl can Help only during Nighthawk’s turn.');
  if(owl.actionUsed)throw Error('Owl already used its action.');
@@ -428,6 +449,7 @@ export function owlHelp(campaign:Campaign,target:'first'|'second'):Campaign {
  return {...campaign,combat:next,updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:'Owl uses Help against '+(target==='second'?c.secondEnemy!.name:c.enemyName)+'. The next qualifying allied attack gains Advantage.',createdAt:now}]};
 }
 export function selectTrainingTarget(campaign:Campaign,target:'first'|'second'):Campaign {
+  requireLegacyNighthawk(campaign);
  const c=campaign.combat;
  if(!c||c.status!=='initiative-set'||c.order?.[c.turnIndex??0]!=='Nighthawk')throw Error('Select a target on Nighthawk’s turn.');
  if(c.attack&&c.attack.phase!=='resolved')throw Error('Finish the current attack before changing targets.');
@@ -438,6 +460,7 @@ export function selectTrainingTarget(campaign:Campaign,target:'first'|'second'):
  return {...campaign,combat:{...c,selectedEnemy:target},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:'Nighthawk targets '+name+'.',createdAt:now}]};
 }
 export function addSecondTrainingEnemy(campaign:Campaign):Campaign {
+  requireLegacyNighthawk(campaign);
  const c=campaign.combat;
  if(!c||c.status!=='initiative-set'||c.secondEnemy)throw Error('Start a training encounter before adding a second opponent.');
  const roll=crypto.getRandomValues(new Uint32Array(1))[0]%20+2;
@@ -453,6 +476,7 @@ export function canNighthawkHide(c:NonNullable<Campaign['combat']>):boolean {
  return ((c.enemyHp??12)<=0||concealed(c.enemyPosition??{x:6,y:4}))&&(!c.secondEnemy||c.secondEnemy.hp<=0||concealed(c.secondEnemy.position));
 }
 export function hideNighthawk(campaign:Campaign,actionType:'action'|'bonus'='bonus'):Campaign {
+  requireLegacyNighthawk(campaign);
  const c=campaign.combat;
  if(!c||c.status!=='initiative-set'||c.order?.[c.turnIndex??0]!=='Nighthawk')throw Error('Hide requires your turn.');
  const useBonus=actionType==='bonus';
@@ -468,6 +492,7 @@ export function hideNighthawk(campaign:Campaign,actionType:'action'|'bonus'='bon
  return {...campaign,combat:{...c,bonusActionUsed:c.bonusActionUsed||useBonus,actionUsed:c.actionUsed||!useBonus,lastAction:'Hide',playerHidden:success,hideRoll:roll,hideTotal:total,hideResult:detail},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:detail,createdAt:now}]};
 }
 export function searchForNighthawk(campaign:Campaign):Campaign {
+  requireLegacyNighthawk(campaign);
  const c=campaign.combat;
  if(!c||c.status!=='initiative-set'||c.order?.[c.turnIndex??0]==='Nighthawk'||!c.playerHidden)throw Error('Search requires a hidden player on the enemy turn.');
  const roll=crypto.getRandomValues(new Uint32Array(1))[0]%20+1;
@@ -516,6 +541,7 @@ export function tacticalOpportunityEnemies(combat:NonNullable<Campaign['combat']
  return found;
 }
 export function moveDuelToken(campaign:Campaign,x:number,y:number):Campaign {
+  requireLegacyNighthawk(campaign);
  const combat=campaign.combat;
  if(!combat||combat.status!=='initiative-set'||combat.order?.[combat.turnIndex??0]!=='Nighthawk')throw Error('You can move only on your turn.');
  if(combat.playerOpportunity)throw Error('Resolve the enemy opportunity attack first.');
@@ -555,6 +581,7 @@ function advanceTacticalMovement(campaign:Campaign,route:TacticalPoint[],startIn
  return {...campaign,combat:updated,updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:'Nighthawk moves '+travelled+' feet to ('+(position.x+1)+','+(position.y+1)+'). '+updated.movementUsed+'/'+(combat.movementAllowance??35)+' feet used.',createdAt:now}]};
 }
 export function resolveEnemyOpportunity(campaign:Campaign,kind:'hit'|'damage'|'finish'):Campaign {
+  requireLegacyNighthawk(campaign);
  const c=campaign.combat,pending=c?.playerOpportunity;
  if(!c||!pending)throw Error('No enemy opportunity attack pending.');
  const die=(sides:number)=>crypto.getRandomValues(new Uint32Array(1))[0]%sides+1;
@@ -589,6 +616,7 @@ export function resolveEnemyOpportunity(campaign:Campaign,kind:'hit'|'damage'|'f
 
 /** Official 2024 exploration/social actions. The check is rolled; its narrative outcome is for the DM to adjudicate. */
 export function takeCombatSkillAction(campaign:Campaign,action:'Search'|'Study'|'Influence',skill:Skill):Campaign {
+  requireLegacyNighthawk(campaign);
  const c=campaign.combat;
  if(!c||c.status!=='initiative-set'||c.order?.[c.turnIndex??0]!=='Nighthawk')throw Error(action+' requires Nighthawk\'s turn.');
  if(c.actionUsed||c.attack)throw Error('Action already used this turn.');
@@ -609,6 +637,7 @@ export function takeCombatSkillAction(campaign:Campaign,action:'Search'|'Study'|
 
 /** Ready spends an Action now; a reaction can later be spent when the declared trigger occurs. */
 export function readyCombatAction(campaign:Campaign,trigger:string,response:string,weapon?:'dagger'|'throw-dagger'|'shortbow'):Campaign {
+  requireLegacyNighthawk(campaign);
  const c=campaign.combat;
  if(!c||c.status!=='initiative-set'||c.order?.[c.turnIndex??0]!=='Nighthawk')throw Error('Ready requires Nighthawk\'s turn.');
  if(c.actionUsed||c.attack)throw Error('Action already used this turn.');
@@ -617,6 +646,7 @@ export function readyCombatAction(campaign:Campaign,trigger:string,response:stri
  return {...campaign,combat:{...c,actionUsed:true,lastAction:'Ready',readiedAction:{trigger:trigger.trim(),response:response.trim(),declaredRound:c.round,weapon}},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:'Ready: if '+trigger.trim()+', then '+response.trim()+'. Uses a Reaction when triggered; DM adjudicates the response.',createdAt:now}]};
 }
 export function resolveReadiedCombatReaction(campaign:Campaign):Campaign {
+  requireLegacyNighthawk(campaign);
  const c=campaign.combat;
  if(!c||c.status!=='initiative-set'||!c.readiedAction)throw Error('No readied action to resolve.');
  if(c.order?.[c.turnIndex??0]==='Nighthawk')throw Error('Ready reaction requires another creature\'s turn.');
@@ -628,6 +658,7 @@ export function resolveReadiedCombatReaction(campaign:Campaign):Campaign {
 }
 /** Cast and hold Mind Sliver when Ready is declared. Concentration holds the spell until its trigger. */
 export function readyCombatMindSliver(campaign:Campaign,trigger:string):Campaign {
+  requireLegacyNighthawk(campaign);
  const c=campaign.combat;
  if(!c||c.status!=='initiative-set'||c.order?.[c.turnIndex??0]!=='Nighthawk')throw Error('Ready requires Nighthawk\'s turn.');
  if(c.actionUsed||c.attack)throw Error('Action already used this turn.');
@@ -641,6 +672,7 @@ export function readyCombatMindSliver(campaign:Campaign,trigger:string):Campaign
  return {...campaign,concentration:{spell:'Readied Mind Sliver',target:second?'second':'first',startedAt:now},combat:{...c,actionUsed:true,lastAction:'Ready: Mind Sliver',readiedAction:{trigger:trigger.trim(),response:'Release Mind Sliver',declaredRound:c.round,spell:'Mind Sliver'}},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:'Nighthawk casts Mind Sliver and holds it with concentration until '+trigger.trim()+'. Action spent. Release uses a Reaction; spell expires at the start of Nighthawk\'s next turn.',createdAt:now}]};
 }
 export function resolveReadiedSpellReaction(campaign:Campaign):Campaign {
+  requireLegacyNighthawk(campaign);
  const c=campaign.combat,ready=c?.readiedAction;
  if(!c||c.status!=='initiative-set'||ready?.spell!=='Mind Sliver')throw Error('No readied Mind Sliver.');
  if(c.order?.[c.turnIndex??0]==='Nighthawk'||c.reactionUsed)throw Error('Ready spell requires an available Reaction on another turn.');
@@ -655,6 +687,7 @@ export function resolveReadiedSpellReaction(campaign:Campaign):Campaign {
  * The trigger is explicitly confirmed by the player; the engine never guesses whether it happened.
  */
 export function resolveReadiedWeaponAttack(campaign:Campaign,weapon:'dagger'|'throw-dagger'|'shortbow'):Campaign {
+  requireLegacyNighthawk(campaign);
  const c=campaign.combat;
  if(!c||c.status!=='initiative-set'||!c.readiedAction)throw Error('No readied action to resolve.');
  if(c.order?.[c.turnIndex??0]==='Nighthawk')throw Error('Ready reaction requires another creature\'s turn.');
@@ -702,6 +735,7 @@ export function resolveReadiedWeaponAttack(campaign:Campaign,weapon:'dagger'|'th
 }
 /** Utilize an available consumable during combat; placement effects await DM adjudication. */
 export function utilizeCombatItem(campaign:Campaign,item:'caltrops'|'ballBearings'):Campaign {
+  requireLegacyNighthawk(campaign);
  const c=campaign.combat;
  if(!c||c.status!=='initiative-set'||c.order?.[c.turnIndex??0]!=='Nighthawk')throw Error('Utilize requires Nighthawk\'s active combat turn.');
  if(c.actionUsed||c.attack)throw Error('Action already used this turn.');
@@ -713,6 +747,7 @@ export function utilizeCombatItem(campaign:Campaign,item:'caltrops'|'ballBearing
 }
 
 export function takeDuelTurnAction(campaign:Campaign, action:'move'|'attack'|'throw-dagger'|'shortbow'|'dash'|'disengage'|'dodge'|'steady-aim'|'cunning-dash'|'cunning-disengage'|'end'):Campaign {
+  requireLegacyNighthawk(campaign);
  const combat=campaign.combat;
  if(!combat||combat.status!=='initiative-set'||!combat.order)throw Error('Initiative must be completed first.');
  const current=combat.order[combat.turnIndex??0];
@@ -762,6 +797,7 @@ export function takeDuelTurnAction(campaign:Campaign, action:'move'|'attack'|'th
 }
 
 export function beginEnemyGrapple(campaign:Campaign):Campaign {
+  requireLegacyNighthawk(campaign);
  const c=campaign.combat;
  if(!c||c.status!=='initiative-set'||c.order?.[c.turnIndex??0]==='Nighthawk')throw Error('Enemy Grapple requires the enemy turn.');
  if(c.pendingEnemyShove||c.pendingEnemyGrapple)throw Error('Resolve the pending save first.');
@@ -770,6 +806,7 @@ export function beginEnemyGrapple(campaign:Campaign):Campaign {
  return {...campaign,combat:{...c,pendingEnemyGrapple:true,lastPlayerGrappleResult:undefined}};
 }
 export function rollPlayerGrappleSave(campaign:Campaign,ability:'str'|'dex'):Campaign {
+  requireLegacyNighthawk(campaign);
  const c=campaign.combat;
  if(!c?.pendingEnemyGrapple||!c.order||c.order[c.turnIndex??0]==='Nighthawk')throw Error('No enemy Grapple save pending.');
  const character=campaign.character??prototypeNighthawk;
@@ -782,11 +819,13 @@ export function rollPlayerGrappleSave(campaign:Campaign,ability:'str'|'dex'):Cam
  return {...campaign,combat:{...c,pendingEnemyGrapple:false,playerGrappled:!passed,lastPlayerGrappleResult:detail,turnIndex:c.order.indexOf('Nighthawk'),round:nextRound,owl:refreshOwlForNighthawkTurn({...c,round:nextRound}),movementUsed:0,movementAllowance:35,actionUsed:false,bonusActionUsed:false,steadyAim:false,disengaged:false,sneakAttackUsedThisTurn:false,sneakAttackEligible:false,spellSlotExpendedThisTurn:false,lastAction:undefined,attack:undefined},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:detail,createdAt:now}]};
 }
 export function beginPlayerGrappleEscape(campaign:Campaign):Campaign {
+  requireLegacyNighthawk(campaign);
  const c=campaign.combat;
  if(!c||c.order?.[c.turnIndex??0]!=='Nighthawk'||!c.playerGrappled||c.actionUsed||c.attack)throw Error('Escaping requires your available action while Grappled.');
  return {...campaign,combat:{...c,pendingPlayerEscape:true}};
 }
 export function rollPlayerGrappleEscape(campaign:Campaign,ability:'str'|'dex'):Campaign {
+  requireLegacyNighthawk(campaign);
  const c=campaign.combat;
  if(!c?.pendingPlayerEscape||!c.playerGrappled||c.order?.[c.turnIndex??0]!=='Nighthawk')throw Error('No Grapple escape check pending.');
  const character=campaign.character??prototypeNighthawk;
@@ -799,6 +838,7 @@ export function rollPlayerGrappleEscape(campaign:Campaign,ability:'str'|'dex'):C
  return {...campaign,combat:{...c,pendingPlayerEscape:false,playerGrappled:!passed,actionUsed:true,lastAction:'Escape Grapple',lastPlayerGrappleResult:detail},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:detail,createdAt:now}]};
 }
 export function beginEnemyShove(campaign:Campaign):Campaign {
+  requireLegacyNighthawk(campaign);
  const c=campaign.combat;
  if(!c||c.status!=='initiative-set'||c.order?.[c.turnIndex??0]==='Nighthawk')throw Error('Enemy Shove requires the enemy turn.');
  if(c.pendingEnemyShove)throw Error('Resolve the pending saving throw.');
@@ -807,6 +847,7 @@ export function beginEnemyShove(campaign:Campaign):Campaign {
  return {...campaign,combat:{...c,pendingEnemyShove:true,lastPlayerShoveSave:undefined}};
 }
 export function rollPlayerShoveSave(campaign:Campaign,ability:'str'|'dex'):Campaign {
+  requireLegacyNighthawk(campaign);
  const c=campaign.combat;
  if(!c?.pendingEnemyShove||!c.order||c.order[c.turnIndex??0]==='Nighthawk')throw Error('No enemy Shove save pending.');
  const character=campaign.character??prototypeNighthawk;
@@ -821,6 +862,7 @@ export function rollPlayerShoveSave(campaign:Campaign,ability:'str'|'dex'):Campa
  return {...campaign,combat:{...c,pendingEnemyShove:false,playerProne:passed?!!c.playerProne:true,lastPlayerShoveSave:detail,turnIndex:c.order.indexOf('Nighthawk'),round:nextRound,owl:refreshOwlForNighthawkTurn({...c,round:nextRound}),movementUsed:0,movementAllowance:35,actionUsed:false,bonusActionUsed:false,steadyAim:false,disengaged:false,sneakAttackUsedThisTurn:false,sneakAttackEligible:false,spellSlotExpendedThisTurn:false,lastAction:undefined,attack:undefined,enemyProne:false},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:detail,createdAt:now}]};
 }
 export function standNighthawk(campaign:Campaign):Campaign {
+  requireLegacyNighthawk(campaign);
  const c=campaign.combat;
  if(!c||c.order?.[c.turnIndex??0]!=='Nighthawk'||!c.playerProne)throw Error('You must be Prone on your turn to stand.');
  if(c.playerGrappled)throw Error('Grappled: Speed 0. Escape before standing.');
@@ -832,6 +874,7 @@ export function standNighthawk(campaign:Campaign):Campaign {
  return {...campaign,combat:{...c,playerProne:false,movementUsed:(c.movementUsed??0)+cost},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:detail,createdAt:now}]};
 }
 export function resolveDuelEnemyTurn(campaign:Campaign):Campaign {
+  requireLegacyNighthawk(campaign);
  const combat=campaign.combat;
  if(!combat||combat.status!=='initiative-set'||!combat.order||combat.order[combat.turnIndex??0]==='Nighthawk')throw Error('It is not the opponent\'s turn.');
  if(combat.opportunity)throw Error('Resolve the opportunity attack before continuing.');
@@ -911,6 +954,7 @@ export function resolveDuelEnemyTurn(campaign:Campaign):Campaign {
 }
 
 export function moveTrainingDummy(campaign:Campaign):Campaign {
+  requireLegacyNighthawk(campaign);
  const c=campaign.combat;
  if(!c||c.enemyName!=='Training Dummy'||c.status!=='initiative-set'||c.order?.[c.turnIndex??0]==='Nighthawk'||c.opportunity)throw Error('Dummy movement is unavailable.');
  if(c.enemyGrappled)throw Error('Grappled: Speed 0. Escape before moving.');
@@ -933,6 +977,7 @@ export function moveTrainingDummy(campaign:Campaign):Campaign {
 }
 
 export function resolveTrainingReaction(campaign:Campaign,choice:'attack'|'decline'):Campaign {
+  requireLegacyNighthawk(campaign);
  const c=campaign.combat;
  if(!c||!c.opportunity||c.status!=='initiative-set'||c.reactionUsed||c.reactionAttack)throw Error('No reaction choice pending.');
  const now=new Date().toISOString();
@@ -944,6 +989,7 @@ export function resolveTrainingReaction(campaign:Campaign,choice:'attack'|'decli
 }
 
 export function rollTrainingReaction(campaign:Campaign,kind:'hit'|'damage'|'finish'):Campaign {
+  requireLegacyNighthawk(campaign);
  const c=campaign.combat,attack=c?.reactionAttack;
  if(!c||!c.opportunity||!attack)throw Error('No reaction attack in progress.');
  const character=campaign.character??prototypeNighthawk;
@@ -973,6 +1019,7 @@ export function rollTrainingReaction(campaign:Campaign,kind:'hit'|'damage'|'fini
 }
 
 export function advanceDuelTestEnemyTurn(campaign:Campaign):Campaign {
+  requireLegacyNighthawk(campaign);
  const combat=campaign.combat;
  if(!combat||combat.status!=='initiative-set'||!combat.order||combat.order[combat.turnIndex??0]==='Nighthawk')throw Error('No enemy turn to advance.');
  if(combat.opportunity)throw Error('Resolve the opportunity attack first.');
@@ -982,6 +1029,7 @@ export function advanceDuelTestEnemyTurn(campaign:Campaign):Campaign {
 }
 
 export function rollDuelAttack(campaign:Campaign,kind:'hit'|'damage',applySneakAttack?:boolean):Campaign {
+  requireLegacyNighthawk(campaign);
  const combat=campaign.combat;
  if(!combat||combat.status!=='initiative-set'||!combat.attack||combat.order?.[combat.turnIndex??0]!=='Nighthawk')throw Error('No attack awaiting a roll.');
  const next={...combat,attack:{...combat.attack}};
@@ -1020,6 +1068,7 @@ export function rollDuelAttack(campaign:Campaign,kind:'hit'|'damage',applySneakA
 }
 
 export function quitTrainingEncounter(campaign:Campaign):Campaign {
+  requireLegacyNighthawk(campaign);
  const combat=campaign.combat;
  if(!combat||combat.enemyName!=='Training Dummy')throw Error('Only encounter training can be reset this way.');
  const character=campaign.character??prototypeNighthawk;
@@ -1033,6 +1082,7 @@ export function quitTrainingEncounter(campaign:Campaign):Campaign {
 }
 
 export function concludeDuel(campaign:Campaign):Campaign {
+  requireLegacyNighthawk(campaign);
  const combat=campaign.combat;
  if(!combat||((combat.enemyHp!==0||!!combat.secondEnemy&&combat.secondEnemy.hp!==0)&&combat.outcome!=='player-defeated'))throw Error('The sparring match has not ended.');
  const now=new Date().toISOString();
@@ -1045,6 +1095,7 @@ export function concludeDuel(campaign:Campaign):Campaign {
 }
 
 export function setTrainingAllyAdjacent(campaign:Campaign,enabled:boolean):Campaign {
+  requireLegacyNighthawk(campaign);
  const combat=campaign.combat;
  if(!combat||combat.status!=='initiative-set'||combat.attack?.phase==='roll-damage')throw Error('Finish pending attack first.');
  const now=new Date().toISOString();
@@ -1052,6 +1103,7 @@ export function setTrainingAllyAdjacent(campaign:Campaign,enabled:boolean):Campa
 }
 
 export function setTrainingEnemyProne(campaign:Campaign,enabled:boolean):Campaign {
+  requireLegacyNighthawk(campaign);
  const combat=campaign.combat;
  if(!combat||combat.status!=='initiative-set'||combat.attack?.phase==='roll-damage')throw Error('Finish pending attack first.');
  const now=new Date().toISOString();
@@ -1059,6 +1111,7 @@ export function setTrainingEnemyProne(campaign:Campaign,enabled:boolean):Campaig
 }
 
 export function grappleTrainingEnemy(campaign:Campaign):Campaign {
+  requireLegacyNighthawk(campaign);
  const c=campaign.combat;
  if(!c||c.status!=='initiative-set'||c.order?.[c.turnIndex??0]!=='Nighthawk')throw Error('Grapple requires your turn.');
  if(c.actionUsed||c.attack)throw Error('Attack action already used.');
@@ -1074,6 +1127,7 @@ export function grappleTrainingEnemy(campaign:Campaign):Campaign {
  return {...campaign,combat:{...c,actionUsed:true,lastAction:'Grapple',enemyGrappled:second?c.enemyGrappled:grabbed,secondEnemy:second?{...c.secondEnemy!,grappled:grabbed}:c.secondEnemy,lastGrappleResult:(second?c.secondEnemy!.name:c.enemyName)+': '+detail},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:detail,createdAt:now}]};
 }
 export function escapeTrainingGrapple(campaign:Campaign,ability:'str'|'dex'):Campaign {
+  requireLegacyNighthawk(campaign);
  const c=campaign.combat;
  if(!c||c.order?.[c.turnIndex??0]==='Nighthawk')throw Error('Escape requires an enemy turn.');
  const second=c.order?.[c.turnIndex??0]===c.secondEnemy?.name;
@@ -1088,6 +1142,7 @@ export function escapeTrainingGrapple(campaign:Campaign,ability:'str'|'dex'):Cam
  return {...campaign,combat:{...c,enemyGrappled:second?c.enemyGrappled:!success,secondEnemy:second?{...c.secondEnemy!,grappled:!success}:c.secondEnemy,lastGrappleResult:(second?c.secondEnemy!.name:c.enemyName)+': '+detail,turnIndex:c.order?.indexOf('Nighthawk')??0,round:nextRound,movementUsed:0,actionUsed:false,bonusActionUsed:false,attack:undefined},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:detail,createdAt:now}]};
 }
 export function shoveTrainingEnemy(campaign:Campaign,outcome:'prone'|'push'):Campaign {
+  requireLegacyNighthawk(campaign);
  const c=campaign.combat;
  if(!c||c.status!=='initiative-set'||c.order?.[c.turnIndex??0]!=='Nighthawk')throw Error('Shove requires your turn.');
  if(c.actionUsed||c.attack)throw Error('Attack action already used.');
@@ -1143,4 +1198,11 @@ export function adjudicateSubclassActorDamage(campaign:Campaign,actorId:string,d
 export function adjudicateSubclassActorCondition(campaign:Campaign,actorId:string,condition:'Charmed'|'Poisoned'|'Other',context:{withinDevotionAura?:boolean;auraActive?:boolean}={}):boolean{
  const actor=campaign.subclassActors?.[actorId];if(!actor)throw new Error('Subclass actor not registered');
  return canApplyCondition(actor,condition,context);
+}
+
+export function requireRogue(campaign:Campaign):void{
+ if((campaign.characterIdentity?.classId??campaign.character?.classId??'rogue')!=='rogue')throw Error('Rogue feature unavailable to this class');
+}
+export function requireLegacyNighthawk(campaign:Campaign):void{
+ if(campaign.characterIdentity||campaign.character?.classId)throw Error('Nighthawk prototype mechanics are unavailable to imported characters; use the shared encounter');
 }

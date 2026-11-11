@@ -1,3 +1,4 @@
+import {hydratePlayerState} from './playerState';
 import { isCampaign, type Campaign } from './campaign';
 
 export interface CampaignStorage {
@@ -53,11 +54,11 @@ function requestResult<T>(request: IDBRequest<T>, resolve: (value: T) => void, r
 export const localCampaignStorage: CampaignStorage = {
   async list() {
     const values = await transact<unknown[]>('readonly', (store, resolve, reject) => requestResult(store.getAll(), resolve, reject));
-    return values.filter(isCampaign).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+    return values.filter(isCampaign).map(hydratePlayerState).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   },
   async get(id) {
     const value = await transact<unknown>('readonly', (store, resolve, reject) => requestResult(store.get(id), resolve, reject));
-    return isCampaign(value) ? value : undefined;
+    return isCampaign(value) ? hydratePlayerState(value) : undefined;
   },
   async save(campaign) {
     if (!isCampaign(campaign)) throw new Error('Invalid campaign data');

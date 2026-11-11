@@ -10,7 +10,7 @@ describe('2024 class selection engine',()=>{
   for(const c of CLASSES){
    expect(validateClass(c.id,{}).length).toBeGreaterThan(0);
    const picks:Record<string,string[]>={};
-   for(const d of classChoices(c.id)){picks[d.id]=d.options.slice(0,d.count);}
+   for(const d of classChoices(c.id,c.skillOptions.slice(0,c.skillCount))){picks[d.id]=d.options.slice(0,d.count);}
    expect(validateClass(c.id,picks)).toEqual([]);
   }
  });

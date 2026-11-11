@@ -16,6 +16,6 @@ describe('independent character creation drafts',()=>{
     expect(validateIdentity(draft)).toEqual([]);
   });
   it('has unique navigable creation sections',()=>{
-    expect(CREATION_STEPS.map(step=>step.id)).toEqual(['identity','origins','class','abilities','equipment','spells','review']);
+    expect(CREATION_STEPS.map(step=>step.id)).toEqual(['identity','origins','class','abilities','equipment','spells','review','forecast']);
   });
 });
