@@ -228,6 +228,13 @@ test('spell choices show full inline descriptions without per-spell DM buttons',
  await expect(page.getByLabel('Ask DM')).toBeVisible();
 });
 
+test('character creator does not show redundant full rules with DM buttons',async({page})=>{
+ await page.goto('/four-keeps/');
+ await page.getByRole('button',{name:'My Characters'}).click();
+ await page.getByRole('button',{name:'Create character',exact:true}).click();
+ await expect(page.getByRole('button',{name:/Full (class|background) rules with DM/i})).toHaveCount(0);
+});
+ 
 test('character builder shows species, background, class, and choice rules inline',async ({page})=>{
  const now='2026-11-10T00:00:00.000Z';
  const base={schemaVersion:1,id:'guide-test',status:'draft',rules:{edition:'2024',allowCompatibleLegacy:true},identity:{name:'Guide Tester',pronouns:'',appearance:'',personality:'',backstory:'',portrait:null},selections:{speciesId:'elf',lineageId:'wood-elf',backgroundId:'sage',classId:'warlock',classChoices:{}},createdAt:now,updatedAt:now};
