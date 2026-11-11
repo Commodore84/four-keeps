@@ -84,3 +84,10 @@ it.each([
  expect(res.code).toBe(200);
  expect(res.body.combatStart).toBeNull();
 });
+
+it('rejects contradictory combat and travel before the client can commit world state',async()=>{
+ setup({narration:'The enemy attacks as you depart.',combatStart:{enemyName:'Road bandit'},travelDestination:'crossroads',newFacts:['Left village']});
+ const res=response();
+ await handler(req({message:'I travel to the crossroads',character,gameState:{characterIdentity:{name:'Aster',classId:'fighter'},adventureSession:{site:'frontier',status:'exploring'}}}),res);
+ expect(res.code).toBe(502);expect(res.body.error).toContain('conflicting combat and travel');
+});

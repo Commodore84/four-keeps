@@ -147,12 +147,18 @@ test('newly created fighter completes organic AI encounter, saves rewards and re
  expect(original.characterIdentity.name).toBe('fighter Hero');
  await page.evaluate(()=>{localStorage.setItem('four-keeps-access-code','browser-test-code');localStorage.setItem('four-keeps-dm-mode','on');});
  await page.reload();await page.getByRole('button',{name:'Continue Adventure'}).click();
- const calls:any[]=[];
+ const calls:any[]=[];let firstFightClarified=false;
  await page.route('**/api/dm',async route=>{
   const request=route.request().postDataJSON();calls.push(request);
   const opening=request.opening;
   const secondFight=!opening && request.message.includes('investigate the riverbank');
-  const combat=!opening && (request.message.includes('approach the bridge') || secondFight);
+  const firstFight=!opening && request.message.includes('approach the bridge');
+  const combat=firstFight || secondFight;
+  if(firstFight && !request.clarification?.answer){
+   await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({narration:'The guard gestures toward the bridge.',clarificationRequest:{question:'Do you approach the guarded bridge or the unguarded ford?'},combatStart:null,newFacts:[],worldUpdates:{}})});
+   return;
+  }
+  if(firstFight && request.clarification?.answer)firstFightClarified=true;
   await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({
    narration:opening?'The old bridge is watched by the town guard.':secondFight?'A poacher blocks the riverbank with a drawn blade.':combat?'A highway robber draws a sword and attacks.':'The guard acknowledges your return and the bridge is safe.',
    combatStart:combat?{enemyName:secondFight?'Poacher':'Highway robber'}:null,newFacts:combat?['A highway robber attacked the bridge']:['The bridge is safe after the battle'],
@@ -163,7 +169,19 @@ test('newly created fighter completes organic AI encounter, saves rewards and re
  await expect(page.getByLabel('Adventure',{exact:true})).toContainText('The old bridge');
  await page.getByLabel('Message the Dungeon Master').fill('I approach the bridge cautiously.');
  await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
+ await expect(page.getByLabel('Dungeon Master clarification')).toContainText('guarded bridge');
+ const beforeClarification=await saved(page);
+ expect(beforeClarification.adventureSession.pendingEncounter).toBeFalsy();
+ expect(beforeClarification.pendingAdventureAction.message).toBe('I approach the bridge cautiously.');
+ const originalActionId=beforeClarification.pendingAdventureAction.id;
+ await page.reload();await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await page.getByLabel('Answer the Dungeon Master').fill('I mean the guarded bridge. I approach cautiously.');
+ await page.getByRole('button',{name:'Confirm and continue'}).click();
  await expect(page.getByText('Opponent: Highway robber',{exact:false})).toBeVisible();
+ expect(firstFightClarified).toBe(true);
+ expect(calls.at(-1).actionId).toBe(originalActionId);
+ expect(calls.at(-1).clarification.answer).toContain('guarded bridge');
+
  await expect(page.getByRole('button',{name:'Send message to Dungeon Master'})).toBeDisabled();
  await page.reload();await page.getByRole('button',{name:'Continue Adventure'}).click();
  const before=await saved(page);

@@ -121,7 +121,8 @@ export default async function handler(req, res) {
     const newFacts = Array.isArray(parsed.newFacts) ? parsed.newFacts.filter((fact) => typeof fact === 'string').slice(0, 4).map((fact) => fact.slice(0, 220)) : [];
     const travelDestination = !opening && adventureContext?.status === 'exploring' && !checkResult && !combatAdjudication && !restRequest && !sharedEncounterActive && typeof parsed.travelDestination === 'string' && ({frontier:['crossroads'],crossroads:['frontier','watchtower'],watchtower:['crossroads']}[adventureContext.site]??[]).includes(parsed.travelDestination) ? parsed.travelDestination : null;
     const combatStart = !opening && (!adventureContext || (characterIdentity && adventureContext.status === 'exploring' && !adventureContext.pendingEncounter)) && !sharedEncounterActive && !checkResult && !combatAdjudication && !gameState?.combat && parsed.combatStart && typeof parsed.combatStart.enemyName === 'string' && parsed.combatStart.enemyName.trim() ? {enemyName:parsed.combatStart.enemyName.trim().slice(0,60)} : null;
-    return res.status(200).json({ narration: parsed.narration.trim(), combatStart, travelDestination, newFacts, checkRequest:combatStart?null:checkRequest, checkResult, worldUpdates: parsed.worldUpdates && typeof parsed.worldUpdates === 'object' ? parsed.worldUpdates : {}, model: MODEL });
+    if(combatStart && travelDestination)return res.status(502).json({error:'The Dungeon Master proposed conflicting combat and travel actions. Retry; no changes were saved.'});
+    return res.status(200).json({ narration: parsed.narration.trim(), combatStart, travelDestination:checkRequest?null:travelDestination, newFacts, checkRequest:combatStart?null:checkRequest, checkResult, worldUpdates: parsed.worldUpdates && typeof parsed.worldUpdates === 'object' ? parsed.worldUpdates : {}, model: MODEL });
   } catch {
     return res.status(502).json({ error: 'The Dungeon Master is temporarily unavailable.' });
   }
