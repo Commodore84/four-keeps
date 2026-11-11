@@ -163,7 +163,11 @@ test('newly created fighter completes organic AI encounter, saves rewards and re
  expect(before.characterBuild).toEqual(original.characterBuild);
  await page.getByLabel('Quick player initiative').fill('18');
  await page.getByLabel('Quick enemy initiative').fill('12');
- await page.getByLabel('Paste verified enemy statistics').fill('HP 10, AC 12, attack bonus +3, damage bonus +1, damage dice 1d6');
+ await page.getByLabel('Paste verified enemy statistics').fill('HP 10, AC 12');
+ await page.getByRole('button',{name:'Fill verified enemy statistics'}).click();
+ await expect(page.getByText('Still needed: attack bonus, damage bonus, damage dice',{exact:false})).toBeVisible();
+ await expect(page.getByLabel('Quick enemy hp')).toHaveValue('10');
+ await page.getByLabel('Paste verified enemy statistics').fill('attack bonus +3, damage bonus +1, damage dice 1d6');
  await page.getByRole('button',{name:'Fill verified enemy statistics'}).click();
  await expect(page.getByLabel('Quick enemy hp')).toHaveValue('10');
  await expect(page.getByLabel('Quick enemy ac')).toHaveValue('12');
