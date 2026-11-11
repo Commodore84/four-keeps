@@ -1,3 +1,6 @@
+import {mergeWorld} from '../game/world';
+import {travelAdventure,type AdventureSite} from '../game/adventureSession';
+import {OPENING_INTENT,prepareAdventureOpening,commitAdventureOpening,needsAdventureOpening} from '../game/adventureOrchestrator';
 import {campaignPlayerContext} from '../game/campaignContext';
 import {ImportedCharacterSheet} from './ImportedCharacterSheet';
 import {CompanionEncounterPanel} from './CompanionEncounterPanel';
@@ -122,14 +125,20 @@ const tabs = [
   { id: 'settings', label: 'Settings', Icon: Settings },
 ] as const;
 
-function Adventure({ campaign, fullHistory, onToggleHistory, onAdventureChange, saving }: { campaign: Campaign | null; fullHistory: boolean; onToggleHistory: () => void; onAdventureChange:(next:Campaign,message:string)=>Promise<boolean>|boolean|void; saving:boolean }) {
+function Adventure({ campaign, fullHistory, onToggleHistory, onAdventureChange, onStartOpening, saving }: { campaign: Campaign | null; fullHistory: boolean; onToggleHistory: () => void; onAdventureChange:(next:Campaign,message:string)=>Promise<boolean>|boolean|void; onStartOpening:()=>Promise<void>; saving:boolean }) {
   const endRef = useRef<HTMLDivElement>(null);
   const lastTurn = campaign?.journal.filter((entry) => entry.kind === 'player' || entry.kind === 'dm').at(-1)?.id;
   useEffect(() => { if (lastTurn) endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' }); }, [lastTurn]);
   const allTurns = campaign?.journal.filter((entry) => entry.kind === 'player' || entry.kind === 'dm') ?? [];
   const turns = fullHistory ? allTurns : allTurns.slice(-6);
   return <section className="space-y-5" aria-label="Adventure">
-    {campaign&&<AdventureSessionPanel campaign={campaign} saving={saving} onChange={onAdventureChange}/> }
+    {campaign?.characterIdentity ? <section className="rounded-xl border border-gold/30 bg-panel p-4 space-y-2" aria-label="AI adventure session">
+      <h3 className="font-serif text-xl">{campaign.location}</h3>
+      <p className="text-sm text-parchment/70">Explore through the Dungeon Master conversation. Your decisions and discoveries are saved with the campaign.</p>
+      {!campaign.adventureSession && <button type="button" disabled={saving} onClick={()=>void onStartOpening()} className="rounded-lg bg-gold px-4 py-2 text-ink disabled:opacity-50">Begin AI-led adventure</button>}
+      {campaign.adventureSession && !campaign.journal.some(e=>e.kind==='dm') && <button type="button" disabled={saving} onClick={()=>void onStartOpening()} className="rounded-lg border border-gold px-4 py-2 text-gold disabled:opacity-50">Generate opening scene</button>}
+    </section> : null}
+    {campaign&&<AdventureSessionPanel campaign={campaign} saving={saving} onChange={onAdventureChange}/>}
     {allTurns.length > 6 && <button type="button" onClick={onToggleHistory} className="w-full rounded-lg border border-gold/30 px-4 py-3 text-sm text-gold">{fullHistory ? "Show recent conversation" : "View full conversation history ("+allTurns.length+" messages)"}</button>}
     
     {turns.length === 0 && <div className="rounded-xl border border-white/10 bg-panel p-5 space-y-3">
@@ -656,6 +665,36 @@ export function App() {
     }catch(error){setNotice('Spell error: '+String(error));}
     finally{setSaving(false);}
   }
+  async function startAiAdventure() {
+    if (!campaign || saving || !campaign.characterIdentity) return;
+    if (!accessCode) { setNotice('Enter your game access code first.'); return; }
+    setSaving(true);
+    setNotice('Preparing your adventure…');
+    try {
+      const started=prepareAdventureOpening(campaign);
+      if (started!==campaign) {
+        await localCampaignStorage.save(started);
+        setCampaign(started);
+        setCampaigns(items=>items.map(item=>item.id===started.id?started:item));
+      }
+      if (!needsAdventureOpening(started)) {setNotice('Your adventure is already underway.');return;}
+      const history=started.journal.filter(e=>e.kind==='player'||e.kind==='dm').slice(-12).map(e=>({role:e.kind==='player'?'user':'assistant',content:e.text}));
+      const response=await fetch('/api/dm',{method:'POST',headers:{'Content-Type':'application/json','x-four-keeps-access':accessCode},body:JSON.stringify({
+        message:OPENING_INTENT,opening:true,character:started.character??prototypeNighthawk,
+        gameState:{...campaignPlayerContext(started),adventureSession:started.adventureSession,characterIdentity:started.characterIdentity,location:started.location},
+        history,worldFacts:started.worldFacts??[],world:started.world??emptyWorld()
+      })});
+      const result:{narration?:string;newFacts?:string[];worldUpdates?:unknown;error?:string}=await response.json();
+      if(!response.ok||!result.narration)throw Error(result.error||'The DM could not create the opening.');
+      const opening=commitAdventureOpening(started,result.narration);
+      const next={...opening,world:mergeWorld(opening.world,result.worldUpdates),worldFacts:[...new Set([...(opening.worldFacts??[]),...(result.newFacts??[])])]};
+      await localCampaignStorage.save(next);
+      setCampaign(next);setCampaigns(items=>items.map(item=>item.id===next.id?next:item));
+      setNotice('Your adventure has begun.');
+    }catch(error){setNotice('Opening error: '+String(error)+'. You can retry without losing your campaign.');}
+    finally{setSaving(false);}
+  }
+
   async function sendToDM(override?:Campaign, messageOverride?:string, alreadySaving=false) {
     const current=override??campaign;
     const message=messageOverride??draft;
@@ -668,10 +707,13 @@ export function App() {
         .slice(-12).map((entry) => ({ role: entry.kind === 'player' ? 'user' : 'assistant', content: entry.text }));
       const response = await fetch('/api/dm', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-four-keeps-access': accessCode },
         body: JSON.stringify({ message, character:current.character ?? prototypeNighthawk, gameState:{ ...campaignPlayerContext(current), adventureSession:current.adventureSession??null, characterIdentity:current.characterIdentity??null, location:current.location, combat:current.combat??null, familiar:current.familiar ?? null, elapsedMinutes:current.elapsedMinutes ?? 0, concentration:current.concentration??null, spellEffects:(current.spellEffects??[]).slice(-12), recentEvents:current.journal.filter(e=>e.kind==='system').slice(-8).map(e=>e.text) }, history, worldFacts: current.worldFacts ?? [], world: current.world ?? emptyWorld() }) });
-      const result: { narration?: string; newFacts?: string[]; worldUpdates?: unknown; checkRequest?: { skill:string; mode:'normal'|'advantage'|'disadvantage'; reason:string; token:string } | null; combatStart?:{enemyName:string}|null; error?: string } = await response.json();
+      const result: { narration?: string; newFacts?: string[]; worldUpdates?: unknown; checkRequest?: { skill:string; mode:'normal'|'advantage'|'disadvantage'; reason:string; token:string } | null; combatStart?:{enemyName:string}|null; travelDestination?:string|null; error?: string } = await response.json();
       if (!response.ok || !result.narration) throw new Error(result.error || 'DM request failed');
       const narrated = addExchange(current, message, result.narration, new Date().toISOString(), result.newFacts ?? [], result.worldUpdates, result.checkRequest ?? undefined);
-      const next = result.combatStart && !current.adventureSession && !current.characterIdentity && !current.combat && !current.pendingAftermath ? beginDuel(narrated,result.combatStart.enemyName) : current.pendingAftermath ? {...narrated,pendingAftermath:undefined} : narrated;
+      const travelled = result.travelDestination && current.adventureSession?.status==='exploring' && ['frontier','crossroads','watchtower'].includes(result.travelDestination)
+        ? (()=>{try{return travelAdventure(narrated,result.travelDestination as AdventureSite)}catch{return narrated}})()
+        : narrated;
+      const next = result.combatStart && !current.adventureSession && !current.characterIdentity && !current.combat && !current.pendingAftermath ? beginDuel(travelled,result.combatStart.enemyName) : current.pendingAftermath ? {...travelled,pendingAftermath:undefined} : travelled;
       await localCampaignStorage.save(next);
       setCampaign(next);
       setCampaigns((items) => items.map((item) => item.id === next.id ? next : item));
@@ -1087,7 +1129,7 @@ export function App() {
     catch(error){setNotice('Campaign save failed: '+String(error));return false;}
     finally{setSaving(false)}
   }
-  const content = { adventure: campaign?.combat && campaign.combat.status!=='completed' ? null : <Adventure campaign={campaign} fullHistory={fullHistory} onToggleHistory={() => setFullHistory(value => !value)} onAdventureChange={saveSubclassActor} saving={saving}/>, party: <Party campaign={campaign} saving={saving} onRoll={(skill,mode) => void saveSkillRoll(skill,mode)} onSaveRoll={(ability,mode) => void saveSavingThrow(ability,mode)} onAwardXP={(amount,reason) => void updateProgress('award',amount,reason)} onLevelUp={hp => void updateProgress('level',hp)} onLevelThree={(hp,cantrips,spells) => void updateProgress('level3',hp,'',cantrips,spells)} onReconcile={() => void updateProgress('reconcile')} onUndoReconcile={() => void updateProgress('undoReconcile')} onRestore={() => void updateProgress('restore')} onCastSpell={(spell,ritual,components,target)=>void castSpell(spell,ritual,components,target)} onEndConcentration={()=>void endConcentration()} onAdjustEquipment={(item,delta)=>void changeEquipment(item,delta)} onUpdateInventory={ledger=>void updateInventoryLedger(ledger)} onSubclassChange={saveSubclassActor}/> , journal: <Journal campaign={campaign}/>, map: <WorldMap campaign={campaign}/>, settings: <section className="space-y-4"><h2 className="font-serif text-2xl">Settings</h2><p className="text-sm text-parchment/60">Manage campaigns, backups, and Dungeon Master access below.</p></section> };
+  const content = { adventure: campaign?.combat && campaign.combat.status!=='completed' ? null : <Adventure campaign={campaign} fullHistory={fullHistory} onToggleHistory={() => setFullHistory(value => !value)} onAdventureChange={saveSubclassActor} onStartOpening={startAiAdventure} saving={saving}/>, party: <Party campaign={campaign} saving={saving} onRoll={(skill,mode) => void saveSkillRoll(skill,mode)} onSaveRoll={(ability,mode) => void saveSavingThrow(ability,mode)} onAwardXP={(amount,reason) => void updateProgress('award',amount,reason)} onLevelUp={hp => void updateProgress('level',hp)} onLevelThree={(hp,cantrips,spells) => void updateProgress('level3',hp,'',cantrips,spells)} onReconcile={() => void updateProgress('reconcile')} onUndoReconcile={() => void updateProgress('undoReconcile')} onRestore={() => void updateProgress('restore')} onCastSpell={(spell,ritual,components,target)=>void castSpell(spell,ritual,components,target)} onEndConcentration={()=>void endConcentration()} onAdjustEquipment={(item,delta)=>void changeEquipment(item,delta)} onUpdateInventory={ledger=>void updateInventoryLedger(ledger)} onSubclassChange={saveSubclassActor}/> , journal: <Journal campaign={campaign}/>, map: <WorldMap campaign={campaign}/>, settings: <section className="space-y-4"><h2 className="font-serif text-2xl">Settings</h2><p className="text-sm text-parchment/60">Manage campaigns, backups, and Dungeon Master access below.</p></section> };
   if(portalScreen!=='adventure')return <div className="min-h-dvh bg-ink text-parchment">
     <div className="mx-auto min-h-dvh w-full max-w-3xl space-y-5 px-5 pb-12 pt-[max(2rem,env(safe-area-inset-top))]">
       <header className="flex flex-col items-center gap-2 border-b border-gold/20 pb-6">
