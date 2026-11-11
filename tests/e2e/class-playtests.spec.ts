@@ -150,11 +150,13 @@ test('newly created fighter completes organic AI encounter, saves rewards and re
  expect(before.characterBuild).toEqual(original.characterBuild);
  await page.getByLabel('Quick player initiative').fill('18');
  await page.getByLabel('Quick enemy initiative').fill('12');
- await page.getByLabel('Quick enemy hp').fill('10');
- await page.getByLabel('Quick enemy ac').fill('12');
- await page.getByLabel('Quick enemy attack bonus').fill('3');
- await page.getByLabel('Quick enemy damage bonus').fill('1');
- await page.getByLabel('Quick enemy damage dice').fill('1d6');
+ await page.getByLabel('Paste verified enemy statistics').fill('HP 10, AC 12, attack bonus +3, damage bonus +1, damage dice 1d6');
+ await page.getByRole('button',{name:'Fill verified enemy statistics'}).click();
+ await expect(page.getByLabel('Quick enemy hp')).toHaveValue('10');
+ await expect(page.getByLabel('Quick enemy ac')).toHaveValue('12');
+ await expect(page.getByLabel('Quick enemy attack bonus')).toHaveValue('3');
+ await expect(page.getByLabel('Quick enemy damage bonus')).toHaveValue('1');
+ await expect(page.getByLabel('Quick enemy damage dice')).toHaveValue('1d6');
  await page.getByRole('checkbox',{name:/DM confirms this encounter/i}).check();
  await page.getByRole('button',{name:'Start verified encounter'}).click();
  const session=page.getByLabel('Adventure session',{exact:true});
