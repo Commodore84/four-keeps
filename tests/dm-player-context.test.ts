@@ -8,10 +8,10 @@ function setup(output:any){
 }
 const character={scores:{str:8,dex:16,con:14,int:14,wis:12,cha:10},proficiencyBonus:2,proficientSkills:['Stealth'],expertiseSkills:['Stealth'],resources:{'Second Wind':{maximum:2,used:1}},currentHitPoints:7,maxHitPoints:12};
 const req=(body:any)=>({method:'POST',headers:{'x-four-keeps-access':'test-access-code-at-least-sixteen'},body});
-it('passes imported identity, class choices, counters and scene evidence to the provider while preventing legacy auto-combat',async()=>{
+it('passes imported identity, class choices, counters and scene evidence to the provider while proposing verified encounter handoff',async()=>{
  const fetch=setup({narration:'The tower remains quiet.',combatStart:{enemyName:'Invented opponent'}}),res=response();
  await handler(req({message:'What is here?',character,gameState:{characterIdentity:{name:'Aster',classId:'fighter'},adventureSession:{site:'watchtower',status:'exploring',visited:['frontier','crossroads','watchtower'],interactions:[{response:'The watchkeeper reported travelers.'}]},playerBuild:{classChoices:{'fighting-style':['Defense']},spellbook:[],invocations:[]}}}),res);
- expect(res.code).toBe(200);expect(res.body.combatStart).toBeNull();const body=JSON.parse(fetch.mock.calls[0][1].body);expect(body.input[0].content).toContain('Second Wind');expect(body.input[0].content).toContain('Defense');expect(body.input[0].content).toContain('The watchkeeper reported travelers.');
+ expect(res.code).toBe(200);expect(res.body.combatStart).toEqual({enemyName:'Invented opponent'});const body=JSON.parse(fetch.mock.calls[0][1].body);expect(body.input[0].content).toContain('Second Wind');expect(body.input[0].content).toContain('Defense');expect(body.input[0].content).toContain('The watchkeeper reported travelers.');
 });
 it('preserves imported Rogue expertise across signed check request and dice adjudication',async()=>{
  setup({narration:'The tracks are uncertain.',checkRequest:{skill:'Stealth',difficulty:'moderate',mode:'normal',reason:'Stay hidden'}});const first=response();await handler(req({message:'I hide.',character}),first);expect(first.body.checkRequest.token).toBeTruthy();

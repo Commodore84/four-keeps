@@ -3,7 +3,7 @@ import {startUnifiedEncounter,addCompanionEnemy} from './companionEncounter';
 export type AdventureSite='frontier'|'crossroads'|'watchtower';
 export interface AdventureSession {
  status:'exploring'|'encounter';site:AdventureSite;characterSource:'campaign-character';
- visited:AdventureSite[];interactions:{site:AdventureSite;choice:string;response:string}[];encounterActorId?:string;
+ visited:AdventureSite[];interactions:{site:AdventureSite;choice:string;response:string}[];encounterActorId?:string;pendingEncounter?:{enemyName:string;actionId:string};
 }
 export const ADVENTURE_SITES:Record<AdventureSite,{name:string;description:string;neighbors:AdventureSite[];options:{id:string;label:string;response:string}[]}>={
  frontier:{name:'Frontier Village',description:'Lanterns glow above the village square. A watchkeeper studies travelers arriving from the eastern road.',neighbors:['crossroads'],options:[
@@ -52,12 +52,27 @@ export function resumeAdventureExploration(campaign:Campaign,now=new Date().toIS
  return {...campaign,adventureSession:{...session,status:'exploring'},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:'The encounter ended. Exploration resumes at '+ADVENTURE_SITES[session.site].name+'.',createdAt:now}]};
 }
 
+/** Persist an AI-proposed encounter; never invent combat statistics or initiative. */
+export function proposeAdventureEncounter(campaign:Campaign,enemyName:unknown,actionId:string,now=new Date().toISOString()):Campaign{
+ const session=campaign.adventureSession;
+ if(!campaign.characterIdentity||!session||session.status!=='exploring'||campaign.companionEncounter?.status==='active')return campaign;
+ if(session.pendingEncounter)return campaign;
+ if(typeof enemyName!=='string'||!enemyName.trim()||enemyName.trim().length>80||!actionId.trim())return campaign;
+ return {...campaign,updatedAt:now,adventureSession:{...session,pendingEncounter:{enemyName:enemyName.trim(),actionId}}};
+}
+
+export function proposedEnemyActorId(name:string):string{
+ const slug=name.toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'').slice(0,30).replace(/-+$/,'');
+ return 'enemy-'+(slug||'opponent');
+}
+
 export interface AdventureEncounterSetup {playerInitiative:number;enemyInitiative:number;enemyId:string;hitPoints:number;armorClass:number;attackModifier:number;damageModifier:number;damageDice:string}
 /** One handoff, using only the existing encounter engine and DM-confirmed inputs. */
 export function enterSoloAdventureEncounter(campaign:Campaign,setup:AdventureEncounterSetup,now=new Date().toISOString()):Campaign{
  const session=campaign.adventureSession;
- if(!session||session.status!=='exploring'||session.site!=='watchtower')throw Error('Reach the watchtower before entering an encounter');
+ if(!session||session.status!=='exploring'||(!session.pendingEncounter&&session.site!=='watchtower'))throw Error('A confirmed hostile encounter or watchtower setup is required');
+ if(session.pendingEncounter&&setup.enemyId!==proposedEnemyActorId(session.pendingEncounter.enemyName))throw Error('Encounter opponent must match the DM proposal');
  const started=startUnifiedEncounter(campaign,{nighthawk:setup.playerInitiative},{nighthawk:{x:1,y:1}},{});
  const next=addCompanionEnemy(started,setup.enemyId,setup.enemyInitiative,{x:2,y:1},setup.hitPoints,setup.armorClass,setup.attackModifier,30,5,setup.damageModifier,setup.damageDice);
- return {...next,updatedAt:now,adventureSession:{...session,status:'encounter',encounterActorId:setup.enemyId},journal:[...next.journal,{id:crypto.randomUUID(),kind:'system',createdAt:now,text:'DM-confirmed watchtower encounter started with the saved player and '+setup.enemyId+'.'}]};
+ return {...next,updatedAt:now,adventureSession:{...session,status:'encounter',pendingEncounter:undefined,encounterActorId:setup.enemyId},journal:[...next.journal,{id:crypto.randomUUID(),kind:'system',createdAt:now,text:'DM-confirmed encounter started with the saved player and '+setup.enemyId+'.'}]};
 }

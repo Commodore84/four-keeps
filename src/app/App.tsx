@@ -1,10 +1,11 @@
 import {mergeWorld} from '../game/world';
-import {travelAdventure,type AdventureSite} from '../game/adventureSession';
+import {travelAdventure,proposeAdventureEncounter,type AdventureSite} from '../game/adventureSession';
 import {OPENING_INTENT,prepareAdventureOpening,commitAdventureOpening,needsAdventureOpening,adventureMemory,prepareAdventureAction,commitAdventureAction} from '../game/adventureOrchestrator';
 import {campaignPlayerContext} from '../game/campaignContext';
 import {ImportedCharacterSheet} from './ImportedCharacterSheet';
 import {CompanionEncounterPanel} from './CompanionEncounterPanel';
 import {AdventureSessionPanel} from './AdventureSessionPanel';
+import {AdventureEncounterSetupPanel} from './AdventureEncounterSetup';
 import {SubclassActorManager} from './SubclassActorManager';
 import { CharacterCreator,readCharacterDrafts } from './CharacterCreator';
 import {campaignFromCharacterDraft,characterDraftImportOptions} from '../game/characterImport';
@@ -137,6 +138,8 @@ function Adventure({ campaign, fullHistory, onToggleHistory, onAdventureChange, 
     {campaign?.characterIdentity ? <section className="rounded-xl border border-gold/30 bg-panel p-4 space-y-2" aria-label="AI adventure session">
       <h3 className="font-serif text-xl">{campaign.location}</h3>
       <p className="text-sm text-parchment/70">Explore through the Dungeon Master conversation. Your decisions and discoveries are saved with the campaign.</p>
+      {campaign.adventureSession?.status==='encounter' && <AdventureSessionPanel campaign={campaign} saving={saving} onChange={onAdventureChange}/>}
+      {campaign.adventureSession?.pendingEncounter && <AdventureEncounterSetupPanel key={campaign.id+'-'+campaign.adventureSession.pendingEncounter.actionId} campaign={campaign} saving={saving} onChange={onAdventureChange}/>}
       {!campaign.adventureSession && <button type="button" disabled={saving} onClick={()=>void onStartOpening()} className="rounded-lg bg-gold px-4 py-2 text-ink disabled:opacity-50">Begin AI-led adventure</button>}
       {campaign.adventureSession && !campaign.journal.some(e=>e.kind==='dm') && <button type="button" disabled={saving} onClick={()=>void onStartOpening()} className="rounded-lg border border-gold px-4 py-2 text-gold disabled:opacity-50">Generate opening scene</button>}
     </section> : null}
@@ -723,7 +726,7 @@ export function App() {
   async function sendToDM(override?:Campaign, messageOverride?:string, alreadySaving=false) {
     const current=override??campaign;
     const message=messageOverride??(campaign?.pendingAdventureAction?.message??draft);
-    if ((!alreadySaving && saving) || adventureRequestRef.current || !current || !message.trim() || current.pendingCheck) return;
+    if ((!alreadySaving && saving) || adventureRequestRef.current || !current || !message.trim() || current.pendingCheck || current.adventureSession?.pendingEncounter) return;
     if (!accessCode) { setNotice('Enter your game access code first.'); return; }
     adventureRequestRef.current=true;
     if(!alreadySaving)setSaving(true);
@@ -749,13 +752,15 @@ export function App() {
       const travelled = result.travelDestination && current.adventureSession?.status==='exploring' && ['frontier','crossroads','watchtower'].includes(result.travelDestination)
         ? (()=>{try{return travelAdventure(narrated,result.travelDestination as AdventureSite)}catch{return narrated}})()
         : narrated;
-      const next = result.combatStart && !current.adventureSession && !current.characterIdentity && !current.combat && !current.pendingAftermath ? beginDuel(travelled,result.combatStart.enemyName) : current.pendingAftermath ? {...travelled,pendingAftermath:undefined} : travelled;
+      const next = current.characterIdentity && current.adventureSession && result.combatStart
+        ? proposeAdventureEncounter(travelled,result.combatStart.enemyName,actionId!)
+        : result.combatStart && !current.adventureSession && !current.characterIdentity && !current.combat && !current.pendingAftermath ? beginDuel(travelled,result.combatStart.enemyName) : current.pendingAftermath ? {...travelled,pendingAftermath:undefined} : travelled;
       await localCampaignStorage.save(next);
       setCampaign(next);
       setCampaigns((items) => items.map((item) => item.id === next.id ? next : item));
       setDraft('');
       setActiveView('adventure');
-      setNotice(next.combat?.status==='awaiting-initiative'?'Combat started. Tap Roll initiative.':'The DM replied. Conversation saved locally.');
+      setNotice(next.adventureSession?.pendingEncounter?'The DM initiated combat. Confirm enemy statistics and initiative below.':next.combat?.status==='awaiting-initiative'?'Combat started. Tap Roll initiative.':'The DM replied. Conversation saved locally.');
     } catch (error) { setNotice('DM error: ' + String(error)); }
     finally { adventureRequestRef.current=false; if(!alreadySaving)setSaving(false); }
   }

@@ -1046,6 +1046,51 @@ test('adventure DM request carries authoritative location and interaction contex
  await expect(page.getByLabel('Adventure',{exact:true})).toContainText('The crossroads remain quiet.');
 });
 
+test('AI combat proposal for imported character persists and enters verified combat without a prototype campaign',async({page})=>{
+ await page.goto('/four-keeps/');
+ await page.evaluate(()=>{
+  const draft={schemaVersion:1,id:'organic-rogue',status:'draft',rules:{edition:'2024',allowCompatibleLegacy:true},step:'review',
+   identity:{name:'Raven',pronouns:'they/them',appearance:'',personality:'',backstory:'',portrait:null},
+   selections:{speciesId:'elf',lineageId:'wood-elf',backgroundId:'criminal',classId:'rogue',
+    classChoices:{'class-skills':['Perception','Acrobatics','Investigation','Deception'],expertise:['Perception','Acrobatics'],'weapon-mastery':['Dagger','Shortbow']},
+    abilities:{method:'standard',base:{Str:8,Dex:15,Con:14,Int:13,Wis:12,Cha:10},bonusMode:'two-one',bonuses:{Dex:2,Int:1},rolls:[],rollDice:[]},
+    equipment:{classPackage:0,backgroundPackage:0,purchases:{},equipped:{weapons:[]}}},createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()};
+  localStorage.setItem('four-keeps-character-drafts-v1',JSON.stringify([draft]));
+  localStorage.setItem('four-keeps-access-code','browser-test-code');
+  localStorage.setItem('four-keeps-dm-mode','on');
+ });
+ await page.reload();
+ await page.getByRole('button',{name:'New Adventure'}).click();
+ await page.getByLabel('Starting character').selectOption('organic-rogue');
+ await page.getByLabel('Campaign name').fill('Raven Road');
+ await page.getByRole('button',{name:'Create campaign'}).click();
+ await page.route('**/api/dm',async route=>await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({narration:'A road bandit blocks your path.',combatStart:{enemyName:'Road bandit'},newFacts:[],worldUpdates:{}})}));
+ await page.getByRole('button',{name:'Begin AI-led adventure'}).click();
+ await page.getByLabel('Message the Dungeon Master').fill('I approach the road cautiously.');
+ await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
+ await expect(page.getByText('Opponent: Road bandit',{exact:false})).toBeVisible();
+ await page.reload();
+ await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await expect(page.getByText('Opponent: Road bandit',{exact:false})).toBeVisible();
+ const setup=page.getByLabel('Quick adventure encounter');
+ await expect(setup).toHaveCount(1);
+ await page.getByLabel('Quick player initiative').fill('18');
+ await page.getByLabel('Quick enemy initiative').fill('12');
+ await page.getByLabel('Quick enemy hp').fill('11');
+ await page.getByLabel('Quick enemy ac').fill('12');
+ await page.getByLabel('Quick enemy attack bonus').fill('3');
+ await page.getByLabel('Quick enemy damage bonus').fill('1');
+ await page.getByLabel('Quick enemy damage dice').fill('1d6');
+ await page.getByRole('checkbox',{name:/DM confirms this encounter/i}).check();
+ await page.getByRole('button',{name:'Start verified encounter'}).click();
+ await expect(page.getByLabel('Adventure session status')).toContainText('encounter');
+ await expect(page.getByLabel('Adventure session status')).toContainText('Raven');
+ await page.reload();
+ await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await expect(page.getByLabel('Adventure session status')).toContainText('encounter');
+ await expect(page.getByText('Road bandit',{exact:false}).first()).toBeVisible();
+});
+
 test('development utilities are isolated from the normal Adventure and Player tabs',async({page})=>{
  await page.goto('/four-keeps/');
  await page.getByRole('button',{name:'Settings',exact:true}).click();
