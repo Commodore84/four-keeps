@@ -1,4 +1,4 @@
-import {futureFeat,featEligibility,eligibleFeatAbility} from './creationFutureFeats';
+import {futureFeat,featEligibility,eligibleFeatAbility,type FeatContext} from './creationFutureFeats';
 import {mysticArcanumLevel} from './creationProgression';
 import {subclassesForClass} from './creationSubclasses';
 import {spellcastingAtLevel,classSummary} from './creationClasses';
@@ -15,13 +15,13 @@ const THIRD_CASTER_SLOTS:readonly number[][]=[
 const fullCasters=new Set(['bard','cleric','druid','sorcerer','wizard']);
 const halfCasters=new Set(['paladin','ranger']);
 export function forecastImprovementLevels(classId:string):number[]{return classId==='fighter'?[4,6,8,12,14,16]:classId==='rogue'?[4,8,10,12,16]:[4,8,12,16]}
-export function projectCharacterLevel(classId:string,baseScores:Scores,forecast:AdvancementForecast,level:number):ProjectedLevel{
+export function projectCharacterLevel(classId:string,baseScores:Scores,forecast:AdvancementForecast,level:number,context:FeatContext={}):ProjectedLevel{
  const cls=classSummary(classId);const safeLevel=Math.max(1,Math.min(20,Math.trunc(level)));
  const scores={...baseScores};const assumptions:string[]=[];
  const improvementLevels=forecastImprovementLevels(classId).filter(l=>l<=safeLevel);
  for(const l of improvementLevels){
   const p=plannedLevel(forecast,l);
-  if(p.featPlan&&p.featPlan!=='Ability Score Improvement'){const feat=futureFeat(p.featPlan);if(feat&&p.featAbility&&feat.abilities.includes(p.featAbility)&&featEligibility(feat,scores,{classId,spellcasting:!!spellcastingAtLevel(classId,l),heavyArmor:['fighter','paladin'].includes(classId),mediumArmor:['fighter','paladin','ranger','cleric','druid','barbarian'].includes(classId),shield:['fighter','paladin','ranger','cleric','druid','barbarian'].includes(classId)}).length===0&&eligibleFeatAbility(feat,p.featAbility,scores))scores[p.featAbility]++;else assumptions.push('Level '+l+' feat ability increase is not eligible or not selected');continue;}
+  if(p.featPlan&&p.featPlan!=='Ability Score Improvement'){const feat=futureFeat(p.featPlan);if(feat&&p.featAbility&&feat.abilities.includes(p.featAbility)&&featEligibility(feat,scores,{classId,spellcasting:!!spellcastingAtLevel(classId,l),heavyArmor:['fighter','paladin'].includes(classId),mediumArmor:['fighter','paladin','ranger','cleric','druid','barbarian'].includes(classId),shield:['fighter','paladin','ranger','cleric','druid','barbarian'].includes(classId),...context}).length===0&&eligibleFeatAbility(feat,p.featAbility,scores))scores[p.featAbility]++;else assumptions.push('Level '+l+' feat ability increase is not eligible or not selected');continue;}
   if(p.featPlan&&p.featPlan!=='Ability Score Improvement')continue;
   if(p.abilityIncreases){
    const total=ABILITIES.reduce((sum,ability)=>sum+(p.abilityIncreases?.[ability]??0),0);
