@@ -58,3 +58,15 @@ test('mobile feat picker explains prerequisites and compares starting to level 2
  await page.getByLabel('Level 4 feat ability').selectOption('Dex');
  await expect(page.getByLabel('Starting versus level 20 ability scores')).toContainText('17 → 18');
 });
+test('feat benefit details and level-up handoff remain advisory after reload',async({page})=>{
+ await openPlan(page);
+ await page.getByLabel('Level 4 feat choice').selectOption('Fey-Touched');
+ await expect(page.getByLabel('Level 4 feat benefits')).toContainText('Misty Step');
+ await expect(page.getByLabel('Level 4 advancement handoff')).toContainText('Choose an eligible +1 ability');
+ await page.getByLabel('Level 4 feat ability').selectOption('Int');
+ await expect(page.getByLabel('Level 4 advancement handoff')).toContainText('Plan ready for confirmation');
+ await expect(page.getByLabel('Level 4 advancement handoff')).toContainText('never changes live character statistics automatically');
+ await page.reload();await page.getByRole('button',{name:'My Characters'}).click();await page.getByRole('button',{name:/Future Hero.*Resume draft/}).click();
+ await expect(page.getByLabel('Level 4 feat benefits')).toContainText('Misty Step');
+ await expect(page.getByLabel('Level 4 advancement handoff')).toContainText('Plan ready for confirmation');
+});
