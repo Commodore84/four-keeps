@@ -21,4 +21,3 @@ describe('compatible legacy feats',()=>{
  it('rejects Elven Accuracy for an ineligible species or disabled legacy',async()=>{const {futureFeat,featEligibility}=await import('./creationFutureFeats');const f=futureFeat('Elven Accuracy')!;expect(featEligibility(f,scores,{speciesId:'human',allowCompatibleLegacy:true})).toContain('Elf or Half-Elf required');expect(featEligibility(f,scores,{speciesId:'elf',allowCompatibleLegacy:false})).toContain('Compatible legacy feats are disabled')});
  it('projects Elven Accuracy Dex increase to 18',()=>{const forecast=updateLevelPlan(emptyForecast(),4,{featPlan:'Elven Accuracy',featAbility:'Dex'});expect(projectCharacterLevel('rogue',scores,forecast,4,{speciesId:'elf',allowCompatibleLegacy:true}).scores.Dex).toBe(18)});
 });
-});
