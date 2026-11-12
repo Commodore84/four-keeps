@@ -19,3 +19,7 @@ test('feat ability increase is projected and earlier choices recalculate later s
  await expect(page.getByLabel('Level 8 projected ability scores')).toContainText('15');
  await page.getByLabel('Level 4 feat choice').selectOption('Ability Score Improvement');await expect(page.getByLabel('Level 8 projected ability scores')).toContainText('14');
 });
+test('Epic Boon selection and ability persist after reload',async({page})=>{
+ await openPlan(page);await page.getByLabel('Level 19 Epic Boon',{exact:true}).selectOption('Boon of Fortitude');await page.getByLabel('Level 19 Epic Boon ability').selectOption('Con');
+ await page.reload();await page.getByRole('button',{name:'My Characters'}).click();await page.getByRole('button',{name:/Future Hero/}).click();await expect(page.getByLabel('Level 19 Epic Boon',{exact:true})).toHaveValue('Boon of Fortitude');await expect(page.getByLabel('Level 19 Epic Boon ability')).toHaveValue('Con');
+});

@@ -9,3 +9,11 @@ describe('future feat projections',()=>{
  it('checks numeric prerequisites',()=>{expect(featEligibility(futureFeat('Defensive Duelist')!,{...scores,Dex:12})).toContain('Dex 13 required')});
  it('preserves fighter and rogue additional ASI levels',()=>{expect(projectCharacterLevel('fighter',scores,emptyForecast(),20).improvementLevels).toContain(14);expect(projectCharacterLevel('rogue',scores,emptyForecast(),20).improvementLevels).toContain(10)});
 });
+
+describe('2024 general feats and Epic Boons',()=>{
+ it('includes common general feats and twelve Epic Boons',async()=>{const {FUTURE_FEATS,EPIC_BOONS}=await import('./creationFutureFeats');expect(FUTURE_FEATS.some(f=>f.name==='War Caster')).toBe(true);expect(EPIC_BOONS).toHaveLength(12)});
+ it('rejects a spellcasting prerequisite without casting',async()=>{const {featEligibility,futureFeat}=await import('./creationFutureFeats');expect(featEligibility(futureFeat('War Caster')!,scores,{spellcasting:false})).toContain('Spellcasting or Pact Magic feature required')});
+ it('projects an Epic Boon increase at 19 and not before',()=>{const forecast=updateLevelPlan(emptyForecast(),19,{epicBoon:'Boon of Fortitude',epicBoonAbility:'Con'});expect(projectCharacterLevel('rogue',scores,forecast,18).scores.Con).toBe(14);expect(projectCharacterLevel('rogue',scores,forecast,19).scores.Con).toBe(15)});
+ it('respects Epic Boon cap of 30',()=>{const forecast=updateLevelPlan(emptyForecast(),19,{epicBoon:'Boon of Fortitude',epicBoonAbility:'Con'});expect(projectCharacterLevel('rogue',{...scores,Con:30},forecast,20).scores.Con).toBe(30)});
+ it('preserves planned subclass while updating boon',()=>{let forecast=updateLevelPlan(emptyForecast(),3,{subclassId:'rogue-arcane-trickster'});forecast=updateLevelPlan(forecast,19,{epicBoon:'Boon of Skill',epicBoonAbility:'Dex'});expect(forecast.levels.find(p=>p.level===3)?.subclassId).toBe('rogue-arcane-trickster')});
+});
