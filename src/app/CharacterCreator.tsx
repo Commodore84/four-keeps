@@ -5,14 +5,14 @@ import {subclassesForClass} from '../game/creationSubclasses';
 import {subclassFeatureAt} from '../game/creationSubclassFeatures';
 import {allAlwaysPreparedSpells,landCirclePreparedSpells} from '../game/creationSubclassSpells';
 import {wizardSpellbookAtLevel,wizardPreparationWarnings,wizardPreparedAtLevel} from '../game/creationWizardPreparation';
-import {SPECIES_TRAITS,LINEAGE_DETAILS,ORIGIN_FEATS,CLASS_OVERVIEW,CLASS_FEATURE_DETAILS,CHOICE_DETAILS,SKILL_DETAILS,choiceExplanation} from '../game/creationRulesGuide';
+import {SPECIES_TRAITS,LINEAGE_DETAILS,ORIGIN_FEATS,CLASS_OVERVIEW,CLASS_FEATURE_DETAILS,SKILL_DETAILS,choiceExplanation} from '../game/creationRulesGuide';
 import {INVOCATION_DETAILS} from '../game/creationInvocationInfo';
 import {fullSpellInfo} from '../game/creationFullSpellInfo';
 import {AskDM} from './AskDM';
 import {spellInfo} from '../game/creationSpellInfo';
 import {reviewCharacter,reviewErrors} from '../game/creationReview';
 import {SPELL_COUNTS,INVOCATIONS,emptyMagic,spellOptions,toggleSpell,validateMagic,spellStats,type MagicDraft,SPELL_BY_ID,emptyOriginMagic,magicInitiateClass,innateOriginSpells,validateOriginMagic,type OriginMagicDraft} from '../game/creationMagic';
-import { ITEMS, ITEM_BY_ID, CLASS_PACKAGES, BACKGROUND_PACKAGES, emptyEquipment, inventory, remainingCp, buy, armorClass, attackBonus, weaponTrained, armorTrained, equipmentErrors, carryingWeight, carryingCapacity, type EquipmentDraft } from '../game/creationEquipment';
+import { ITEM_BY_ID, CLASS_PACKAGES, BACKGROUND_PACKAGES, emptyEquipment, inventory, remainingCp, armorClass, attackBonus, weaponTrained, armorTrained, equipmentErrors, carryingWeight, carryingCapacity, type EquipmentDraft } from '../game/creationEquipment';
 import { ABILITIES, STANDARD_ARRAY, POINT_COSTS, POINT_BUY_START, changePointBuy, emptyAbilityDraft, pointCost, rollSet, totalScores, modifier, validateAbilityDraft, validateBaseAbilityDraft, type AbilityDraft } from '../game/creationAbilities';
 import { CLASSES, classChoices, classSummary, reconcileChoices, setChoice, spellcastingAtLevel, validateClassAgainstBackground, type ChoiceSelections, type ChoiceDefinition } from '../game/creationClasses';
 import { availableSpecies, availableBackgrounds, validateOrigins, originBenefits, resolveBackground, DEFAULT_CUSTOM_BACKGROUND, ALL_SKILLS, CUSTOM_TOOLS, CUSTOM_FEATS, requiredSkillReplacements, validateSkillReplacements, isDuplicateTool, validateToolReplacement, type CustomBackground } from '../game/creationOrigins';
@@ -40,6 +40,18 @@ export const CREATION_STEPS: {id:CreationStep;label:string}[] = [
   {id:'origins',label:'Origins'}, {id:'equipment',label:'Equipment'},
   {id:'spells',label:'Spells & Features'}, {id:'identity',label:'Identity'}, {id:'forecast',label:'Future Levels'}, {id:'review',label:'Review'}
 ];
+const TOOL_DESCRIPTIONS:Record<string,string>={
+ "Thieves' Tools":"Open locks and disarm traps with specialized instruments.",
+ "Disguise Kit":"Alter your appearance to impersonate someone.",
+ "Forgery Kit":"Create convincing copies of documents and signatures.",
+ "Herbalism Kit":"Identify and prepare medicinal herbs.",
+ "Poisoner's Kit":"Handle and prepare poisons.",
+ "Navigator's Tools":"Read charts and plot routes.",
+ "Gaming Set":"Play games of skill or chance.",
+ "Musical Instrument":"Perform music with the instrument.",
+ "Artisan's Tools":"Practice a specialized trade or craft."
+};
+const toolDescription=(name:string)=>TOOL_DESCRIPTIONS[name]??(name.includes('Tools')?'Specialized instruments for this craft or activity.':name.includes('Kit')?'Equipment for this specialized activity.':name.includes('Instrument')?'Used to perform music.':'Training in this tool helps with relevant ability checks.');
 const SKILLS_BY_ABILITY:Record<string,readonly string[]>={
  Strength:['Athletics'],
  Dexterity:['Acrobatics','Sleight of Hand','Stealth'],
@@ -164,7 +176,7 @@ export function CharacterCreator(){
         {(()=>{const cls=classSummary(draft.selections.classId??'');if(!cls)return <p className="text-sm text-amber-200">Choose a class to continue.</p>;
           const selections=draft.selections.classChoices??{};
           return <div className="space-y-4"><section className="space-y-2 rounded-lg border border-white/20 p-3 text-sm">
-            <h5 className="font-semibold">{cls.name}</h5><p>{CLASS_OVERVIEW[cls.id]??cls.summary}</p><p>Hit Die: d{cls.hitDie} · Primary: {cls.primaryAbilities.join(', ')}</p><p>Saves: {cls.savingThrows.join(', ')}</p><p>Armor: {cls.armor.join(', ')||'None'}</p><p>Weapons: {cls.weapons.join(', ')}</p><p>Tools: {cls.tools.join(', ')||'None'}</p><p>Starting equipment: {cls.startingEquipment}</p>
+            <h5 className="font-semibold">{cls.name}</h5><p>{CLASS_OVERVIEW[cls.id]??cls.summary}</p><p>Hit Die: d{cls.hitDie} · Primary: {cls.primaryAbilities.join(', ')}</p><p>Saves: {cls.savingThrows.join(', ')}</p><p>Armor: {cls.armor.join(', ')||'None'}</p><p>Weapons: {cls.weapons.join(', ')}</p><div><strong>Tool proficiencies:</strong> {cls.tools.length?cls.tools.map(tool=><p key={tool} className="mt-1"><strong>{tool}</strong> — {toolDescription(tool)}</p>):'None'}</div><p>Starting equipment: {cls.startingEquipment}</p>
             <details><summary className="cursor-pointer font-semibold">Level progression preview</summary>{cls.features.map(f=><div key={f.level} className="mt-2 space-y-1"><strong>Level {f.level}</strong>{f.names.map(name=><p key={name} className="pl-2"><strong>{name}</strong><span className="block text-xs text-parchment/75">{CLASS_FEATURE_DETAILS[name]??'A class feature unlocked at this level; its exact effect depends on your class and any associated choices.'}</span></p>)}</div>)}</details>
           </section>
           <section className="space-y-3 rounded-lg border border-white/20 p-3 text-sm" aria-label="Subclass options preview">
@@ -180,7 +192,7 @@ export function CharacterCreator(){
           {classChoices(cls.id,selections['class-skills']??[]).map(definition=><fieldset key={definition.id} className="space-y-2 rounded-lg border border-white/20 p-3">
             <legend className="px-1 font-semibold">{definition.label} — choose {definition.count}</legend>
             <p className="text-xs text-parchment/60">{(selections[definition.id]??[]).length} / {definition.count} selected</p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">{definition.options.map(option=><label key={option} className="flex items-start gap-2 rounded border border-white/15 p-2 text-sm"><input type="checkbox" checked={(selections[definition.id]??[]).includes(option)} onChange={()=>toggleClassChoice(definition,option)}/><span><strong>{option}</strong><span className="block text-xs leading-relaxed text-parchment/75">{choiceExplanation(option,definition.kind)}</span></span></label>)}</div>
+            <div className="space-y-3">{(definition.id==='class-skills'?Object.entries(SKILLS_BY_ABILITY).map(([ability,skills])=>[ability,definition.options.filter(option=>skills.includes(option))] as const).filter(([,options])=>options.length>0):[['Options',definition.options] as const]).map(([ability,options])=><div key={ability}><h6 className="mb-1 text-xs font-semibold text-gold">{ability}</h6><div className="grid grid-cols-1 sm:grid-cols-2 gap-2">{options.map(option=><label key={option} className="flex items-start gap-2 rounded border border-white/15 p-2 text-sm"><input type="checkbox" checked={(selections[definition.id]??[]).includes(option)} onChange={()=>toggleClassChoice(definition,option)}/><span><strong>{option}</strong><span className="block text-xs leading-relaxed text-parchment/75">{choiceExplanation(option,definition.kind)}</span></span></label>)}</div></div>)}</div>
           </fieldset>)}
           {validateClassAgainstBackground(cls.id,selections,[]).length>0?<p role="status" className="text-sm text-amber-200">{validateClassAgainstBackground(cls.id,selections,[]).join(' ')}</p>:<p role="status" className="text-sm text-emerald-300">Class choices valid and saved.</p>}
           </div>})()}
@@ -227,9 +239,7 @@ export function CharacterCreator(){
               <p className="text-sm">Remaining: <strong>{(funds/100).toFixed(2)} GP</strong> · Carrying {(carryingWeight(eq,classId,backgroundId)).toFixed(1)} / {carryingCapacity(scores)} lb.</p>
               <p className="text-xs text-parchment/65">Class and background funds combine. Purchases use exact copper-piece accounting.</p>
             </section>
-            <section className="space-y-2"><h5 className="font-semibold">Shop — 2024 equipment</h5>
-              <div className="max-h-72 space-y-1 overflow-y-auto rounded-lg border border-white/20 p-2">{ITEMS.map(item=><div key={item.id} className="flex items-center justify-between gap-2 border-b border-white/10 py-2 text-sm"><div><strong>{item.name}</strong><span className="block text-xs text-parchment/60">{item.category} · {(item.costCp/100).toFixed(2)} GP · {item.weight} lb.{item.damage?' · '+item.damage:''}{item.properties?.length?' · '+item.properties.join(', '):''}</span>{item.mastery&&<span className="block text-xs leading-relaxed text-parchment/75"><strong>{item.mastery} mastery:</strong> {CHOICE_DETAILS[item.mastery]??'A weapon-specific effect for characters with Weapon Mastery.'}</span>}{item.category==='armor'&&<span className="block text-xs leading-relaxed text-parchment/75">Armor Class: {item.baseAC}{item.dexCap===0?' (no Dexterity bonus)':item.dexCap===2?' + Dexterity modifier (maximum +2)':item.dexCap===99?' + Dexterity modifier':''}{item.strength?' · Strength '+item.strength+' recommended':''}{item.stealthDisadvantage?' · Disadvantage on Stealth checks':''}</span>}</div><button type="button" disabled={eq.classPackage===null||eq.backgroundPackage===null||funds<item.costCp} onClick={()=>updateEquipment(buy(eq,classId,backgroundId,item.id))} className="shrink-0 rounded border border-gold/40 px-2 py-1 text-gold disabled:opacity-30">Buy</button></div>)}</div>
-            </section>
+            <p className="text-xs text-parchment/70">Additional purchases will be available from merchants during your adventure. Choose your starting equipment here.</p>
             <section className="space-y-2"><h5 className="font-semibold">Inventory and equipment</h5>
               {Object.entries(owned).filter(([,n])=>n>0).length===0?<p className="text-sm text-parchment/60">Choose starting packages to receive equipment.</p>:Object.entries(owned).filter(([,n])=>n>0).map(([id,n])=>{const item=ITEM_BY_ID[id];if(!item)return <p key={id} className="text-amber-200">Unknown item: {id}</p>;
                 const equipable=item.category==='weapon'||item.category==='armor'||item.category==='shield';
