@@ -1263,3 +1263,33 @@ test('origin details appear immediately below selected row and navigation resets
  await page.getByRole('button',{name:'1. Class'}).click();
  await expect.poll(()=>page.evaluate(()=>window.scrollY)).toBeLessThan(50);
 });
+
+test('custom background button opens its editor directly below the button',async({page})=>{
+ await page.goto('/four-keeps/');
+ await page.evaluate(()=>{
+  const now=new Date().toISOString();
+  localStorage.setItem('four-keeps-character-drafts-v1',JSON.stringify([{
+   schemaVersion:1,id:'custom-inline-test',status:'draft',rules:{edition:'2024',allowCompatibleLegacy:false},
+   step:'origins',identity:{name:'Custom Test',pronouns:'',appearance:'',personality:'',backstory:'',portrait:null},
+   selections:{classId:'rogue',classChoices:{'class-skills':['Stealth','Insight','Perception','Acrobatics']}},
+   createdAt:now,updatedAt:now
+  }]));
+ });
+ await page.reload();await page.getByRole('button',{name:'My Characters'}).click();
+ await page.getByRole('button',{name:/Custom Test.*Resume draft/}).click();
+ const button=page.getByRole('button',{name:'Create custom background (2024 DMG)'});
+ await button.click();
+ await expect(button).toHaveAttribute('aria-pressed','true');
+ const editor=page.getByRole('group',{name:'Custom background'});
+ await expect(editor).toBeVisible();
+ const firstStandard=page.getByRole('button',{name:/Acolyte.*Player.s Handbook/});
+ const b=await button.boundingBox(),e=await editor.boundingBox(),a=await firstStandard.boundingBox();
+ expect(b&&e&&a).toBeTruthy();
+ expect(e!.y).toBeGreaterThan(b!.y);
+ expect(e!.y).toBeLessThan(a!.y);
+ await page.getByRole('textbox',{name:'Custom background name'}).fill('My Custom Origin');
+ await page.reload();
+ await page.getByRole('button',{name:'My Characters'}).click();
+ await page.getByRole('button',{name:/Custom Test.*Resume draft/}).click();
+ await expect(page.getByRole('textbox',{name:'Custom background name'})).toHaveValue('My Custom Origin');
+});
