@@ -46,3 +46,15 @@ test('mobile roadmap groups feat categories and retains a cumulative forecast on
  await expect(page.getByLabel('Planned subclass')).toHaveValue('rogue-arcane-trickster');
  await expect(page.getByLabel('Level 20 projected ability scores')).toContainText('Dex 18');
 });
+test('mobile feat picker explains prerequisites and compares starting to level 20 scores',async({page})=>{
+ await page.setViewportSize({width:390,height:844});await openPlan(page);
+ await expect(page.getByLabel('Starting versus level 20 ability scores')).toContainText('Dex');
+ const picker=page.getByLabel('Level 4 feat choice');
+ await expect(picker.locator('option[value="Great Weapon Master"]')).toBeDisabled();
+ await expect(picker.locator('option[value="Great Weapon Master"]')).toContainText('Str 13 required');
+ await picker.selectOption('Skill Expert');
+ await expect(page.getByLabel('Level 4 prerequisites')).toContainText('Eligible at this level');
+ await expect(page.getByLabel('Level 4 ability effect')).toContainText('None yet');
+ await page.getByLabel('Level 4 feat ability').selectOption('Dex');
+ await expect(page.getByLabel('Starting versus level 20 ability scores')).toContainText('17 → 18');
+});
