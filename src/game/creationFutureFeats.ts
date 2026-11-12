@@ -1,5 +1,5 @@
 import type {Ability,Scores} from './creationAbilities';
-export interface FutureFeat {name:string;abilities:readonly Ability[];minimum?:Partial<Record<Ability,number>>;requirement?:'spellcasting'|'heavy-armor'|'martial-weapons'|'fighting-style'|'medium-armor'|'shield';description:string}
+export interface FutureFeat {name:string;abilities:readonly Ability[];minimum?:Partial<Record<Ability,number>>;requirement?:'spellcasting'|'heavy-armor'|'martial-weapons'|'fighting-style'|'medium-armor'|'shield';description:string;source?:'2017'|'2024';species?:readonly string[]}
 const ALL=['Str','Dex','Con','Int','Wis','Cha'] as const;
 const MENTAL=['Int','Wis','Cha'] as const;
 const PHYSICAL=['Str','Dex'] as const;
@@ -48,6 +48,7 @@ export const FUTURE_FEATS:readonly FutureFeat[]=[
  feat('Telepathic',MENTAL,'Gain telepathic abilities.'),
  feat('War Caster',MENTAL,'Improve concentration and casting in combat.','spellcasting'),
  feat('Weapon Master',PHYSICAL,'Gain weapon mastery properties.'),
+export const LEGACY_FEATS:readonly FutureFeat[]=[{name:'Elven Accuracy',abilities:['Dex','Int','Wis','Cha'],description:'When you have Advantage on an attack roll using Dexterity, Intelligence, Wisdom, or Charisma, reroll one of the dice once. Requires Elf or Half-Elf.',source:'2017',species:['elf','half-elf']}];
 ];
 export const EPIC_BOONS:readonly FutureFeat[]=[
  feat('Boon of Combat Prowess',ALL,'Improve a missed attack.'),
@@ -63,10 +64,13 @@ export const EPIC_BOONS:readonly FutureFeat[]=[
  feat('Boon of the Night Spirit',ALL,'Gain stealth and invisibility in darkness.'),
  feat('Boon of Truesight',ALL,'Gain truesight.'),
 ];
-export function futureFeat(name:string){return [...FUTURE_FEATS,...EPIC_BOONS].find(f=>f.name===name)}
-export interface FeatContext {classId?:string;spellcasting?:boolean;heavyArmor?:boolean;mediumArmor?:boolean;shield?:boolean;saveProficiencies?:readonly Ability[]}
+export function futureFeat(name:string){return [...FUTURE_FEATS,...LEGACY_FEATS,...EPIC_BOONS].find(f=>f.name===name)}
+export interface FeatContext {classId?:string;spellcasting?:boolean;heavyArmor?:boolean;mediumArmor?:boolean;shield?:boolean;saveProficiencies?:readonly Ability[];speciesId?:string;allowCompatibleLegacy?:boolean}
 export function featEligibility(f:FutureFeat,scores:Scores,context:FeatContext={}):string[]{
- const issues=Object.entries(f.minimum??{}).filter(([a,n])=>scores[a as Ability]<(n??0)).map(([a,n])=>`${a} ${n} required`);
+ const issues:string[]=[];
+ if(f.source==='2017'&&context.allowCompatibleLegacy===false)issues.push('Compatible legacy feats are disabled');
+ if(f.species&&context.speciesId&&!f.species.includes(context.speciesId))issues.push('Elf or Half-Elf required');
+ issues.push(...Object.entries(f.minimum??{}).filter(([a,n])=>scores[a as Ability]<(n??0)).map(([a,n])=>`${a} ${n} required`));
  if(f.requirement==='spellcasting'&&context.spellcasting===false)issues.push('Spellcasting or Pact Magic feature required');
  if(f.requirement==='heavy-armor'&&context.heavyArmor===false)issues.push('Heavy armor training required');
  if(f.requirement==='medium-armor'&&context.mediumArmor===false)issues.push('Medium armor training required');
