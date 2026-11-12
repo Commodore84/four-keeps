@@ -21,7 +21,8 @@ export function projectCharacterLevel(classId:string,baseScores:Scores,forecast:
  const improvementLevels=forecastImprovementLevels(classId).filter(l=>l<=safeLevel);
  for(const l of improvementLevels){
   const p=plannedLevel(forecast,l);
-  if(p.featPlan&&p.featPlan!=='Ability Score Improvement'){const feat=futureFeat(p.featPlan);if(feat&&p.featAbility&&feat.abilities.includes(p.featAbility)&&featEligibility(feat,scores,{classId,spellcasting:!!spellcastingAtLevel(classId,l),heavyArmor:['fighter','paladin'].includes(classId),mediumArmor:['fighter','paladin','ranger','cleric','druid','barbarian'].includes(classId),shield:['fighter','paladin','ranger','cleric','druid','barbarian'].includes(classId),...context}).length===0&&eligibleFeatAbility(feat,p.featAbility,scores))scores[p.featAbility]++;else assumptions.push('Level '+l+' feat ability increase is not eligible or not selected');continue;}
+  if(p.featPlan&&p.featPlan!=='Ability Score Improvement'){const feat=futureFeat(p.featPlan);if(feat&&feat.abilityBonus===0&&featEligibility(feat,scores,{...context}).length===0)continue;
+  if(feat&&p.featAbility&&feat.abilities.includes(p.featAbility)&&featEligibility(feat,scores,{classId,spellcasting:!!spellcastingAtLevel(classId,l),heavyArmor:['fighter','paladin'].includes(classId),mediumArmor:['fighter','paladin','ranger','cleric','druid','barbarian'].includes(classId),shield:['fighter','paladin','ranger','cleric','druid','barbarian'].includes(classId),...context}).length===0&&eligibleFeatAbility(feat,p.featAbility,scores))scores[p.featAbility]++;else assumptions.push('Level '+l+' feat ability increase is not eligible or not selected');continue;}
   if(p.featPlan&&p.featPlan!=='Ability Score Improvement')continue;
   if(p.abilityIncreases){
    const total=ABILITIES.reduce((sum,ability)=>sum+(p.abilityIncreases?.[ability]??0),0);
