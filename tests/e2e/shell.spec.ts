@@ -1293,3 +1293,29 @@ test('custom background button opens its editor directly below the button',async
  await page.getByRole('button',{name:/Custom Test.*Resume draft/}).click();
  await expect(page.getByRole('textbox',{name:'Custom background name'})).toHaveValue('My Custom Origin');
 });
+
+test('mobile text inputs stay at least 16px to prevent iPhone focus zoom',async({page})=>{
+ await page.setViewportSize({width:390,height:844});
+ await page.goto('/four-keeps/');
+ await page.evaluate(()=>{
+  const now=new Date().toISOString();
+  localStorage.setItem('four-keeps-character-drafts-v1',JSON.stringify([{
+   schemaVersion:1,id:'zoom-regression-test',status:'draft',rules:{edition:'2024',allowCompatibleLegacy:false},
+   step:'origins',identity:{name:'Zoom Test',pronouns:'',appearance:'',personality:'',backstory:'',portrait:null},
+   selections:{classId:'rogue',classChoices:{'class-skills':['Stealth','Insight','Perception','Acrobatics']}},
+   createdAt:now,updatedAt:now
+  }]));
+ });
+ await page.reload();
+ await page.getByRole('button',{name:'My Characters'}).click();
+ await page.getByRole('button',{name:/Zoom Test.*Resume draft/}).click();
+ await page.getByRole('button',{name:'Create custom background (2024 DMG)'}).click();
+ const name=page.getByRole('textbox',{name:'Custom background name'});
+ await expect(name).toBeVisible();
+ await expect.poll(()=>name.evaluate(el=>parseFloat(getComputedStyle(el).fontSize))).toBeGreaterThanOrEqual(16);
+ await name.focus();
+ await expect.poll(()=>name.evaluate(el=>parseFloat(getComputedStyle(el).fontSize))).toBeGreaterThanOrEqual(16);
+ const editableSizes=await page.locator('input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]):not([type="hidden"]),textarea,select').evaluateAll(elements=>elements.map(el=>({tag:el.tagName,size:parseFloat(getComputedStyle(el).fontSize)})));
+ expect(editableSizes.length).toBeGreaterThan(0);
+ expect(editableSizes.filter(item=>item.size<16)).toEqual([]);
+});

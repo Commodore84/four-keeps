@@ -10,3 +10,14 @@ button, textarea { font: inherit; }
 .scene::before { content: ''; position: absolute; inset: 0; opacity: .25; background: repeating-linear-gradient(90deg, transparent 0 68px, #0a1611 69px 72px); }
 .scene-glow { position: absolute; left: 42%; top: 12%; width: 90px; height: 160px; border-radius: 50%; background: #d7bd79; opacity: .08; filter: blur(32px); }
 .map-preview { background: radial-gradient(circle at 50% 45%, #33473b, #192720 75%); }
+
+/* iOS Safari zooms the visual viewport when a focused editable control uses
+   text smaller than 16px. Keep every mobile freeform field at that minimum,
+   including dynamically rendered character-creator inputs. */
+@media (max-width: 767px) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]):not([type="hidden"]),
+  textarea,
+  select {
+    font-size: max(16px, 1em) !important;
+  }
+}
