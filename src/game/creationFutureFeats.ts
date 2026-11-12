@@ -84,11 +84,12 @@ export const EPIC_BOONS:readonly FutureFeat[]=[
  feat('Boon of Truesight',ALL,'Gain truesight.'),
 ];
 export function futureFeat(name:string){return [...FUTURE_FEATS,...ORIGIN_PLANNING_FEATS,...LEGACY_FEATS,...EPIC_BOONS].find(f=>f.name===name)}
-export interface FeatContext {classId?:string;spellcasting?:boolean;heavyArmor?:boolean;mediumArmor?:boolean;shield?:boolean;saveProficiencies?:readonly Ability[];speciesId?:string;allowCompatibleLegacy?:boolean}
+export interface FeatContext {classId?:string;spellcasting?:boolean;heavyArmor?:boolean;mediumArmor?:boolean;shield?:boolean;saveProficiencies?:readonly Ability[];speciesId?:string;lineageId?:string;allowCompatibleLegacy?:boolean}
 export function featEligibility(f:FutureFeat,scores:Scores,context:FeatContext={}):string[]{
  const issues:string[]=[];
  if(f.source==='2017'&&context.allowCompatibleLegacy===false)issues.push('Compatible legacy feats are disabled');
- if(f.species&&context.speciesId&&!f.species.includes(context.speciesId))issues.push(`Requires compatible species: ${f.species.join(', ')}`);
+ if(f.species&&(!context.speciesId||!f.species.includes(context.speciesId)))issues.push(`Requires compatible species: ${f.species.join(', ')}`);
+ if(f.lineages&&(!context.lineageId||!f.lineages.includes(context.lineageId)))issues.push(`Requires legacy lineage: ${f.lineages.join(', ')}; 2024 lineage compatibility requires DM approval`);
  issues.push(...Object.entries(f.minimum??{}).filter(([a,n])=>scores[a as Ability]<(n??0)).map(([a,n])=>`${a} ${n} required`));
  if(f.requirement==='spellcasting'&&context.spellcasting===false)issues.push('Spellcasting or Pact Magic feature required');
  if(f.requirement==='heavy-armor'&&context.heavyArmor===false)issues.push('Heavy armor training required');
@@ -97,3 +98,6 @@ export function featEligibility(f:FutureFeat,scores:Scores,context:FeatContext={
  return issues;
 }
 export function eligibleFeatAbility(f:FutureFeat,ability:Ability,scores:Scores){return f.abilityBonus!==0&&f.abilities.includes(ability)&&scores[ability]<20}
+
+
+export function featCompatibilityWarnings(f:FutureFeat,context:FeatContext={}):string[]{return f.source==='2017'?[`2017 legacy feat (Xanathar’s Guide to Everything): DM approval required; 2024 compatibility is provisional${f.lineages?' for '+f.lineages.join(' / ')+' lineage':''}.`,...(f.lineages&&!context.lineageId?['Choose a 2024 elven lineage before planning this feat.']:[])]:[];}
