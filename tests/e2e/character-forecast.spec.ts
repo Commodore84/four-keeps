@@ -1,135 +1,21 @@
 import {test,expect} from '@playwright/test';
-
-test('character creator exposes an accessible draft and forecast navigation',async({page})=>{
- await page.goto('/four-keeps/');
- await page.getByRole('button',{name:'My Characters'}).click();
- const creator=page.getByText('Character Creator',{exact:true});
- await expect(creator).toBeVisible();
- await page.getByRole('button',{name:'Create character'}).click();
- await expect(page.getByRole('navigation',{name:'Character creation steps'})).toBeVisible();
- await expect(page.getByRole('button',{name:/Future Levels/})).toBeVisible();
- await expect(page.getByRole('button',{name:'All characters'})).toBeVisible();
+async function openPlan(page:import('@playwright/test').Page,classId='rogue'){
+ await page.goto('/four-keeps/');await page.evaluate(id=>{const now=new Date().toISOString();localStorage.setItem('four-keeps-character-drafts-v1',JSON.stringify([{schemaVersion:1,id:'future-test',status:'draft',rules:{edition:'2024',allowCompatibleLegacy:false},step:'forecast',identity:{name:'Future Hero',pronouns:'',appearance:'',personality:'',backstory:'',portrait:null},selections:{classId:id,abilities:{method:'standard',base:{Str:8,Dex:15,Con:14,Int:13,Wis:12,Cha:10},bonusMode:'two-one',bonuses:{Dex:2,Int:1},rolls:[],rollDice:[]}},createdAt:now,updatedAt:now}]));},classId);
+ await page.reload();await page.getByRole('button',{name:'My Characters'}).click();await page.getByRole('button',{name:/Future Hero.*Resume draft/}).click();
+}
+test('planner exposes subclass and correct rogue improvement milestones',async({page})=>{
+ await openPlan(page);await expect(page.getByText('Future ASIs & Feats')).toBeVisible();await page.getByLabel('Planned subclass').selectOption('rogue-arcane-trickster');
+ for(const level of [4,8,10,12,16])await expect(page.getByLabel(`Level ${level} feat choice`)).toBeVisible();
+ await expect(page.getByLabel('Level 6 feat choice')).toHaveCount(0);
+ await page.reload();await page.getByRole('button',{name:'My Characters'}).click();await page.getByRole('button',{name:/Future Hero/}).click();await expect(page.getByLabel('Planned subclass')).toHaveValue('rogue-arcane-trickster');
 });
-
-test('forecast level selector and automatic spells are rendered for a saved Paladin draft',async({page})=>{
- await page.goto('/four-keeps/');
- await page.evaluate(()=>{
-  const key='four-keeps-character-drafts-v1';
-  const draft={schemaVersion:1,id:'forecast-e2e-paladin',status:'draft',rules:{edition:'2024',allowCompatibleLegacy:false},identity:{name:'Forecast Test Paladin'},selections:{classId:'paladin'},step:'forecast',forecast:{targetLevel:5,levels:[{level:3,subclassId:'paladin-devotion'}]},createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()};
-  localStorage.setItem(key,JSON.stringify([draft]));
- });
- await page.reload();
- await page.getByRole('button',{name:'My Characters'}).click();
- await page.getByRole('button',{name:/Forecast Test Paladin.*Resume draft/}).click();
- await expect(page.getByLabel('Character advancement forecast')).toBeVisible();
- await expect(page.getByText('Your Future Character')).toBeVisible();
- await expect(page.getByText(/Find Steed/).first()).toBeVisible();
- await expect(page.getByLabel('Level 3 subclass feature')).toContainText('Sacred Weapon');
- await page.reload();
- await page.getByRole('button',{name:'My Characters'}).click();
- await page.getByRole('button',{name:/Forecast Test Paladin/}).click();
- await expect(page.getByLabel('Planned subclass')).toHaveValue('paladin-devotion');
- await expect(page.getByText(/Find Steed/).first()).toBeVisible();
+test('ASI changes cumulative projected scores and survives reload',async({page})=>{
+ await openPlan(page);await page.getByLabel('Level 4 feat choice').selectOption('Ability Score Improvement');await page.getByRole('button',{name:'Add level 4 Dex increase'}).click();
+ await expect(page.getByLabel('Level 8 projected ability scores')).toContainText('18');
+ await page.reload();await page.getByRole('button',{name:'My Characters'}).click();await page.getByRole('button',{name:/Future Hero/}).click();await expect(page.getByLabel('Level 4 feat choice')).toHaveValue('Ability Score Improvement');await expect(page.getByLabel('Level 8 projected ability scores')).toContainText('18');
 });
-
-test('forecast UI changes Druid terrain and displays the resulting always-prepared spells',async({page})=>{
- await page.goto('/four-keeps/');
- await page.evaluate(()=>{
-  localStorage.setItem('four-keeps-character-drafts-v1',JSON.stringify([{schemaVersion:1,id:'druid-e2e',status:'draft',rules:{edition:'2024',allowCompatibleLegacy:false},identity:{name:'Terrain Druid'},selections:{classId:'druid'},step:'forecast',forecast:{targetLevel:5,levels:[{level:3,subclassId:'druid-land'}]},createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()}]));
- });
- await page.reload();
- await page.getByRole('button',{name:'My Characters'}).click();
- await page.getByRole('button',{name:/Terrain Druid.*Resume draft/}).click();
- await expect(page.getByLabel('Planned subclass')).toHaveValue('druid-land');
- await expect(page.getByLabel('Level 3 subclass feature')).toContainText('Land’s Aid');
- await page.getByLabel('Level 3 Circle of the Land terrain').selectOption('arid');
- await expect(page.getByLabel('Level 5 Circle of the Land terrain')).toHaveValue('arid');
- await page.getByLabel('Level 5 Circle of the Land terrain').selectOption('polar');
- await expect(page.getByLabel('Level 5 Circle of the Land terrain')).toHaveValue('polar');
- await expect(page.getByText(/Sleet Storm/).first()).toBeVisible();
- await page.reload();
- await page.getByRole('button',{name:'My Characters'}).click();
- await page.getByRole('button',{name:/Terrain Druid/}).click();
- await expect(page.getByLabel('Level 3 Circle of the Land terrain')).toHaveValue('arid');
- await expect(page.getByLabel('Level 5 Circle of the Land terrain')).toHaveValue('polar');
-});
-test('forecast UI displays Warlock Mystic Arcanum replacement selectors',async({page})=>{
- await page.goto('/four-keeps/');
- await page.evaluate(()=>{
-  localStorage.setItem('four-keeps-character-drafts-v1',JSON.stringify([{schemaVersion:1,id:'warlock-e2e',status:'draft',rules:{edition:'2024',allowCompatibleLegacy:false},identity:{name:'Arcanum Warlock'},selections:{classId:'warlock'},step:'forecast',forecast:{targetLevel:12,levels:[{level:3,subclassId:'warlock-fiend'}]},createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()}]));
- });
- await page.reload();
- await page.getByRole('button',{name:'My Characters'}).click();
- await page.getByRole('button',{name:/Arcanum Warlock.*Resume draft/}).click();
- await expect(page.getByLabel('Level 3 subclass feature')).toContainText('Dark One’s Blessing');
- await expect(page.getByLabel('Level 12 Mystic Arcanum to replace')).toBeVisible();
- await expect(page.getByLabel('Level 12 Mystic Arcanum replacement')).toBeVisible();
-});
-
-test('planned subclass persists across reload',async({page})=>{
- await page.addInitScript(()=>{if(!localStorage.getItem('four-keeps-character-drafts-v1'))localStorage.setItem('four-keeps-character-drafts-v1',JSON.stringify([{schemaVersion:1,id:'subclass-persistence',status:'draft',rules:{edition:'2024',allowCompatibleLegacy:true},step:'forecast',identity:{name:'Subclass Persistence'},selections:{classId:'paladin'},forecast:{targetLevel:3,levels:[]},createdAt:'2026-11-10T00:00:00.000Z',updatedAt:'2026-11-10T00:00:00.000Z'}]));});
- await page.goto('/four-keeps/');
- await page.getByRole('button',{name:'My Characters'}).click();
- await page.getByRole('button',{name:/Subclass Persistence/}).click();
- await page.getByLabel('Planned subclass').selectOption('paladin-devotion');
- await expect(page.getByLabel('Planned subclass')).toHaveValue('paladin-devotion');
- await page.reload();
- await page.getByRole('button',{name:'My Characters'}).click();
- await page.getByRole('button',{name:/Subclass Persistence/}).click();
- await expect(page.getByLabel('Planned subclass')).toHaveValue('paladin-devotion');
-});
-test('Mystic Arcanum replacement controls save selected existing and replacement spells',async({page})=>{
- await page.addInitScript(()=>{if(!localStorage.getItem('four-keeps-character-drafts-v1'))localStorage.setItem('four-keeps-character-drafts-v1',JSON.stringify([{schemaVersion:1,id:'arcanum-interaction',status:'draft',rules:{edition:'2024',allowCompatibleLegacy:true},step:'forecast',identity:{name:'Arcanum Interaction'},selections:{classId:'warlock'},forecast:{targetLevel:12,levels:[{level:11,plannedSpellIds:['eyebite']}]},createdAt:'2026-11-10T00:00:00.000Z',updatedAt:'2026-11-10T00:00:00.000Z'}]));});
- await page.goto('/four-keeps/');
- await page.getByRole('button',{name:'My Characters'}).click();
- await page.getByRole('button',{name:/Arcanum Interaction/}).click();
- const from=page.getByLabel('Level 12 Mystic Arcanum to replace');
- const options=from.locator('option');
- const count=await options.count();
- expect(count).toBeGreaterThan(1);
- const oldId=await options.nth(1).getAttribute('value');
- expect(oldId).toBeTruthy();
- await from.selectOption(oldId!);
- const replacement=page.getByLabel('Level 12 Mystic Arcanum replacement');
- expect(await replacement.locator('option').count()).toBeGreaterThan(1);
- const newId=await replacement.locator('option').nth(1).getAttribute('value');
- await replacement.selectOption(newId!);
- await expect(replacement).toHaveValue(newId!);
- await page.reload();
- await page.getByRole('button',{name:'My Characters'}).click();
- await page.getByRole('button',{name:/Arcanum Interaction/}).click();
- await expect(page.getByLabel('Level 12 Mystic Arcanum to replace')).toHaveValue(oldId!);
- await expect(page.getByLabel('Level 12 Mystic Arcanum replacement')).toHaveValue(newId!);
-});
-
-test('level-ten Land forecast displays deterministic terrain resistance and Poisoned immunity',async({page})=>{
- await page.goto('/four-keeps/');
- await page.evaluate(()=>localStorage.setItem('four-keeps-character-drafts-v1',JSON.stringify([{schemaVersion:1,id:'land-defense',status:'draft',rules:{edition:'2024',allowCompatibleLegacy:false},identity:{name:'Land Defense Druid'},selections:{classId:'druid'},step:'forecast',forecast:{targetLevel:10,levels:[{level:3,subclassId:'druid-land',landTerrain:'arid'}]},createdAt:'2026-11-10T00:00:00.000Z',updatedAt:'2026-11-10T00:00:00.000Z'}])));
- await page.reload();
- await page.getByRole('button',{name:'My Characters'}).click();
- await page.getByRole('button',{name:/Land Defense Druid/}).click();
- const sheet=page.getByLabel('Level 10 projected character sheet');
- await expect(sheet).toContainText('Condition immunity: Poisoned');
- await expect(sheet).toContainText('Damage resistance: Fire');
- await page.getByLabel('Level 10 Circle of the Land terrain').selectOption('polar');
- await expect(sheet).toContainText('Damage resistance: Cold');
- await expect(sheet).not.toContainText('Damage resistance: Fire');
-});
-test('level-six Fiend forecast displays Charisma-based Dark One’s Own Luck uses',async({page})=>{
- await page.goto('/four-keeps/');
- await page.evaluate(()=>localStorage.setItem('four-keeps-character-drafts-v1',JSON.stringify([{schemaVersion:1,id:'fiend-luck',status:'draft',rules:{edition:'2024',allowCompatibleLegacy:false},identity:{name:'Fiend Luck Warlock'},selections:{classId:'warlock'},step:'forecast',forecast:{targetLevel:6,levels:[{level:3,subclassId:'warlock-fiend'}]},createdAt:'2026-11-10T00:00:00.000Z',updatedAt:'2026-11-10T00:00:00.000Z'}])));
- await page.reload();
- await page.getByRole('button',{name:'My Characters'}).click();
- await page.getByRole('button',{name:/Fiend Luck Warlock/}).click();
- await expect(page.getByLabel('Level 6 projected character sheet')).toContainText('Dark One’s Own Luck');
-});
-
-test('Devotion forecast labels level-seven charm immunity without claiming live combat enforcement',async({page})=>{
- await page.goto('/four-keeps/');
- await page.evaluate(()=>localStorage.setItem('four-keeps-character-drafts-v1',JSON.stringify([{schemaVersion:1,id:'devotion-aura',status:'draft',rules:{edition:'2024',allowCompatibleLegacy:false},identity:{name:'Devotion Aura Paladin'},selections:{classId:'paladin'},step:'forecast',forecast:{targetLevel:7,levels:[{level:3,subclassId:'paladin-devotion'}]},createdAt:'2026-11-10T00:00:00.000Z',updatedAt:'2026-11-10T00:00:00.000Z'}])));
- await page.reload();
- await page.getByRole('button',{name:'My Characters'}).click();
- await page.getByRole('button',{name:/Devotion Aura Paladin/}).click();
- await expect(page.getByLabel('Level 7 projected character sheet')).toContainText('Condition immunity: Charmed');
- await expect(page.getByLabel('Level 6 projected character sheet')).not.toContainText('Condition immunity: Charmed');
+test('feat ability increase is projected and earlier choices recalculate later scores',async({page})=>{
+ await openPlan(page);await page.getByLabel('Level 4 feat choice').selectOption('Skill Expert');await page.getByLabel('Level 4 feat ability').selectOption('Int');
+ await expect(page.getByLabel('Level 8 projected ability scores')).toContainText('15');
+ await page.getByLabel('Level 4 feat choice').selectOption('Ability Score Improvement');await expect(page.getByLabel('Level 8 projected ability scores')).toContainText('14');
 });

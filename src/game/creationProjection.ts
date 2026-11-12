@@ -1,3 +1,4 @@
+import {futureFeat,featEligibility} from './creationFutureFeats';
 import {mysticArcanumLevel} from './creationProgression';
 import {subclassesForClass} from './creationSubclasses';
 import {spellcastingAtLevel,classSummary} from './creationClasses';
@@ -20,6 +21,8 @@ export function projectCharacterLevel(classId:string,baseScores:Scores,forecast:
  const improvementLevels=forecastImprovementLevels(classId).filter(l=>l<=safeLevel);
  for(const l of improvementLevels){
   const p=plannedLevel(forecast,l);
+  if(p.featPlan&&p.featPlan!=='Ability Score Improvement'){const feat=futureFeat(p.featPlan);if(feat&&p.featAbility&&feat.abilities.includes(p.featAbility)&&featEligibility(feat,scores).length===0&&scores[p.featAbility]<20)scores[p.featAbility]++;else assumptions.push('Level '+l+' feat ability increase is not eligible or not selected');continue;}
+  if(p.featPlan&&p.featPlan!=='Ability Score Improvement')continue;
   if(p.abilityIncreases){
    const total=ABILITIES.reduce((sum,ability)=>sum+(p.abilityIncreases?.[ability]??0),0);
    if(total>2){assumptions.push('Level '+l+' ability increases exceed the two-point budget; ignored');continue;}

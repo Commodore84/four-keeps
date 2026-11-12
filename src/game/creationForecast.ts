@@ -5,7 +5,7 @@ import {HIGHER_LEVEL_FORECAST_SPELLS} from './creationHigherSpellCatalog';
 import {spellcastingAtLevel,preparedSpellsAtLevel} from './creationClasses';
 import {subclassesForClass} from './creationSubclasses';
 import {allAlwaysPreparedSpells} from './creationSubclassSpells';
-export interface LevelPlan {level:number;subclassId?:string;abilityPlan?:string;abilityIncreases?:Partial<Record<Ability,number>>;featPlan?:string;spellPlan?:string;plannedSpellIds?:string[];wizardPreparedSpellIds?:string[];landTerrain?:'arid'|'polar'|'temperate'|'tropical';arcanumReplacementFromId?:string;arcanumReplacementToId?:string;replacementSpellId?:string;replacementWithSpellId?:string;notes?:string}
+export interface LevelPlan {level:number;subclassId?:string;abilityPlan?:string;abilityIncreases?:Partial<Record<Ability,number>>;featPlan?:string;featAbility?:Ability;spellPlan?:string;plannedSpellIds?:string[];wizardPreparedSpellIds?:string[];landTerrain?:'arid'|'polar'|'temperate'|'tropical';arcanumReplacementFromId?:string;arcanumReplacementToId?:string;replacementSpellId?:string;replacementWithSpellId?:string;notes?:string}
 export interface AdvancementForecast {targetLevel:number;levels:LevelPlan[]}
 export type SpellAcquisitionMode='spellbook'|'prepared'|'pact-prepared'|'subclass';
 export interface ForecastSpellPolicy {mode:SpellAcquisitionMode;canReplaceOnLevelUp:boolean;replacementLimit:number;replacementTiming:'level-up'|'long-rest'|'none';description:string}

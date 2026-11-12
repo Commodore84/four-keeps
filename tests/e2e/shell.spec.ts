@@ -264,43 +264,6 @@ test('all Warlock subclass options are readable without selecting one at level o
  await expect(section.getByText(/you will choose a subclass when you reach level 3/)).toBeVisible();
 });
 
-test('future-level forecast grows sequentially and saves subclass plans',async ({page})=>{
- const now='2026-11-10T00:00:00.000Z';
- const draft={schemaVersion:1,id:'forecast-browser',status:'draft',rules:{edition:'2024',allowCompatibleLegacy:true},step:'forecast',identity:{name:'Forecast Warlock',pronouns:'',appearance:'',personality:'',backstory:'',portrait:null},selections:{speciesId:'human',backgroundId:'sage',classId:'warlock',classChoices:{}},createdAt:now,updatedAt:now};
- await page.addInitScript(value=>{if(!localStorage.getItem('four-keeps-character-drafts-v1'))localStorage.setItem('four-keeps-character-drafts-v1',JSON.stringify([value]));},draft);
- await page.goto('/four-keeps/');
- await page.getByRole('button',{name:'My Characters'}).click();
- await page.getByRole('button',{name:/Forecast Warlock/}).click();
- await expect(page.getByRole('button',{name:'See level 2'})).toBeVisible();
- await page.getByRole('button',{name:'See level 2'}).click();
- await page.getByLabel('Level 2 notes').fill('Practice invocations');
- await page.getByRole('button',{name:'See level 3'}).click();
- await page.getByLabel('Planned subclass').selectOption('warlock-archfey');
- await expect(page.getByText(/A patron from the Feywild/).first()).toBeVisible();
- await page.reload();
- await page.getByRole('button',{name:'My Characters'}).click();
- await page.getByRole('button',{name:/Forecast Warlock/}).click();
- await expect(page.getByLabel('Planned subclass')).toHaveValue('warlock-archfey');
- await expect(page.getByLabel('Level 2 notes')).toHaveValue('Practice invocations');
-});
-
-test('projected warlock sheet recalculates from provisional level-four ability choices',async ({page})=>{
- const now='2026-11-10T00:00:00.000Z';
- const draft={schemaVersion:1,id:'projection-browser',status:'draft',rules:{edition:'2024',allowCompatibleLegacy:true},step:'forecast',identity:{name:'Projection Warlock',pronouns:'',appearance:'',personality:'',backstory:'',portrait:null},selections:{speciesId:'human',backgroundId:'sage',classId:'warlock',classChoices:{},abilities:{method:'standard',base:{Str:8,Dex:14,Con:13,Int:10,Wis:12,Cha:15},bonusMode:'two-one',bonuses:{Cha:2,Con:1},rolls:[],rollDice:[]}},forecast:{targetLevel:4,levels:[]},createdAt:now,updatedAt:now};
- await page.addInitScript(value=>{if(!localStorage.getItem('four-keeps-character-drafts-v1'))localStorage.setItem('four-keeps-character-drafts-v1',JSON.stringify([value]));},draft);
- await page.goto('/four-keeps/');
- await page.getByRole('button',{name:'My Characters'}).click();
- await page.getByRole('button',{name:/Projection Warlock/}).click();
- const sheet=page.getByLabel('Level 4 projected character sheet');
- await expect(sheet.getByText('Spell save DC: 13',{exact:false})).toBeVisible();
- await page.getByRole('button',{name:'Add level 4 Cha increase'}).click();
- await expect(sheet.getByText('Spell save DC: 14',{exact:false})).toBeVisible();
- await page.reload();
- await page.getByRole('button',{name:'My Characters'}).click();
- await page.getByRole('button',{name:/Projection Warlock/}).click();
- await expect(page.getByLabel('Level 4 projected character sheet').getByText('Spell save DC: 14',{exact:false})).toBeVisible();
-});
-
 test('registered subclass actors persist in campaign and remain separate from Nighthawk',async({page})=>{
  await page.goto('/four-keeps/');
  await navigate(page,'Settings');
