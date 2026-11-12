@@ -99,5 +99,4 @@ export function featEligibility(f:FutureFeat,scores:Scores,context:FeatContext={
 }
 export function eligibleFeatAbility(f:FutureFeat,ability:Ability,scores:Scores){return f.abilityBonus!==0&&f.abilities.includes(ability)&&scores[ability]<20}
 
-
 export function featCompatibilityWarnings(f:FutureFeat,context:FeatContext={}):string[]{return f.source==='2017'?[`2017 legacy feat (Xanathar’s Guide to Everything): DM approval required; 2024 compatibility is provisional${f.lineages?' for '+f.lineages.join(' / ')+' lineage':''}.`,...(f.lineages&&!context.lineageId?['Choose a 2024 elven lineage before planning this feat.']:[])]:[];}
