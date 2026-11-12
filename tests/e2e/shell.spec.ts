@@ -185,7 +185,7 @@ test('point buy begins at eight and blocks overspending',async ({page})=>{
  await page.goto('/four-keeps/');
  await page.getByRole('button',{name:'My Characters'}).click();
  await page.getByRole('button',{name:/Point Buy Hero/}).click();
- await page.getByRole('button',{name:'Point Buy'}).click();
+ await page.getByRole('button',{name:'Point Buy',exact:true}).click();
  await expect(page.getByText(/Points remaining:/)).toContainText('27 / 27');
  for(const ability of ['Str','Dex','Con'])for(let i=0;i<7;i++)await page.getByRole('button',{name:'Increase '+ability}).click();
  await expect(page.getByText(/Points remaining:/)).toContainText('0 / 27');
@@ -1191,7 +1191,7 @@ test('custom background editor prevents duplicate class skills and persists choi
  await editor.getByLabel('Custom Origin feat').selectOption('Alert');
  await editor.getByLabel('Custom background tool').selectOption('Cartographer’s Tools');
  await expect(page.getByLabel('Overlapping skill proficiency replacements')).toHaveCount(0);
- await expect(page.getByRole('button',{name:'Continue to abilities'})).toBeEnabled();
+ await expect(page.getByRole('button',{name:'Continue to equipment'})).toBeDisabled();
  await page.reload();await page.getByRole('button',{name:'My Characters'}).click();
  await page.getByRole('button',{name:/Scout.*Resume draft/}).click();
  await expect(page.getByLabel('Custom background name')).toHaveValue('Frontier Scout');
@@ -1257,7 +1257,7 @@ test('origin details appear immediately below selected row and navigation resets
  await expect(page.getByText(/Stealth — already proficient; choose a replacement below/)).toBeVisible();
  await page.getByLabel('Replacement for Stealth').selectOption('Arcana');
  await page.getByRole('button',{name:/Elf.*Player.s Handbook/}).click();
- await expect(page.getByText(/Speed 30 ft/)).toBeVisible();
+ await expect(page.getByText(/Fey ancestry and magical lineages.*Speed 30 ft/)).toBeVisible();
  await page.evaluate(()=>window.scrollTo(0,document.body.scrollHeight));
  await page.getByRole('button',{name:'1. Class'}).click();
  await expect.poll(()=>page.evaluate(()=>window.scrollY)).toBeLessThan(50);
@@ -1355,4 +1355,40 @@ test('species precedes background, custom skills lock existing proficiencies and
  await expect(editor.getByText(/Luck Points equal to your Proficiency Bonus/)).toBeVisible();
  await page.getByRole('button',{name:/Acolyte.*Player.s Handbook/}).click();
  await expect(page.getByText(/Choose two Cleric cantrips and one level-one Cleric spell/).first()).toBeVisible();
+});
+
+test('redesigned creator shows expanded sticky live summary and groups custom skills',async({page})=>{
+ await page.goto('/four-keeps/');
+ await page.evaluate(()=>{
+  const now=new Date().toISOString();
+  localStorage.setItem('four-keeps-character-drafts-v1',JSON.stringify([{
+   schemaVersion:1,id:'builder-summary-test',status:'draft',rules:{edition:'2024',allowCompatibleLegacy:false},
+   step:'abilities',identity:{name:'Relic Hunter',pronouns:'',appearance:'',personality:'',backstory:'',portrait:null},
+   selections:{classId:'rogue',classChoices:{'class-skills':['Stealth','Investigation','Perception','Sleight of Hand']}},
+   createdAt:now,updatedAt:now
+  }]));
+ });
+ await page.reload();await page.getByRole('button',{name:'My Characters'}).click();
+ await page.getByRole('button',{name:/Relic Hunter.*Resume draft/}).click();
+ const creator=page.getByLabel('Character creator',{exact:true});
+ const nav=creator.getByRole('navigation',{name:'Character creation steps'});
+ await expect(nav.getByRole('button').nth(1)).toContainText('Abilities');
+ await expect(nav.getByRole('button').nth(2)).toContainText('Origins');
+ const summary=creator.getByLabel('Live character summary');
+ await expect(summary.getByRole('button',{name:/Relic Hunter.*Collapse/})).toHaveAttribute('aria-expanded','true');
+ await expect(summary).toHaveCSS('position','sticky');
+ for(const [ability,score] of Object.entries({Str:8,Dex:15,Con:14,Int:13,Wis:12,Cha:10}))await creator.getByLabel(ability+' base score',{exact:true}).selectOption(String(score));
+ await expect(summary.getByText('15',{exact:true})).toBeVisible();
+ await creator.getByRole('button',{name:'Continue to origins'}).click();
+ await creator.getByRole('button',{name:/^Elf/}).click();
+ await creator.getByRole('radio',{name:/^Wood Elf/}).check();
+ await creator.getByRole('button',{name:'Create custom background (2024 DMG)'}).click();
+ const editor=creator.getByRole('group',{name:'Custom background'});
+ await expect(editor.getByText('Choose 3 abilities eligible for background bonuses')).toBeVisible();
+ const group=editor.getByRole('group',{name:'Dexterity'});
+ await expect(group.getByRole('checkbox',{name:/Stealth/})).toBeChecked();
+ await expect(group.getByRole('checkbox',{name:/Stealth/})).toBeDisabled();
+ await expect(group.getByRole('checkbox',{name:/Acrobatics/})).toBeEnabled();
+ await summary.getByRole('button',{name:/Relic Hunter.*Collapse/}).click();
+ await expect(summary.getByRole('button',{name:/Relic Hunter.*Expand/})).toHaveAttribute('aria-expanded','false');
 });

@@ -27,6 +27,10 @@ export function rollSet(random:()=>number=Math.random):{rolls:number[];rollDice:
 }
 export function baseScoreOptions(draft:AbilityDraft):number[]{return draft.method==='standard'?[...STANDARD_ARRAY]:draft.method==='rolled'?[...draft.rolls]:[];}
 export function totalScores(draft:AbilityDraft):Scores{return Object.fromEntries(ABILITIES.map(key=>[key,(draft.base[key]??0)+(draft.bonuses[key]??0)])) as Scores;}
+export function validateBaseAbilityDraft(draft:AbilityDraft):string[]{
+ const withoutBonuses={...draft,bonuses:{},bonusMode:'two-one' as const};
+ return validateAbilityDraft(withoutBonuses,[]).filter(error=>!error.startsWith('Assign background bonuses'));
+}
 export function validateAbilityDraft(draft:AbilityDraft,backgroundAbilities:readonly string[]):string[]{
  const errors:string[]=[];
  const base=ABILITIES.map(key=>draft.base[key]);
