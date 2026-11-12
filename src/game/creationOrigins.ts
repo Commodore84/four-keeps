@@ -96,12 +96,13 @@ export const LEGACY_SPECIES:Species[]=[];
 export const LEGACY_BACKGROUNDS:Background[]=[];
 export function availableSpecies(allowLegacy:boolean):Species[]{return [...SPECIES,...(allowLegacy?LEGACY_SPECIES:[])];}
 export function availableBackgrounds(allowLegacy:boolean):Background[]{return [...BACKGROUNDS,...(allowLegacy?LEGACY_BACKGROUNDS:[])];}
-export function validateOrigins(selections:{speciesId?:string;lineageId?:string;backgroundId?:string;customBackground?:CustomBackground},allowLegacy:boolean):string[]{
+export function validateOrigins(selections:{speciesId?:string;speciesSkill?:string;lineageId?:string;backgroundId?:string;customBackground?:CustomBackground},allowLegacy:boolean):string[]{
  const errors:string[]=[];
  const species=availableSpecies(allowLegacy).find(s=>s.id===selections.speciesId);
  const background=resolveBackground(selections,allowLegacy);
  if(!species)errors.push('Choose a supported species.');
  if(species?.lineages?.length&&!species.lineages.some(l=>l.id===selections.lineageId))errors.push('Choose a lineage.');
+ if(species&&selections.speciesSkill&&!(species.id==='elf'?['Insight','Perception','Survival']:species.id==='human'?ALL_SKILLS:[]).includes(selections.speciesSkill))errors.push('Choose the skill proficiency granted by your species.');
  if(!background)errors.push('Choose a supported background.');
  if(selections.backgroundId==='custom')errors.push(...validateCustomBackground(selections.customBackground));
  return errors;

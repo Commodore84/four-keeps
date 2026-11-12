@@ -1169,7 +1169,7 @@ test('Home navigation is inside the hamburger menu, not beside it',async({page})
  await expect(page.getByRole('button',{name:'Continue Adventure'})).toBeVisible();
 });
 
-test('custom background editor persists choices and resolves duplicate class skill',async({page})=>{
+test('custom background editor prevents duplicate class skills and persists choices',async({page})=>{
  await page.goto('/four-keeps/');
  await page.evaluate(()=>{
   const now=new Date().toISOString();
@@ -1186,17 +1186,16 @@ test('custom background editor persists choices and resolves duplicate class ski
  const editor=page.getByRole('group',{name:'Custom background'});
  await editor.getByLabel('Custom background name').fill('Frontier Scout');
  for(const ability of ['Dex','Wis','Con'])await editor.getByRole('checkbox',{name:ability}).check();
- for(const skill of ['Stealth','Survival'])await editor.getByRole('checkbox',{name:skill}).check();
+ await expect(editor.getByRole('checkbox',{name:/Stealth/})).toBeDisabled();
+ for(const skill of ['Survival','Arcana'])await editor.getByRole('checkbox',{name:skill}).check();
  await editor.getByLabel('Custom Origin feat').selectOption('Alert');
  await editor.getByLabel('Custom background tool').selectOption('Cartographer’s Tools');
- await expect(page.getByLabel('Overlapping skill proficiency replacements')).toBeVisible();
- await expect(page.getByRole('button',{name:'Continue to abilities'})).toBeDisabled();
- await page.getByLabel('Replacement for Stealth').selectOption('Arcana');
+ await expect(page.getByLabel('Overlapping skill proficiency replacements')).toHaveCount(0);
  await expect(page.getByRole('button',{name:'Continue to abilities'})).toBeEnabled();
  await page.reload();await page.getByRole('button',{name:'My Characters'}).click();
  await page.getByRole('button',{name:/Scout.*Resume draft/}).click();
  await expect(page.getByLabel('Custom background name')).toHaveValue('Frontier Scout');
- await expect(page.getByLabel('Replacement for Stealth')).toHaveValue('Arcana');
+ await expect(page.getByRole('group',{name:'Custom background'}).getByRole('checkbox',{name:/Arcana/})).toBeChecked();
 });
 
 test('characters can be deleted with confirmation without deleting an adventure',async({page})=>{
@@ -1318,4 +1317,42 @@ test('mobile text inputs stay at least 16px to prevent iPhone focus zoom',async(
  const editableSizes=await page.locator('input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]):not([type="hidden"]),textarea,select').evaluateAll(elements=>elements.map(el=>({tag:el.tagName,size:parseFloat(getComputedStyle(el).fontSize)})));
  expect(editableSizes.length).toBeGreaterThan(0);
  expect(editableSizes.filter(item=>item.size<16)).toEqual([]);
+});
+
+test('species precedes background, custom skills lock existing proficiencies and feats explain effects',async({page})=>{
+ await page.goto('/four-keeps/');
+ await page.evaluate(()=>{
+  const now=new Date().toISOString();
+  localStorage.setItem('four-keeps-character-drafts-v1',JSON.stringify([{
+   schemaVersion:1,id:'species-before-background-test',status:'draft',rules:{edition:'2024',allowCompatibleLegacy:false},
+   step:'origins',identity:{name:'Species Test',pronouns:'',appearance:'',personality:'',backstory:'',portrait:null},
+   selections:{classId:'rogue',classChoices:{'class-skills':['Stealth','Insight','Perception','Acrobatics']}},
+   createdAt:now,updatedAt:now
+  }]));
+ });
+ await page.reload();
+ await page.getByRole('button',{name:'My Characters'}).click();
+ await page.getByRole('button',{name:/Species Test.*Resume draft/}).click();
+ const species=page.getByRole('heading',{name:'Species',exact:true});
+ const background=page.getByRole('heading',{name:'Background',exact:true});
+ expect((await species.boundingBox())!.y).toBeLessThan((await background.boundingBox())!.y);
+ await page.getByRole('button',{name:/Elf.*Player.s Handbook/}).click();
+ const speciesSkill=page.getByLabel('Species skill proficiency');
+ await expect(speciesSkill.locator('option[value="Insight"]')).toBeDisabled();
+ await expect(speciesSkill.locator('option[value="Perception"]')).toBeDisabled();
+ await speciesSkill.selectOption('Survival');
+ await page.getByRole('button',{name:'Create custom background (2024 DMG)'}).click();
+ const editor=page.getByRole('group',{name:'Custom background'});
+ await expect(editor.getByText('Already proficient (Class)').first()).toBeVisible();
+ await expect(editor.getByText('Already proficient (Species)')).toBeVisible();
+ const stealth=editor.getByRole('checkbox',{name:/Stealth/});
+ await expect(stealth).toBeChecked();
+ await expect(stealth).toBeDisabled();
+ const survival=editor.getByRole('checkbox',{name:/Survival/});
+ await expect(survival).toBeChecked();
+ await expect(survival).toBeDisabled();
+ await editor.getByLabel('Custom Origin feat').selectOption('Lucky');
+ await expect(editor.getByText(/Luck Points equal to your Proficiency Bonus/)).toBeVisible();
+ await page.getByRole('button',{name:/Acolyte.*Player.s Handbook/}).click();
+ await expect(page.getByText(/Choose two Cleric cantrips and one level-one Cleric spell/).first()).toBeVisible();
 });

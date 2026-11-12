@@ -12,6 +12,19 @@ describe('custom backgrounds and overlapping proficiencies',()=>{
   expect(resolveBackground(d.selections,false)?.feat).toBe('Alert');
   expect(resolveBackground(d.selections,false)?.skills).toEqual(['Stealth','Survival']);
  });
+ it('tracks species skill choice and resolves background overlaps against class and species',()=>{
+  const d=createCharacterDraft();
+  d.selections={classId:'rogue',speciesId:'elf',lineageId:'wood-elf',speciesSkill:'Survival',backgroundId:'custom',customBackground:{...custom,skills:['Survival','Arcana']},classChoices:{'class-skills':['Stealth','Insight','Perception','Acrobatics']},skillReplacements:{Survival:'History'}};
+  expect(validateOrigins(d.selections,false)).toEqual([]);
+  expect(validateSkillReplacements(['Stealth','Insight','Perception','Acrobatics','Survival'],['Survival','Arcana'],{Survival:'History'})).toEqual([]);
+  const review=reviewCharacter(d);
+  expect(review.skills).toContain('Survival');
+  expect(review.skills).toContain('History');
+  expect(review.skillSources).toContainEqual({skill:'Survival',source:'Species'});
+  expect(review.skillSources).toContainEqual({skill:'History',source:'Background (replaces Survival)'});
+  d.selections.speciesSkill='Insight';
+  expect(reviewErrors(d).join(' ')).toContain('Species skill duplicates a class skill');
+ });
  it('supports custom Magic Initiate choices and the standard 50 GP equipment alternative',()=>{
   expect(magicInitiateClass('custom','Magic Initiate (Wizard)')).toBe('wizard');
   expect(validateOriginMagic('custom',emptyOriginMagic(),'Magic Initiate (Wizard)')).toContain('Select two legal Magic Initiate cantrips.');

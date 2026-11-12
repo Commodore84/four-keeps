@@ -10,7 +10,8 @@ export function reviewErrors(d:CharacterDraft):string[]{
  const abilities=s.abilities??emptyAbilityDraft();
  return [...(d.identity.name.trim()?[]:['Character name is required.']),...validateOrigins(s,d.rules.allowCompatibleLegacy),
  ...validateClassAgainstBackground(s.classId,s.classChoices??{},[]),
- ...validateSkillReplacements(s.classChoices?.['class-skills']??[],background?.skills??[],s.skillReplacements),
+ ...(s.speciesSkill&&(s.classChoices?.['class-skills']??[]).includes(s.speciesSkill)?['Species skill duplicates a class skill; choose a different species skill.']:[]),
+ ...validateSkillReplacements([...(s.classChoices?.['class-skills']??[]),...(s.speciesSkill?[s.speciesSkill]:[])],background?.skills??[],s.skillReplacements),
  ...validateToolReplacement(classSummary(s.classId??'')?.tools??[],background?.tool??'',s.toolReplacement),
  ...validateAbilityDraft(abilities,background?.abilities??[]),
  ...equipmentErrors(s.equipment??emptyEquipment(),s.classId??'',s.backgroundId??'',totalScores(abilities)),
@@ -24,8 +25,8 @@ export function reviewCharacter(d:CharacterDraft){
   scores:ABILITIES.map(ability=>({ability,score:scores[ability],modifier:modifier(scores[ability])})),
   hitPoints:cls?cls.hitDie+modifier(scores.Con):null,armorClass:armorClass(eq,s.classId??'',s.backgroundId??'',scores),
   proficiencyBonus:2,initiative:modifier(scores.Dex),
-  skills:[...new Set([...effectiveBackgroundSkills(s.classChoices?.['class-skills']??[],origins.skills,s.skillReplacements),...(s.classChoices?.['class-skills']??[])])],
-  skillSources:[...(s.classChoices?.['class-skills']??[]).map(skill=>({skill,source:'Class'})),...origins.skills.map(skill=>({skill:s.classChoices?.['class-skills']?.includes(skill)?s.skillReplacements?.[skill]??skill:skill,source:s.classChoices?.['class-skills']?.includes(skill)?'Background (replaces '+skill+')':'Background'}))],
+  skills:[...new Set([...effectiveBackgroundSkills([...(s.classChoices?.['class-skills']??[]),...(s.speciesSkill?[s.speciesSkill]:[])],origins.skills,s.skillReplacements),...(s.classChoices?.['class-skills']??[]),...(s.speciesSkill?[s.speciesSkill]:[])])],
+  skillSources:[...(s.speciesSkill?[{skill:s.speciesSkill,source:'Species'}]:[]),...(s.classChoices?.['class-skills']??[]).map(skill=>({skill,source:'Class'})),...origins.skills.map(skill=>({skill:(s.classChoices?.['class-skills']?.includes(skill)||s.speciesSkill===skill)?s.skillReplacements?.[skill]??skill:skill,source:(s.classChoices?.['class-skills']?.includes(skill)||s.speciesSkill===skill)?'Background (replaces '+skill+')':'Background'}))],
 
   toolProficiencies:[...new Set([...(cls?.tools??[]).filter(Boolean),s.toolReplacement??origins.tool].filter((tool):tool is string=>!!tool))],
   saves:cls?.savingThrows??[],features:cls?.features.filter(f=>f.level===1).flatMap(f=>f.names)??[],
