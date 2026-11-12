@@ -48,8 +48,8 @@ export const FUTURE_FEATS:readonly FutureFeat[]=[
  feat('Telepathic',MENTAL,'Gain telepathic abilities.'),
  feat('War Caster',MENTAL,'Improve concentration and casting in combat.','spellcasting'),
  feat('Weapon Master',PHYSICAL,'Gain weapon mastery properties.'),
-export const LEGACY_FEATS:readonly FutureFeat[]=[{name:'Elven Accuracy',abilities:['Dex','Int','Wis','Cha'],description:'When you have Advantage on an attack roll using Dexterity, Intelligence, Wisdom, or Charisma, reroll one of the dice once. Requires Elf or Half-Elf.',source:'2017',species:['elf','half-elf']}];
 ];
+export const LEGACY_FEATS:readonly FutureFeat[]=[{name:'Elven Accuracy',abilities:['Dex','Int','Wis','Cha'],description:'When you have Advantage on an attack roll using Dexterity, Intelligence, Wisdom, or Charisma, reroll one of the dice once. Requires Elf or Half-Elf.',source:'2017',species:['elf','half-elf']}];
 export const EPIC_BOONS:readonly FutureFeat[]=[
  feat('Boon of Combat Prowess',ALL,'Improve a missed attack.'),
  feat('Boon of Dimensional Travel',ALL,'Teleport after taking the Attack or Magic action.'),
