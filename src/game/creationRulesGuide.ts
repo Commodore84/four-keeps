@@ -1,3 +1,4 @@
+import {ITEMS} from './creationEquipment';
 export const SPECIES_TRAITS:Record<string,string>={
 'Celestial Resistance':'You resist Radiant and Necrotic damage. Resistance halves damage of that type after other applicable modifiers.',
 'Darkvision':'You can see in dim light within your Darkvision range as though it were bright, and darkness as dim light; you cannot discern colors in darkness. The usual range is 60 feet unless a lineage specifies otherwise.',
@@ -141,6 +142,11 @@ export const SKILL_DETAILS:Record<string,string>={
 export function choiceExplanation(option:string,kind:string):string{
  if(kind==='skill'||kind==='expertise')return SKILL_DETAILS[option]??'A proficiency used for relevant ability checks.';
  if(kind==='fighting-style'||kind==='divine-order'||kind==='primal-order')return CHOICE_DETAILS[option]??'See the class feature for its full conditions.';
- if(kind==='weapon-mastery')return 'Choose a weapon whose mastery property you want to use. Its mastery effect depends on the weapon: '+(option||'')+'. Compare the item’s mastery property in the equipment list.';
+ if(kind==='weapon-mastery'){
+  const weapon=ITEMS.find(item=>item.category==='weapon'&&item.name===option);
+  if(!weapon)return 'Weapon mastery details unavailable for '+option+'.';
+  const property=weapon.mastery;
+  return property?property+' — '+(CHOICE_DETAILS[property]??'See the weapon mastery rules.'):'No mastery property listed.';
+ }
  return CHOICE_DETAILS[option]??'Review this choice’s requirements and benefits.';
 }

@@ -159,7 +159,7 @@ export function CharacterCreator(){
           {classChoices(cls.id,selections['class-skills']??[]).map(definition=><fieldset key={definition.id} className="space-y-2 rounded-lg border border-white/20 p-3">
             <legend className="px-1 font-semibold">{definition.label} — choose {definition.count}</legend>
             <p className="text-xs text-parchment/60">{(selections[definition.id]??[]).length} / {definition.count} selected</p>
-            <div className="grid grid-cols-2 gap-2">{definition.options.map(option=><label key={option} className="flex items-start gap-2 rounded border border-white/15 p-2 text-sm"><input type="checkbox" checked={(selections[definition.id]??[]).includes(option)} onChange={()=>toggleClassChoice(definition,option)}/><span><strong>{option}</strong><span className="block text-xs leading-relaxed text-parchment/75">{choiceExplanation(option,definition.kind)}</span></span></label>)}</div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">{definition.options.map(option=><label key={option} className="flex items-start gap-2 rounded border border-white/15 p-2 text-sm"><input type="checkbox" checked={(selections[definition.id]??[]).includes(option)} onChange={()=>toggleClassChoice(definition,option)}/><span><strong>{option}</strong><span className="block text-xs leading-relaxed text-parchment/75">{choiceExplanation(option,definition.kind)}</span></span></label>)}</div>
           </fieldset>)}
           {validateClassAgainstBackground(cls.id,selections,[]).length>0?<p role="status" className="text-sm text-amber-200">{validateClassAgainstBackground(cls.id,selections,[]).join(' ')}</p>:<p role="status" className="text-sm text-emerald-300">Class choices valid and saved.</p>}
           </div>})()}
