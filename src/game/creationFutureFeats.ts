@@ -1,5 +1,5 @@
 import type {Ability,Scores} from './creationAbilities';
-export interface FutureFeat {name:string;abilities:readonly Ability[];minimum?:Partial<Record<Ability,number>>;requirement?:'spellcasting'|'heavy-armor'|'martial-weapons'|'fighting-style'|'medium-armor'|'shield';description:string;source?:'2017'|'2024';species?:readonly string[]}
+export interface FutureFeat {name:string;abilities:readonly Ability[];minimum?:Partial<Record<Ability,number>>;requirement?:'spellcasting'|'heavy-armor'|'martial-weapons'|'fighting-style'|'medium-armor'|'shield';description:string;source?:'2017'|'2024';species?:readonly string[];abilityBonus?:0|1;legacyNote?:string}
 const ALL=['Str','Dex','Con','Int','Wis','Cha'] as const;
 const MENTAL=['Int','Wis','Cha'] as const;
 const PHYSICAL=['Str','Dex'] as const;
@@ -39,7 +39,6 @@ export const FUTURE_FEATS:readonly FutureFeat[]=[
  feat('Sharpshooter',['Dex'],'Improve ranged weapon attacks.',undefined,{Dex:13}),
  feat('Shield Master',['Str'],'Improve combat with a shield.','shield'),
  feat('Skill Expert',ALL,'Gain skill proficiency and expertise.'),
- feat('Skilled',ALL,'Gain additional skill or tool proficiencies.'),
  feat('Skulker',['Dex'],'Improve stealth and hiding.'),
  feat('Slasher',PHYSICAL,'Improve slashing attacks.'),
  feat('Speedy',['Dex','Con'],'Improve speed and mobility.'),
@@ -49,7 +48,27 @@ export const FUTURE_FEATS:readonly FutureFeat[]=[
  feat('War Caster',MENTAL,'Improve concentration and casting in combat.','spellcasting'),
  feat('Weapon Master',PHYSICAL,'Gain weapon mastery properties.'),
 ];
-export const LEGACY_FEATS:readonly FutureFeat[]=[{name:'Elven Accuracy',abilities:['Dex','Int','Wis','Cha'],description:'When you have Advantage on an attack roll using Dexterity, Intelligence, Wisdom, or Charisma, reroll one of the dice once. Requires Elf or Half-Elf.',source:'2017',species:['elf','half-elf']}];
+/** Xanathar's Guide to Everything (2017) legacy racial feats. Requires DM permission. */
+const legacy=(name:string,abilities:readonly Ability[],species:readonly string[],description:string,abilityBonus:0|1=1):FutureFeat=>({name,abilities,species,description,source:'2017',abilityBonus,legacyNote:'2017 legacy feat; requires DM approval and compatible species'});
+export const LEGACY_FEATS:readonly FutureFeat[]=[
+ legacy('Elven Accuracy',['Dex','Int','Wis','Cha'],['elf','half-elf'],'Reroll one die of an attack roll made with Advantage using Dexterity, Intelligence, Wisdom, or Charisma.'),
+ legacy('Bountiful Luck',[],['halfling'],'Allow a nearby ally to reroll a natural 1 on a d20 test.',0),
+ legacy('Second Chance',['Dex','Con','Cha'],['halfling'],'Force an attacker that hits you to reroll its attack.'),
+ legacy('Dwarven Fortitude',['Con'],['dwarf'],'Spend a Hit Die to heal when taking the Dodge action.'),
+ legacy('Fade Away',['Dex','Int'],['gnome'],'Become invisible briefly after taking damage.'),
+ legacy('Fey Teleportation',['Int','Cha'],['elf','high-elf'],'Learn Sylvan and gain a short-range teleportation spell.'),
+ legacy('Wood Elf Magic',[],['elf','wood-elf'],'Learn druidic magic including a nature-themed cantrip and spells.',0),
+ legacy('Drow High Magic',[],['elf','drow'],'Gain additional innate magic associated with drow heritage.',0),
+ legacy('Dragon Fear',['Str','Con','Cha'],['dragonborn'],'Use your breath weapon to frighten nearby creatures.'),
+ legacy('Dragon Hide',['Str','Con','Cha'],['dragonborn'],'Gain natural armor and claws.'),
+ legacy('Flames of Phlegethos',['Int','Cha'],['tiefling'],'Empower fire spells and surround yourself with protective flames.'),
+ legacy('Infernal Constitution',['Con'],['tiefling'],'Gain resistance to cold and poison and improved poison resilience.'),
+ legacy('Orcish Fury',['Str','Con'],['half-orc'],'Add extra weapon damage and retaliate when reduced to zero hit points.'),
+ legacy('Prodigy',[],['human','half-elf','half-orc'],'Gain a skill, tool, language, and expertise.',0),
+ legacy('Squat Nimbleness',['Str','Dex'],['dwarf','gnome','halfling'],'Improve speed, escape from grapples, and gain Athletics or Acrobatics proficiency.'),
+];
+/** Origin feats are not General feats; taking them at later levels does not grant an ASI. */
+export const ORIGIN_PLANNING_FEATS:readonly FutureFeat[]=[{name:'Skilled',abilities:[],description:'Gain three skill or tool proficiencies.',source:'2024',abilityBonus:0}];
 export const EPIC_BOONS:readonly FutureFeat[]=[
  feat('Boon of Combat Prowess',ALL,'Improve a missed attack.'),
  feat('Boon of Dimensional Travel',ALL,'Teleport after taking the Attack or Magic action.'),
@@ -64,12 +83,12 @@ export const EPIC_BOONS:readonly FutureFeat[]=[
  feat('Boon of the Night Spirit',ALL,'Gain stealth and invisibility in darkness.'),
  feat('Boon of Truesight',ALL,'Gain truesight.'),
 ];
-export function futureFeat(name:string){return [...FUTURE_FEATS,...LEGACY_FEATS,...EPIC_BOONS].find(f=>f.name===name)}
+export function futureFeat(name:string){return [...FUTURE_FEATS,...ORIGIN_PLANNING_FEATS,...LEGACY_FEATS,...EPIC_BOONS].find(f=>f.name===name)}
 export interface FeatContext {classId?:string;spellcasting?:boolean;heavyArmor?:boolean;mediumArmor?:boolean;shield?:boolean;saveProficiencies?:readonly Ability[];speciesId?:string;allowCompatibleLegacy?:boolean}
 export function featEligibility(f:FutureFeat,scores:Scores,context:FeatContext={}):string[]{
  const issues:string[]=[];
  if(f.source==='2017'&&context.allowCompatibleLegacy===false)issues.push('Compatible legacy feats are disabled');
- if(f.species&&context.speciesId&&!f.species.includes(context.speciesId))issues.push('Elf or Half-Elf required');
+ if(f.species&&context.speciesId&&!f.species.includes(context.speciesId))issues.push(`Requires compatible species: ${f.species.join(', ')}`);
  issues.push(...Object.entries(f.minimum??{}).filter(([a,n])=>scores[a as Ability]<(n??0)).map(([a,n])=>`${a} ${n} required`));
  if(f.requirement==='spellcasting'&&context.spellcasting===false)issues.push('Spellcasting or Pact Magic feature required');
  if(f.requirement==='heavy-armor'&&context.heavyArmor===false)issues.push('Heavy armor training required');
@@ -77,4 +96,4 @@ export function featEligibility(f:FutureFeat,scores:Scores,context:FeatContext={
  if(f.requirement==='shield'&&context.shield===false)issues.push('Shield training required');
  return issues;
 }
-export function eligibleFeatAbility(f:FutureFeat,ability:Ability,scores:Scores){return f.abilities.includes(ability)&&scores[ability]<20}
+export function eligibleFeatAbility(f:FutureFeat,ability:Ability,scores:Scores){return f.abilityBonus!==0&&f.abilities.includes(ability)&&scores[ability]<20}
