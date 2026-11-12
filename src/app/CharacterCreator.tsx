@@ -62,12 +62,18 @@ export function saveCharacterDrafts(drafts:CharacterDraft[]):void {
 export function CharacterCreator(){
   const [drafts,setDrafts]=useState<CharacterDraft[]>([]);
   const [selected,setSelected]=useState<string|null>(null);
+  const [deleteDraftId,setDeleteDraftId]=useState<string|null>(null);
   const [error,setError]=useState('');
   useEffect(()=>{setDrafts(readCharacterDrafts());},[]);
   const draft=drafts.find(item=>item.id===selected);
   function persist(next:CharacterDraft[]){
     try {saveCharacterDrafts(next);setDrafts(next);setError('');}
     catch(e){setError('Unable to save draft: '+String(e));}
+  }
+  function deleteDraft(id:string){
+    persist(drafts.filter(item=>item.id!==id));
+    setSelected(current=>current===id?null:current);
+    setDeleteDraftId(null);
   }
   function update(patch:Partial<CharacterDraft>){
     if(!draft)return;
@@ -105,7 +111,7 @@ export function CharacterCreator(){
     <div><h3 className="font-serif text-xl">Character Creator</h3><p className="text-sm text-parchment/65">Create characters independently of campaigns. Drafts are saved on this device.</p></div>
     {error&&<p role="alert" className="text-amber-200">{error}</p>}
     {!draft?<><button type="button" className="rounded-lg bg-gold px-4 py-2 font-semibold text-ink" onClick={()=>{const next=createCharacterDraft();persist([next,...drafts]);setSelected(next.id);}}>Create character</button>
-      {drafts.length>0&&<div className="space-y-2"><h4 className="font-semibold">Unfinished characters</h4>{drafts.map(item=><button key={item.id} type="button" onClick={()=>setSelected(item.id)} className="block w-full rounded-lg border border-white/20 p-3 text-left">{item.identity.name||'Unnamed character'} <span className="text-xs text-parchment/60">· Resume draft</span></button>)}</div>}</>:
+      {drafts.length>0&&<div className="space-y-2"><h4 className="font-semibold">Unfinished characters</h4>{drafts.map(item=><div key={item.id} className="rounded-lg border border-white/20 p-3 space-y-2"><div className="flex items-center justify-between gap-2"><button type="button" onClick={()=>{setSelected(item.id);setDeleteDraftId(null)}} className="min-w-0 flex-1 text-left">{item.identity.name||'Unnamed character'} <span className="text-xs text-parchment/60">· Resume draft</span></button><button type="button" aria-label="Delete character" onClick={()=>setDeleteDraftId(item.id)} className="shrink-0 rounded border border-red-400/50 px-3 py-2 text-sm text-red-200">Delete</button></div>{deleteDraftId===item.id&&<div role="group" aria-label="Confirm character deletion" className="space-y-2 rounded border border-red-400/50 p-3"><p className="text-sm">Permanently delete {item.identity.name||'this character'} from this device? Existing adventures will not be deleted. This cannot be undone.</p><div className="flex gap-2"><button type="button" onClick={()=>deleteDraft(item.id)} className="rounded bg-red-700 px-3 py-2 text-sm text-white">Confirm delete character</button><button type="button" onClick={()=>setDeleteDraftId(null)} className="rounded border border-white/30 px-3 py-2 text-sm">Cancel</button></div></div>}</div>)}</div>}</>:
     <><div className="flex items-center justify-between gap-2"><strong>{draft.identity.name||'Unnamed character'}</strong><button type="button" onClick={()=>setSelected(null)} className="rounded-lg border border-white/25 px-3 py-2 text-sm">All characters</button></div>
       <nav aria-label="Character creation steps" className="grid grid-cols-2 gap-2 sm:grid-cols-4">{CREATION_STEPS.map((step,index)=><button type="button" key={step.id} disabled={index>0&&validateClassAgainstBackground(draft.selections.classId,draft.selections.classChoices??{},[]).length>0||index>1&&(validateOrigins(draft.selections,draft.rules.allowCompatibleLegacy).length>0||validateSkillReplacements(draft.selections.classChoices?.['class-skills']??[],resolveBackground(draft.selections,draft.rules.allowCompatibleLegacy)?.skills??[],draft.selections.skillReplacements).length>0||validateToolReplacement(classSummary(draft.selections.classId??'')?.tools??[],resolveBackground(draft.selections,draft.rules.allowCompatibleLegacy)?.tool??'',draft.selections.toolReplacement).length>0)||index>2&&validateAbilityDraft(draft.selections.abilities??emptyAbilityDraft(),resolveBackground(draft.selections,draft.rules.allowCompatibleLegacy)?.abilities??[]).length>0||index>3&&equipmentErrors(draft.selections.equipment??emptyEquipment(),draft.selections.classId??'',draft.selections.backgroundId??'',totalScores(draft.selections.abilities??emptyAbilityDraft())).length>0||index>4&&(validateMagic(draft.selections.classId??'',draft.selections.magic??emptyMagic()).length>0||validateOriginMagic(draft.selections.backgroundId??'',draft.selections.originMagic??emptyOriginMagic(),draft.selections.customBackground?.feat).length>0)||index>5&&validateIdentity(draft).length>0} onClick={()=>update({step:step.id})} className={`rounded-lg border px-2 py-2 text-left text-sm ${draft.step===step.id?'border-gold text-gold':'border-white/20'} disabled:opacity-40`}>{index+1}. {step.label}</button>)}</nav>
       {draft.step==='identity'?<div className="space-y-3">

@@ -1198,3 +1198,37 @@ test('custom background editor persists choices and resolves duplicate class ski
  await expect(page.getByLabel('Custom background name')).toHaveValue('Frontier Scout');
  await expect(page.getByLabel('Replacement for Stealth')).toHaveValue('Arcana');
 });
+
+test('characters can be deleted with confirmation without deleting an adventure',async({page})=>{
+ await page.goto('/four-keeps/');
+ await page.getByRole('button',{name:'My Characters'}).click();
+ await page.getByRole('button',{name:'Create character'}).click();
+ await page.getByRole('button',{name:'All characters'}).click();
+ const row=page.getByRole('button',{name:/Unnamed character.*Resume draft/});
+ await expect(row).toBeVisible();
+ await page.getByRole('button',{name:'Delete character'}).click();
+ await expect(page.getByRole('group',{name:'Confirm character deletion'})).toBeVisible();
+ await page.getByRole('button',{name:'Cancel'}).click();
+ await expect(row).toBeVisible();
+ await page.getByRole('button',{name:'Delete character'}).click();
+ await page.getByRole('button',{name:'Confirm delete character'}).click();
+ await expect(row).toHaveCount(0);
+ await page.reload();await page.getByRole('button',{name:'My Characters'}).click();
+ await expect(row).toHaveCount(0);
+});
+test('saved adventures can be deleted directly from My Campaigns',async({page})=>{
+ await page.goto('/four-keeps/');
+ await createLegacyCampaign(page,'Delete from list test');
+ await page.getByRole('button',{name:'Open navigation menu'}).click();await page.getByRole('navigation',{name:'Primary navigation'}).getByRole('button',{name:'Home'}).click();
+ await page.getByRole('button',{name:'My Campaigns'}).click();
+ await expect(page.getByRole('button',{name:'Delete adventure Delete from list test'})).toBeVisible();
+ await page.getByRole('button',{name:'Delete adventure Delete from list test'}).click();
+ await expect(page.getByRole('group',{name:'Confirm adventure deletion'})).toBeVisible();
+ await page.getByRole('button',{name:'Cancel'}).click();
+ await expect(page.getByText('Delete from list test')).toBeVisible();
+ await page.getByRole('button',{name:'Delete adventure Delete from list test'}).click();
+ await page.getByRole('button',{name:'Confirm delete adventure'}).click();
+ await expect(page.getByText('Delete from list test')).toHaveCount(0);
+ await page.reload();await page.getByRole('button',{name:'My Campaigns'}).click();
+ await expect(page.getByText('Delete from list test')).toHaveCount(0);
+});
