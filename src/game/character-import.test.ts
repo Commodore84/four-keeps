@@ -45,3 +45,7 @@ it('imports Wizard slots and class saving throws without Rogue proficiency',()=>
  const c=campaignFromCharacterDraft(d,'Wizard import');expect(c.character).toMatchObject({classId:'wizard',maxHitPoints:8,savingThrowProficiencies:['int','wis'],weaponProficiencies:['Simple'],spellSlots:{level1:2,usedLevel1:0}});
  expect(c.character?.expertiseSkills).toEqual([]);expect(c.character?.weaponProficiencies).not.toContain('Martial');expect(c.character?.preparedSpells).toContain('Alarm');expect(c.character?.resources?.['Arcane Recovery'].maximum).toBe(1);
 });
+
+describe('future forecast import persistence',()=>{
+ it('keeps planned subclass, legacy feat and ASIs in imported character snapshot',async()=>{const {emptyForecast,updateLevelPlan}=await import('./creationForecast');const d=validRogue();d.rules.allowCompatibleLegacy=true;let f=emptyForecast();f=updateLevelPlan(f,3,{subclassId:'rogue-arcane-trickster'});f=updateLevelPlan(f,4,{featPlan:'Elven Accuracy',featAbility:'Dex'});f=updateLevelPlan(f,8,{featPlan:'Ability Score Improvement',abilityIncreases:{Dex:2}});d.forecast=f;const c=campaignFromCharacterDraft(d,'Forecast adventure');expect(c.characterBuild?.forecast).toEqual(f);d.forecast.levels[0].subclassId='rogue-assassin';expect(c.characterBuild?.forecast?.levels.find(x=>x.level===3)?.subclassId).toBe('rogue-arcane-trickster')});
+});
