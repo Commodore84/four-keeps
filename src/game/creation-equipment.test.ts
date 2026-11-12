@@ -3,9 +3,9 @@ import {ITEMS,ITEM_BY_ID,CLASS_PACKAGES,BACKGROUND_PACKAGES,emptyEquipment,inven
 const scores={Str:15,Dex:16,Con:14,Int:12,Wis:13,Cha:8};
 describe('2024 starting equipment',()=>{
  it('has all 12 classes and 16 backgrounds with a gold alternative',()=>{
-  expect(Object.keys(CLASS_PACKAGES)).toHaveLength(12);expect(Object.keys(BACKGROUND_PACKAGES)).toHaveLength(16);
+  expect(Object.keys(CLASS_PACKAGES)).toHaveLength(12);expect(Object.keys(BACKGROUND_PACKAGES)).toHaveLength(17);
   for(const packages of Object.values(CLASS_PACKAGES))expect(packages.at(-1)?.items).toEqual({});
-  for(const packages of Object.values(BACKGROUND_PACKAGES))expect(packages[1]?.gold).toBe(50);
+  for(const [id,packages] of Object.entries(BACKGROUND_PACKAGES))expect(packages[id==='custom'?0:1]?.gold).toBe(50);
  });
  it('resolves every item in starting packages',()=>{
   for(const packages of [...Object.values(CLASS_PACKAGES),...Object.values(BACKGROUND_PACKAGES)])for(const p of packages)for(const id of Object.keys(p.items))expect(ITEM_BY_ID[id],id).toBeDefined();

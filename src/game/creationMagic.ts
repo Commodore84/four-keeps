@@ -36,15 +36,16 @@ export function spellStats(classId:string,scores:Scores):{dc:number;attack:numbe
 
 export interface OriginMagicDraft {cantrips:string[];spell:string|null;ability:'Int'|'Wis'|'Cha'}
 export const emptyOriginMagic=():OriginMagicDraft=>({cantrips:[],spell:null,ability:'Int'});
-export function magicInitiateClass(backgroundId:string):string|null{
+export function magicInitiateClass(backgroundId:string,customFeat?:string):string|null{
+ if(backgroundId==='custom')return ({'Magic Initiate (Cleric)':'cleric','Magic Initiate (Druid)':'druid','Magic Initiate (Wizard)':'wizard'} as Record<string,string>)[customFeat??'']??null;
  return ({acolyte:'cleric',guide:'druid',sage:'wizard'} as Record<string,string>)[backgroundId]??null;
 }
 export function innateOriginSpells(speciesId:string,lineageId?:string):string[]{
  const fixed:Record<string,string[]>={'aasimar':['light'],'drow':['dancing-lights'],'high-elf':['prestidigitation'],'wood-elf':['druidcraft'],'forest-gnome':['minor-illusion','speak-with-animals'],'rock-gnome':['mending','prestidigitation'],'abyssal':['poison-spray'],'chthonic':['chill-touch'],'infernal':['fire-bolt']};
  return [...(fixed[speciesId]??[]),...(fixed[lineageId??'']??[])];
 }
-export function validateOriginMagic(backgroundId:string,origin:OriginMagicDraft):string[]{
- const cls=magicInitiateClass(backgroundId);
+export function validateOriginMagic(backgroundId:string,origin:OriginMagicDraft,customFeat?:string):string[]{
+ const cls=magicInitiateClass(backgroundId,customFeat);
  if(!cls)return origin.cantrips.length||origin.spell?['Magic Initiate choices are only available with an eligible background.']:[];
  const cantrips=spellOptions(cls,0).map(s=>s.id),spells=spellOptions(cls,1).map(s=>s.id);
  const errors:string[]=[];

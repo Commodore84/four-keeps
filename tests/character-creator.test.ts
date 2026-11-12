@@ -5,7 +5,7 @@ describe('independent character creation drafts',()=>{
     const draft=createCharacterDraft();
     expect(draft.status).toBe('draft');
     expect(draft.rules).toEqual({edition:'2024',allowCompatibleLegacy:true});
-    expect(draft.step).toBe('identity');
+    expect(draft.step).toBe('class');
     expect(draft.selections).toEqual({});
     expect(draft.id).toBeTruthy();
   });
@@ -16,6 +16,6 @@ describe('independent character creation drafts',()=>{
     expect(validateIdentity(draft)).toEqual([]);
   });
   it('has unique navigable creation sections',()=>{
-    expect(CREATION_STEPS.map(step=>step.id)).toEqual(['identity','origins','class','abilities','equipment','spells','review','forecast']);
+    expect(CREATION_STEPS.map(step=>step.id)).toEqual(['class','origins','abilities','equipment','spells','identity','forecast','review']);
   });
 });

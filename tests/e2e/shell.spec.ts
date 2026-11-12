@@ -138,13 +138,13 @@ test('landing page routes and character draft survive reload', async ({page})=>{
  await expect(page.getByRole('button',{name:'Continue Adventure'})).toBeDisabled();
  await page.getByRole('button',{name:'My Characters'}).click();
  await page.getByRole('button',{name:'Create character'}).click();
- await page.getByLabel('name *').fill('Browser Hero');
+ await page.evaluate(()=>{const key='four-keeps-character-drafts-v1';const drafts=JSON.parse(localStorage.getItem(key)??'[]');drafts[0].identity.name='Browser Hero';localStorage.setItem(key,JSON.stringify(drafts));});
  await page.getByRole('button',{name:'All characters'}).click();
  await page.reload();
  await expect(page.getByLabel('Four Keeps landing page')).toBeVisible();
  await page.getByRole('button',{name:'My Characters'}).click();
  await page.getByRole('button',{name:/Browser Hero/}).click();
- await expect(page.getByLabel('name *')).toHaveValue('Browser Hero');
+ await expect(page.getByText('Browser Hero',{exact:true})).toBeVisible();
  await page.getByRole('button',{name:/Home/}).click();
  await page.getByRole('button',{name:'New Adventure'}).click();
  await expect(page.getByLabel('Starting character')).toHaveValue('');
@@ -244,7 +244,7 @@ test('character builder shows species, background, class, and choice rules inlin
  await page.getByRole('button',{name:/Guide Tester/}).click();
  await expect(page.getByText(/Your walking Speed increases to 35 feet/)).toBeVisible();
  await expect(page.getByText(/Choose two Wizard cantrips and one level-one Wizard spell/)).toBeVisible();
- await page.getByRole('button',{name:'3. Class'}).click();
+ await page.getByRole('button',{name:'1. Class'}).click();
  await expect(page.getByText(/Pact Magic slots refresh on Short Rests/)).toBeVisible();
  await expect(page.getByText(/Warlock spell slots return on a Short or Long Rest/)).toHaveCount(1);
 });
@@ -1013,7 +1013,7 @@ test('validated character draft becomes a persistent campaign without replacing 
  await page.evaluate(()=>{
   const draft={schemaVersion:1,id:'valid-rogue-draft',status:'draft',rules:{edition:'2024',allowCompatibleLegacy:true},step:'review',
    identity:{name:'Raven',pronouns:'they/them',appearance:'',personality:'',backstory:'',portrait:null},
-   selections:{speciesId:'elf',lineageId:'wood-elf',backgroundId:'criminal',classId:'rogue',
+   selections:{speciesId:'elf',lineageId:'wood-elf',backgroundId:'criminal',classId:'rogue',toolReplacement:'Herbalism Kit',
     classChoices:{'class-skills':['Perception','Acrobatics','Investigation','Deception'],expertise:['Perception','Acrobatics'],'weapon-mastery':['Dagger','Shortbow']},
     abilities:{method:'standard',base:{Str:8,Dex:15,Con:14,Int:13,Wis:12,Cha:10},bonusMode:'two-one',bonuses:{Dex:2,Int:1},rolls:[],rollDice:[]},
     equipment:{classPackage:0,backgroundPackage:0,purchases:{},equipped:{weapons:[]}}},createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()};
@@ -1072,7 +1072,7 @@ test('AI combat proposal for imported character persists and enters verified com
  await page.evaluate(()=>{
   const draft={schemaVersion:1,id:'organic-rogue',status:'draft',rules:{edition:'2024',allowCompatibleLegacy:true},step:'review',
    identity:{name:'Raven',pronouns:'they/them',appearance:'',personality:'',backstory:'',portrait:null},
-   selections:{speciesId:'elf',lineageId:'wood-elf',backgroundId:'criminal',classId:'rogue',
+   selections:{speciesId:'elf',lineageId:'wood-elf',backgroundId:'criminal',classId:'rogue',toolReplacement:'Herbalism Kit',
     classChoices:{'class-skills':['Perception','Acrobatics','Investigation','Deception'],expertise:['Perception','Acrobatics'],'weapon-mastery':['Dagger','Shortbow']},
     abilities:{method:'standard',base:{Str:8,Dex:15,Con:14,Int:13,Wis:12,Cha:10},bonusMode:'two-one',bonuses:{Dex:2,Int:1},rolls:[],rollDice:[]},
     equipment:{classPackage:0,backgroundPackage:0,purchases:{},equipped:{weapons:[]}}},createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()};
@@ -1167,4 +1167,34 @@ test('Home navigation is inside the hamburger menu, not beside it',async({page})
  await page.getByRole('navigation',{name:'Primary navigation'}).getByRole('button',{name:'Home',exact:true}).click();
  await expect(page.getByLabel('Four Keeps landing page')).toBeVisible();
  await expect(page.getByRole('button',{name:'Continue Adventure'})).toBeVisible();
+});
+
+test('custom background editor persists choices and resolves duplicate class skill',async({page})=>{
+ await page.goto('/four-keeps/');
+ await page.evaluate(()=>{
+  const now=new Date().toISOString();
+  localStorage.setItem('four-keeps-character-drafts-v1',JSON.stringify([{
+   schemaVersion:1,id:'custom-overlap-test',status:'draft',rules:{edition:'2024',allowCompatibleLegacy:false},
+   step:'origins',identity:{name:'Scout',pronouns:'',appearance:'',personality:'',backstory:'',portrait:null},
+   selections:{classId:'rogue',classChoices:{'class-skills':['Stealth','Insight','Perception','Acrobatics']},speciesId:'elf',lineageId:'wood-elf'},
+   createdAt:now,updatedAt:now
+  }]));
+ });
+ await page.reload();await page.getByRole('button',{name:'My Characters'}).click();
+ await page.getByRole('button',{name:/Scout.*Resume draft/}).click();
+ await page.getByRole('button',{name:'Create custom background (2024 DMG)'}).click();
+ const editor=page.getByRole('group',{name:'Custom background'});
+ await editor.getByLabel('Custom background name').fill('Frontier Scout');
+ for(const ability of ['Dex','Wis','Con'])await editor.getByRole('checkbox',{name:ability}).check();
+ for(const skill of ['Stealth','Survival'])await editor.getByRole('checkbox',{name:skill}).check();
+ await editor.getByLabel('Custom Origin feat').selectOption('Alert');
+ await editor.getByLabel('Custom background tool').selectOption('Cartographer’s Tools');
+ await expect(page.getByLabel('Overlapping skill proficiency replacements')).toBeVisible();
+ await expect(page.getByRole('button',{name:'Continue to abilities'})).toBeDisabled();
+ await page.getByLabel('Replacement for Stealth').selectOption('Arcana');
+ await expect(page.getByRole('button',{name:'Continue to abilities'})).toBeEnabled();
+ await page.reload();await page.getByRole('button',{name:'My Characters'}).click();
+ await page.getByRole('button',{name:/Scout.*Resume draft/}).click();
+ await expect(page.getByLabel('Custom background name')).toHaveValue('Frontier Scout');
+ await expect(page.getByLabel('Replacement for Stealth')).toHaveValue('Arcana');
 });

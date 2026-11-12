@@ -12,15 +12,14 @@ test('fighter creation to adventure, NPC, combat, rewards, save and resume',asyn
  const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));
  await page.goto('/four-keeps/');
  await page.getByRole('button',{name:'My Characters'}).click();await page.getByRole('button',{name:'Create character',exact:true}).click();
- await page.getByLabel('name *',{exact:true}).fill('Aster');await page.getByRole('button',{name:'Continue to origins'}).click();
- await page.getByRole('button',{name:/^Elf/}).click();await page.getByRole('radio',{name:/^Wood Elf/}).check();await page.getByRole('button',{name:/^Criminal/}).click();await page.getByRole('button',{name:'Continue to class'}).click();
  await page.getByRole('button',{name:/^Fighter/}).click();
  for(const name of ['Perception','Acrobatics','Defense','Greatsword','Flail','Javelin'])await page.getByRole('checkbox',{name:new RegExp('^'+name+'\\b')}).check();
- await page.getByRole('button',{name:'Continue to abilities'}).click();
+ await page.getByRole('button',{name:'Continue to origins'}).click();
+ await page.getByRole('button',{name:/^Elf/}).click();await page.getByRole('radio',{name:/^Wood Elf/}).check();await page.getByRole('button',{name:/^Criminal/}).click();await page.getByRole('button',{name:'Continue to abilities'}).click();
  for(const [ability,score] of Object.entries({Str:15,Dex:14,Con:13,Int:12,Wis:10,Cha:8}))await page.getByLabel(ability+' base score',{exact:true}).selectOption(String(score));
  await page.getByLabel('Dex background bonus').selectOption('2');await page.getByLabel('Con background bonus').selectOption('1');await page.getByRole('button',{name:'Continue to equipment'}).click();
  await page.getByRole('group',{name:'Class equipment',exact:true}).getByRole('radio').first().check();await page.getByRole('group',{name:'Background equipment',exact:true}).getByRole('radio').first().check();
- await page.getByRole('button',{name:'Continue to spells'}).click();await page.getByRole('button',{name:'Continue to review'}).click();
+ await page.getByRole('button',{name:'Continue to spells'}).click();await page.getByRole('button',{name:'Continue to identity'}).click();await page.getByLabel('name *',{exact:true}).fill('Aster');await page.getByRole('button',{name:'Continue to future levels'}).click();await page.getByRole('button',{name:'Continue to review'}).click();
  await page.getByRole('button',{name:/Home/}).click();await page.getByRole('button',{name:'New Adventure'}).click();
  const draftId=await page.getByLabel('Starting character').getByRole('option',{name:/Aster/}).getAttribute('value');await page.getByLabel('Starting character').selectOption(draftId!);
  await page.getByLabel('Campaign name',{exact:true}).fill('Aster journey');await page.getByRole('button',{name:'Create campaign',exact:true}).click();

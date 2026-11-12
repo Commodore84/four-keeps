@@ -31,6 +31,7 @@ export const CLASS_PACKAGES:Record<string,Package[]> = {
  wizard:[pkg(5,'dagger*2|quarterstaff|robe|spellbook|scholar-s-pack'),pkg(55,'','55 GP')]
 };
 export const BACKGROUND_PACKAGES:Record<string,Package[]> = {
+ custom:[pkg(50,'','50 GP')],
  acolyte:[pkg(8,'calligrapher-s-supplies|book|holy-symbol|parchment*10|robe'),pkg(50,'','50 GP')],
  artisan:[pkg(32,'artisan-s-tools|pouch*2|traveler-s-clothes'),pkg(50,'','50 GP')],
  charlatan:[pkg(15,'forgery-kit|costume|fine-clothes'),pkg(50,'','50 GP')],

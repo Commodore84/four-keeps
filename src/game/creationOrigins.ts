@@ -45,22 +45,70 @@ export const BACKGROUNDS:Background[]=[
  bg('soldier','Soldier','Str,Dex,Con','Savage Attacker','Athletics,Intimidation','Gaming Set (one kind)','Background equipment package or 50 GP','Served in an armed force.'),
  bg('wayfarer','Wayfarer','Dex,Wis,Cha','Lucky','Insight,Stealth',"Thieves' Tools",'Background equipment package or 50 GP','Survived by traveling and adapting.')
 ];
+export interface CustomBackground {
+ name:string; abilities:string[]; feat:string; skills:string[]; tool:string;
+}
+export const DEFAULT_CUSTOM_BACKGROUND:CustomBackground={name:'',abilities:[],feat:'',skills:[],tool:''};
+export const ALL_SKILLS=['Acrobatics','Animal Handling','Arcana','Athletics','Deception','History','Insight','Intimidation','Investigation','Medicine','Nature','Perception','Performance','Persuasion','Religion','Sleight of Hand','Stealth','Survival'];
+export const CUSTOM_TOOLS=['Alchemist’s Supplies','Brewer’s Supplies','Calligrapher’s Supplies','Carpenter’s Tools','Cartographer’s Tools','Cobbler’s Tools','Cook’s Utensils','Disguise Kit','Forgery Kit','Gaming Set','Glassblower’s Tools','Herbalism Kit','Jeweler’s Tools','Leatherworker’s Tools','Mason’s Tools','Musical Instrument','Navigator’s Tools','Painter’s Supplies','Poisoner’s Kit','Potter’s Tools','Smith’s Tools','Thieves’ Tools','Tinker’s Tools','Weaver’s Tools','Woodcarver’s Tools'];
+export const CUSTOM_FEATS=['Alert','Crafter','Healer','Lucky','Magic Initiate (Cleric)','Magic Initiate (Druid)','Magic Initiate (Wizard)','Musician','Savage Attacker','Skilled','Tavern Brawler','Tough'];
+export function validateCustomBackground(bg:CustomBackground|undefined):string[]{
+ if(!bg)return ['Configure your custom background.'];
+ const errors:string[]=[];
+ if(!bg.name.trim())errors.push('Name your custom background.');
+ if(bg.abilities.length!==3||new Set(bg.abilities).size!==3||!bg.abilities.every(a=>['Str','Dex','Con','Int','Wis','Cha'].includes(a)))errors.push('Choose three distinct background abilities.');
+ if(!CUSTOM_FEATS.includes(bg.feat))errors.push('Choose a valid Origin feat.');
+ if(bg.skills.length!==2||new Set(bg.skills).size!==2||!bg.skills.every(skill=>ALL_SKILLS.includes(skill)))errors.push('Choose two distinct background skills.');
+ if(!CUSTOM_TOOLS.includes(bg.tool))errors.push('Choose one tool proficiency.');
+ return errors;
+}
+export function resolveBackground(selections:{backgroundId?:string;customBackground?:CustomBackground},allowLegacy:boolean):Background|undefined{
+ if(selections.backgroundId==='custom'){
+  const bg=selections.customBackground;
+  if(!bg)return undefined;
+  return {id:'custom',name:bg.name||'Custom background',source:'PHB2024',sourceBook:'2024 Dungeon Master’s Guide — Custom Background',summary:'Custom background created using the DMG framework.',abilities:bg.abilities,feat:bg.feat,skills:bg.skills,tool:bg.tool,equipment:'50 GP'};
+ }
+ return availableBackgrounds(allowLegacy).find(b=>b.id===selections.backgroundId);
+}
+export function requiredSkillReplacements(classSkills:readonly string[],backgroundSkills:readonly string[]):string[]{
+ return [...new Set(backgroundSkills.filter(skill=>classSkills.includes(skill)))];
+}
+export function validateSkillReplacements(classSkills:readonly string[],backgroundSkills:readonly string[],replacements:Record<string,string>={}):string[]{
+ const duplicate=requiredSkillReplacements(classSkills,backgroundSkills);
+ const used=new Set([...classSkills,...backgroundSkills]);
+ return duplicate.flatMap(skill=>{
+  const chosen=replacements[skill];
+  return chosen&&ALL_SKILLS.includes(chosen)&&!used.has(chosen)&&duplicate.every(other=>other===skill||replacements[other]!==chosen)?[]:['Choose a different skill proficiency to replace overlapping '+skill+'.'];
+ });
+}
+export function isDuplicateTool(classTools:readonly string[],backgroundTool:string):boolean{
+ const normalize=(value:string)=>value.toLowerCase().replace(/[^a-z0-9]/g,'').replace(/tools$/,'tool');
+ return !!backgroundTool&&classTools.some(tool=>normalize(tool)===normalize(backgroundTool));
+}
+export function validateToolReplacement(classTools:readonly string[],backgroundTool:string,replacement?:string):string[]{
+ if(!isDuplicateTool(classTools,backgroundTool))return [];
+ return replacement&&CUSTOM_TOOLS.includes(replacement)&&!isDuplicateTool(classTools,replacement)&&replacement!==backgroundTool?[]:['Choose a different tool proficiency to replace overlapping '+backgroundTool+'.'];
+}
+export function effectiveBackgroundSkills(classSkills:readonly string[],backgroundSkills:readonly string[],replacements:Record<string,string>={}):string[]{
+ return backgroundSkills.map(skill=>classSkills.includes(skill)&&replacements[skill]?replacements[skill]:skill);
+}
 export const LEGACY_SPECIES:Species[]=[];
 export const LEGACY_BACKGROUNDS:Background[]=[];
 export function availableSpecies(allowLegacy:boolean):Species[]{return [...SPECIES,...(allowLegacy?LEGACY_SPECIES:[])];}
 export function availableBackgrounds(allowLegacy:boolean):Background[]{return [...BACKGROUNDS,...(allowLegacy?LEGACY_BACKGROUNDS:[])];}
-export function validateOrigins(selections:{speciesId?:string;lineageId?:string;backgroundId?:string},allowLegacy:boolean):string[]{
+export function validateOrigins(selections:{speciesId?:string;lineageId?:string;backgroundId?:string;customBackground?:CustomBackground},allowLegacy:boolean):string[]{
  const errors:string[]=[];
  const species=availableSpecies(allowLegacy).find(s=>s.id===selections.speciesId);
- const background=availableBackgrounds(allowLegacy).find(b=>b.id===selections.backgroundId);
+ const background=resolveBackground(selections,allowLegacy);
  if(!species)errors.push('Choose a supported species.');
  if(species?.lineages?.length&&!species.lineages.some(l=>l.id===selections.lineageId))errors.push('Choose a lineage.');
  if(!background)errors.push('Choose a supported background.');
+ if(selections.backgroundId==='custom')errors.push(...validateCustomBackground(selections.customBackground));
  return errors;
 }
-export function originBenefits(selections:{speciesId?:string;lineageId?:string;backgroundId?:string},allowLegacy:boolean){
+export function originBenefits(selections:{speciesId?:string;lineageId?:string;backgroundId?:string;customBackground?:CustomBackground},allowLegacy:boolean){
  const species=availableSpecies(allowLegacy).find(s=>s.id===selections.speciesId);
- const background=availableBackgrounds(allowLegacy).find(b=>b.id===selections.backgroundId);
+ const background=resolveBackground(selections,allowLegacy);
  const lineage=species?.lineages?.find(l=>l.id===selections.lineageId);
  return {species:species?.name??null,lineage:lineage?.name??null,traits:[...(species?.traits??[]),...(lineage?.traits??[])],speed:lineage?.id==='wood-elf'?35:species?.speed??null,background:background?.name??null,originFeat:background?.feat??null,skills:background?.skills??[],tool:background?.tool??null,abilityOptions:background?.abilities??[]};
 }
