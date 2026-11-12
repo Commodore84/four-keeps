@@ -23,3 +23,12 @@ test('Epic Boon selection and ability persist after reload',async({page})=>{
  await openPlan(page);await page.getByLabel('Level 19 Epic Boon',{exact:true}).selectOption('Boon of Fortitude');await page.getByLabel('Level 19 Epic Boon ability').selectOption('Con');
  await page.reload();await page.getByRole('button',{name:'My Characters'}).click();await page.getByRole('button',{name:/Future Hero/}).click();await expect(page.getByLabel('Level 19 Epic Boon',{exact:true})).toHaveValue('Boon of Fortitude');await expect(page.getByLabel('Level 19 Epic Boon ability')).toHaveValue('Con');
 });
+test('legacy elf lineage feat, subclass and ability forecast survive reload',async({page})=>{
+ await openPlan(page);
+ await page.evaluate(()=>{const key='four-keeps-character-drafts-v1';const drafts=JSON.parse(localStorage.getItem(key)!);drafts[0].rules.allowCompatibleLegacy=true;drafts[0].selections.speciesId='elf';drafts[0].selections.lineageId='high-elf';localStorage.setItem(key,JSON.stringify(drafts));});
+ await page.reload();await page.getByRole('button',{name:'My Characters'}).click();await page.getByRole('button',{name:/Future Hero.*Resume draft/}).click();
+ await page.getByLabel('Planned subclass').selectOption('rogue-arcane-trickster');await page.getByLabel('Level 4 feat choice').selectOption('Fey Teleportation');await page.getByLabel('Level 4 feat ability').selectOption('Int');
+ await expect(page.getByText(/DM approval required/).first()).toBeVisible();
+ await page.reload();await page.getByRole('button',{name:'My Characters'}).click();await page.getByRole('button',{name:/Future Hero.*Resume draft/}).click();
+ await expect(page.getByLabel('Planned subclass')).toHaveValue('rogue-arcane-trickster');await expect(page.getByLabel('Level 4 feat choice')).toHaveValue('Fey Teleportation');await expect(page.getByLabel('Level 4 feat ability')).toHaveValue('Int');
+});
