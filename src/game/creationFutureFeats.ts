@@ -1,5 +1,5 @@
 import type {Ability,Scores} from './creationAbilities';
-export interface FutureFeat {name:string;abilities:readonly Ability[];minimum?:Partial<Record<Ability,number>>;requirement?:'spellcasting'|'heavy-armor'|'martial-weapons'|'fighting-style'|'medium-armor'|'shield';description:string;source?:'2017'|'2024';species?:readonly string[];abilityBonus?:0|1;legacyNote?:string}
+export interface FutureFeat {name:string;abilities:readonly Ability[];minimum?:Partial<Record<Ability,number>>;requirement?:'spellcasting'|'heavy-armor'|'martial-weapons'|'fighting-style'|'medium-armor'|'shield';description:string;source?:'2017'|'2024';species?:readonly string[];abilityBonus?:0|1;legacyNote?:string;lineages?:readonly string[]}
 const ALL=['Str','Dex','Con','Int','Wis','Cha'] as const;
 const MENTAL=['Int','Wis','Cha'] as const;
 const PHYSICAL=['Str','Dex'] as const;
@@ -56,9 +56,9 @@ export const LEGACY_FEATS:readonly FutureFeat[]=[
  legacy('Second Chance',['Dex','Con','Cha'],['halfling'],'Force an attacker that hits you to reroll its attack.'),
  legacy('Dwarven Fortitude',['Con'],['dwarf'],'Spend a Hit Die to heal when taking the Dodge action.'),
  legacy('Fade Away',['Dex','Int'],['gnome'],'Become invisible briefly after taking damage.'),
- legacy('Fey Teleportation',['Int','Cha'],['elf','high-elf'],'Learn Sylvan and gain a short-range teleportation spell.'),
- legacy('Wood Elf Magic',[],['elf','wood-elf'],'Learn druidic magic including a nature-themed cantrip and spells.',0),
- legacy('Drow High Magic',[],['elf','drow'],'Gain additional innate magic associated with drow heritage.',0),
+ {...legacy('Fey Teleportation',['Int','Cha'],['elf'],'Learn Sylvan and gain a short-range teleportation spell.'),lineages:['high-elf']},
+ {...legacy('Wood Elf Magic',[],['elf'],'Learn druidic magic including a nature-themed cantrip and spells.',0),lineages:['wood-elf']},
+ {...legacy('Drow High Magic',[],['elf'],'Gain additional innate magic associated with drow heritage.',0),lineages:['drow']},
  legacy('Dragon Fear',['Str','Con','Cha'],['dragonborn'],'Use your breath weapon to frighten nearby creatures.'),
  legacy('Dragon Hide',['Str','Con','Cha'],['dragonborn'],'Gain natural armor and claws.'),
  legacy('Flames of Phlegethos',['Int','Cha'],['tiefling'],'Empower fire spells and surround yourself with protective flames.'),
