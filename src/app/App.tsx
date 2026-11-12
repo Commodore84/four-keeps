@@ -1221,7 +1221,7 @@ export function App() {
           <button type="button" onClick={()=>setPortalScreen('help')} className="flex items-center gap-2 text-parchment/75"><BookOpen size={17}/>Help</button>
         </div>
       </div>}
-      {portalScreen==='characters'&&<div className="space-y-3"><h2 className="font-serif text-2xl">My Characters</h2><CharacterCreator/></div>}
+      {portalScreen==='characters'&&<div className="space-y-3"><h2 className="font-serif text-2xl">My Characters</h2><CharacterCreator onBeginAdventure={(draftId)=>{const selected=readCharacterDrafts().find(item=>item.id===draftId);if(!selected)return;setSelectedCharacterDraft(draftId);setNewTitle(`${selected.identity.name || "New Hero"}’s Adventure`);setPortalScreen('new');}}/></div>}
       {portalScreen==='new'&&<section className="space-y-4 rounded-xl border border-white/20 bg-panel p-4">
         <h2 className="font-serif text-2xl">New Adventure</h2>
         <p className="text-sm text-parchment/65">Select a fully validated level-one character to begin. Create and complete a character under My Characters first. Existing campaigns are never overwritten.</p>
