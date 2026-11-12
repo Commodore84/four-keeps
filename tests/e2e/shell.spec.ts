@@ -1232,3 +1232,34 @@ test('saved adventures can be deleted directly from My Campaigns',async({page})=
  await page.reload();await page.getByRole('button',{name:'My Campaigns'}).click();
  await expect(page.getByText('Delete from list test')).toHaveCount(0);
 });
+
+test('origin details appear immediately below selected row and navigation resets scroll',async({page})=>{
+ await page.goto('/four-keeps/');
+ await page.evaluate(()=>{
+  const now=new Date().toISOString();
+  localStorage.setItem('four-keeps-character-drafts-v1',JSON.stringify([{
+   schemaVersion:1,id:'inline-origin-test',status:'draft',rules:{edition:'2024',allowCompatibleLegacy:false},
+   step:'origins',identity:{name:'Inline Test',pronouns:'',appearance:'',personality:'',backstory:'',portrait:null},
+   selections:{classId:'rogue',classChoices:{'class-skills':['Stealth','Insight','Perception','Acrobatics']}},
+   createdAt:now,updatedAt:now
+  }]));
+ });
+ await page.reload();await page.getByRole('button',{name:'My Characters'}).click();
+ await page.getByRole('button',{name:/Inline Test.*Resume draft/}).click();
+ await page.getByRole('button',{name:/Criminal.*Player.s Handbook/}).click();
+ const background=page.getByRole('button',{name:/Criminal.*Player.s Handbook/});
+ const details=page.getByText('Skills: Sleight of Hand, Stealth').first();
+ await expect(details).toBeVisible();
+ const next=page.getByRole('button',{name:/Entertainer.*Player.s Handbook/});
+ const bgBox=await background.boundingBox(),detailBox=await details.boundingBox(),nextBox=await next.boundingBox();
+ expect(bgBox&&detailBox&&nextBox).toBeTruthy();
+ expect(detailBox!.y).toBeGreaterThan(bgBox!.y);
+ expect(detailBox!.y).toBeLessThan(nextBox!.y);
+ await expect(page.getByText(/Stealth — already proficient; choose a replacement below/)).toBeVisible();
+ await page.getByLabel('Replacement for Stealth').selectOption('Arcana');
+ await page.getByRole('button',{name:/Elf.*Player.s Handbook/}).click();
+ await expect(page.getByText(/Speed 30 ft/)).toBeVisible();
+ await page.evaluate(()=>window.scrollTo(0,document.body.scrollHeight));
+ await page.getByRole('button',{name:'1. Class'}).click();
+ await expect.poll(()=>page.evaluate(()=>window.scrollY)).toBeLessThan(50);
+});
