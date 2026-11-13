@@ -55,3 +55,38 @@ test('fighter creation to adventure, NPC, combat, rewards, save and resume',asyn
  await navigate(page,'Player');await expect(page.getByLabel('Imported player character')).toContainText('75 XP');await expect(page.getByLabel('Combat and vital statistics')).toContainText('HP 9/12');await expect(page.getByLabel('Player class resources')).toContainText('Second Wind: 1/2');await expect(page.getByLabel('Equipment and inventory')).toContainText('Tower token ×1');
  expect(errors).toEqual([]);
 });
+
+test('imported character earns XP, confirms level 2, and retains HP and level after reload',async({page})=>{
+ test.setTimeout(60000);
+ await page.goto('/four-keeps/');
+ await page.getByRole('button',{name:'My Characters'}).click();await page.getByRole('button',{name:'Create character',exact:true}).click();
+ await page.getByRole('button',{name:/^Fighter/}).click();
+ for(const name of ['Perception','Acrobatics','Defense','Greatsword','Flail','Javelin'])await page.getByRole('checkbox',{name:new RegExp('^'+name+'\\b')}).check();
+ await page.getByRole('button',{name:'Continue to abilities'}).click();
+ for(const [ability,score] of Object.entries({Str:15,Dex:14,Con:13,Int:12,Wis:10,Cha:8}))await page.getByLabel(ability+' base score',{exact:true}).selectOption(String(score));
+ await page.getByRole('button',{name:'Continue to origins'}).click();
+ await page.getByRole('button',{name:/^Elf/}).click();await page.getByRole('radio',{name:/^Wood Elf/}).check();await page.getByRole('button',{name:/^Criminal/}).click();
+ await page.getByLabel('Dex background bonus').selectOption('2');await page.getByLabel('Con background bonus').selectOption('1');await page.getByRole('button',{name:'Continue to equipment'}).click();
+ await page.getByRole('group',{name:'Class equipment',exact:true}).getByRole('radio').first().check();await page.getByRole('group',{name:'Background equipment',exact:true}).getByRole('radio').first().check();
+ await page.getByRole('button',{name:'Continue to spells'}).click();await page.getByRole('button',{name:'Continue to identity'}).click();await page.getByLabel('name *',{exact:true}).fill('Aster');await page.getByRole('button',{name:'Continue to future levels'}).click();await page.getByRole('button',{name:'Continue to review'}).click();
+ await page.getByRole('button',{name:/Home/}).click();await page.getByRole('button',{name:'New Adventure'}).click();
+ const draftId=await page.getByLabel('Starting character').getByRole('option',{name:/Aster/}).getAttribute('value');await page.getByLabel('Starting character').selectOption(draftId!);
+ await page.getByLabel('Campaign name',{exact:true}).fill('Aster journey');await page.getByRole('button',{name:'Create campaign',exact:true}).click();
+ await navigate(page,'Player');
+ const sheet=page.getByLabel('Imported player character');
+ const initialHP=await sheet.getByLabel('Combat and vital statistics').textContent();
+ const match=initialHP?.match(/HP (\d+)\/(\d+)/);expect(match).not.toBeNull();
+ await sheet.getByLabel('Manual XP award').locator('summary').click();
+ await sheet.getByLabel('Award XP amount').fill('300');
+ await sheet.getByLabel('Award XP reason').fill('Completed the crossroads quest');
+ await sheet.getByRole('button',{name:'Record XP award'}).click();
+ await expect(sheet).toContainText('300 XP');
+ await sheet.getByLabel('Level-up hit points').fill('7');
+ await sheet.getByRole('checkbox',{name:'I confirm these level-up choices'}).check();
+ await sheet.getByRole('button',{name:'Confirm and save level 2'}).click();
+ await expect(sheet).toContainText('Level 2');
+ await expect(sheet.getByLabel('Combat and vital statistics')).toContainText('HP '+(Number(match![1])+7)+'/'+(Number(match![2])+7));
+ await page.reload();await page.getByRole('button',{name:'Continue Adventure'}).click();await navigate(page,'Player');
+ await expect(page.getByLabel('Imported player character')).toContainText('Level 2');
+ await expect(page.getByLabel('Imported player character').getByLabel('Combat and vital statistics')).toContainText('HP '+(Number(match![1])+7)+'/'+(Number(match![2])+7));
+});

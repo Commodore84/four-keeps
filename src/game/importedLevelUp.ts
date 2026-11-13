@@ -1,4 +1,6 @@
 import type {Campaign} from './campaign';
+import type {Skill} from './checks';
+import {skillAbility} from './checks';
 import {xpThresholds} from './campaign';
 import {classSummary} from './creationClasses';
 import {subclassesForClass} from './creationSubclasses';
@@ -6,7 +8,7 @@ import {futureFeat,featEligibility,eligibleFeatAbility} from './creationFutureFe
 import {ABILITIES,type Ability,type Scores,modifier} from './creationAbilities';
 import {forecastImprovementLevels} from './creationProjection';
 import type {FeatContext} from './creationFutureFeats';
-export interface ImportedLevelChoice {hpGain:number;subclassId?:string;featPlan?:string;featAbility?:Ability;abilityIncreases?:Partial<Record<Ability,number>>;confirm:boolean;legacyApproved?:boolean}
+export interface ImportedLevelChoice {hpGain:number;subclassId?:string;featPlan?:string;featAbility?:Ability;abilityIncreases?:Partial<Record<Ability,number>>;confirm:boolean;legacyApproved?:boolean;skillProficiency?:Skill;skillExpertise?:Skill}
 export function importedLevelUpIssues(c:Campaign,choice:ImportedLevelChoice):string[]{
  const issues:string[]=[];const ch=c.character,identity=c.characterIdentity,build=c.characterBuild;
  if(!ch||!identity||!build)return ['Only imported characters can use this level-up workflow.'];
@@ -31,9 +33,11 @@ export function importedLevelUpIssues(c:Campaign,choice:ImportedLevelChoice):str
     issues.push(...featEligibility(feat,before,context));
     if(feat.abilityBonus!==0&&(!choice.featAbility||!eligibleFeatAbility(feat,choice.featAbility,before)))issues.push('Choose an eligible feat ability increase.');
     if(feat.source==='2017'&&!choice.legacyApproved)issues.push('Explicit DM approval required for legacy feats.');
-    // Feats with unimplemented benefits cannot be partially applied as if complete.
-    if(feat.name!=='Skill Expert'&&feat.name!=='Skilled')issues.push('This feat requires additional feature choices or mechanics not yet implemented for level-up.');
-    if(feat.name==='Skill Expert'||feat.name==='Skilled')issues.push('Skill proficiency choices must be implemented before this feat can be applied.');
+    if(feat.name==='Skill Expert'){
+     const known=[...ch.proficientSkills];
+     if(!choice.skillProficiency||!Object.hasOwn(skillAbility,choice.skillProficiency)||known.includes(choice.skillProficiency))issues.push('Choose one new skill proficiency.');
+     if(!choice.skillExpertise||!Object.hasOwn(skillAbility,choice.skillExpertise)||!(known.includes(choice.skillExpertise)||choice.skillExpertise===choice.skillProficiency)||(ch.expertiseSkills??[]).includes(choice.skillExpertise))issues.push('Choose one proficient skill without existing expertise.');
+    }else issues.push('This feat requires additional feature choices or mechanics not yet implemented for level-up.');
    }
   }
  }
@@ -43,9 +47,16 @@ export function importedLevelUpIssues(c:Campaign,choice:ImportedLevelChoice):str
 export function applyImportedLevelUp(c:Campaign,choice:ImportedLevelChoice):Campaign{
  const issues=importedLevelUpIssues(c,choice);if(issues.length)throw Error(issues.join(' '));
  const ch=c.character!,level=(ch.level??1)+1;const scores={...ch.scores};
- if(level===4)for(const a of ABILITIES){const increase=choice.abilityIncreases?.[a]??0;scores[a.toLowerCase() as keyof typeof scores]+=increase;}
+ if(level===4){
+  if(choice.featPlan==='Ability Score Improvement')for(const a of ABILITIES){const increase=choice.abilityIncreases?.[a]??0;scores[a.toLowerCase() as keyof typeof scores]+=increase;}
+  else if(choice.featAbility)scores[choice.featAbility.toLowerCase() as keyof typeof scores]+=1;
+ }
  const maxHitPoints=(ch.maxHitPoints??1)+choice.hpGain;
- const next={...ch,level,maxHitPoints,currentHitPoints:Math.min(maxHitPoints,(ch.currentHitPoints??1)+choice.hpGain),scores,proficiencyBonus:Math.ceil(level/4)+1};
+ const conChange=modifier(scores.con)-modifier(ch.scores.con);
+ const adjustedMax=maxHitPoints+conChange*level;
+ const next={...ch,level,maxHitPoints:adjustedMax,currentHitPoints:Math.min(adjustedMax,(ch.currentHitPoints??1)+choice.hpGain+conChange*level),scores,proficiencyBonus:Math.ceil(level/4)+1,
+  proficientSkills:choice.featPlan==='Skill Expert'?[...ch.proficientSkills,choice.skillProficiency!]:ch.proficientSkills,
+  expertiseSkills:choice.featPlan==='Skill Expert'?[...(ch.expertiseSkills??[]),choice.skillExpertise!]:ch.expertiseSkills};
  // Keep the selected subclass separately; legacy character.subclass is Arcane Trickster-specific.
- return {...c,character:next,importedSubclassId:level===3?choice.subclassId:c.importedSubclassId,updatedAt:new Date().toISOString(),journal:[...c.journal,{id:crypto.randomUUID(),kind:'system',text:`${c.characterIdentity!.name} confirmed level ${level}: +${choice.hpGain} HP${level===3?`; subclass ${choice.subclassId}`:''}${level===4?'; Ability Score Improvement':''}.`,createdAt:new Date().toISOString()}]};
+ return {...c,character:next,importedSubclassId:level===3?choice.subclassId:c.importedSubclassId,updatedAt:new Date().toISOString(),journal:[...c.journal,{id:crypto.randomUUID(),kind:'system',text:`${c.characterIdentity!.name} confirmed level ${level}: +${choice.hpGain} HP${level===3?`; subclass ${choice.subclassId}`:''}${level===4?'; '+choice.featPlan:''}.`,createdAt:new Date().toISOString()}]};
 }
