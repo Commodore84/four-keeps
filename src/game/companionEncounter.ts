@@ -911,3 +911,51 @@ export function useImportedWizardPortentAttack(campaign:Campaign,index:number,ta
  const result=attackCompanion(campaign,'nighthawk',targetId,roll,bonus,target.armorClass??10,damageRoll,0,'Fire',120);
  return {...result,importedWizardPortents:portents.filter((_,i)=>i!==index),companionEncounter:{...result.companionEncounter!,log:[...result.companionEncounter!.log,`Diviner Portent used stored d20 ${roll} for a spell attack (Fire Bolt 1d10 verified; no slot spent)`]}};
 }
+
+/** Strict, single-target verified Wizard spell resolution. Area spells are not supported here. */
+export type WizardSpellResolution={spell:'Magic Missile'|'Scorching Ray'|'Hold Person';targetId:string;slotLevel:1|2;damageDice?:number[];attackRolls?:number[];saveTotal?:number;saveModifier?:number;portentIndex?:number;humanoidConfirmed?:boolean};
+export function resolveImportedWizardSpell(campaign:Campaign,choice:WizardSpellResolution):Campaign{
+ const battle=activeActor(campaign,'nighthawk'),caster=battle.participants.nighthawk,target=battle.participants[choice.targetId],ch=campaign.character;
+ if(battle.mode!=='unified'||campaign.characterIdentity?.classId!=='wizard'||!ch||!target||target.actorKind!=='enemy'||target.hp<=0||caster.actionUsed||caster.hp<=0||cannotAct(caster))throw Error('Wizard spell requires an eligible turn and enemy target');
+ if(!['Magic Missile','Scorching Ray','Hold Person'].includes(choice.spell)||!ch.preparedSpells?.includes(choice.spell))throw Error('Unsupported or unprepared Wizard spell');
+ if(![1,2].includes(choice.slotLevel)||choice.slotLevel<(choice.spell==='Magic Missile'?1:2))throw Error('Spell requires an eligible slot rank');
+ const range=Math.max(Math.abs(caster.x-target.x),Math.abs(caster.y-target.y))*5;
+ if(range>(choice.spell==='Hold Person'?60:120)||!companionLineOfSight(battle,caster,target))throw Error('Target out of spell range or line of sight');
+ const dice=choice.damageDice??[],rolls=choice.attackRolls??[];
+ const portent=choice.portentIndex,stored=campaign.importedWizardPortents??[];
+ if(portent!==undefined&&(campaign.importedSubclassId!=='wizard-diviner'||!Number.isInteger(portent)||portent<0||portent>=stored.length||!Number.isInteger(stored[portent])||stored[portent]<1||stored[portent]>20))throw Error('Portent replacement unavailable');
+ if(portent!==undefined&&choice.spell==='Magic Missile')throw Error('Magic Missile has no d20 to replace');
+ if(choice.spell==='Magic Missile'&&(dice.length!==3+(choice.slotLevel-1)||dice.some(n=>!Number.isInteger(n)||n<1||n>4)))throw Error('Verify one d4 per Magic Missile dart');
+ if(choice.spell==='Scorching Ray'&&(dice.length!==3||rolls.length!==3||dice.some((n,i)=>!Number.isInteger(n)||n<2||n>(rolls[i]===20?24:12))||rolls.some(n=>!Number.isInteger(n)||n<1||n>20)))throw Error('Verify three d20 attacks and three 2d6 damage totals (critical hits 4d6)');
+ if(choice.spell==='Hold Person'&&!choice.humanoidConfirmed)throw Error('Hold Person requires verified humanoid target');
+ if(choice.spell==='Scorching Ray'&&(!Number.isInteger(target.armorClass)||target.armorClass!<1||(battle.cover??[]).some(p=>p.x===target.x&&p.y===target.y)))throw Error('Verify target AC and resolve cover before spell attacks');
+ if(choice.spell==='Hold Person'&&(!Number.isInteger(choice.saveTotal)||choice.saveTotal!<0||choice.saveTotal!>100||dice.length||rolls.length||portent!==undefined&&(!Number.isInteger(choice.saveModifier)||choice.saveModifier! < -10||choice.saveModifier!>30)))throw Error('Verified Wisdom save total required');
+ const slots=ch.spellSlots,rank=choice.slotLevel,max=rank===1?slots?.level1:slots?.level2,used=rank===1?slots?.usedLevel1:slots?.usedLevel2;
+ if(max===undefined||used===undefined||!Number.isInteger(max)||!Number.isInteger(used)||used>=max||used<0)throw Error('No eligible Wizard spell slot remaining');
+ const dc=8+ch.proficiencyBonus+abilityModifier(ch.scores.int),bonus=ch.proficiencyBonus+abilityModifier(ch.scores.int);
+ let damage=0,success=false;
+ if(choice.spell==='Magic Missile')damage=dice.reduce((a,b)=>a+b+1,0);
+ if(choice.spell==='Scorching Ray')damage=dice.reduce((sum,die,i)=>{const roll=i===0&&portent!==undefined?stored[portent]:rolls[i];return sum+(roll===20||roll!==1&&roll+bonus>=target.armorClass!?die:0)},0);
+ if(choice.spell==='Hold Person')success=(portent!==undefined?stored[portent]+choice.saveModifier!:choice.saveTotal!)>=dc;
+ // Portent replaces the d20, not a verified total. For saving throws require a separate verified modifier.
+ const nextTarget=choice.spell==='Hold Person'&&!success?{...target,conditions:[...new Set([...target.conditions,'Paralyzed' as const])]}:damage?damagedActor(target,damage):target;
+ const nextBattle={...battle,participants:{...battle.participants,nighthawk:{...caster,actionUsed:true,...(choice.spell==='Hold Person'?{concentratingOn:'Hold Person'}:{})},[choice.targetId]:nextTarget},log:[...battle.log,`Wizard ${choice.spell} rank ${rank} vs ${choice.targetId}: ${choice.spell==='Hold Person'?(success?'Wisdom save passed':'Wisdom save failed; Paralyzed'):damage+' verified damage'}${portent!==undefined?' (Portent '+stored[portent]+')':''}`]};
+ const result=save(campaign,nextBattle);
+ return {...result,character:{...ch,spellSlots:{...slots!,...(rank===1?{usedLevel1:used+1}:{usedLevel2:used+1})}},...(portent!==undefined?{importedWizardPortents:stored.filter((_,i)=>i!==portent)}:{})};
+}
+
+/** A Diviner may substitute a stored Portent d20 for any verified enemy attack roll. */
+export function resolveWizardPortentAttack(campaign:Campaign,index:number,attackerId:string,targetId:string,attackModifier:number,damage:number,damageType:DamageType):Campaign{
+ const battle=encounter(campaign),dice=campaign.importedWizardPortents??[],roll=dice[index];
+ if(battle.mode!=='unified'||campaign.characterIdentity?.classId!=='wizard'||campaign.importedSubclassId!=='wizard-diviner'||!Number.isInteger(roll)||roll<1||roll>20||!Number.isInteger(attackModifier)||!Number.isInteger(damage)||damage<0||damage>100)throw Error('Portent attack requires verified statistics');
+ const target=battle.participants[targetId];if(!target||!Number.isInteger(target.armorClass))throw Error('Target AC unverified');
+ const next=attackCompanion(campaign,attackerId,targetId,roll,attackModifier,target.armorClass!,damage,0,damageType);
+ return {...next,importedWizardPortents:dice.filter((_,i)=>i!==index)};
+}
+/** Replace the raw d20, retaining the explicitly verified save modifier. */
+export function resolveWizardPortentSave(campaign:Campaign,index:number,actorId:string,ability:'Strength'|'Dexterity'|'Constitution'|'Intelligence'|'Wisdom'|'Charisma',modifier:number,dc:number):{campaign:Campaign;success:boolean}{
+ const dice=campaign.importedWizardPortents??[],roll=dice[index];
+ if(campaign.companionEncounter?.mode!=='unified'||campaign.characterIdentity?.classId!=='wizard'||campaign.importedSubclassId!=='wizard-diviner'||!Number.isInteger(roll)||roll<1||roll>20||!Number.isInteger(modifier)||modifier< -10||modifier>30)throw Error('Portent save requires a verified modifier and die');
+ const result=resolveCompanionSavingThrow(campaign,actorId,ability,roll+modifier,dc);
+ return {...result,campaign:{...result.campaign,importedWizardPortents:dice.filter((_,i)=>i!==index)}};
+}
