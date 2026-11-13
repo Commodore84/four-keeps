@@ -11,6 +11,8 @@ export interface Campaign {
   /** Original reviewed build; independent of later draft edits and advancement plans. */
   characterBuild?:CharacterDraft;
   importedSubclassId?:string;
+  /** Confirmed feats from actual imported-character level-ups; forecasts never grant combat effects. */
+  importedEarnedFeats?:{level:number;name:string;ability?:string;legacyApproved:boolean}[];
   /** Reserved for future non-Nighthawk actors; never implicitly applied to the Rogue prototype. */
   subclassActors?:Record<string,SubclassCombatState>;
   companionEncounter?:CompanionEncounter;

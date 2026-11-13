@@ -682,7 +682,7 @@ export function finishCompanionEncounter(campaign:Campaign):Campaign{
 }
 
 /** Manual d20 and damage dice inputs; no automatic attack modifiers or dice invented. */
-export function attackCompanion(campaign:Campaign,attackerId:string,targetId:string,roll:number,attackModifier:number,targetAC:number,damageRoll:number,damageModifier:number,damageType:DamageType,rangeFeet?:number,secondD20?:number):Campaign{
+export function attackCompanion(campaign:Campaign,attackerId:string,targetId:string,roll:number,attackModifier:number,targetAC:number,damageRoll:number,damageModifier:number,damageType:DamageType,rangeFeet?:number,secondD20?:number,elvenAccuracyReroll?:number):Campaign{
  const battle=activeActor(campaign,attackerId);
  const attacker=battle.participants[attackerId],target=battle.participants[targetId];
  if(!target||attackerId===targetId||attacker.hp<=0||(target.hp<=0&&(!target.conditions.includes('Unconscious')||target.deathSaves?.dead)))throw Error('Invalid attacker or target');
@@ -697,7 +697,10 @@ export function attackCompanion(campaign:Campaign,attackerId:string,targetId:str
  if(secondD20!==undefined&&(!Number.isInteger(secondD20)||secondD20<1||secondD20>20))throw Error('Invalid second d20');
  if(rangeFeet!==undefined){if(!Number.isInteger(rangeFeet)||rangeFeet<5||rangeFeet>1000||rangeFeet%5!==0)throw Error('Invalid attack range');const distance=Math.max(Math.abs(attacker.x-target.x),Math.abs(attacker.y-target.y))*5;if(distance>rangeFeet)throw Error('Target outside declared attack range');}
  if(!Number.isInteger(roll)||roll<1||roll>20||!Number.isInteger(attackModifier)||attackModifier< -20||attackModifier>30||!Number.isInteger(targetAC)||targetAC<1||targetAC>40||!Number.isInteger(damageRoll)||damageRoll<0||damageRoll>1000||!Number.isInteger(damageModifier)||damageModifier< -20||damageModifier>30)throw Error('Invalid attack inputs');
- const effectiveRoll=attackAdvantage&&attackDisadvantage?roll:attackDisadvantage?Math.min(roll,secondD20!):attackAdvantage?Math.max(roll,secondD20!):roll;
+ const elvenEligible=attackerId==='nighthawk'&&battle.mode==='unified'&&!!campaign.characterIdentity&&campaign.importedEarnedFeats?.some(f=>f.name==='Elven Accuracy'&&f.legacyApproved&&f.level<=(campaign.character?.level??0))===true&&['Dexterity','Intelligence','Wisdom','Charisma'].includes(nighthawkEquippedAttack(campaign)?.ability??'')&&attackAdvantage&&!attackDisadvantage;
+ if(elvenAccuracyReroll!==undefined&&(!elvenEligible||secondD20===undefined||!Number.isInteger(elvenAccuracyReroll)||elvenAccuracyReroll<1||elvenAccuracyReroll>20))throw Error('Elven Accuracy reroll requires an earned approved feat, eligible ability and uncancelled advantage');
+ // The player rerolls the lower of the original two d20s and must use the new result.
+ const effectiveRoll=elvenAccuracyReroll!==undefined?Math.max(Math.max(roll,secondD20!),elvenAccuracyReroll):attackAdvantage&&attackDisadvantage?roll:attackDisadvantage?Math.min(roll,secondD20!):attackAdvantage?Math.max(roll,secondD20!):roll;
  const critical=effectiveRoll===20;
  const hit=critical||(effectiveRoll!==1&&effectiveRoll+attackModifier>=targetAC);
  const criticalHit=hit&&(critical||(target.conditions.includes('Unconscious')&&distanceFeet<=5));
@@ -710,7 +713,7 @@ export function attackCompanion(campaign:Campaign,attackerId:string,targetId:str
   dealt=(targetId==='nighthawk'&&battle.mode==='unified')||target.actorKind==='enemy'?raw:adjudicateSubclassActorDamage(campaign,targetId,raw,damageType);
   participants[targetId]=damagedActor(target,dealt,criticalHit);
  }
- return save(campaign,{...battle,participants,log:[...battle.log,attackerId+' attack d20 '+effectiveRoll+(target.dodging?' (Dodge disadvantage)':'')+(criticalHit?' critical hit':hit?' hit':' miss')+' vs '+targetId+' AC '+targetAC+(hit?'; '+dealt+' '+damageType+' damage':'')]});
+ return save(campaign,{...battle,participants,log:[...battle.log,attackerId+' attack d20 '+effectiveRoll+(elvenAccuracyReroll!==undefined?' (Elven Accuracy reroll '+elvenAccuracyReroll+')':'')+(target.dodging?' (Dodge disadvantage)':'')+(criticalHit?' critical hit':hit?' hit':' miss')+' vs '+targetId+' AC '+targetAC+(hit?'; '+dealt+' '+damageType+' damage':'')]});
 }
 export function setCompanionSpeed(campaign:Campaign,actorId:string,speedFeet:number):Campaign{
  const battle=encounter(campaign),actor=battle.participants[actorId];
@@ -722,7 +725,7 @@ export function setCompanionSpeed(campaign:Campaign,actorId:string,speedFeet:num
 /** Uses authoritative combat modifiers/AC for verified equipped Nighthawk or DM-stat enemies.
  * Damage dice are still supplied explicitly; attack actions remain subject to the usual rules.
  */
-export function attackCompanionWithVerifiedStats(campaign:Campaign,attackerId:string,targetId:string,roll:number,damageRoll:number,damageType:DamageType,rangeFeet?:number,secondD20?:number):Campaign{
+export function attackCompanionWithVerifiedStats(campaign:Campaign,attackerId:string,targetId:string,roll:number,damageRoll:number,damageType:DamageType,rangeFeet?:number,secondD20?:number,elvenAccuracyReroll?:number):Campaign{
  const battle=encounter(campaign),attacker=battle.participants[attackerId],target=battle.participants[targetId];
  if(!attacker||!target)throw Error('Unknown attack participant');
  const equipped=attackerId==='nighthawk'&&battle.mode==='unified'?nighthawkEquippedAttack(campaign):null;
@@ -740,7 +743,7 @@ export function attackCompanionWithVerifiedStats(campaign:Campaign,attackerId:st
  const equipmentAvailable=ammoKey&&!campaign.characterIdentity?(campaign.equipment?.arrows??0):0;
  const ledgerAvailable=ammoName?(campaign.inventoryLedger?.gear.find(g=>g.name===ammoName)?.quantity??0):0;
  if(ammoName&&equipmentAvailable+ledgerAvailable<1)throw Error('Insufficient campaign ammunition');
- const result=attackCompanion(campaign,attackerId,targetId,roll,attackModifier,targetAC,damageRoll,damageModifier,damageType,rangeFeet,secondD20);
+ const result=attackCompanion(campaign,attackerId,targetId,roll,attackModifier,targetAC,damageRoll,damageModifier,damageType,rangeFeet,secondD20,elvenAccuracyReroll);
  if(!ammoName)return result;
  const source=equipmentAvailable>0?'arrows':ammoName;
  const spent=spendUnifiedNighthawkInventory(result,source,1);
