@@ -19,7 +19,7 @@ export interface CompanionEncounter {
  round:number;
  turnIndex:number;
  order:string[];
- participants:Record<string,{x:number;y:number;hp:number;maxHp:number;initiative:number;conditions:('Charmed'|'Poisoned'|'Blinded'|'Deafened'|'Frightened'|'Grappled'|'Incapacitated'|'Invisible'|'Paralyzed'|'Petrified'|'Prone'|'Restrained'|'Stunned'|'Unconscious'|'Exhaustion')[];speedFeet:number;movementSpentFeet:number;actionUsed:boolean;bonusActionUsed:boolean;dashFeet:number;disengaged:boolean;dodging:boolean;reactionUsed?:boolean;rogueSneakUsed?:boolean;rogueSteadyAim?:boolean;rogueHidden?:boolean;rogueHideDC?:number;rogueMovedThisTurn?:boolean;concentratingOn?:string;consumables?:Record<string,number>;faction?:string;reachFeet?:number;actorKind?:'party'|'enemy';armorClass?:number;attackModifier?:number;constitutionSaveModifier?:number;damageModifier?:number;damageDice?:string;enemyTactic?:'hold'|'nearest'|'lowest-hp';rangedAttackFeet?:number;deathSaves?:{successes:number;failures:number;stable:boolean;dead:boolean}}>;
+ participants:Record<string,{x:number;y:number;hp:number;maxHp:number;initiative:number;conditions:('Charmed'|'Poisoned'|'Blinded'|'Deafened'|'Frightened'|'Grappled'|'Incapacitated'|'Invisible'|'Paralyzed'|'Petrified'|'Prone'|'Restrained'|'Stunned'|'Unconscious'|'Exhaustion')[];speedFeet:number;movementSpentFeet:number;actionUsed:boolean;bonusActionUsed:boolean;dashFeet:number;disengaged:boolean;dodging:boolean;reactionUsed?:boolean;rogueSneakUsed?:boolean;rogueSteadyAim?:boolean;rogueHidden?:boolean;rogueHideDC?:number;rogueHideConcealment?:boolean;rogueMovedThisTurn?:boolean;concentratingOn?:string;consumables?:Record<string,number>;faction?:string;reachFeet?:number;actorKind?:'party'|'enemy';armorClass?:number;attackModifier?:number;constitutionSaveModifier?:number;damageModifier?:number;damageDice?:string;enemyTactic?:'hold'|'nearest'|'lowest-hp';rangedAttackFeet?:number;deathSaves?:{successes:number;failures:number;stable:boolean;dead:boolean}}>;
  wizardHoldPersonTargets?:string[];
  rogueHoldPersonTargets?:string[];
  obstacles?:{x:number;y:number}[];
@@ -133,7 +133,7 @@ export function setCompanionObstacles(campaign:Campaign,obstacles:Cell[]):Campai
  if(obstacles.length>120||obstacles.some(p=>!valid(p))||new Set(obstacles.map(key)).size!==obstacles.length)throw Error('Invalid obstacle coordinates');
  if(obstacles.some(p=>Object.values(battle.participants).some(actor=>actor.x===p.x&&actor.y===p.y)))throw Error('Obstacle overlaps an actor');
  if(obstacles.some(p=>(battle.cover??[]).some(c=>c.x===p.x&&c.y===p.y)))throw Error('Obstacle overlaps cover annotation');
- return save(campaign,{...battle,obstacles:obstacles.map(p=>({...p})),log:[...battle.log,'Map obstacles updated: '+obstacles.length]});
+ return save(campaign,revealRogueOnVisibilityChange({...battle,obstacles:obstacles.map(p=>({...p})),log:[...battle.log,'Map obstacles updated: '+obstacles.length]}));
 }
 /** Solid occupied squares block sight. Other terrain and partial cover require DM judgment. */
 export function companionLineOfSight(battle:CompanionEncounter,from:Cell,to:Cell):boolean{
@@ -148,12 +148,22 @@ export function companionLineOfSight(battle:CompanionEncounter,from:Cell,to:Cell
  }
  return true;
 }
+/** Re-evaluate a hidden Rogue after enemy movement or changes to opaque terrain.
+ * DM-verified obscurity remains until an enemy reaches adjacency or a Search succeeds. */
+function revealRogueOnVisibilityChange(battle:CompanionEncounter):CompanionEncounter{
+ const rogue=battle.participants.nighthawk;
+ if(battle.mode!=='unified'||!rogue?.rogueHidden)return battle;
+ const visible=Object.values(battle.participants).some(enemy=>enemy.actorKind==='enemy'&&enemy.hp>0&&companionLineOfSight(battle,enemy,rogue));
+ const adjacent=Object.values(battle.participants).some(enemy=>enemy.actorKind==='enemy'&&enemy.hp>0&&Math.max(Math.abs(enemy.x-rogue.x),Math.abs(enemy.y-rogue.y))<=1);
+ if(!(adjacent||(visible&&!rogue.rogueHideConcealment)))return battle;
+ return {...battle,participants:{...battle.participants,nighthawk:{...rogue,rogueHidden:false}},log:[...battle.log,'Rogue revealed by enemy proximity or newly clear line of sight']};
+}
 /** Partial cover is a DM-supplied map annotation, not an automatic AC bonus. */
 export function setCompanionCover(campaign:Campaign,cells:{x:number;y:number}[]):Campaign{
  const battle=encounter(campaign);
  if(cells.length>120||cells.some(p=>!valid(p))||new Set(cells.map(key)).size!==cells.length)throw Error('Invalid cover coordinates');
  if(cells.some(p=>(battle.obstacles??[]).some(o=>o.x===p.x&&o.y===p.y)))throw Error('Cover cannot overlap solid obstacles');
- return save(campaign,{...battle,cover:cells.map(p=>({...p})),log:[...battle.log,'Cover annotations updated: '+cells.length]});
+ return save(campaign,revealRogueOnVisibilityChange({...battle,cover:cells.map(p=>({...p})),log:[...battle.log,'Cover annotations updated: '+cells.length]}));
 }
 export function companionCoverStatus(campaign:Campaign,targetId:string):'annotated'|'none'{
  const battle=encounter(campaign),target=battle.participants[targetId];
@@ -390,7 +400,7 @@ export function moveCompanion(campaign:Campaign,actorId:string,x:number,y:number
  const movementCost=traversedSteps*5*(actor.conditions.includes('Prone')?2:1);
  if(movementCost>actor.speedFeet+actor.dashFeet-actor.movementSpentFeet)throw Error('Move exceeds remaining movement');
  if(Object.entries(battle.participants).some(([id,p])=>id!==actorId&&p.hp>0&&p.x===destination.x&&p.y===destination.y))throw Error('Square occupied');
- return save(campaign,{...battle,participants:{...battle.participants,[actorId]:{...actor,x:destination.x,y:destination.y,movementSpentFeet:actor.movementSpentFeet+movementCost,rogueMovedThisTurn:actor.rogueMovedThisTurn||movementCost>0,rogueHidden:movementCost>0&&Object.values(battle.participants).some(enemy=>enemy.actorKind==='enemy'&&enemy.hp>0&&companionLineOfSight(battle,enemy,destination))?false:actor.rogueHidden}},pendingOpportunity:candidates.length?{moverId:actorId,attackerIds:candidates,from:interrupt?{x:firstTrigger.from.x,y:firstTrigger.from.y}:{x:actor.x,y:actor.y},to:interrupt?{x:firstTrigger.to.x,y:firstTrigger.to.y}:{x,y},...(interrupt?{destination:{x,y}}:{})}:undefined,log:[...battle.log,actorId+' moved to '+destination.x+','+destination.y+(interrupt?' · interrupted before leaving reach toward '+firstTrigger.to.x+','+firstTrigger.to.y:candidates.length?' · potential opportunity attackers: '+candidates.join(', '):'')]});
+ return save(campaign,revealRogueOnVisibilityChange({...battle,participants:{...battle.participants,[actorId]:{...actor,x:destination.x,y:destination.y,movementSpentFeet:actor.movementSpentFeet+movementCost,rogueMovedThisTurn:actor.rogueMovedThisTurn||movementCost>0,rogueHidden:actorId==='nighthawk'&&movementCost>0&&Object.values(battle.participants).some(enemy=>enemy.actorKind==='enemy'&&enemy.hp>0&&companionLineOfSight(battle,enemy,destination))?false:actor.rogueHidden}},pendingOpportunity:candidates.length?{moverId:actorId,attackerIds:candidates,from:interrupt?{x:firstTrigger.from.x,y:firstTrigger.from.y}:{x:actor.x,y:actor.y},to:interrupt?{x:firstTrigger.to.x,y:firstTrigger.to.y}:{x,y},...(interrupt?{destination:{x,y}}:{})}:undefined,log:[...battle.log,actorId+' moved to '+destination.x+','+destination.y+(interrupt?' · interrupted before leaving reach toward '+firstTrigger.to.x+','+firstTrigger.to.y:candidates.length?' · potential opportunity attackers: '+candidates.join(', '):'')]}));
 }
 export function endCompanionTurn(campaign:Campaign,actorId:string):Campaign{
  const battle=activeActor(campaign,actorId);
@@ -868,7 +878,7 @@ export function importedRogueHide(campaign:Campaign,stealthTotal:number,dmVerifi
  if(!Number.isInteger(stealthTotal)||stealthTotal<0||stealthTotal>100)throw Error('Verified Stealth total required');
  if(stealthTotal<15)throw Error('Hide requires DC 15 Stealth');
  if(!dmVerifiedConcealment&&Object.values(battle.participants).some(enemy=>enemy.actorKind==='enemy'&&enemy.hp>0&&companionLineOfSight(battle,enemy,actor)))throw Error('Hide requires no enemy line of sight or DM-verified heavy obscurity or three-quarters/total cover');
- return save(campaign,{...battle,participants:{...battle.participants,nighthawk:{...actor,bonusActionUsed:true,rogueHidden:true,rogueHideDC:stealthTotal}},log:[...battle.log,'Rogue Hide succeeded with Stealth '+stealthTotal]});
+ return save(campaign,{...battle,participants:{...battle.participants,nighthawk:{...actor,bonusActionUsed:true,rogueHidden:true,rogueHideDC:stealthTotal,rogueHideConcealment:dmVerifiedConcealment}},log:[...battle.log,'Rogue Hide succeeded with Stealth '+stealthTotal]});
 }
 /** Verified Search check can reveal a hidden Rogue; never fabricate Perception results. */
 export function resolveImportedRogueDetection(campaign:Campaign,observerId:string,perceptionTotal:number):Campaign{
