@@ -16,6 +16,14 @@ export const frontierShopStock=FRONTIER_SHOP_IDS.map(id=>ITEM_BY_ID[id]).filter(
 export function remainingMerchantStock(campaign:Campaign,itemId:string):number {return campaign.merchantStockRemaining?.[itemId]??FRONTIER_INITIAL_STOCK[itemId]??0;}
 export function merchantCatalog(campaign:Campaign):string {return frontierShopStock.map(item=>item.name+": "+formatFrontierPrice(item.costCp)+(item.packQuantity?" per pack of "+item.packQuantity:" each")+" ("+remainingMerchantStock(campaign,item.id)+" available)").join("; ");}
 export function isMerchantBrowseRequest(message:string):boolean {return /\b(what (?:do you|have you|are you) (?:sell|stock|carry|have)|show (?:me )?(?:your )?(?:wares|inventory|stock)|(?:list|catalog|inventory|price list|prices|wares|for sale))\b/i.test(message);}
+export function merchantNegotiationTarget(message:string):string|null {
+ if(!isMerchantNegotiationRequest(message))return null;
+ const matches=frontierShopStock.filter(item=>{
+  const names=[item.name.replace(/\s*\(20\)$/,''),item.id==='bullets-sling'?'sling bullets':'',item.id==='bolts'?'crossbow bolts':''].filter(Boolean);
+  return names.some(name=>new RegExp('\\b'+name.replace(/[.*+?^\$()|[\]{}]/g,'\\$&')+'s?\\b','i').test(message));
+ });
+ return matches.length===1?matches[0].id:null;
+}
 export function isMerchantPurchaseRequest(message:string):boolean {return /\b(?:buy|purchase|i(?:'ll| will) have|i(?:'d| would) like to buy)\b/i.test(message);}
 export function isMerchantNegotiationRequest(message:string):boolean {return /\b(haggle|negotiate|discount|lower (?:the )?price|better price|persuade|bargain)\b/i.test(message);}
 export function frontierMerchantContext(campaign:Campaign){

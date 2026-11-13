@@ -70,3 +70,21 @@ test('feat benefit details and level-up handoff remain advisory after reload',as
  await expect(page.getByLabel('Level 4 feat benefits')).toContainText('Misty Step');
  await expect(page.getByLabel('Level 4 advancement handoff')).toContainText('Plan ready for confirmation');
 });
+
+test('new character package resolves official equipment variants and retains selection on reload',async({page})=>{
+ await page.goto('/four-keeps/');
+ await page.evaluate(()=>{
+  const now=new Date().toISOString();
+  localStorage.setItem('four-keeps-character-drafts-v1',JSON.stringify([{schemaVersion:1,id:'equipment-variants-test',status:'draft',rules:{edition:'2024',allowCompatibleLegacy:false},step:'equipment',identity:{name:'Variant Hero',pronouns:'',appearance:'',personality:'',backstory:'',portrait:null},selections:{classId:'bard',backgroundId:'entertainer',abilities:{method:'standard',base:{Str:8,Dex:14,Con:13,Int:12,Wis:10,Cha:15},bonusMode:'two-one',bonuses:{Cha:2,Dex:1},rolls:[],rollDice:[]}},createdAt:now,updatedAt:now}]));
+ });
+ await page.reload();await page.getByRole('button',{name:'My Characters'}).click();await page.getByRole('button',{name:/Variant Hero.*Resume draft/}).click();
+ const creator=page.getByLabel('Character creator');
+ await creator.getByRole('group',{name:'Class equipment',exact:true}).getByRole('radio').first().check();
+ await creator.getByRole('group',{name:'Background equipment',exact:true}).getByRole('radio').first().check();
+ const variants=page.getByRole('group',{name:'Official equipment variants'});
+ await expect(variants).toBeVisible();
+ await variants.getByLabel('Choose Musical Instrument').selectOption('musical-instrument-lute');
+ await expect(page.getByText(/2 × Musical Instrument \(Lute\)/).first()).toBeVisible();
+ await page.reload();await page.getByRole('button',{name:'My Characters'}).click();await page.getByRole('button',{name:/Variant Hero.*Resume draft/}).click();
+ await expect(page.getByLabel('Choose Musical Instrument')).toHaveValue('musical-instrument-lute');
+});

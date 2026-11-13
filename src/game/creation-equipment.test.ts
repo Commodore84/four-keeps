@@ -1,6 +1,27 @@
 import {describe,it,expect} from 'vitest';
-import {ITEMS,ITEM_BY_ID,CLASS_PACKAGES,BACKGROUND_PACKAGES,emptyEquipment,inventory,remainingCp,buy,armorClass,attackBonus,weaponTrained,armorTrained,equipmentErrors,carryingWeight,carryingCapacity} from './creationEquipment';
+import {ITEMS,ITEM_BY_ID,CLASS_PACKAGES,BACKGROUND_PACKAGES,emptyEquipment,inventory,remainingCp,buy,armorClass,attackBonus,weaponTrained,armorTrained,equipmentErrors,carryingWeight,carryingCapacity,EQUIPMENT_VARIANTS,packageVariantIds,selectEquipmentVariant,defaultPackageVariants} from './creationEquipment';
 const scores={Str:15,Dex:16,Con:14,Int:12,Wis:13,Cha:8};
+describe('official 2024 equipment variants and saved-game compatibility',()=>{
+ it('replaces only selected generic package entries with official IDs and preserves their quantities',()=>{
+  const original={...emptyEquipment(),classPackage:0,backgroundPackage:0};
+  expect(inventory(original,'bard','entertainer')['musical-instrument']).toBe(2);
+  expect(packageVariantIds(original,'bard','entertainer')).toContain('musical-instrument');
+  const choice=selectEquipmentVariant(original,'bard','entertainer','musical-instrument','musical-instrument-lute');
+  expect(inventory(choice,'bard','entertainer')['musical-instrument']).toBeUndefined();
+  expect(inventory(choice,'bard','entertainer')['musical-instrument-lute']).toBe(2);
+  expect(remainingCp(choice,'bard','entertainer')).toBe(remainingCp(original,'bard','entertainer'));
+  expect(inventory(JSON.parse(JSON.stringify(choice)),'bard','entertainer')).toEqual(inventory(choice,'bard','entertainer'));
+ });
+ it('defaults new package selections to official variants while keeping historical saves untouched',()=>{
+  const old={...emptyEquipment(),classPackage:0,backgroundPackage:0};
+  expect(inventory(old,'cleric','acolyte')['holy-symbol']).toBe(2);
+  const fresh={...old,packageVariants:defaultPackageVariants(old,'cleric','acolyte')};
+  expect(inventory(fresh,'cleric','acolyte')['holy-symbol']).toBeUndefined();
+  expect(Object.keys(inventory(fresh,'cleric','acolyte')).some(id=>id.startsWith('holy-symbol-'))).toBe(true);
+  expect(EQUIPMENT_VARIANTS['gaming-set']).toContain('gaming-set-dice');
+  expect(()=>selectEquipmentVariant(old,'cleric','acolyte','holy-symbol','greatsword')).toThrow();
+ });
+});
 describe('2024 starting equipment',()=>{
  it('has all 12 classes and 16 backgrounds with a gold alternative',()=>{
   expect(Object.keys(CLASS_PACKAGES)).toHaveLength(12);expect(Object.keys(BACKGROUND_PACKAGES)).toHaveLength(17);

@@ -1,7 +1,7 @@
 import {describe,it,expect} from 'vitest';
 import {newCampaign} from './campaign';
 import {beginAdventureSession} from './adventureSession';
-import {buyFrontierItem,frontierShopStock,frontierMerchantContext,formatFrontierPrice,parseFrontierPurchase,prepareMerchantPurchase,settleMerchantPurchase,walletCopper,remainingMerchantStock,merchantCatalog,isMerchantBrowseRequest,approveMerchantDiscount,isMerchantPurchaseRequest} from './frontierShop';
+import {buyFrontierItem,frontierShopStock,frontierMerchantContext,formatFrontierPrice,parseFrontierPurchase,prepareMerchantPurchase,settleMerchantPurchase,walletCopper,remainingMerchantStock,merchantCatalog,isMerchantBrowseRequest,approveMerchantDiscount,isMerchantPurchaseRequest,merchantNegotiationTarget} from './frontierShop';
 function fixture(){const c=newCampaign('Shop','shop-test');return beginAdventureSession({...c,characterIdentity:{name:'Test',speciesId:'elf',backgroundId:'sage',classId:'rogue',draftId:'draft',pronouns:'',appearance:'',personality:'',backstory:''},inventoryLedger:{currency:{GP:10,SP:0,CP:0,EP:0,PP:0},gear:[]}})}
 describe('2024 merchant catalog compatibility and ammunition',()=>{
  it('sells only canonical entries from the explicitly selected merchant stock',()=>{
@@ -25,6 +25,9 @@ describe('2024 merchant catalog compatibility and ammunition',()=>{
  it('rejects unlisted merchandise and tampered discount without spending money',()=>{
   const c=fixture();
   expect(isMerchantPurchaseRequest('I will buy a greatsword')).toBe(true);
+  expect(merchantNegotiationTarget('Can you discount the dagger?')).toBe('dagger');
+  expect(merchantNegotiationTarget('Can you discount everything?')).toBeNull();
+  expect(merchantNegotiationTarget('Can you discount the dagger and rope?')).toBeNull();
   expect(parseFrontierPurchase('I will buy a greatsword')).toBeNull();
   expect(parseFrontierPurchase('I will buy 2 packs of sling bullets')).toEqual({itemId:'bullets-sling',quantity:2});
   expect(parseFrontierPurchase('I will buy 3 crossbow bolts')).toEqual({itemId:'bolts',quantity:3});

@@ -1,4 +1,4 @@
-import {parseFrontierPurchase,prepareMerchantPurchase,settleMerchantPurchase,frontierShopStock,formatFrontierPrice,merchantCatalog,isMerchantBrowseRequest,isMerchantNegotiationRequest,isMerchantPurchaseRequest,approveMerchantDiscount} from '../game/frontierShop';
+import {parseFrontierPurchase,prepareMerchantPurchase,settleMerchantPurchase,frontierShopStock,formatFrontierPrice,merchantCatalog,isMerchantBrowseRequest,isMerchantNegotiationRequest,isMerchantPurchaseRequest,merchantNegotiationTarget,approveMerchantDiscount} from '../game/frontierShop';
 import {classSummary} from '../game/creationClasses';
 import {completePlayerRest,playerLongRestWaitMinutes} from '../game/playerRecovery';
 import {frontierMerchantContext} from '../game/frontierShop';
@@ -827,7 +827,7 @@ export function App() {
       const narrated = aiSession
         ? {...commitAdventureAction(prepared,actionId!,result.narration,new Date().toISOString(),result.newFacts??[],result.worldUpdates),pendingClarification:undefined,pendingCheck:result.checkRequest??undefined}
         : addExchange(current, message, result.narration, new Date().toISOString(), result.newFacts ?? [], result.worldUpdates, result.checkRequest ?? undefined);
-      const negotiated = result.merchantDiscount && isMerchantNegotiationRequest(message) && current.adventureSession?.site==='frontier' && current.adventureSession.status==='exploring'
+      const negotiated = result.merchantDiscount && merchantNegotiationTarget(message)===result.merchantDiscount.itemId && current.adventureSession?.site==='frontier' && current.adventureSession.status==='exploring'
         ? approveMerchantDiscount(narrated,result.merchantDiscount.itemId,result.merchantDiscount.percent,actionId??crypto.randomUUID())
         : narrated;
       const travelled = result.travelDestination && current.adventureSession?.status==='exploring' && ['frontier','crossroads','watchtower'].includes(result.travelDestination)

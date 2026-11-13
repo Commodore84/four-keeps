@@ -64,13 +64,34 @@ export const BACKGROUND_PACKAGES:Record<string,Package[]> = {
  soldier:[pkg(14,'spear|shortbow|arrows*20|gaming-set|healer-s-kit|quiver|traveler-s-clothes'),pkg(50,'','50 GP')],
  wayfarer:[pkg(16,'dagger*2|thieves-tools|gaming-set|bedroll|pouch*2|traveler-s-clothes'),pkg(50,'','50 GP')]
 };
-export interface EquipmentDraft {classPackage:number|null;backgroundPackage:number|null;purchases:Record<string,number>;equipped:{armor?:string;shield?:string;weapons:string[]}}
+/** Explicit 2024 choices for legacy generic starting-package entries. Old drafts without choices keep their original inventory. */
+export const EQUIPMENT_VARIANTS:Readonly<Record<string,readonly string[]>>={
+ 'musical-instrument':['musical-instrument-bagpipes','musical-instrument-drum','musical-instrument-dulcimer','musical-instrument-flute','musical-instrument-horn','musical-instrument-lute','musical-instrument-lyre','musical-instrument-pan-flute','musical-instrument-shawm','musical-instrument-viol'],
+ 'gaming-set':['gaming-set-dice','gaming-set-dragonchess','gaming-set-playing-cards','gaming-set-three-dragon-ante'],
+ 'holy-symbol':['holy-symbol-amulet','holy-symbol-emblem','holy-symbol-reliquary'],
+ 'artisan-s-tools':['carpenter-s-tools','smith-s-tools','weaver-s-tools','woodcarver-s-tools','potter-s-tools','leatherworker-s-tools','mason-s-tools','jeweler-s-tools','glassblower-s-tools','brewer-s-supplies','calligrapher-s-supplies','cartographer-s-tools','cobbler-s-tools','cook-s-utensils','painter-s-supplies','tinker-s-tools'].filter(id=>Boolean(canonicalById.get(id))),
+};
+export function packageVariantIds(draft:EquipmentDraft,classId:string,backgroundId:string):string[]{
+ const classItems=CLASS_PACKAGES[classId]?.[draft.classPackage??-1]?.items??{};
+ const backgroundItems=BACKGROUND_PACKAGES[backgroundId]?.[draft.backgroundPackage??-1]?.items??{};
+ return Object.keys(EQUIPMENT_VARIANTS).filter(id=>(classItems[id]??0)+(backgroundItems[id]??0)>0);
+}
+export function defaultPackageVariants(draft:EquipmentDraft,classId:string,backgroundId:string):Record<string,string>{
+ return Object.fromEntries(packageVariantIds(draft,classId,backgroundId).map(id=>[id,EQUIPMENT_VARIANTS[id].find(choice=>canonicalById.has(choice))!]));
+}
+export function selectEquipmentVariant(draft:EquipmentDraft,classId:string,backgroundId:string,placeholder:string,choice:string):EquipmentDraft {
+ if(!packageVariantIds(draft,classId,backgroundId).includes(placeholder)||!EQUIPMENT_VARIANTS[placeholder]?.includes(choice)||!canonicalById.has(choice))throw Error('Invalid official equipment choice.');
+ return {...draft,packageVariants:{...draft.packageVariants,[placeholder]:choice}};
+}
+export interface EquipmentDraft {packageVariants?:Record<string,string>;classPackage:number|null;backgroundPackage:number|null;purchases:Record<string,number>;equipped:{armor?:string;shield?:string;weapons:string[]}}
 export const emptyEquipment=():EquipmentDraft=>({classPackage:null,backgroundPackage:null,purchases:{},equipped:{weapons:[]}});
 export function inventory(draft:EquipmentDraft,classId:string,backgroundId:string):Record<string,number>{
  const result:Record<string,number>={};
  const add=(items:Record<string,number>)=>{for(const [id,n] of Object.entries(items))result[id]=(result[id]??0)+n;};
  const c=CLASS_PACKAGES[classId]?.[draft.classPackage??-1];const b=BACKGROUND_PACKAGES[backgroundId]?.[draft.backgroundPackage??-1];
- if(c)add(c.items);if(b)add(b.items);add(draft.purchases);
+ if(c)add(c.items);if(b)add(b.items);
+ for(const placeholder of packageVariantIds(draft,classId,backgroundId)){const choice=draft.packageVariants?.[placeholder];if(choice&&EQUIPMENT_VARIANTS[placeholder].includes(choice)&&canonicalById.has(choice)){const count=result[placeholder]??0;if(count){delete result[placeholder];result[choice]=(result[choice]??0)+count;}}}
+ add(draft.purchases);
  return result;
 }
 export function remainingCp(draft:EquipmentDraft,classId:string,backgroundId:string):number{
@@ -115,6 +136,7 @@ export function equipmentErrors(draft:EquipmentDraft,classId:string,backgroundId
  if(!CLASS_PACKAGES[classId]?.[draft.classPackage??-1])errors.push('Choose class equipment.');
  if(!BACKGROUND_PACKAGES[backgroundId]?.[draft.backgroundPackage??-1])errors.push('Choose background equipment.');
  if(remainingCp(draft,classId,backgroundId)<0)errors.push('Insufficient funds.');
+ for(const [placeholder,choice] of Object.entries(draft.packageVariants??{}))if(!packageVariantIds(draft,classId,backgroundId).includes(placeholder)||!EQUIPMENT_VARIANTS[placeholder]?.includes(choice)||!canonicalById.has(choice))errors.push('Invalid equipment variant '+placeholder+'.');
  const owned=inventory(draft,classId,backgroundId);
  for(const [id,n] of Object.entries(owned))if(!ITEM_BY_ID[id]||!Number.isInteger(n)||n<0)errors.push('Invalid inventory item '+id+'.');
  for(const [id,n] of Object.entries(draft.purchases))if(!ITEM_BY_ID[id]||!Number.isInteger(n)||n<0)errors.push('Invalid purchase '+id+'.');
