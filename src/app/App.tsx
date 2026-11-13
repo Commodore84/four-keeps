@@ -132,22 +132,10 @@ const tabs = [
   { id: 'development', label: 'Developer', Icon: Blocks },
 ] as const;
 
-function Adventure({ campaign, fullHistory, onToggleHistory, onAdventureChange, onStartOpening, onRetryAction, saving, development = false }: { campaign: Campaign | null; fullHistory: boolean; onToggleHistory: () => void; onAdventureChange:(next:Campaign,message:string)=>Promise<boolean>|boolean|void; onStartOpening:()=>Promise<void>; onRetryAction:()=>Promise<void>; saving:boolean; development?:boolean }) {
+function Adventure({ campaign, fullHistory, onToggleHistory, onAdventureChange, onStartOpening, onRetryAction, saving, narrationSpeed, development = false }: { campaign: Campaign | null; fullHistory: boolean; onToggleHistory: () => void; onAdventureChange:(next:Campaign,message:string)=>Promise<boolean>|boolean|void; onStartOpening:()=>Promise<void>; onRetryAction:()=>Promise<void>; saving:boolean; narrationSpeed:NarrationSpeed; development?:boolean }) {
   const endRef = useRef<HTMLDivElement>(null);
-  const [speed,setSpeed]=useState<NarrationSpeed>(()=>(localStorage.getItem('four-keeps-narration-speed') as NarrationSpeed)||'normal');
   const [seen,setSeen]=useState<string[]>(()=>{try{return JSON.parse(sessionStorage.getItem('four-keeps-narration-seen')||'[]')}catch{return []}});
-  const [pendingReveal,setPendingReveal]=useState<string[]>([]);
-  const previousIds=useRef<Set<string>>(new Set());
-  const initialized=useRef(false);
-  useEffect(()=>{
-    if(!campaign)return;
-    const entries=campaign.journal.filter(entry=>entry.kind==='dm').map(entry=>entry.id);
-    if(!initialized.current){previousIds.current=new Set(entries);initialized.current=true;return;}
-    const newIds=entries.filter(id=>!previousIds.current.has(id));
-    if(newIds.length){previousIds.current=new Set(entries);setPendingReveal(old=>[...new Set([...old,...newIds])]);setSeen(old=>{const next=[...new Set([...old,...entries.filter(id=>!newIds.includes(id))])];sessionStorage.setItem('four-keeps-narration-seen',JSON.stringify(next));return next;});}
-  },[campaign?.id,campaign?.journal]);
-  const markSeen=(id:string)=>{setPendingReveal(old=>old.filter(entry=>entry!==id));setSeen(old=>{if(old.includes(id))return old;const next=[...old,id];sessionStorage.setItem('four-keeps-narration-seen',JSON.stringify(next));return next;});};
-
+  const markSeen=(id:string)=>setSeen(old=>{if(old.includes(id))return old;const next=[...old,id];sessionStorage.setItem('four-keeps-narration-seen',JSON.stringify(next));return next;});
   const lastTurn = campaign?.journal.filter((entry) => entry.kind === 'player' || entry.kind === 'dm').at(-1)?.id;
   useEffect(() => { if (lastTurn) endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' }); }, [lastTurn]);
   const allTurns = campaign?.journal.filter((entry) => entry.kind === 'player' || entry.kind === 'dm') ?? [];
@@ -160,10 +148,9 @@ function Adventure({ campaign, fullHistory, onToggleHistory, onAdventureChange, 
     {campaign?.pendingAdventureAction && !campaign.pendingClarification && <p role="status" className="text-sm text-gold">Unfinished action saved: {campaign.pendingAdventureAction.message}. <button type="button" disabled={saving} onClick={()=>void onRetryAction()} className="underline text-gold">Retry saved action</button></p>}
     {allTurns.length > 6 && <button type="button" onClick={onToggleHistory} className="w-full rounded-lg border border-gold/30 px-4 py-3 text-sm text-gold">{fullHistory ? "Show recent conversation" : "View full conversation history ("+allTurns.length+" messages)"}</button>}
     
-    <label className="flex items-center justify-end gap-2 text-xs text-parchment/70">Narration speed <select aria-label="Narration speed" value={speed} onChange={e=>{const value=e.target.value as NarrationSpeed;setSpeed(value);localStorage.setItem('four-keeps-narration-speed',value)}}><option value="slow">Slow</option><option value="normal">Normal</option><option value="fast">Fast</option><option value="instant">Instant</option></select></label>
     {turns.map((entry) => <article key={entry.id} className={entry.kind === 'player' ? 'ml-8 rounded-xl border border-gold/30 bg-gold/10 p-4' : 'mr-3 rounded-xl border border-white/10 bg-panel p-5'}>
       <p className="eyebrow">{entry.kind === 'player' ? (campaign?.characterIdentity?.name??'Nighthawk') : 'Dungeon Master'}</p>
-      {entry.kind==='dm'?<DMNarration key={entry.id} id={entry.id} text={entry.text} speed={speed} animate={pendingReveal.includes(entry.id)&&!seen.includes(entry.id)} onComplete={()=>markSeen(entry.id)}/>:<p className="mt-2 whitespace-pre-wrap leading-7 text-parchment/90">{entry.text}</p>}
+      {entry.kind==='dm'?<DMNarration key={entry.id} id={entry.id} text={entry.text} speed={narrationSpeed} animate={!seen.includes(entry.id)} onComplete={()=>markSeen(entry.id)}/>:<p className="mt-2 whitespace-pre-wrap leading-7 text-parchment/90">{entry.text}</p>}
     </article>)}
     {campaign && <p className="text-xs text-gold/80">Campaign saved on this device · {turns.length ? 'AI Dungeon Master connected' : 'Ready for your first action'}</p>}
     <div ref={endRef}/>
@@ -403,6 +390,8 @@ export function App() {
   const [navigationOpen,setNavigationOpen]=useState(false);
   const [selectedCharacterDraft,setSelectedCharacterDraft]=useState('');
   const [portalScreen,setPortalScreen] = useState<'home'|'characters'|'campaigns'|'new'|'help'|'adventure'>('home');
+  const [narrationSpeed,setNarrationSpeed]=useState<NarrationSpeed>(()=>{const value=localStorage.getItem('four-keeps-narration-speed');return value==='slow'||value==='fast'||value==='instant'?value:'normal';});
+  const changeNarrationSpeed=(value:NarrationSpeed)=>{setNarrationSpeed(value);localStorage.setItem('four-keeps-narration-speed',value);};
   const [fullHistory, setFullHistory] = useState(false);
   const [draft, setDraft] = useState('');
   const [askDMOpen, setAskDMOpen] = useState(false);
@@ -438,6 +427,8 @@ export function App() {
     localCampaignStorage.list().then((items) => {
       if (!active) return;
       setCampaigns(items);
+      const previous=items.flatMap(item=>item.journal.filter(entry=>entry.kind==='dm').map(entry=>entry.id));
+      sessionStorage.setItem('four-keeps-narration-seen',JSON.stringify([...new Set([...JSON.parse(sessionStorage.getItem('four-keeps-narration-seen')||'[]'),...previous])]));
       setCampaign(items[0] ?? null);
     }).catch((error: unknown) => {
       if (active) setNotice('Local storage unavailable: ' + String(error));
@@ -1263,7 +1254,7 @@ export function App() {
     catch(error){setNotice('Campaign save failed: '+String(error));return false;}
     finally{setSaving(false)}
   }
-  const content = { adventure: campaign?.combat && campaign.combat.status!=='completed' ? null : <Adventure campaign={campaign} fullHistory={fullHistory} onToggleHistory={() => setFullHistory(value => !value)} onAdventureChange={saveSubclassActor} onStartOpening={startAiAdventure} onRetryAction={()=>sendToDM()} saving={saving}/>, party: <Party campaign={campaign} saving={saving} onRoll={(skill,mode) => void saveSkillRoll(skill,mode)} onSaveRoll={(ability,mode) => void saveSavingThrow(ability,mode)} onAwardXP={(amount,reason) => void updateProgress('award',amount,reason)} onLevelUp={hp => void updateProgress('level',hp)} onLevelThree={(hp,cantrips,spells) => void updateProgress('level3',hp,'',cantrips,spells)} onReconcile={() => void updateProgress('reconcile')} onUndoReconcile={() => void updateProgress('undoReconcile')} onRestore={() => void updateProgress('restore')} onCastSpell={(spell,ritual,components,target)=>void castSpell(spell,ritual,components,target)} onEndConcentration={()=>void endConcentration()} onAdjustEquipment={(item,delta)=>void changeEquipment(item,delta)} onUpdateInventory={ledger=>void updateInventoryLedger(ledger)} onSubclassChange={saveSubclassActor}/> , journal: <Journal campaign={campaign}/>, map: <WorldMap campaign={campaign}/>, settings: <section className="space-y-4"><h2 className="font-serif text-2xl">Settings</h2><p className="text-sm text-parchment/60">Manage campaigns, backups, and Dungeon Master access below.</p></section>, development: campaign?.characterIdentity?<ImportedCharacterSheet campaign={campaign} saving={saving} onChange={saveSubclassActor} development/>:<section aria-label="Developer tools"><h2 className="font-serif text-2xl">Developer tools</h2><p>Legacy testing remains available through the existing development controls.</p></section> };
+  const content = { adventure: campaign?.combat && campaign.combat.status!=='completed' ? null : <Adventure campaign={campaign} fullHistory={fullHistory} onToggleHistory={() => setFullHistory(value => !value)} onAdventureChange={saveSubclassActor} onStartOpening={startAiAdventure} onRetryAction={()=>sendToDM()} saving={saving} narrationSpeed={narrationSpeed}/>, party: <Party campaign={campaign} saving={saving} onRoll={(skill,mode) => void saveSkillRoll(skill,mode)} onSaveRoll={(ability,mode) => void saveSavingThrow(ability,mode)} onAwardXP={(amount,reason) => void updateProgress('award',amount,reason)} onLevelUp={hp => void updateProgress('level',hp)} onLevelThree={(hp,cantrips,spells) => void updateProgress('level3',hp,'',cantrips,spells)} onReconcile={() => void updateProgress('reconcile')} onUndoReconcile={() => void updateProgress('undoReconcile')} onRestore={() => void updateProgress('restore')} onCastSpell={(spell,ritual,components,target)=>void castSpell(spell,ritual,components,target)} onEndConcentration={()=>void endConcentration()} onAdjustEquipment={(item,delta)=>void changeEquipment(item,delta)} onUpdateInventory={ledger=>void updateInventoryLedger(ledger)} onSubclassChange={saveSubclassActor}/> , journal: <Journal campaign={campaign}/>, map: <WorldMap campaign={campaign}/>, settings: <section className="space-y-4"><h2 className="font-serif text-2xl">Settings</h2><p className="text-sm text-parchment/60">Manage campaigns, backups, and Dungeon Master access below.</p></section>, development: campaign?.characterIdentity?<ImportedCharacterSheet campaign={campaign} saving={saving} onChange={saveSubclassActor} development/>:<section aria-label="Developer tools"><h2 className="font-serif text-2xl">Developer tools</h2><p>Legacy testing remains available through the existing development controls.</p></section> };
   if(portalScreen!=='adventure')return <div className="min-h-dvh bg-ink text-parchment">
     <div className="mx-auto min-h-dvh w-full max-w-3xl space-y-5 px-5 pb-12 pt-[max(2rem,env(safe-area-inset-top))]">
       <header className="flex flex-col items-center gap-2 border-b border-gold/20 pb-6">
@@ -1340,6 +1331,15 @@ export function App() {
       </div>}
       <main className={activeView==='map'?"min-h-0 flex-1 overflow-hidden px-3 py-3":"flex-1 px-5 py-6 pb-48"} id="main-content">
         {activeView === 'settings' && <>
+        <section aria-label="Narration settings" className="mb-5 rounded-xl border border-white/15 bg-panel p-4 space-y-3">
+          <h2 className="font-serif text-lg">Story narration</h2>
+          <label className="block text-sm">Narration speed
+            <select aria-label="Narration speed" value={narrationSpeed} onChange={event=>changeNarrationSpeed(event.target.value as NarrationSpeed)} className="mt-2 w-full rounded-lg border border-white/20 bg-ink p-3">
+              <option value="slow">Slow</option><option value="normal">Normal</option><option value="fast">Fast</option><option value="instant">Instant</option>
+            </select>
+          </label>
+          <p className="text-xs text-parchment/65">New Dungeon Master narration fades in one line at a time. Tap narration to reveal all. Your device's reduced-motion preference is respected.</p>
+        </section>
         <section className="mb-5 rounded-xl border border-gold/25 bg-panel p-4 space-y-3" aria-label="Local campaigns">
           <div className="flex items-center justify-between"><h2 className="font-serif text-lg">Local campaigns</h2><span className="text-xs text-parchment/55">{loading ? 'Loading…' : 'Saved on this device'}</span></div>
           {campaigns.length > 0 && <label className="block text-xs text-parchment/70">Active campaign
@@ -1371,14 +1371,14 @@ export function App() {
           {dmConnection && <p role="status" aria-label="DM connection status" className="text-xs text-parchment/80">{dmConnection}</p>}
           <button type="button" onClick={() => { setAccessCode(''); setDmConnection(''); setNotice('Saved access code cleared from this browser.'); }} className="rounded-lg border border-white/20 px-3 py-2 text-xs text-parchment/70">Forget access code</button><p className="text-xs text-parchment/55">Your access code stays in this browser until you clear it. Do not use this on a shared device. The rules engine resolves skill checks; combat and inventory are not yet connected.</p></>}
         </section>}
-        <details aria-label="Development section" className="mb-5 rounded-xl border border-white/15 bg-panel p-4">
+        </>}
+        {activeView === 'development' && <details aria-label="Development section" open className="mb-5 rounded-xl border border-white/15 bg-panel p-4">
           <summary className="cursor-pointer font-serif text-lg">Development</summary>
           <div className="mt-4 space-y-4">
-        <section className="space-y-4" aria-label="Development tools"><h2 className="font-serif text-2xl">Development tools</h2><p className="text-sm text-parchment/65">Test-only features. Normal adventures and character sheets remain separate.</p><div className="rounded-xl border border-gold/30 bg-panel p-3 space-y-2" aria-label="Legacy campaign creation"><h3 className="font-semibold">Legacy prototype campaign (testing only)</h3><p className="text-xs text-parchment/65">Creates an isolated Nighthawk prototype for legacy regression testing. Normal new adventures require a validated character.</p><label className="block text-sm">New campaign name<input value={newTitle} onChange={event=>setNewTitle(event.target.value)} className="mt-2 w-full rounded-lg border border-white/20 bg-ink p-3"/></label><button type="button" onClick={()=>void createLegacyDevelopmentCampaign()} disabled={saving||loading||!newTitle.trim()} className="rounded-lg bg-gold px-3 py-2 font-semibold text-ink disabled:opacity-40">New</button></div>{content.adventure && cloneElement(content.adventure,{development:true})}{cloneElement(content.party,{development:true})}</section>
+        <section className="space-y-4" aria-label="Development tools"><h2 className="font-serif text-2xl">Development tools</h2><p className="text-sm text-parchment/65">Test-only features. Normal adventures and character sheets remain separate.</p><div className="rounded-xl border border-gold/30 bg-panel p-3 space-y-2" aria-label="Legacy campaign creation"><h3 className="font-semibold">Legacy prototype campaign (testing only)</h3><p className="text-xs text-parchment/65">Creates an isolated Nighthawk prototype for legacy regression testing. Normal new adventures require a validated character.</p><label className="block text-sm">New campaign name<input value={newTitle} onChange={event=>setNewTitle(event.target.value)} className="mt-2 w-full rounded-lg border border-white/20 bg-ink p-3"/></label><button type="button" onClick={()=>void createLegacyDevelopmentCampaign()} disabled={saving||loading||!newTitle.trim()} className="rounded-lg bg-gold px-3 py-2 font-semibold text-ink disabled:opacity-40">New</button></div>{content.adventure && cloneElement(content.adventure,{development:true})}{!campaign?.characterIdentity && cloneElement(content.party,{development:true})}</section>
         {campaign && !campaign.characterIdentity && !campaign.combat && !campaign.pendingAftermath && <div className="mx-4 my-4 rounded-xl border border-gold/40 bg-panel p-3 space-y-2"><p className="text-sm font-semibold text-gold">Encounter training</p><p className="text-xs text-parchment/70">Start a standard two-opponent sparring encounter. Use the tactical grid and normal combat actions.</p><button type="button" disabled={saving} className="w-full rounded-lg border border-gold/70 p-3 font-semibold disabled:opacity-40" onClick={()=>{setActiveView('adventure');void startTrainingCombatTest()}}>Start encounter training</button></div>}
           </div>
-        </details>
-        </>}
+        </details>}
         {campaign && activeView === 'journal' && (campaign.worldFacts?.length ?? 0) > 0 && <details className="mb-5 rounded-xl border border-gold/25 bg-panel p-4">
           <summary className="cursor-pointer font-serif text-lg">World memory ({campaign.worldFacts?.length} facts)</summary>
           <ul className="mt-3 list-disc space-y-2 pl-5 text-sm text-parchment/80">{campaign.worldFacts?.map((fact, index) => <li key={index}>{fact}</li>)}</ul>

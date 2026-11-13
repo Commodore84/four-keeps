@@ -2,6 +2,8 @@ import {test,expect} from '@playwright/test';
 test('Rogue Steady Aim and Hide controls persist after reload',async({page})=>{
  await page.goto('/four-keeps/');
  await page.getByRole('button',{name:'Settings',exact:true}).click();
+ await page.getByRole('button',{name:'Open navigation menu'}).click();
+ await page.getByRole('navigation',{name:'Primary navigation'}).getByRole('button',{name:'Developer'}).click();
  const development=page.getByLabel('Development section');if(!(await development.getByLabel('Legacy campaign creation').isVisible()))await development.locator('summary').first().click();
  await development.getByLabel('Legacy campaign creation').getByLabel('New campaign name').fill('Rogue positioning browser');
  await development.getByLabel('Legacy campaign creation').getByRole('button',{name:'New',exact:true}).click();
@@ -11,18 +13,22 @@ test('Rogue Steady Aim and Hide controls persist after reload',async({page})=>{
  });
  await page.reload();await page.getByRole('button',{name:'Continue Adventure'}).click();
  await page.getByRole('button',{name:'Open navigation menu'}).click();await page.getByRole('navigation',{name:'Primary navigation'}).getByRole('button',{name:'Settings',exact:true}).click();
- const section=page.getByLabel('Development section');if(!(await section.getByLabel('Player testing').isVisible()))await section.locator('summary').first().click();
- const rogue=page.getByLabel('Imported Rogue combat features');await expect(rogue.getByRole('button',{name:'Steady Aim'})).toBeVisible();
+ await page.getByRole('button',{name:'Open navigation menu'}).click();
+ await page.getByRole('navigation',{name:'Primary navigation'}).getByRole('button',{name:'Developer'}).click();
+
+ const rogue=page.getByLabel('Imported player development').getByLabel('Imported Rogue combat features');await expect(rogue.getByRole('button',{name:'Steady Aim'})).toBeVisible();
  await rogue.getByRole('button',{name:'Steady Aim'}).click();await expect(rogue).toContainText('Steady Aim: active');
  await page.reload();await page.getByRole('button',{name:'Continue Adventure'}).click();
- await page.getByRole('button',{name:'Open navigation menu'}).click();await page.getByRole('navigation',{name:'Primary navigation'}).getByRole('button',{name:'Settings',exact:true}).click();
- const after=page.getByLabel('Imported Rogue combat features');await expect(after).toContainText('Steady Aim: active');await expect(after.getByLabel('Rogue positioning').locator('button').first()).toBeDisabled();
+ await page.getByRole('button',{name:'Open navigation menu'}).click();await page.getByRole('navigation',{name:'Primary navigation'}).getByRole('button',{name:'Developer',exact:true}).click();
+ const after=page.getByLabel('Imported player development').getByLabel('Imported Rogue combat features');await expect(after).toContainText('Steady Aim: active');await expect(after.getByLabel('Rogue positioning').locator('button').first()).toBeDisabled();
 
 });
 
 test('Rogue Hide and enemy Search persist through browser reload',async({page})=>{test.setTimeout(60000);
  await page.goto('/four-keeps/');
  await page.getByRole('button',{name:'Settings',exact:true}).click();
+ await page.getByRole('button',{name:'Open navigation menu'}).click();
+ await page.getByRole('navigation',{name:'Primary navigation'}).getByRole('button',{name:'Developer'}).click();
  const development=page.getByLabel('Development section');if(!(await development.getByLabel('Legacy campaign creation').isVisible()))await development.locator('summary').first().click();
  await development.getByLabel('Legacy campaign creation').getByLabel('New campaign name').fill('Rogue positioning browser');
  await development.getByLabel('Legacy campaign creation').getByRole('button',{name:'New',exact:true}).click();
@@ -32,11 +38,13 @@ test('Rogue Hide and enemy Search persist through browser reload',async({page})=
  });
  await page.reload();await page.getByRole('button',{name:'Continue Adventure'}).click();
  await page.getByRole('button',{name:'Open navigation menu'}).click();await page.getByRole('navigation',{name:'Primary navigation'}).getByRole('button',{name:'Settings',exact:true}).click();
- const section=page.getByLabel('Development section');if(!(await section.getByLabel('Player testing').isVisible()))await section.locator('summary').first().click();
- const rogue=page.getByLabel('Imported Rogue combat features');await expect(rogue.getByRole('button',{name:'Steady Aim'})).toBeVisible();
+ await page.getByRole('button',{name:'Open navigation menu'}).click();
+ await page.getByRole('navigation',{name:'Primary navigation'}).getByRole('button',{name:'Developer'}).click();
+
+ const rogue=page.getByLabel('Imported player development').getByLabel('Imported Rogue combat features');await expect(rogue.getByRole('button',{name:'Steady Aim'})).toBeVisible();
  await rogue.getByLabel('Rogue Hide Stealth total').fill('19');await rogue.getByLabel('DM verified Hide concealment').check();await rogue.getByRole('button',{name:'Cunning Hide'}).click();await expect(rogue).toContainText('Hidden: yes');
  await page.reload();await page.getByRole('button',{name:'Continue Adventure'}).click();
- await page.getByRole('button',{name:'Open navigation menu'}).click();await page.getByRole('navigation',{name:'Primary navigation'}).getByRole('button',{name:'Settings',exact:true}).click();
- const devAfter=page.getByLabel('Development section');if(!(await devAfter.getByLabel('Player testing').isVisible()))await devAfter.locator('summary').first().click();const after=page.getByLabel('Imported Rogue combat features');await expect(after).toContainText('Hidden: yes');await expect(after.getByLabel('Rogue detection observer')).toBeVisible();await after.getByLabel('Rogue detection observer').selectOption('enemy');await after.getByLabel('Verified enemy Perception total').fill('19');await after.getByRole('button',{name:'Resolve Search'}).click();await expect(after).toContainText('Hidden: no');
+ await page.getByRole('button',{name:'Open navigation menu'}).click();await page.getByRole('navigation',{name:'Primary navigation'}).getByRole('button',{name:'Developer',exact:true}).click();
+ const after=page.getByLabel('Imported player development').getByLabel('Imported Rogue combat features');await expect(after).toContainText('Hidden: yes');await expect(after.getByLabel('Rogue detection observer')).toBeVisible();await after.getByLabel('Rogue detection observer').selectOption('enemy');await after.getByLabel('Verified enemy Perception total').fill('19');await after.getByRole('button',{name:'Resolve Search'}).click();await expect(after).toContainText('Hidden: no');
 
 });

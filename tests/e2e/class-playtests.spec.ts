@@ -8,6 +8,7 @@ async function navigate(page:Page,tab:'Adventure'|'Player'|'Journal'|'Map'|'Sett
 }
 async function openDevelopment(page:Page){
  await navigate(page,'Settings');
+ await navigate(page,'Developer');
  const panel=page.getByLabel('Development section');
  if(!(await panel.getByLabel('Legacy campaign creation').isVisible()))await panel.locator('summary').first().click();
 }
@@ -110,17 +111,25 @@ test('AI-led opening, world memory and saved pending action retry survive reload
  await createAndImport(page,'fighter');
  await expect.poll(async()=>Boolean((await saved(page))?.characterIdentity)).toBe(true);
  await page.evaluate(()=>{localStorage.setItem('four-keeps-access-code','browser-test-code');localStorage.setItem('four-keeps-dm-mode','on');});
- await page.reload();await page.getByRole('button',{name:'Continue Adventure'}).click();
  const requests:any[]=[];let failure:string|null=null;
  await page.route('**/api/dm',async route=>{
    const body=route.request().postDataJSON();requests.push(body);
    if(failure){await route.fulfill({status:502,contentType:'application/json',body:JSON.stringify({error:failure})});return;}
-   await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({narration:body.opening?'A bell tolls from the abandoned keep.':'Mira says the bell rang at dusk.',newFacts:['A bell rang at dusk'],worldUpdates:{npcs:[{name:'Mira',role:'Watchkeeper',location:'Frontier Village',relationship:'neutral',notes:['Knows the old road']}],clues:[{text:'A stranger passed at dusk',evidence:'reported',source:'Mira'}]},combatStart:null})});
- });
+   await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({narration:body.opening?'A bell tolls from the abandoned keep. The road winds through a crowded marketplace, where a suspicious merchant argues with a particularly uncooperative mule. Beyond the village gates, the old tower waits beneath the gathering clouds.':'Mira says the bell rang at dusk.',newFacts:['A bell rang at dusk'],worldUpdates:{npcs:[{name:'Mira',role:'Watchkeeper',location:'Frontier Village',relationship:'neutral',notes:['Knows the old road']}],clues:[{text:'A stranger passed at dusk',evidence:'reported',source:'Mira'}]},combatStart:null})});
+ })
+ await page.reload();await page.getByRole('button',{name:'Continue Adventure'}).click();
  await expect.poll(async()=> (await saved(page))?.journal?.some((entry:any)=>entry.id?.endsWith('-dm-opening'))).toBe(true);
- await expect(page.getByLabel('Adventure',{exact:true})).toContainText('A bell tolls from the abandoned keep.');
+ const narration=page.getByLabel('Dungeon Master narration').first();
+ await expect(narration).toContainText('A bell tolls from the abandoned keep.');
+ await expect(narration.locator('.dm-narration-line')).toHaveCount(1);
+ await narration.click();
+ await expect(narration).toContainText('gathering clouds.');
+
+ await expect(page.getByLabel('Narration speed')).toHaveCount(0);
+ await navigate(page,'Settings');
  await expect(page.getByLabel('Narration speed')).toHaveValue('normal');
  await page.getByLabel('Narration speed').selectOption('instant');
+ await navigate(page,'Adventure');
  await expect(page.getByLabel('Dungeon Master narration').first()).toContainText('A bell tolls');
  await expect(page.getByLabel('Adventure journal')).toHaveCount(0);
  await expect(page.getByLabel('AI adventure session')).toHaveCount(0);
@@ -660,7 +669,7 @@ test('imported character sheet excludes developer tools and rest controls',async
  await expect(nav.getByRole('button').last()).toContainText('Developer');
  await nav.getByRole('button',{name:'Developer'}).click();
  await expect(page.getByLabel('Imported player development tools')).toBeVisible();
- await expect(page.getByText('Subclass actor management')).toBeVisible();
+ await expect(page.getByText('Subclass actor management').first()).toBeVisible();
  await expect(page.getByLabel('Manual XP award')).toBeVisible();
  await navigate(page,'Player');
  await expect(page.getByLabel('Manual XP award')).toHaveCount(0);

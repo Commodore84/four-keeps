@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-async function navigate(page:Page,tab:'Adventure'|'Player'|'Journal'|'Map'|'Settings'){
+async function navigate(page:Page,tab:'Adventure'|'Player'|'Journal'|'Map'|'Settings'|'Developer'){
  const menu=page.getByRole('button',{name:'Open navigation menu'});
  await menu.waitFor({state:'visible',timeout:2500}).catch(()=>{});
  if(await menu.count()===0){if(tab==='Settings'){await page.getByRole('button',{name:'Settings',exact:true}).click();return;}throw new Error('Navigation menu is unavailable on the portal screen');}
@@ -8,6 +8,7 @@ async function navigate(page:Page,tab:'Adventure'|'Player'|'Journal'|'Map'|'Sett
 }
 async function openDevelopment(page:Page){
  await navigate(page,'Settings');
+ await navigate(page,'Developer');
  const panel=page.getByLabel('Development section');
  if(!(await panel.getByLabel('Legacy campaign creation').isVisible()))await panel.locator('summary').first().click();
 }
@@ -1093,7 +1094,7 @@ test('development utilities are isolated from the normal Adventure and Player ta
  await expect(page.getByText('Development: XP and level-up testing')).toBeVisible();
 });
 
-test('mobile hamburger navigation preserves five destinations and collapsed development settings',async({page})=>{
+test('mobile hamburger navigation preserves five destinations and separate developer tools',async({page})=>{
  await page.setViewportSize({width:375,height:812});
  await page.goto('/four-keeps/');
  await navigate(page,'Settings');
@@ -1107,14 +1108,16 @@ test('mobile hamburger navigation preserves five destinations and collapsed deve
  await expect(page.locator('header > div').first().getByRole('button',{name:'Home',exact:true})).toHaveCount(0);
  await expect(nav.getByRole('button').last()).toContainText('Developer');
  await expect(nav.getByRole('button',{name:'Settings'})).toHaveAttribute('aria-current','page');
+ await expect(page.getByLabel('Development section')).toHaveCount(0);
  await nav.getByRole('button',{name:'Journal'}).click();
  await expect(menu).toHaveAttribute('aria-expanded','false');
  await expect(page.getByRole('navigation',{name:'Primary navigation'})).toHaveCount(0);
  await navigate(page,'Settings');
  const panel=page.getByLabel('Development section');
- await expect(panel.getByLabel('Legacy campaign creation')).toBeHidden();
- await panel.locator('summary').first().click();
- await expect(panel.getByLabel('Legacy campaign creation')).toBeVisible();
+ await expect(panel).toHaveCount(0);
+ await menu.click();
+ await page.getByRole('navigation',{name:'Primary navigation'}).getByRole('button',{name:'Developer'}).click();
+ await expect(page.getByLabel('Development section').getByLabel('Legacy campaign creation')).toBeVisible();
  const bounds=await menu.boundingBox();
  expect(bounds).not.toBeNull();
  expect(bounds!.x+bounds!.width).toBeLessThanOrEqual(376);
