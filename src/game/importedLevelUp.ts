@@ -75,7 +75,7 @@ export function importedLevelUpIssues(c:Campaign,choice:ImportedLevelChoice):str
  }
  if(identity.classId==='rogue'&&level>=9&&c.importedSubclassId==='rogue-arcane-trickster'){
   const spells=choice.arcaneSpells??[],prior=ch.preparedSpells??[],needed=level===9?Math.max(0,6-prior.length):Math.max(0,7-prior.length);
-  if(spells.length!==needed||new Set(spells).size!==spells.length||spells.some(name=>prior.includes(name)||!([...SPELLS.filter(sp=>sp.level===1||sp.level===2).filter(sp=>sp.classes.includes('wizard')).map(sp=>sp.name),...WIZARD_LEVEL2_SPELLS].includes(name))))issues.push('Choose distinct supported Wizard spells to reach the Arcane Trickster prepared-spell progression.');
+  if(spells.length!==needed||new Set(spells).size!==spells.length||spells.some(name=>prior.includes(name)||!([...SPELLS.filter(sp=>sp.level===1).filter(sp=>sp.classes.includes('wizard')).map(sp=>sp.name),...WIZARD_LEVEL2_SPELLS].includes(name))))issues.push('Choose distinct supported Wizard spells to reach the Arcane Trickster prepared-spell progression.');
  }
  if(identity.classId==='rogue'&&level===6){
   const selected=choice.rogueExpertise??[],known=ch.proficientSkills,existing=ch.expertiseSkills??[];
