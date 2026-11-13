@@ -841,7 +841,7 @@ export function importedRogueCunningAction(campaign:Campaign,choice:'Dash'|'Dise
 }
 /** Rogue Sneak Attack is applied only after validating a hit and its eligibility.
  * The player supplies individual d6 results; no rolls are invented. */
-export function attackImportedRogue(campaign:Campaign,targetId:string,roll:number,weaponDamageDice:number,rangeFeet:number,sneakDice:number[],secondD20?:number):Campaign{
+export function attackImportedRogue(campaign:Campaign,targetId:string,roll:number,weaponDamageDice:number,rangeFeet:number,sneakDice:number[],secondD20?:number,cunningStrike?:{effect:'Trip';saveTotal:number}):Campaign{
  const battle=activeActor(campaign,'nighthawk'),actor=battle.participants.nighthawk,target=battle.participants[targetId];
  const ch=campaign.character;
  if(battle.mode!=='unified'||campaign.characterIdentity?.classId!=='rogue'||!ch)throw Error('Requires imported Rogue in a unified encounter');
@@ -859,12 +859,30 @@ export function attackImportedRogue(campaign:Campaign,targetId:string,roll:numbe
  const critical=hitRoll===20;
  const diceCount=Math.ceil((ch.level??1)/2)*(critical?2:1);
  if(sneakDice.length!==diceCount||sneakDice.some(n=>!Number.isInteger(n)||n<1||n>6))throw Error('Provide '+diceCount+' verified Sneak Attack d6 rolls');
+ if(cunningStrike){
+  if((ch.level??1)<5||cunningStrike.effect!=='Trip')throw Error('Cunning Strike Trip requires Rogue level 5');
+  if(!Number.isInteger(cunningStrike.saveTotal)||cunningStrike.saveTotal<0||cunningStrike.saveTotal>100)throw Error('Verified Dexterity saving throw required');
+  if(sneakDice.length<1)throw Error('Trip requires a Sneak Attack die to forgo');
+ }
  if(!Number.isInteger(weaponDamageDice)||weaponDamageDice<1||weaponDamageDice>100)throw Error('Invalid weapon damage roll');
  const hit=hitRoll===20||(hitRoll!==1&&hitRoll+attackModifier>=targetAC);
- const result=attackCompanion(campaign,'nighthawk',targetId,roll,attackModifier,targetAC,weaponDamageDice+(hit?sneakDice.reduce((a,b)=>a+b,0):0),damageModifier,'Piercing',rangeFeet,secondD20);
+ const result=attackCompanion(campaign,'nighthawk',targetId,roll,attackModifier,targetAC,weaponDamageDice+(hit?sneakDice.slice(cunningStrike?1:0).reduce((a,b)=>a+b,0):0),damageModifier,'Piercing',rangeFeet,secondD20);
  if(!hit)return result;
  const combat=result.companionEncounter!;
- return save(result,{...combat,participants:{...combat.participants,nighthawk:{...combat.participants.nighthawk,rogueSneakUsed:true}},log:[...combat.log,'Rogue Sneak Attack '+diceCount+'d6: '+sneakDice.join('+')+' = '+sneakDice.reduce((a,b)=>a+b,0)+' extra piercing damage']});
+ const tripDC=8+ch.proficiencyBonus+abilityModifier(ch.scores.dex);
+ const tripped=!!cunningStrike&&cunningStrike.saveTotal<tripDC;
+ const struck=combat.participants[targetId];
+ return save(result,{...combat,participants:{...combat.participants,...(tripped?{[targetId]:{...struck,conditions:[...new Set([...struck.conditions,'Prone' as const])]}}:{}),nighthawk:{...combat.participants.nighthawk,rogueSneakUsed:true}},log:[...combat.log,...(cunningStrike?[`Rogue Cunning Strike Trip: one Sneak Attack d6 forgone; Dexterity save ${cunningStrike.saveTotal} vs DC ${tripDC}: ${tripped?'prone':'saved'}`]:[]),'Rogue Sneak Attack '+diceCount+'d6: '+sneakDice.join('+')+' = '+sneakDice.slice(cunningStrike?1:0).reduce((a,b)=>a+b,0)+' extra piercing damage']});
+}
+/** Uncanny Dodge is a reaction to a verified visible attacker hitting the Rogue. */
+export function importedRogueUncannyDodge(campaign:Campaign,attackerId:string,verifiedIncomingDamage:number,type:DamageType):Campaign{
+ const battle=encounter(campaign),rogue=battle.participants.nighthawk,attacker=battle.participants[attackerId];
+ if(battle.mode!=='unified'||campaign.characterIdentity?.classId!=='rogue'||(campaign.character?.level??1)<5)throw Error('Uncanny Dodge requires an imported level-5 Rogue');
+ if(!attacker||attacker.actorKind!=='enemy'||attacker.hp<=0||!companionLineOfSight(battle,rogue,attacker)||rogue.hp<=0||rogue.reactionUsed||cannotAct(rogue))throw Error('Uncanny Dodge requires a visible attacker and an available reaction');
+ if(!Number.isInteger(verifiedIncomingDamage)||verifiedIncomingDamage<1||verifiedIncomingDamage>1000)throw Error('Verified incoming hit damage required');
+ const reduced=Math.floor(verifiedIncomingDamage/2);
+ const next=damageCompanion(campaign,'nighthawk',reduced,type),updated=next.companionEncounter!;
+ return save(next,{...updated,participants:{...updated.participants,nighthawk:{...updated.participants.nighthawk,reactionUsed:true}},log:[...updated.log,`Rogue Uncanny Dodge: ${verifiedIncomingDamage} incoming damage halved to ${reduced}; reaction spent`]});
 }
 /** Mage Hand Legerdemain: consume the action and record a declared subtle interaction.
  * Object manipulation is not silently resolved without DM adjudication. */

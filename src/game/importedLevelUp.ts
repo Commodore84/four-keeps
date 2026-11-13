@@ -9,12 +9,12 @@ import {futureFeat,featEligibility,eligibleFeatAbility} from './creationFutureFe
 import {ABILITIES,type Ability,type Scores,modifier} from './creationAbilities';
 import {forecastImprovementLevels} from './creationProjection';
 import type {FeatContext} from './creationFutureFeats';
-export interface ImportedLevelChoice {hpGain:number;subclassId?:string;featPlan?:string;featAbility?:Ability;abilityIncreases?:Partial<Record<Ability,number>>;confirm:boolean;legacyApproved?:boolean;skillProficiency?:Skill;skillExpertise?:Skill;arcaneCantrips?:string[];arcaneSpells?:string[];warlockInvocations?:string[];warlockSpells?:string[];wizardBookSpells?:string[];wizardPrepared?:string[];wizardPortents?:number[]}
+export interface ImportedLevelChoice {hpGain:number;subclassId?:string;featPlan?:string;featAbility?:Ability;abilityIncreases?:Partial<Record<Ability,number>>;confirm:boolean;legacyApproved?:boolean;skillProficiency?:Skill;skillExpertise?:Skill;arcaneCantrips?:string[];arcaneSpells?:string[];warlockInvocations?:string[];warlockSpells?:string[];wizardBookSpells?:string[];wizardPrepared?:string[];wizardPortents?:number[];rogueExpertise?:Skill[]}
 export function importedLevelUpIssues(c:Campaign,choice:ImportedLevelChoice):string[]{
  const issues:string[]=[];const ch=c.character,identity=c.characterIdentity,build=c.characterBuild;
  if(!ch||!identity||!build)return ['Only imported characters can use this level-up workflow.'];
  const level=(ch.level??1)+1;
- if(level<2||level>4)return ['Imported level-up currently supports levels 2–4 only.'];
+ if(level<2||level>(identity.classId==='rogue'?6:4))return ['Imported level-up supports Rogue levels 2–6 and other classes levels 2–4 only.'];
  if((c.xp??0)<xpThresholds[level-1])issues.push(`Requires ${xpThresholds[level-1]} XP for level ${level}.`);
  const cls=classSummary(identity.classId);if(!cls)return ['Unknown class.'];
  const min=1+modifier(ch.scores.con),max=cls.hitDie+modifier(ch.scores.con);
@@ -73,6 +73,10 @@ export function importedLevelUpIssues(c:Campaign,choice:ImportedLevelChoice):str
    }
   }
  }
+ if(identity.classId==='rogue'&&level===6){
+  const selected=choice.rogueExpertise??[],known=ch.proficientSkills,existing=ch.expertiseSkills??[];
+  if(selected.length!==2||new Set(selected).size!==2||selected.some(skill=>!known.includes(skill)||existing.includes(skill)))issues.push('Choose two distinct proficient Rogue skills without existing Expertise.');
+ }
  if(!choice.confirm)issues.push('Explicit confirmation required.');
  return issues;
 }
@@ -90,9 +94,10 @@ export function applyImportedLevelUp(c:Campaign,choice:ImportedLevelChoice):Camp
  const priorInvocations=c.importedWarlockInvocations??c.characterBuild?.selections?.magic?.invocations??[];
  const next={...ch,level,maxHitPoints:adjustedMax,currentHitPoints:Math.min(adjustedMax,(ch.currentHitPoints??1)+choice.hpGain+conChange*level),scores,proficiencyBonus:Math.ceil(level/4)+1,
   proficientSkills:choice.featPlan==='Skill Expert'?[...ch.proficientSkills,choice.skillProficiency!]:ch.proficientSkills,
-  expertiseSkills:choice.featPlan==='Skill Expert'?[...(ch.expertiseSkills??[]),choice.skillExpertise!]:ch.expertiseSkills,
+  expertiseSkills:level===6&&c.characterIdentity?.classId==='rogue'?[...(ch.expertiseSkills??[]),...(choice.rogueExpertise??[])]:choice.featPlan==='Skill Expert'?[...(ch.expertiseSkills??[]),choice.skillExpertise!]:ch.expertiseSkills,
   ...(wizard?{preparedSpells:[...(choice.wizardPrepared??[])],spellSlots:{level1:level===2?3:4,usedLevel1:Math.min(ch.spellSlots?.usedLevel1??0,level===2?3:4),...(level>=3?{level2:level===3?2:3,usedLevel2:Math.min(ch.spellSlots?.usedLevel2??0,level===3?2:3)}:{})},resources:{...ch.resources,'Arcane Recovery':{maximum:1,used:ch.resources?.['Arcane Recovery']?.used??0,recovery:'long' as const},...(level===3?{'Portent':{maximum:2,used:0,recovery:'long' as const}}:{})}}:{}),
   ...(warlock?{preparedSpells:[...new Set([...(ch.preparedSpells??[]),...(choice.warlockSpells??[])])],spellSlots:{level1:level>=2?2:1,usedLevel1:Math.min(ch.spellSlots?.usedLevel1??0,level>=2?2:1)},resources:{...ch.resources,...(level===2?{'Magical Cunning':{maximum:1,used:0,recovery:'long' as const}}:{}),...(level===3?{'Healing Light':{maximum:4,used:0,recovery:'long' as const}}:{}),...(level===4?{'Healing Light':{maximum:5,used:ch.resources?.['Healing Light']?.used??0,recovery:'long' as const}}:{})}}:{}),
+  ...(c.characterIdentity?.classId==='rogue'&&level>=5&&c.importedSubclassId==='rogue-arcane-trickster'?{spellSlots:{...ch.spellSlots!,level1:3,usedLevel1:Math.min(ch.spellSlots?.usedLevel1??0,3)}}:{}),
   ...(level===3&&choice.subclassId==='rogue-arcane-trickster'?{subclass:'Arcane Trickster' as const,cantrips:[...new Set([...(ch.cantrips??[]),'Mage Hand',...(choice.arcaneCantrips??[])])],preparedSpells:[...new Set([...(ch.preparedSpells??[]),...(choice.arcaneSpells??[])])],spellSlots:{level1:2,usedLevel1:0}}:{})};
  // Keep the selected subclass separately; legacy character.subclass is Arcane Trickster-specific.
  return {...c,character:next,...(wizard?{hitDiceRemaining:Math.min(level,(c.hitDiceRemaining??(level-1))+1),importedWizardSpellbook:[...(c.importedWizardSpellbook??c.characterBuild?.selections?.magic?.spellbook?.map(id=>SPELL_BY_ID[id]?.name??id)??[]),...(choice.wizardBookSpells??[])],...(level===3?{importedWizardPortents:[...(choice.wizardPortents??[])]}:{})}:{}),...(warlock?{hitDiceRemaining:Math.min(level,(c.hitDiceRemaining??(level-1))+1)}:{}),...(warlock?{importedWarlockPactSlotLevel:level>=3?2:1,importedWarlockInvocations:level===2?[...priorInvocations,...(choice.warlockInvocations??[])]:priorInvocations}:{}),importedSubclassId:level===3?choice.subclassId:c.importedSubclassId,updatedAt:new Date().toISOString(),journal:[...c.journal,{id:crypto.randomUUID(),kind:'system',text:`${c.characterIdentity!.name} confirmed level ${level}: +${choice.hpGain} HP${level===3?`; subclass ${choice.subclassId}`:''}${level===4?'; '+choice.featPlan:''}.`,createdAt:new Date().toISOString()}]};
