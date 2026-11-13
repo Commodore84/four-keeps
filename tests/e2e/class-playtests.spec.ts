@@ -70,7 +70,7 @@ for(const id of ['fighter','rogue','cleric','wizard'] as const)test(id+' complet
   await battle.getByRole('button',{name:'Cast origin spell without a slot'}).click();await expect(battle.getByLabel('Unified spell slots')).toContainText('2 remaining');
   await battle.getByRole('button',{name:'End companion turn'}).click();await battle.getByRole('button',{name:'End companion turn'}).click();
  }
- if(id==='wizard'){await expect(battle.getByLabel('Wizard verified spell resolution')).toBeVisible();await expect(battle.getByRole('button',{name:'Resolve verified Wizard spell'})).toBeDisabled();await expect(battle.getByLabel('Wizard resolved spell')).toHaveValue('Magic Missile');}
+ if(id==='wizard'){await expect(battle.getByLabel('Wizard verified spell resolution')).toBeVisible();await expect(battle.getByRole('button',{name:'Resolve verified Wizard spell'})).toBeDisabled();await expect(battle.getByLabel('Wizard resolved spell')).toHaveValue('Magic Missile');await expect(battle.getByRole('button',{name:'Resolve multi-target Magic Missile'})).toBeDisabled();await expect(battle.getByLabel('Wizard Magic Missile dart targets')).toBeVisible();}
  if(id==='wizard'||id==='cleric'){
   await battle.getByLabel('Unified prepared spell',{exact:true}).selectOption(id==='wizard'?'Magic Missile':'Guiding Bolt');await battle.getByRole('button',{name:'Cast prepared level-one spell'}).click();await expect(battle.getByLabel('Unified spell slots')).toContainText('1 remaining');
   await battle.getByLabel('Companion target',{exact:true}).selectOption('tower-guard');await battle.getByLabel('Companion damage',{exact:true}).fill('3');await battle.getByRole('button',{name:'Apply damage',exact:true}).click();

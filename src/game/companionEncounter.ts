@@ -48,7 +48,12 @@ function activeActor(campaign:Campaign,actorId:string):CompanionEncounter{
  return battle;
 }
 function save(campaign:Campaign,battle:CompanionEncounter):Campaign{
- return {...campaign,companionEncounter:battle,updatedAt:new Date().toISOString()};
+ // Centralized cleanup covers all damage paths, including attacks and environmental damage.
+ const wizard=battle.participants.nighthawk;
+ const interrupted=wizard?.hp===0&&(wizard.concentratingOn||campaign.companionEncounter?.participants.nighthawk?.concentratingOn);
+ const cleaned=interrupted&&(wizard.concentratingOn==='Hold Person'||campaign.companionEncounter?.participants.nighthawk?.concentratingOn==='Hold Person')?clearWizardHoldPerson(battle):battle;
+ const participants=interrupted?{...cleaned.participants,nighthawk:{...cleaned.participants.nighthawk,concentratingOn:undefined}}:cleaned.participants;
+ return {...campaign,companionEncounter:{...cleaned,participants,...(interrupted?{log:[...cleaned.log,'Wizard concentration ended at zero HP']}: {})},updatedAt:new Date().toISOString()};
 }
 export function startCompanionEncounter(campaign:Campaign,initiative:Record<string,number>,positions:Record<string,{x:number;y:number}>,hitPoints:Record<string,number>):Campaign{
  if(campaign.companionEncounter?.status==='active')throw Error('Finish the existing companion encounter first');
@@ -376,6 +381,7 @@ export function moveCompanion(campaign:Campaign,actorId:string,x:number,y:number
 }
 export function endCompanionTurn(campaign:Campaign,actorId:string):Campaign{
  const battle=activeActor(campaign,actorId);
+ if(battle.mode==='unified'&&battle.wizardHoldPersonTargets?.includes(actorId)&&battle.participants[actorId]?.conditions.includes('Paralyzed'))throw Error('Resolve Hold Person end-of-turn Wisdom save before ending turn');
  if(battle.participants[actorId]?.actorKind==='enemy'&&battle.pendingOpportunity?.moverId===actorId&&battle.pendingOpportunity.attackerIds.length)throw Error('Pending opportunity reactions require DM adjudication');
  const next=(battle.turnIndex+1)%battle.order.length;
  const nextId=battle.order[next];const outgoing=battle.participants[actorId];const participants={...battle.participants,[actorId]:{...outgoing,disengaged:false}};participants[nextId]={...participants[nextId],movementSpentFeet:0,actionUsed:false,bonusActionUsed:false,dashFeet:0,disengaged:false,dodging:false,reactionUsed:false,rogueSneakUsed:false};return save(campaign,{...battle,participants,turnIndex:next,round:battle.round+(next===0?1:0),log:[...battle.log,actorId+' ended turn']});
@@ -1001,4 +1007,21 @@ export function resolveWizardScorchingRayMulti(campaign:Campaign,targets:[string
  }
  const next=save(campaign,{...battle,participants:{...participants,nighthawk:{...caster,actionUsed:true}},log:[...battle.log,`Wizard Scorching Ray: three verified rays, ${total} total fire damage`]});
  return {...next,character:{...ch,spellSlots:{...ch.spellSlots,usedLevel2:(ch.spellSlots.usedLevel2??0)+1}},...(portentIndex===undefined?{}:{importedWizardPortents:dice.filter((_,i)=>i!==portentIndex)})};
+}
+
+/** Deterministic multi-target Magic Missile: each verified dart has its own d4 and target. */
+export function resolveWizardMagicMissileMulti(campaign:Campaign,targets:string[],dice:number[],rank:1|2):Campaign{
+ const battle=activeActor(campaign,'nighthawk'),caster=battle.participants.nighthawk,ch=campaign.character;
+ if(battle.mode!=='unified'||campaign.characterIdentity?.classId!=='wizard'||!ch?.preparedSpells?.includes('Magic Missile')||caster.actionUsed||caster.hp<=0||cannotAct(caster))throw Error('Magic Missile unavailable');
+ if(rank!==1&&rank!==2)throw Error('Invalid Magic Missile slot');
+ const count=rank+2;
+ if(targets.length!==count||dice.length!==count||dice.some(d=>!Number.isInteger(d)||d<1||d>4))throw Error('Verify each Magic Missile dart and target');
+ const slots=ch.spellSlots,used=rank===1?slots?.usedLevel1:slots?.usedLevel2,max=rank===1?slots?.level1:slots?.level2;
+ if(!Number.isInteger(used)||!Number.isInteger(max)||used!>=max!)throw Error('Magic Missile slot unavailable');
+ const participants={...battle.participants};
+ // Validate the entire casting before applying any damage or expending a slot.
+ for(const id of targets){const target=battle.participants[id];if(!target||target.actorKind!=='enemy'||target.hp<=0||Math.max(Math.abs(caster.x-target.x),Math.abs(caster.y-target.y))*5>120||!companionLineOfSight(battle,caster,target))throw Error('Invalid Magic Missile target');}
+ targets.forEach((id,i)=>{participants[id]=damagedActor(participants[id],dice[i]+1)});
+ const next=save(campaign,{...battle,participants:{...participants,nighthawk:{...caster,actionUsed:true}},log:[...battle.log,`Wizard Magic Missile rank ${rank}: ${count} verified darts across ${new Set(targets).size} targets`]});
+ return {...next,character:{...ch,spellSlots:{...slots!,...(rank===1?{usedLevel1:used!+1}:{usedLevel2:used!+1})}}};
 }
