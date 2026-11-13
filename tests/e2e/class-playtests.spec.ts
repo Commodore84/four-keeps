@@ -507,6 +507,13 @@ test('new Rogue starts at Frontier Village, buys supplies, and sees persisted Pl
  expect(dmRequests.at(-1).gameState.merchant.purchaseRule).toContain('explicit confirmation');
  await expect.poll(async()=>Boolean((await saved(page)).pendingAdventureAction)).toBe(false);
  const before=(await saved(page)).inventoryLedger;
+ const requestsBeforeSearch=dmRequests.length;
+ await page.getByLabel('Message the Dungeon Master').fill('I look for a place to buy some gear');
+ await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
+ await expect.poll(()=>dmRequests.length).toBeGreaterThan(requestsBeforeSearch);
+ await expect.poll(async()=>Boolean((await saved(page)).pendingAdventureAction)).toBe(false);
+ expect((await saved(page)).inventoryLedger).toEqual(before);
+ await expect(page.getByText('The merchant cannot prepare that purchase')).toHaveCount(0);
  await page.getByLabel('Message the Dungeon Master').fill('I buy one dagger');
  await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
  await expect(page.getByText('Confirm purchase',{exact:false}).first()).toBeVisible();

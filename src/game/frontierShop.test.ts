@@ -51,6 +51,11 @@ describe('2024 merchant catalog compatibility and ammunition',()=>{
  it('rejects unlisted merchandise and tampered discount without spending money',()=>{
   const c=fixture();
   expect(isMerchantPurchaseRequest('I will buy a greatsword')).toBe(true);
+  expect(isMerchantPurchaseRequest('I look for a place to buy some gear')).toBe(false);
+  expect(isMerchantPurchaseRequest('Where can I buy supplies?')).toBe(false);
+  expect(isMerchantPurchaseRequest('I want to find a merchant who sells weapons')).toBe(false);
+  expect(isMerchantPurchaseRequest('I want to buy a dagger')).toBe(true);
+  expect(isMerchantPurchaseRequest('Buy 2 torches')).toBe(true);
   expect(merchantNegotiationTarget('Can you discount the dagger?')).toBe('dagger');
   expect(merchantNegotiationTarget('Can you discount everything?')).toBeNull();
   expect(merchantNegotiationTarget('Can you discount the dagger and rope?')).toBeNull();

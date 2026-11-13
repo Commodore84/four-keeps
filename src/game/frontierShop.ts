@@ -24,7 +24,12 @@ export function merchantNegotiationTarget(message:string):string|null {
  });
  return matches.length===1?matches[0].id:null;
 }
-export function isMerchantPurchaseRequest(message:string):boolean {return /\b(?:buy|purchase|i(?:'ll| will) have|i(?:'d| would) like to buy)\b/i.test(message);}
+/** Purchase intent is a commitment to acquire goods, not an exploration or shopping-location question. */
+export function isMerchantPurchaseRequest(message:string):boolean {
+ const text=message.trim();
+ if(/\b(?:look(?:ing)? for|find|search for|where|place|shop|store|merchant|someone|somewhere|location|go to|head to|visit)\b.{0,90}\b(?:buy|purchase)\b/i.test(text))return false;
+ return /\b(?:i\s+(?:want|wish|need|intend|plan)\s+to\s+(?:buy|purchase)|i(?:'d| would)\s+like\s+to\s+(?:buy|purchase)|i(?:'ll| will| am going to)\s+(?:buy|purchase|take|have)|(?:buy|purchase)\s+(?:me\s+)?(?:a\s+|an\s+|the\s+|some\s+|\d+\s+)?\S+|i(?:'ll| will)\s+have\b)/i.test(text);
+}
 export function isMerchantNegotiationRequest(message:string):boolean {return /\b(haggle|negotiate|discount|lower (?:the )?price|better price|persuade|bargain)\b/i.test(message);}
 export function frontierMerchantContext(campaign:Campaign){
  if(campaign.adventureSession?.site!=='frontier'||campaign.adventureSession.status!=='exploring'||!campaign.characterIdentity)return null;
