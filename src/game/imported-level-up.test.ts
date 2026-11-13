@@ -48,3 +48,31 @@ describe('Arcane Trickster progression gates',()=>{
   expect(next.character?.level).toBe(4);expect(next.character?.cantrips).toContain('Mage Hand');expect(next.character?.preparedSpells).toContain('Shield');expect(next.character?.spellSlots?.level1).toBe(2);
  });
 });
+
+describe('Rogue level nine and ten advancement',()=>{
+ it('advances level nine only with XP and keeps other class caps',()=>{
+  const c=fixture(8,48000);
+  expect(importedLevelUpIssues(c,{hpGain:5,confirm:true})).toEqual([]);
+  const next=applyImportedLevelUp(c,{hpGain:5,confirm:true});
+  expect(next.character?.level).toBe(9);
+  expect(c.character?.level).toBe(8);
+  expect(importedLevelUpIssues(fixture(8,34000),{hpGain:5,confirm:true})).toContain('Requires 48000 XP for level 9.');
+ });
+ it('level ten requires and persists ASI',()=>{
+  const c=fixture(9,64000);
+  expect(importedLevelUpIssues(c,{hpGain:5,confirm:true})).toContain('Choose a valid feat or ASI.');
+  const next=applyImportedLevelUp(c,{hpGain:5,confirm:true,featPlan:'Ability Score Improvement',abilityIncreases:{Dex:2}});
+  expect(next.character?.level).toBe(10);
+  expect(next.character?.scores.dex).toBe(c.character!.scores.dex+2);
+ });
+ it('Arcane Trickster requires distinct prepared spells and upgrades slots',()=>{
+  const c=fixture(8,48000);c.importedSubclassId='rogue-arcane-trickster';
+  c.character!.preparedSpells=['Shield','Magic Missile','Sleep','Charm Person','Disguise Self'];
+  const spells=['Detect Magic'];
+  expect(importedLevelUpIssues(c,{hpGain:5,confirm:true,arcaneSpells:spells})).toEqual([]);
+  const next=applyImportedLevelUp(c,{hpGain:5,confirm:true,arcaneSpells:spells});
+  expect(next.character!.preparedSpells).toContain('Detect Magic');
+  expect(next.character!.spellSlots?.level2).toBe(2);
+  expect(c.character!.preparedSpells).not.toContain('Detect Magic');
+ });
+});
