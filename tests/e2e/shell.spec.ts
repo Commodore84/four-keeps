@@ -1102,10 +1102,10 @@ test('mobile hamburger navigation preserves five destinations and collapsed deve
  await expect(page.getByRole('navigation',{name:'Primary navigation'})).toHaveCount(0);
  await menu.click();
  const nav=page.getByRole('navigation',{name:'Primary navigation'});
- await expect(nav.getByRole('button')).toHaveCount(6);
+ await expect(nav.getByRole('button')).toHaveCount(7);
  await expect(nav.getByRole('button',{name:'Home',exact:true})).toBeVisible();
  await expect(page.locator('header > div').first().getByRole('button',{name:'Home',exact:true})).toHaveCount(0);
- await expect(nav.getByRole('button',{name:'Dev',exact:true})).toHaveCount(0);
+ await expect(nav.getByRole('button').last()).toContainText('Developer');
  await expect(nav.getByRole('button',{name:'Settings'})).toHaveAttribute('aria-current','page');
  await nav.getByRole('button',{name:'Journal'}).click();
  await expect(menu).toHaveAttribute('aria-expanded','false');

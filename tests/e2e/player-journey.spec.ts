@@ -1,5 +1,5 @@
 import {test,expect} from '@playwright/test';
-async function navigate(page:Page,tab:'Adventure'|'Player'|'Journal'|'Map'|'Settings'){
+async function navigate(page:Page,tab:'Adventure'|'Player'|'Journal'|'Map'|'Settings'|'Developer'){
  const menu=page.getByRole('button',{name:'Open navigation menu'});
  await menu.waitFor({state:'visible',timeout:2500}).catch(()=>{});
  if(await menu.count()===0){if(tab==='Settings'){await page.getByRole('button',{name:'Settings',exact:true}).click();return;}throw new Error('Navigation menu is unavailable on the portal screen');}
@@ -76,10 +76,13 @@ test('imported character earns XP, confirms level 2, and retains HP and level af
  const sheet=page.getByLabel('Imported player character');
  const initialHP=await sheet.getByLabel('Combat and vital statistics').textContent();
  const match=initialHP?.match(/HP (\d+)\/(\d+)/);expect(match).not.toBeNull();
- await sheet.getByLabel('Manual XP award').locator('summary').click();
- await sheet.getByLabel('Award XP amount').fill('300');
- await sheet.getByLabel('Award XP reason').fill('Completed the crossroads quest');
- await sheet.getByRole('button',{name:'Record XP award'}).click();
+ await navigate(page,'Developer');
+ const dev=page.getByLabel('Imported player development tools');
+ await dev.getByLabel('Manual XP award').locator('summary').click();
+ await dev.getByLabel('Award XP amount').fill('300');
+ await dev.getByLabel('Award XP reason').fill('Completed the crossroads quest');
+ await dev.getByRole('button',{name:'Record XP award'}).click();
+ await navigate(page,'Player');
  await expect(sheet).toContainText('300 XP');
  await sheet.getByLabel('Level-up hit points').fill('7');
  await sheet.getByRole('checkbox',{name:'I confirm these level-up choices'}).check();

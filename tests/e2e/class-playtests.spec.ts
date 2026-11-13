@@ -1,5 +1,5 @@
 import {test,expect,type Page} from '@playwright/test';
-async function navigate(page:Page,tab:'Adventure'|'Player'|'Journal'|'Map'|'Settings'){
+async function navigate(page:Page,tab:'Adventure'|'Player'|'Journal'|'Map'|'Settings'|'Developer'){
  const menu=page.getByRole('button',{name:'Open navigation menu'});
  await menu.waitFor({state:'visible',timeout:2500}).catch(()=>{});
  if(await menu.count()===0){if(tab==='Settings'){await page.getByRole('button',{name:'Settings',exact:true}).click();return;}throw new Error('Navigation menu is unavailable on the portal screen');}
@@ -12,6 +12,15 @@ async function openDevelopment(page:Page){
  if(!(await panel.getByLabel('Legacy campaign creation').isVisible()))await panel.locator('summary').first().click();
 }
 
+async function awardImportedTestXP(page:Page,amount:string,reason:string){
+ await navigate(page,'Developer');
+ const tools=page.getByLabel('Imported player development tools');
+ await tools.getByLabel('Manual XP award').locator('summary').click();
+ await tools.getByLabel('Award XP amount').fill(amount);
+ await tools.getByLabel('Award XP reason').fill(reason);
+ await tools.getByRole('button',{name:'Record XP award'}).click();
+ await navigate(page,'Player');
+}
 const word=(s:string)=>new RegExp('^'+s+'\\b');
 type ClassId='fighter'|'rogue'|'cleric'|'wizard'|'warlock';
 const config={
@@ -80,16 +89,16 @@ for(const id of ['fighter','rogue','cleric','wizard'] as const)test(id+' complet
  await battle.getByLabel('Companion target',{exact:true}).selectOption('nighthawk');await battle.getByLabel('Companion damage',{exact:true}).fill('3');await battle.getByRole('button',{name:'Apply damage',exact:true}).click();await battle.getByRole('button',{name:'Finish companion encounter'}).click();
  await session.getByLabel('Encounter reward XP').fill('30');await session.getByLabel('Encounter reward gold').fill('5');await session.getByLabel('Encounter reward item',{exact:true}).fill(id+' keepsake');await session.getByRole('button',{name:'Save encounter rewards'}).click();await expect(session).toContainText('Rewards saved: 30 XP');await page.reload();await page.getByRole('button',{name:'Continue Adventure'}).click();await openDevelopment(page);await expect(session).toContainText('Rewards saved: 30 XP');
  let c=await saved(page);expect(c.character.currentHitPoints).toBe(config[id].hp-3);expect(c.characterBuild).toEqual(snapshot);if(id==='cleric'){expect(c.character.resources['Magic Initiate'].used).toBe(1);expect(c.character.spellSlots.usedLevel1).toBe(1);}if(id==='rogue')expect(c.inventoryLedger.gear.find((g:any)=>g.name==='Dagger').quantity).toBe(3);
- await session.getByRole('button',{name:'Resume exploration after encounter'}).click();const rest=session.getByLabel('Player rest recovery');await rest.getByRole('checkbox',{name:/DM confirms safe/}).check();await rest.getByLabel('Rest Hit Die result').fill('1');if(id==='wizard')await rest.getByRole('checkbox',{name:/Use Arcane Recovery/}).check();await rest.getByRole('button',{name:'Complete short rest'}).click();await expect(rest.getByRole('status')).toHaveText('Rest completed and saved.');
+ await session.getByRole('button',{name:'Resume exploration after encounter'}).click();await navigate(page,'Developer');const rest=page.getByLabel('Imported player development tools').getByLabel('Player rest recovery');await rest.getByRole('checkbox',{name:/DM confirms safe/}).check();await rest.getByLabel('Rest Hit Die result').fill('1');if(id==='wizard')await rest.getByRole('checkbox',{name:/Use Arcane Recovery/}).check();await rest.getByRole('button',{name:'Complete short rest'}).click();await expect(rest.getByRole('status')).toHaveText('Rest completed and saved.');
  c=await saved(page);expect(c.hitDiceRemaining).toBe(0);expect(c.character.currentHitPoints).toBe(config[id].hp);if(id==='fighter')expect(c.character.resources['Second Wind'].used).toBe(0);if(id==='wizard'){expect(c.character.resources['Arcane Recovery'].used).toBe(1);expect(c.character.spellSlots.usedLevel1).toBe(0);}if(id==='cleric')expect(c.character.spellSlots.usedLevel1).toBe(1);
  await rest.getByRole('checkbox',{name:/DM confirms safe/}).check();await rest.getByRole('button',{name:'Complete long rest'}).click();await expect.poll(async()=>(await saved(page)).hitDiceRemaining).toBe(1);await page.reload();await page.getByRole('button',{name:'Continue Adventure'}).click();c=await saved(page);expect(c.hitDiceRemaining).toBe(1);expect(c.character.currentHitPoints).toBe(config[id].hp);expect(c.characterBuild).toEqual(snapshot);expect(c.xp).toBe(30);if(c.character.spellSlots)expect(c.character.spellSlots.usedLevel1).toBe(0);for(const pool of Object.values(c.character.resources??{}) as any[])expect(pool.used).toBe(0);
- if(id==='fighter'){await openDevelopment(page);const again=session.getByLabel('Player rest recovery');await again.getByRole('checkbox',{name:/DM confirms safe/}).check();await expect(again.getByRole('button',{name:'Complete long rest'})).toBeDisabled();await again.getByRole('checkbox',{name:/Include 960 minutes/}).check();await again.getByRole('button',{name:'Complete long rest'}).click();await expect(again.getByRole('status')).toHaveText('Rest completed and saved.');expect((await saved(page)).elapsedMinutes).toBe(1980);}
- await navigate(page,'Player');await expect(page.getByLabel('Saved character build')).toContainText('Saved level-one choices');expect(errors).toEqual([]);
+ if(id==='fighter'){await navigate(page,'Developer');const again=page.getByLabel('Imported player development tools').getByLabel('Player rest recovery');await again.getByRole('checkbox',{name:/DM confirms safe/}).check();await expect(again.getByRole('button',{name:'Complete long rest'})).toBeDisabled();await again.getByRole('checkbox',{name:/Include 960 minutes/}).check();await again.getByRole('button',{name:'Complete long rest'}).click();await expect(again.getByRole('status')).toHaveText('Rest completed and saved.');expect((await saved(page)).elapsedMinutes).toBe(1980);}
+ await navigate(page,'Player');await expect(page.getByLabel('Saved character build')).toContainText('Background and character choices');expect(errors).toEqual([]);
 });
 
 test('rest save failure preserves Hit Dice, reports the failure, and permits a successful retry',async({page})=>{
  test.setTimeout(60000);await createAndImport(page,'fighter');await openDevelopment(page);
- const session=page.getByLabel('Adventure session',{exact:true});await session.getByRole('button',{name:'Start frontier adventure'}).click();const rest=session.getByLabel('Player rest recovery');
+ const session=page.getByLabel('Adventure session',{exact:true});await session.getByRole('button',{name:'Start frontier adventure'}).click();await navigate(page,'Developer');const rest=page.getByLabel('Imported player development tools').getByLabel('Player rest recovery');
  await rest.getByRole('checkbox',{name:/DM confirms safe/}).check();await rest.getByLabel('Rest Hit Die result').fill('2');
  await page.evaluate(()=>{const original=IDBDatabase.prototype.transaction;(window as any).__originalTransaction=original;IDBDatabase.prototype.transaction=function(...args:any[]){if(args[1]==='readwrite')throw new DOMException('Test write failure','QuotaExceededError');return Reflect.apply(original,this,args);} as typeof original;});
  await rest.getByRole('button',{name:'Complete short rest'}).click();await expect(rest.getByRole('status')).toContainText('Rest could not be saved');expect((await saved(page)).hitDiceRemaining).toBe(1);await expect(rest.getByRole('checkbox',{name:/DM confirms safe/})).toBeChecked();
@@ -367,10 +376,7 @@ test('imported Rogue unlocks Cunning Action and selects Arcane Trickster spells 
  test.setTimeout(90000);
  await createAndImport(page,'rogue');await navigate(page,'Player');
  const sheet=page.getByLabel('Imported player character');
- await sheet.getByLabel('Manual XP award').locator('summary').click();
- await sheet.getByLabel('Award XP amount').fill('900');
- await sheet.getByLabel('Award XP reason').fill('Verified adventure rewards');
- await sheet.getByRole('button',{name:'Record XP award'}).click();
+ await awardImportedTestXP(page,'900','Verified adventure rewards');
  await sheet.getByLabel('Level-up hit points').fill('5');
  await sheet.getByRole('checkbox',{name:'I confirm these level-up choices'}).check();
  await sheet.getByRole('button',{name:'Confirm and save level 2'}).click();
@@ -395,14 +401,14 @@ test('imported Rogue unlocks Cunning Action and selects Arcane Trickster spells 
 
 test('imported Warlock advances to Celestial and persists Pact Magic resources',async({page})=>{
  test.setTimeout(90000);await createAndImport(page,'warlock');await navigate(page,'Player');const sheet=page.getByLabel('Imported player character');
- await sheet.getByLabel('Manual XP award').locator('summary').click();await sheet.getByLabel('Award XP amount').fill('2700');await sheet.getByLabel('Award XP reason').fill('Verified rewards');await sheet.getByRole('button',{name:'Record XP award'}).click();
+ await awardImportedTestXP(page,'2700','Verified rewards');
  await sheet.getByLabel('Level-up hit points').fill('5');await sheet.getByLabel('Warlock invocation 1').selectOption('Agonizing Blast');await sheet.getByLabel('Warlock invocation 2').selectOption('Armor of Shadows');await sheet.getByLabel('Warlock advancement spell').selectOption('Charm Person');await sheet.getByRole('checkbox',{name:'I confirm these level-up choices'}).check();await sheet.getByRole('button',{name:'Confirm and save level 2'}).click();
  await expect(sheet).toContainText('Level 2');await sheet.getByLabel('Level-up subclass').selectOption('warlock-celestial');await sheet.getByLabel('Warlock advancement spell').selectOption('Protection from Evil and Good');await sheet.getByRole('checkbox',{name:'I confirm these level-up choices'}).check();await sheet.getByRole('button',{name:'Confirm and save level 3'}).click();
  await expect(sheet).toContainText('Level 3');const c=await saved(page);expect(c.importedWarlockPactSlotLevel).toBe(2);expect(c.importedWarlockInvocations).toContain('Agonizing Blast');expect(c.character.resources['Healing Light'].maximum).toBe(4);await page.reload();await page.getByRole('button',{name:'Continue Adventure'}).click();await navigate(page,'Player');await expect(page.getByLabel('Imported player character')).toContainText('Level 3');
 });
 test('imported Wizard advances to Diviner with persistent spellbook and level-two slots',async({page})=>{
  test.setTimeout(90000);await createAndImport(page,'wizard');await navigate(page,'Player');const sheet=page.getByLabel('Imported player character');
- await sheet.getByLabel('Manual XP award').locator('summary').click();await sheet.getByLabel('Award XP amount').fill('2700');await sheet.getByLabel('Award XP reason').fill('Verified rewards');await sheet.getByRole('button',{name:'Record XP award'}).click();
+ await awardImportedTestXP(page,'2700','Verified rewards');
  await sheet.getByLabel('Level-up hit points').fill('5');await sheet.getByLabel('Wizard spellbook addition 1').selectOption('Shield');await sheet.getByLabel('Wizard spellbook addition 2').selectOption('Sleep');
  for(const name of ['Alarm','Burning Hands','Charm Person','Magic Missile','Shield'])await sheet.getByRole('checkbox',{name:'Prepare '+name}).check();
  await sheet.getByRole('checkbox',{name:'I confirm these level-up choices'}).check();await sheet.getByRole('button',{name:'Confirm and save level 2'}).click();await expect(sheet).toContainText('Level 2');
@@ -489,4 +495,24 @@ test('new Rogue starts at Frontier Village, buys supplies, and sees persisted Pl
  await expect(page.getByLabel('Equipment and inventory')).toContainText('Dagger');
  await navigate(page,'Adventure');
  await expect(page.getByLabel('Frontier Village general store')).toBeVisible();
+});
+
+test('imported character sheet excludes developer tools and rest controls',async({page})=>{
+ await createAndImport(page,'rogue');
+ await navigate(page,'Player');
+ const sheet=page.getByLabel('Imported player character');
+ await expect(sheet.getByLabel('Character details')).toBeVisible();
+ await expect(sheet.getByLabel('Player skills')).toBeVisible();
+ await expect(sheet.getByText('Subclass actor management')).toHaveCount(0);
+ await expect(sheet.getByText('Rest and recover')).toHaveCount(0);
+ await expect(sheet.getByLabel('Manual XP award')).toHaveCount(0);
+ await page.getByRole('button',{name:'Open navigation menu'}).click();
+ const nav=page.getByRole('navigation',{name:'Primary navigation'});
+ await expect(nav.getByRole('button').last()).toContainText('Developer');
+ await nav.getByRole('button',{name:'Developer'}).click();
+ await expect(page.getByLabel('Imported player development tools')).toBeVisible();
+ await expect(page.getByText('Subclass actor management')).toBeVisible();
+ await expect(page.getByLabel('Manual XP award')).toBeVisible();
+ await navigate(page,'Player');
+ await expect(page.getByLabel('Manual XP award')).toHaveCount(0);
 });
