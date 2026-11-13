@@ -137,7 +137,7 @@ function Adventure({ campaign, fullHistory, onToggleHistory, onAdventureChange, 
     {campaign?.characterIdentity ? <section className="rounded-xl border border-gold/30 bg-panel p-4 space-y-2" aria-label="AI adventure session">
       <h3 className="font-serif text-xl">{campaign.location}</h3>
       <p className="text-sm text-parchment/70">Explore through the Dungeon Master conversation. Your decisions and discoveries are saved with the campaign.</p>
-      {campaign.adventureSession?.status==='encounter' && <AdventureSessionPanel campaign={campaign} saving={saving} onChange={onAdventureChange}/>}
+      {campaign.adventureSession && <AdventureSessionPanel campaign={campaign} saving={saving} onChange={onAdventureChange}/>}
       {campaign.adventureSession?.pendingEncounter && <AdventureEncounterSetupPanel key={campaign.id+'-'+campaign.adventureSession.pendingEncounter.actionId} campaign={campaign} saving={saving} onChange={onAdventureChange}/>}
       {!campaign.adventureSession && <button type="button" disabled={saving} onClick={()=>void onStartOpening()} className="rounded-lg bg-gold px-4 py-2 text-ink disabled:opacity-50">Begin AI-led adventure</button>}
       {campaign.adventureSession && !campaign.journal.some(e=>e.kind==='dm') && <button type="button" disabled={saving} onClick={()=>void onStartOpening()} className="rounded-lg border border-gold px-4 py-2 text-gold disabled:opacity-50">Generate opening scene</button>}

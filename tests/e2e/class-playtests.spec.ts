@@ -448,3 +448,30 @@ test('imported Arcane Trickster advances through levels nine and ten with persis
  await page.reload();await page.getByRole('button',{name:'Continue Adventure'}).click();await navigate(page,'Player');
  await expect(page.getByLabel('Imported player character')).toContainText('Level 10');
 });
+
+test('new Rogue starts at Frontier Village, buys supplies, and sees persisted Player sheet',async({page})=>{
+ test.setTimeout(90000);
+ await createAndImport(page,'rogue');
+ await navigate(page,'Player');
+ const sheet=page.getByLabel('Imported player character');
+ await expect(sheet.getByLabel('Player ability scores')).toBeVisible();
+ await expect(sheet.getByLabel('Player skills')).toContainText('Stealth');
+ await expect(sheet.getByLabel('Equipment and inventory')).toBeVisible();
+ await navigate(page,'Adventure');
+ await page.evaluate(()=>localStorage.setItem('four-keeps-access-code','browser-test-code'));
+ await page.route('**/api/dm',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({narration:'The village shop is open; the watchkeeper watches the road.',worldUpdates:{},newFacts:[]})}));
+ await page.reload();await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await page.getByRole('button',{name:'Begin AI-led adventure'}).click();
+ const shop=page.getByLabel('Frontier Village general store');
+ await expect(shop).toBeVisible();
+ await shop.getByLabel('Shop item').selectOption('dagger');
+ await shop.getByLabel('Shop quantity').fill('1');
+ const before=(await saved(page)).inventoryLedger;
+ await shop.getByRole('button',{name:'Buy item'}).click();
+ await expect.poll(async()=>{const c=await saved(page);return c.inventoryLedger.gear.find((i:any)=>i.name==='Dagger')?.quantity??0}).toBeGreaterThan(before.gear.find((i:any)=>i.name==='Dagger')?.quantity??0);
+ await page.reload();await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await navigate(page,'Player');
+ await expect(page.getByLabel('Equipment and inventory')).toContainText('Dagger');
+ await navigate(page,'Adventure');
+ await expect(page.getByLabel('Frontier Village general store')).toBeVisible();
+});
