@@ -478,7 +478,7 @@ test('new Rogue starts at Frontier Village, buys supplies, and sees persisted Pl
  await page.getByLabel('Message the Dungeon Master').fill('I ask the shopkeeper what a dagger costs');
  await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
  await expect.poll(()=>dmRequests.length).toBeGreaterThanOrEqual(2);
- expect(dmRequests.at(-1).gameState.merchant.items).toContainEqual({id:'dagger',name:'Dagger',costCp:200,remaining:8});
+ expect(dmRequests.at(-1).gameState.merchant.items).toContainEqual({id:'dagger',name:'Dagger',costCp:200,remaining:8,packQuantity:1});
  expect(dmRequests.at(-1).gameState.merchant.purchaseRule).toContain('explicit confirmation');
  await expect.poll(async()=>Boolean((await saved(page)).pendingAdventureAction)).toBe(false);
  await shop.getByLabel('Shop item').selectOption('dagger');
@@ -584,6 +584,30 @@ test('merchant catalog reflects finite stock and refuses unavailable quantities'
  await expect.poll(async()=>(await saved(page)).merchantStockRemaining?.dagger).toBe(6);
  await page.reload();await page.getByRole('button',{name:'Continue Adventure'}).click();
  expect((await saved(page)).merchantStockRemaining.dagger).toBe(6);
+});
+test('conversational sling ammunition packs use canonical price and persist 40 projectiles',async({page})=>{
+ test.setTimeout(90000);
+ await createAndImport(page,'rogue');await navigate(page,'Adventure');
+ await page.evaluate(()=>{localStorage.setItem('four-keeps-access-code','browser-test-code');localStorage.setItem('four-keeps-dm-mode','on');});
+ await page.route('**/api/dm',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({narration:'The general store is open.',worldUpdates:{},newFacts:[]})}));
+ await page.reload();await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await page.getByRole('button',{name:'Begin AI-led adventure'}).click();
+ const input=page.getByLabel('Message the Dungeon Master');
+ const send=page.getByRole('button',{name:'Send message to Dungeon Master'});
+ const before=await saved(page);
+ await input.fill('I will buy 2 packs of sling bullets');await send.click();
+ await expect.poll(async()=>(await saved(page)).pendingMerchantPurchase?.unitCostCp).toBe(4);
+ const pending=await saved(page);
+ expect(pending.inventoryLedger).toEqual(before.inventoryLedger);
+ await page.reload();await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await page.getByLabel('Message the Dungeon Master').fill('yes');
+ await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
+ await expect.poll(async()=>(await saved(page)).merchantStockRemaining?.['bullets-sling']).toBe(3);
+ const after=await saved(page);
+ expect(after.inventoryLedger.gear).toContainEqual({name:'Bullets, Sling (20)',quantity:40});
+ expect(after.completedMerchantPurchaseIds).toContain(pending.pendingMerchantPurchase.id);
+ await page.reload();await page.getByRole('button',{name:'Continue Adventure'}).click();
+ expect((await saved(page)).merchantStockRemaining['bullets-sling']).toBe(3);
 });
 test('DM-approved discount changes quoted cost but never bypasses confirmation',async({page})=>{
  test.setTimeout(90000);

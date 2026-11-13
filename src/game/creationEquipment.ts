@@ -16,7 +16,18 @@ const LEGACY_ITEMS:Item[]=[
 ];
 // Canonical 2024 facts take precedence, while legacy IDs remain resolvable for saved campaigns.
 const canonicalById=new Map(OFFICIAL_EQUIPMENT_2024.map(i=>[i.id,i]));
-export const ITEMS:Item[]=[...LEGACY_ITEMS.map(old=>canonicalById.get(old.id)??old),...OFFICIAL_EQUIPMENT_2024.filter(i=>!LEGACY_ITEMS.some(old=>old.id===i.id))];
+/** Stable saved-game IDs whose 2024 catalog counterparts have different names. */
+export const LEGACY_EQUIPMENT_ALIASES:Readonly<Record<string,string>>={
+ 'crossbow-bolts':'bolts',
+ 'sling-bullets':'bullets-sling',
+};
+export const canonicalEquipmentId=(id:string):string=>LEGACY_EQUIPMENT_ALIASES[id]??id;
+const resolvedLegacy=LEGACY_ITEMS.map(old=>{
+ const canonical=canonicalById.get(canonicalEquipmentId(old.id));
+ // Keep historical display names/IDs and pack contents intact; adopt official mechanics and cost where exact.
+ return canonical?(canonical.id===old.id?canonical:old.id==='sling-bullets'?old:{...canonical,id:old.id,name:old.name}):old;
+});
+export const ITEMS:Item[]=[...resolvedLegacy,...OFFICIAL_EQUIPMENT_2024.filter(i=>!LEGACY_ITEMS.some(old=>old.id===i.id))];
 export const ITEM_BY_ID:Record<string,Item>=Object.fromEntries(ITEMS.map(i=>[i.id,i]));
 export interface Package {gold:number;items:Record<string,number>;label:string}
 const pkg=(gold:number,entries:string, label='Package A'):Package=>({gold,items:Object.fromEntries(entries.split('|').filter(Boolean).map(entry=>{const [id,quantity]=entry.split('*');return [id,Number(quantity??1)]})),label});

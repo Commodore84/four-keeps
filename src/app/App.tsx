@@ -1,4 +1,4 @@
-import {parseFrontierPurchase,prepareMerchantPurchase,settleMerchantPurchase,frontierShopStock,formatFrontierPrice,merchantCatalog,isMerchantBrowseRequest,isMerchantNegotiationRequest,approveMerchantDiscount} from '../game/frontierShop';
+import {parseFrontierPurchase,prepareMerchantPurchase,settleMerchantPurchase,frontierShopStock,formatFrontierPrice,merchantCatalog,isMerchantBrowseRequest,isMerchantNegotiationRequest,isMerchantPurchaseRequest,approveMerchantDiscount} from '../game/frontierShop';
 import {classSummary} from '../game/creationClasses';
 import {completePlayerRest,playerLongRestWaitMinutes} from '../game/playerRecovery';
 import {frontierMerchantContext} from '../game/frontierShop';
@@ -663,6 +663,10 @@ export function App() {
         setNotice('The shopkeeper will consider a bargain, but the price stays unchanged until the Dungeon Master approves it.');
       }
       const intent=parseFrontierPurchase(draft);
+      if(isMerchantPurchaseRequest(draft)&&!intent&&!isMerchantNegotiationRequest(draft)){
+        setNotice('The merchant cannot prepare that purchase. Ask for the available catalog and specify one stocked item and a quantity of 1–20.');
+        return;
+      }
       if(intent){
         setSaving(true);
         try{

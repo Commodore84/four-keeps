@@ -1,5 +1,5 @@
 import {describe,expect,it} from 'vitest';
-import {ITEMS,ITEM_BY_ID} from './creationEquipment';
+import {ITEMS,ITEM_BY_ID,LEGACY_EQUIPMENT_ALIASES,canonicalEquipmentId} from './creationEquipment';
 import {OFFICIAL_EQUIPMENT_2024} from './officialEquipment2024';
 import {frontierShopStock} from './frontierShop';
 
@@ -25,6 +25,15 @@ describe('D&D 2024 equipment source audit',()=>{
    expect(ITEM_BY_ID[id]).toBeDefined();
   }
   expect(ITEMS.length).toBeGreaterThan(OFFICIAL_EQUIPMENT_2024.length);
+ });
+ it('maps exact legacy ammunition aliases while preserving historical IDs and starting packs',()=>{
+  expect(LEGACY_EQUIPMENT_ALIASES).toEqual({'crossbow-bolts':'bolts','sling-bullets':'bullets-sling'});
+  expect(canonicalEquipmentId('crossbow-bolts')).toBe('bolts');
+  expect(ITEM_BY_ID['crossbow-bolts']).toMatchObject({id:'crossbow-bolts',costCp:5,weight:.075});
+  expect(ITEM_BY_ID['sling-bullets']).toMatchObject({id:'sling-bullets',name:'Sling Bullets',costCp:1});
+  expect(ITEM_BY_ID['gaming-set']).toBeDefined();
+  expect(ITEM_BY_ID['musical-instrument']).toBeDefined();
+  expect(ITEM_BY_ID['spellbook']).toBeDefined();
  });
  it('uses 2024 weapon costs, damage, mastery, weights and armor rules',()=>{
   expect(ITEM_BY_ID['dagger']).toMatchObject({costCp:200,weight:1,damage:'1d4 piercing',mastery:'Nick',weaponGroup:'simple'});

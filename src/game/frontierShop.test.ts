@@ -1,13 +1,44 @@
 import {describe,it,expect} from 'vitest';
 import {newCampaign} from './campaign';
 import {beginAdventureSession} from './adventureSession';
-import {buyFrontierItem,frontierShopStock,frontierMerchantContext,formatFrontierPrice,parseFrontierPurchase,prepareMerchantPurchase,settleMerchantPurchase,walletCopper,remainingMerchantStock,merchantCatalog,isMerchantBrowseRequest,approveMerchantDiscount} from './frontierShop';
+import {buyFrontierItem,frontierShopStock,frontierMerchantContext,formatFrontierPrice,parseFrontierPurchase,prepareMerchantPurchase,settleMerchantPurchase,walletCopper,remainingMerchantStock,merchantCatalog,isMerchantBrowseRequest,approveMerchantDiscount,isMerchantPurchaseRequest} from './frontierShop';
 function fixture(){const c=newCampaign('Shop','shop-test');return beginAdventureSession({...c,characterIdentity:{name:'Test',speciesId:'elf',backgroundId:'sage',classId:'rogue',draftId:'draft',pronouns:'',appearance:'',personality:'',backstory:''},inventoryLedger:{currency:{GP:10,SP:0,CP:0,EP:0,PP:0},gear:[]}})}
+describe('2024 merchant catalog compatibility and ammunition',()=>{
+ it('sells only canonical entries from the explicitly selected merchant stock',()=>{
+  expect(frontierShopStock.every(item=>item.official2024)).toBe(true);
+  expect(frontierShopStock.some(item=>item.id==='greatsword')).toBe(false);
+  expect(frontierShopStock.find(item=>item.id==='bolts')).toMatchObject({costCp:5});
+  expect(frontierShopStock.find(item=>item.id==='bullets-sling')).toMatchObject({costCp:4,packQuantity:20});
+  expect(merchantCatalog(fixture())).toContain('per pack of 20');
+ });
+ it('prices sling bullets by a 20-piece pack in integer copper and persists stock and ammunition',()=>{
+  const c=fixture();
+  const pending=prepareMerchantPurchase(c,'bullets-sling',2,'pack-1');
+  expect(pending.pendingMerchantPurchase?.unitCostCp).toBe(4);
+  expect(pending.inventoryLedger).toEqual(c.inventoryLedger);
+  const bought=settleMerchantPurchase(JSON.parse(JSON.stringify(pending)),'pack-1',true);
+  expect(bought.inventoryLedger?.gear).toContainEqual({name:'Bullets, Sling (20)',quantity:40});
+  expect(walletCopper(bought.inventoryLedger?.currency)).toBe(992);
+  expect(remainingMerchantStock(bought,'bullets-sling')).toBe(3);
+  expect(()=>settleMerchantPurchase(bought,'pack-1',true)).toThrow();
+ });
+ it('rejects unlisted merchandise and tampered discount without spending money',()=>{
+  const c=fixture();
+  expect(isMerchantPurchaseRequest('I will buy a greatsword')).toBe(true);
+  expect(parseFrontierPurchase('I will buy a greatsword')).toBeNull();
+  expect(parseFrontierPurchase('I will buy 2 packs of sling bullets')).toEqual({itemId:'bullets-sling',quantity:2});
+  expect(parseFrontierPurchase('I will buy 3 crossbow bolts')).toEqual({itemId:'bolts',quantity:3});
+  expect(()=>prepareMerchantPurchase(c,'greatsword',1,'no-stock')).toThrow();
+  const tampered={...c,merchantDiscount:{itemId:'dagger',percent:90,approvalId:'invalid'}};
+  expect(()=>prepareMerchantPurchase(tampered,'dagger',1,'bad-discount')).toThrow();
+  expect(c.inventoryLedger?.currency.GP).toBe(10);
+ });
+});
 describe('first visit shop',()=>{
  it('shows standard prices in gold, silver and copper',()=>{expect(formatFrontierPrice(200)).toBe('2 GP');expect(formatFrontierPrice(125)).toBe('1.25 GP');expect(formatFrontierPrice(5)).toBe('0.05 GP');expect(formatFrontierPrice(0)).toBe('0 GP')});
  it('uses the canonical item catalog and deducts exact copper pieces',()=>{const item=frontierShopStock.find(i=>i.id==='dagger')!;expect(item.costCp).toBe(200);const c=buyFrontierItem(fixture(),'dagger',2);expect(c.inventoryLedger?.currency.GP).toBe(6);expect(c.inventoryLedger?.gear).toContainEqual({name:'Dagger',quantity:2});expect(JSON.parse(JSON.stringify(c)).inventoryLedger.gear[0].quantity).toBe(2)});
  it('does not mutate a campaign on invalid, unavailable or unaffordable purchases',()=>{const c=fixture();for(const [id,q] of [['dagger',21],['greatsword',1],['dagger',6]] as const)expect(()=>buyFrontierItem(c,id,q)).toThrow();expect(c.inventoryLedger?.currency.GP).toBe(10)});
- it('exposes authoritative shop prices and wallet to merchant conversation without transactions',()=>{const c=fixture();const ctx=frontierMerchantContext(c)!;expect(ctx.items).toContainEqual({id:'potion-of-healing',name:'Potion of Healing',costCp:5000,remaining:3});expect(ctx.walletCp).toBe(1000);expect(ctx.purchaseRule).toContain('explicit confirmation');expect(c.inventoryLedger?.gear).toEqual([])});
+ it('exposes authoritative shop prices and wallet to merchant conversation without transactions',()=>{const c=fixture();const ctx=frontierMerchantContext(c)!;expect(ctx.items).toContainEqual({id:'potion-of-healing',name:'Potion of Healing',costCp:5000,packQuantity:1,remaining:3});expect(ctx.walletCp).toBe(1000);expect(ctx.purchaseRule).toContain('explicit confirmation');expect(c.inventoryLedger?.gear).toEqual([])});
  it('requires a started imported character in Frontier Village',()=>{const c=fixture();expect(()=>buyFrontierItem({...c,adventureSession:{...c.adventureSession!,site:'crossroads'}},'dagger')).toThrow('not available')});
 });
 
