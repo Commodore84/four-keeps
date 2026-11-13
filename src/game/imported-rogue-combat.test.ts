@@ -1,6 +1,6 @@
 import {describe,it,expect} from 'vitest';
 import {newCampaign} from './campaign';
-import {startUnifiedEncounter,addCompanionEnemy,importedRogueCunningAction,attackImportedRogue,importedRogueUncannyDodge,endCompanionTurn,useImportedMageHandLegerdemain} from './companionEncounter';
+import {startUnifiedEncounter,addCompanionEnemy,importedRogueCunningAction,attackImportedRogue,importedRogueUncannyDodge,resolveImportedRogueEvasion,endCompanionTurn,useImportedMageHandLegerdemain} from './companionEncounter';
 import type {Campaign} from './campaign';
 function arena(level=2,subclass=false){
  const c=newCampaign('Rogue combat');
@@ -10,6 +10,9 @@ function arena(level=2,subclass=false){
  return b;
 }
 describe('imported Rogue in unified combat',()=>{
+ it('Evasion at level seven applies zero or half verified Dexterity-save damage and preserves source',()=>{const c=arena(7);const success=resolveImportedRogueEvasion(c,true,17,'Fire');expect(success.companionEncounter!.participants.nighthawk.hp).toBe(c.companionEncounter!.participants.nighthawk.hp);const failure=resolveImportedRogueEvasion(c,false,17,'Fire');expect(failure.companionEncounter!.participants.nighthawk.hp).toBe(c.companionEncounter!.participants.nighthawk.hp-8);expect(c.companionEncounter!.participants.nighthawk.hp).toBeGreaterThan(failure.companionEncounter!.participants.nighthawk.hp);expect(()=>resolveImportedRogueEvasion(arena(6),true,17,'Fire')).toThrow('level 7');});
+ it('critical Cunning Strike Trip costs two doubled Sneak Attack dice',()=>{const c=arena(5);const advantaged={...c,companionEncounter:{...c.companionEncounter!,participants:{...c.companionEncounter!.participants,nighthawk:{...c.companionEncounter!.participants.nighthawk,conditions:['Invisible' as const]}}}};const struck=attackImportedRogue(advantaged,'goblin',20,3,5,[1,2,3,4,5,6],12,{effect:'Trip',saveTotal:1});expect(struck.companionEncounter!.log.join(' ')).toContain('= 18 extra piercing damage');});
+
  it('Cunning Action Dash adds movement and spends only bonus action',()=>{const c=arena();const next=importedRogueCunningAction(c,'Dash');expect(next.companionEncounter!.participants.nighthawk.dashFeet).toBe(next.companionEncounter!.participants.nighthawk.speedFeet);expect(next.companionEncounter!.participants.nighthawk.actionUsed).toBe(false);expect(()=>importedRogueCunningAction(next,'Disengage')).toThrow('unavailable');expect(c.companionEncounter!.participants.nighthawk.bonusActionUsed).toBe(false)});
  it('Cunning Action Disengage prevents opportunity triggers',()=>{const c=importedRogueCunningAction(arena(),'Disengage');expect(c.companionEncounter!.participants.nighthawk.disengaged).toBe(true)});
  it('halves verified incoming hit damage using one reaction at level five',()=>{const c=arena(5);const dodged=importedRogueUncannyDodge(c,'goblin',9,'Piercing');expect(dodged.companionEncounter!.participants.nighthawk.hp).toBe(c.companionEncounter!.participants.nighthawk.hp-4);expect(dodged.companionEncounter!.participants.nighthawk.reactionUsed).toBe(true);expect(()=>importedRogueUncannyDodge(dodged,'goblin',9,'Piercing')).toThrow('available reaction');expect(()=>importedRogueUncannyDodge(arena(4),'goblin',9,'Piercing')).toThrow('level-5');});

@@ -866,13 +866,13 @@ export function attackImportedRogue(campaign:Campaign,targetId:string,roll:numbe
  }
  if(!Number.isInteger(weaponDamageDice)||weaponDamageDice<1||weaponDamageDice>100)throw Error('Invalid weapon damage roll');
  const hit=hitRoll===20||(hitRoll!==1&&hitRoll+attackModifier>=targetAC);
- const result=attackCompanion(campaign,'nighthawk',targetId,roll,attackModifier,targetAC,weaponDamageDice+(hit?sneakDice.slice(cunningStrike?1:0).reduce((a,b)=>a+b,0):0),damageModifier,'Piercing',rangeFeet,secondD20);
+ const result=attackCompanion(campaign,'nighthawk',targetId,roll,attackModifier,targetAC,weaponDamageDice+(hit?sneakDice.slice(cunningStrike?(critical?2:1):0).reduce((a,b)=>a+b,0):0),damageModifier,'Piercing',rangeFeet,secondD20);
  if(!hit)return result;
  const combat=result.companionEncounter!;
  const tripDC=8+ch.proficiencyBonus+abilityModifier(ch.scores.dex);
  const tripped=!!cunningStrike&&cunningStrike.saveTotal<tripDC;
  const struck=combat.participants[targetId];
- return save(result,{...combat,participants:{...combat.participants,...(tripped?{[targetId]:{...struck,conditions:[...new Set([...struck.conditions,'Prone' as const])]}}:{}),nighthawk:{...combat.participants.nighthawk,rogueSneakUsed:true}},log:[...combat.log,...(cunningStrike?[`Rogue Cunning Strike Trip: one Sneak Attack d6 forgone; Dexterity save ${cunningStrike.saveTotal} vs DC ${tripDC}: ${tripped?'prone':'saved'}`]:[]),'Rogue Sneak Attack '+diceCount+'d6: '+sneakDice.join('+')+' = '+sneakDice.slice(cunningStrike?1:0).reduce((a,b)=>a+b,0)+' extra piercing damage']});
+ return save(result,{...combat,participants:{...combat.participants,...(tripped?{[targetId]:{...struck,conditions:[...new Set([...struck.conditions,'Prone' as const])]}}:{}),nighthawk:{...combat.participants.nighthawk,rogueSneakUsed:true}},log:[...combat.log,...(cunningStrike?[`Rogue Cunning Strike Trip: one Sneak Attack d6 forgone; Dexterity save ${cunningStrike.saveTotal} vs DC ${tripDC}: ${tripped?'prone':'saved'}`]:[]),'Rogue Sneak Attack '+diceCount+'d6: '+sneakDice.join('+')+' = '+sneakDice.slice(cunningStrike?(critical?2:1):0).reduce((a,b)=>a+b,0)+' extra piercing damage']});
 }
 /** Uncanny Dodge is a reaction to a verified visible attacker hitting the Rogue. */
 export function importedRogueUncannyDodge(campaign:Campaign,attackerId:string,verifiedIncomingDamage:number,type:DamageType):Campaign{
@@ -1042,4 +1042,16 @@ export function resolveWizardMagicMissileMulti(campaign:Campaign,targets:string[
  targets.forEach((id,i)=>{participants[id]=damagedActor(participants[id],dice[i]+1)});
  const next=save(campaign,{...battle,participants:{...participants,nighthawk:{...caster,actionUsed:true}},log:[...battle.log,`Wizard Magic Missile rank ${rank}: ${count} verified darts across ${new Set(targets).size} targets`]});
  return {...next,character:{...ch,spellSlots:{...slots!,...(rank===1?{usedLevel1:used!+1}:{usedLevel2:used!+1})}}};
+}
+
+/** Resolve a verified Dexterity save for a level-seven imported Rogue's Evasion.
+ * Successful saves take zero damage; failed saves take half (rounded down). */
+export function resolveImportedRogueEvasion(campaign:Campaign,saveSucceeded:boolean,verifiedDamage:number,type:DamageType):Campaign{
+ const battle=encounter(campaign),rogue=battle.participants.nighthawk;
+ if(battle.mode!=='unified'||campaign.characterIdentity?.classId!=='rogue'||(campaign.character?.level??1)<7)throw Error('Evasion requires imported Rogue level 7');
+ if(!rogue||rogue.hp<=0||rogue.conditions.includes('Incapacitated'))throw Error('Evasion unavailable while incapacitated');
+ if(!Number.isInteger(verifiedDamage)||verifiedDamage<0||verifiedDamage>1000)throw Error('Verified Dexterity save damage required');
+ const applied=saveSucceeded?0:Math.floor(verifiedDamage/2);
+ const next=damageCompanion(campaign,'nighthawk',applied,type);
+ return save(next,{...next.companionEncounter!,log:[...next.companionEncounter!.log,`Rogue Evasion: ${saveSucceeded?'successful':'failed'} Dexterity save; ${applied} of ${verifiedDamage} damage applied`]});
 }

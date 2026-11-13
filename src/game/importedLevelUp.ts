@@ -14,7 +14,7 @@ export function importedLevelUpIssues(c:Campaign,choice:ImportedLevelChoice):str
  const issues:string[]=[];const ch=c.character,identity=c.characterIdentity,build=c.characterBuild;
  if(!ch||!identity||!build)return ['Only imported characters can use this level-up workflow.'];
  const level=(ch.level??1)+1;
- if(level<2||level>(identity.classId==='rogue'?6:4))return ['Imported level-up supports Rogue levels 2–6 and other classes levels 2–4 only.'];
+ if(level<2||level>(identity.classId==='rogue'?7:4))return ['Imported level-up supports Rogue levels 2–7 and other classes levels 2–4 only.'];
  if((c.xp??0)<xpThresholds[level-1])issues.push(`Requires ${xpThresholds[level-1]} XP for level ${level}.`);
  const cls=classSummary(identity.classId);if(!cls)return ['Unknown class.'];
  const min=1+modifier(ch.scores.con),max=cls.hitDie+modifier(ch.scores.con);
