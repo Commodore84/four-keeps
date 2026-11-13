@@ -22,7 +22,7 @@ function importedCharacter(campaign:Campaign){
  const c=campaign.character,cls=classSummary(campaign.characterIdentity?.classId??c?.classId??'');
  if(!c||!cls)throw Error('Imported class statistics are required; legacy Nighthawk uses its existing rest controls');
  if(!validPlayerState(c))throw Error('Invalid player resource state');
- if((c.level??1)!==1)throw Error('Player recovery currently supports single-class level-one characters');
+ if((c.level??1)!==1&&!(cls.id==='warlock'&&(c.level??1)<=4))throw Error('Player recovery currently supports level-one characters or Warlocks through level four');
  if(campaign.pendingCheck||campaign.companionEncounter?.status==='active'||campaign.combat&&campaign.combat.status!=='completed'||campaign.adventureSession?.status==='encounter')throw Error('Finish the encounter and resume exploration before resting');
  if(!Number.isInteger(c.maxHitPoints)||!Number.isInteger(c.currentHitPoints)||c.currentHitPoints!<1||c.currentHitPoints!>c.maxHitPoints!||c.deathSaves?.dead||c.exhaustionLevel===6)throw Error('Start a rest with at least 1 HP and valid living character statistics');
  return {c,cls};
@@ -40,8 +40,8 @@ export interface PlayerRestOptions {
 export function completePlayerRest(campaign:Campaign,kind:'short'|'long',options:PlayerRestOptions,now=new Date().toISOString()):Campaign{
  const {c,cls}=importedCharacter(campaign);
  if(!['short','long'].includes(kind)||options.confirmedSafe!==true)throw Error('Confirm a safe, uninterrupted completed rest');
- const available=campaign.hitDiceRemaining??1,rolls=options.hitDieRolls??[];
- if(!Number.isInteger(available)||available<0||available>1||!Array.isArray(rolls)||rolls.length>available||rolls.some(d=>!Number.isInteger(d)||d<1||d>cls.hitDie)||kind==='long'&&rolls.length)throw Error('Invalid Hit Dice expenditure or die result');
+ const level=c.level??1;const available=campaign.hitDiceRemaining??level,rolls=options.hitDieRolls??[];
+ if(!Number.isInteger(available)||available<0||available>level||!Array.isArray(rolls)||rolls.length>available||rolls.some(d=>!Number.isInteger(d)||d<1||d>cls.hitDie)||kind==='long'&&rolls.length)throw Error('Invalid Hit Dice expenditure or die result');
  const wait=options.waitMinutes??0,required=kind==='long'?playerLongRestWaitMinutes(campaign):0;
  if(!Number.isSafeInteger(wait)||wait<0||wait!==required)throw Error('Long Rest requires '+required+' minutes of approved waiting before it starts');
  if(options.useTrance&&(kind!=='long'||campaign.characterIdentity?.speciesId!=='elf'))throw Error('Trance is available only to an Elf taking a Long Rest');
@@ -68,5 +68,13 @@ export function completePlayerRest(campaign:Campaign,kind:'short'|'long',options
  const exhaustion=kind==='long'&&c.exhaustionLevel!==undefined?Math.max(0,c.exhaustionLevel-1):c.exhaustionLevel;
  const conditions=kind==='long'&&exhaustion===0?c.conditions?.filter(s=>s!=='Exhaustion'):c.conditions;
  const character={...c,currentHitPoints:hp,spellSlots:slots,resources,conditions,exhaustionLevel:exhaustion};
- return {...campaign,character,hitDiceRemaining:kind==='long'?1:available-rolls.length,elapsedMinutes:end,lastLongRestCompletedAt:kind==='long'?end:campaign.lastLongRestCompletedAt,concentration:kind==='long'&&!options.useTrance?undefined:campaign.concentration,updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',createdAt:now,text:(campaign.characterIdentity?.name??'Player')+' completes a '+kind+' rest ('+duration+' minutes'+(wait?', after '+wait+' minutes approved waiting':'')+'). HP '+c.currentHitPoints+' → '+hp+'. Hit Dice '+(kind==='long'?1:available-rolls.length)+'/1.'+(options.arcaneRecovery?' Arcane Recovery restored one level-one slot.':'')}]};
+ return {...campaign,character,hitDiceRemaining:kind==='long'?Math.min(level,available+Math.max(1,Math.ceil(level/2))):available-rolls.length,elapsedMinutes:end,lastLongRestCompletedAt:kind==='long'?end:campaign.lastLongRestCompletedAt,concentration:kind==='long'&&!options.useTrance?undefined:campaign.concentration,updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',createdAt:now,text:(campaign.characterIdentity?.name??'Player')+' completes a '+kind+' rest ('+duration+' minutes'+(wait?', after '+wait+' minutes approved waiting':'')+'). HP '+c.currentHitPoints+' → '+hp+'. Hit Dice '+(kind==='long'?Math.min(level,available+Math.max(1,Math.ceil(level/2))):available-rolls.length)+'/'+level+'.'+(options.arcaneRecovery?' Arcane Recovery restored one level-one slot.':'')}]};
+}
+/** Magical Cunning: 1-minute ritual, once per long rest, recover half Pact slots (rounded up). */
+export function performWarlockMagicalCunning(campaign:Campaign):Campaign{
+ const ch=campaign.character,pool=ch?.resources?.['Magical Cunning'],slots=ch?.spellSlots;
+ if(campaign.characterIdentity?.classId!=='warlock'||(ch?.level??0)<2||!ch||!pool||!slots||pool.used>=pool.maximum||slots.usedLevel1<1)throw Error('Magical Cunning is unavailable');
+ if(campaign.pendingCheck||campaign.companionEncounter?.status==='active'||campaign.adventureSession?.status==='encounter'||campaign.combat&&campaign.combat.status!=='completed')throw Error('Magical Cunning requires exploration outside combat');
+ const recovered=Math.min(slots.usedLevel1,Math.ceil(slots.level1/2));
+ return {...campaign,character:{...ch,spellSlots:{...slots,usedLevel1:slots.usedLevel1-recovered},resources:{...ch.resources,'Magical Cunning':{...pool,used:pool.used+1}}},elapsedMinutes:(campaign.elapsedMinutes??0)+1,updatedAt:new Date().toISOString(),journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',createdAt:new Date().toISOString(),text:`Magical Cunning: 1 minute spent; ${recovered} Pact Magic slot restored.`}]};
 }

@@ -623,7 +623,7 @@ export function spendUnifiedNighthawkSpellSlot(campaign:Campaign,spell:string):C
  if(!spell.trim()||spell.length>100||!character.preparedSpells?.includes(spell.trim()))throw Error('Spell is not prepared');
  if(actor.hp<=0||actor.actionUsed||cannotAct(actor))throw Error('Spell action unavailable');
  if(!Number.isInteger(slots.level1)||!Number.isInteger(slots.usedLevel1)||slots.usedLevel1>=slots.level1||slots.usedLevel1<0)throw Error('No level-one spell slots remaining');
- return {...save(campaign,{...battle,participants:{...battle.participants,nighthawk:{...actor,actionUsed:true}},log:[...battle.log,'Nighthawk expended level-one slot for '+spell.trim()+' (spell effect DM adjudicated)']}),character:{...character,spellSlots:{...slots,usedLevel1:slots.usedLevel1+1}}};
+ return {...save(campaign,{...battle,participants:{...battle.participants,nighthawk:{...actor,actionUsed:true}},log:[...battle.log,(campaign.characterIdentity?.classId==='warlock'?'Warlock expended rank '+(campaign.importedWarlockPactSlotLevel??1)+' Pact Magic slot for ':'Nighthawk expended level-one slot for ')+spell.trim()+' (spell effect DM adjudicated)']}),character:{...character,spellSlots:{...slots,usedLevel1:slots.usedLevel1+1}}};
 }
 /** Deterministic opportunity attack from an explicitly verified leaving-reach event.
  * Melee range, target AC and damage are supplied by the DM. No dice are generated.
@@ -851,4 +851,48 @@ export function useImportedMageHandLegerdemain(campaign:Campaign,description:str
  if(actor.actionUsed||actor.hp<=0||cannotAct(actor))throw Error('Action unavailable');
  if(!description.trim()||description.length>160)throw Error('Describe the intended Mage Hand interaction');
  return save(campaign,{...battle,participants:{...battle.participants,nighthawk:{...actor,actionUsed:true}},log:[...battle.log,'Mage Hand Legerdemain: '+description.trim()+' (DM adjudication required; no automatic object effects)']});
+}
+/** Supported Warlock invocations are resolved with the same encounter action economy. */
+export function useImportedWarlockInvocation(campaign:Campaign,invocation:'Armor of Shadows'|'Mask of Many Faces'):Campaign{
+ const battle=activeActor(campaign,'nighthawk'),actor=battle.participants.nighthawk;
+ if(battle.mode!=='unified'||campaign.characterIdentity?.classId!=='warlock'||!(campaign.importedWarlockInvocations??campaign.characterBuild?.selections.magic?.invocations??[]).includes(invocation))throw Error('Warlock invocation is not known');
+ if(actor.hp<=0||actor.actionUsed||cannotAct(actor))throw Error('Invocation action unavailable');
+ if(invocation==='Armor of Shadows'){
+  if(campaign.encounterLoadout?.armorId||campaign.encounterLoadout?.shieldId)throw Error('Armor of Shadows requires no equipped armor or shield');
+  const ac=13+abilityModifier(campaign.character!.scores.dex);
+  return save(campaign,{...battle,participants:{...battle.participants,nighthawk:{...actor,actionUsed:true,armorClass:ac}},log:[...battle.log,'Armor of Shadows: Mage Armor AC '+ac+' (action; until encounter ends or equipment changes)']});
+ }
+ return save(campaign,{...battle,participants:{...battle.participants,nighthawk:{...actor,actionUsed:true}},log:[...battle.log,'Mask of Many Faces: Disguise Self cast without spell slot (appearance DM adjudicated)']});
+}
+/** Eldritch Blast: verified d20 and damage dice, with Agonizing Blast CHA bonus. */
+export function attackImportedEldritchBlast(campaign:Campaign,targetId:string,roll:number,damageDice:number,secondD20?:number):Campaign{
+ const battle=activeActor(campaign,'nighthawk'),actor=battle.participants.nighthawk,target=battle.participants[targetId],ch=campaign.character;
+ if(battle.mode!=='unified'||campaign.characterIdentity?.classId!=='warlock'||!ch?.cantrips?.includes('Eldritch Blast'))throw Error('Eldritch Blast is not known');
+ if(!target||target.actorKind!=='enemy'||target.armorClass===undefined||!Number.isInteger(roll)||roll<1||roll>20||!Number.isInteger(damageDice)||damageDice<1||damageDice>(roll===20?20:10))throw Error('Verified target and damage roll required (2d10 total on a natural 20)');
+ const range=Math.max(Math.abs(actor.x-target.x),Math.abs(actor.y-target.y))*5;
+ if(range>120)throw Error('Eldritch Blast target exceeds 120 feet');
+ const cha=abilityModifier(ch.scores.cha),bonus=ch.proficiencyBonus+cha;
+ const agonizing=(campaign.importedWarlockInvocations??[]).includes('Agonizing Blast');
+ const result=attackCompanion(campaign,'nighthawk',targetId,roll,bonus,target.armorClass,damageDice,agonizing?cha:0,'Force',120,secondD20);
+ return {...result,companionEncounter:{...result.companionEncounter!,log:[...result.companionEncounter!.log,`Eldritch Blast: ${agonizing?'Agonizing Blast Charisma damage bonus applied':'base 1d10 force'} (verified roll)`]}};
+}
+/** Celestial Healing Light: spend verified d6s as a bonus action, including an ally. */
+export function useImportedHealingLight(campaign:Campaign,targetId:string,dice:number[]):Campaign{
+ const battle=activeActor(campaign,'nighthawk'),actor=battle.participants.nighthawk,target=battle.participants[targetId],ch=campaign.character;
+ const pool=ch?.resources?.['Healing Light'];
+ if(battle.mode!=='unified'||campaign.characterIdentity?.classId!=='warlock'||campaign.importedSubclassId!=='warlock-celestial'||!pool||!ch)throw Error('Celestial Healing Light unavailable');
+ if(!target||target.actorKind==='enemy'||actor.bonusActionUsed||actor.hp<=0||cannotAct(actor))throw Error('Healing Light target or bonus action unavailable');
+ if(!dice.length||dice.length>Math.max(1,abilityModifier(ch.scores.cha))||pool.used+dice.length>pool.maximum||dice.some(n=>!Number.isInteger(n)||n<1||n>6))throw Error('Provide eligible Healing Light d6 rolls within the remaining pool');
+ const range=Math.max(Math.abs(actor.x-target.x),Math.abs(actor.y-target.y))*5;
+ if(range>60)throw Error('Healing Light range is 60 feet');
+ const healed=Math.min(target.maxHp-target.hp,dice.reduce((a,b)=>a+b,0));
+ const next=save(campaign,{...battle,participants:{...battle.participants,nighthawk:{...actor,bonusActionUsed:true},[targetId]:{...target,hp:target.hp+healed,...(targetId==='nighthawk'?{bonusActionUsed:true}:{})}},log:[...battle.log,'Celestial Healing Light '+dice.join('+')+' healed '+healed+' HP to '+targetId]});
+ return {...next,character:{...ch,resources:{...ch.resources,'Healing Light':{...pool,used:pool.used+dice.length}},...(targetId==='nighthawk'?{currentHitPoints:Math.min(ch.maxHitPoints??target.maxHp,(ch.currentHitPoints??target.hp)+healed)}:{})}};
+}
+/** Eldritch Mind: use the higher of two verified Constitution save totals. */
+export function resolveWarlockEldritchMindSave(campaign:Campaign,damage:number,firstTotal:number,secondTotal:number):Campaign{
+ if(campaign.characterIdentity?.classId!=='warlock'||!(campaign.importedWarlockInvocations??campaign.characterBuild?.selections.magic?.invocations??[]).includes('Eldritch Mind'))throw Error('Eldritch Mind invocation not known');
+ if(![firstTotal,secondTotal].every(n=>Number.isInteger(n)&&n>=0&&n<=100))throw Error('Provide two verified Constitution save totals');
+ const next=resolveCompanionConcentrationSave(campaign,'nighthawk',damage,Math.max(firstTotal,secondTotal));
+ return {...next,companionEncounter:{...next.companionEncounter!,log:[...next.companionEncounter!.log,`Eldritch Mind advantage: higher of ${firstTotal} and ${secondTotal}`]}};
 }

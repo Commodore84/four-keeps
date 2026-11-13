@@ -13,11 +13,12 @@ async function openDevelopment(page:Page){
 }
 
 const word=(s:string)=>new RegExp('^'+s+'\\b');
-type ClassId='fighter'|'rogue'|'cleric'|'wizard';
+type ClassId='fighter'|'rogue'|'cleric'|'wizard'|'warlock';
 const config={
  fighter:{skills:['Perception','Acrobatics'],choices:[['Fighting Style',['Defense']],['Weapon Masteries',['Greatsword','Flail','Javelin']]],scores:{Str:15,Dex:14,Con:13,Int:12,Wis:10,Cha:8},hp:12,weapon:'Greatsword'},
  rogue:{skills:['Perception','Acrobatics','Investigation','Deception'],choices:[['Expertise',['Perception','Acrobatics']],['Weapon Masteries',['Dagger','Shortbow']]],scores:{Str:8,Dex:15,Con:13,Int:14,Wis:12,Cha:10},hp:10,weapon:'Dagger'},
  cleric:{skills:['History','Medicine'],choices:[['Divine Order',['Protector']]],scores:{Str:10,Dex:13,Con:14,Int:12,Wis:15,Cha:8},hp:10,weapon:'Mace'},
+ warlock:{skills:['Arcana','Deception'],choices:[],scores:{Str:8,Dex:14,Con:13,Int:12,Wis:10,Cha:15},hp:10,weapon:'Dagger'},
  wizard:{skills:['Arcana','History'],choices:[],scores:{Str:8,Dex:14,Con:13,Int:15,Wis:12,Cha:10},hp:8,weapon:'Quarterstaff'}
 };
 async function createAndImport(page:Page,id:ClassId){
@@ -40,6 +41,7 @@ async function createAndImport(page:Page,id:ClassId){
   for(const name of ['Resistance','Thaumaturgy'])await creator.getByRole('checkbox',{name:word(name)}).last().check();
   await creator.getByRole('radio',{name:word('Cure Wounds')}).check();await creator.getByLabel('Magic Initiate ability').selectOption('Wis');
  }
+ if(id==='warlock'){for(const name of ['Eldritch Blast','Minor Illusion'])await creator.getByRole('checkbox',{name:word(name)}).first().check();for(const name of ['Hex','Armor of Agathys'])await creator.getByRole('checkbox',{name:word(name)}).first().check();await creator.getByRole('radio',{name:word('Eldritch Mind')}).check();}
  if(id==='wizard'){
   for(const name of ['Fire Bolt','Mage Hand','Minor Illusion'])await creator.getByRole('checkbox',{name:word(name)}).check();
   for(const name of ['Alarm','Burning Hands','Charm Person','Detect Magic','Find Familiar','Magic Missile'])await creator.getByRole('checkbox',{name:word(name)}).first().check();
@@ -388,4 +390,12 @@ test('imported Rogue unlocks Cunning Action and selects Arcane Trickster spells 
  expect(record.character.spellSlots.level1).toBe(2);
  await page.reload();await page.getByRole('button',{name:'Continue Adventure'}).click();await navigate(page,'Player');
  await expect(page.getByLabel('Imported player character')).toContainText('Level 3');
+});
+
+test('imported Warlock advances to Celestial and persists Pact Magic resources',async({page})=>{
+ test.setTimeout(90000);await createAndImport(page,'warlock');await navigate(page,'Player');const sheet=page.getByLabel('Imported player character');
+ await sheet.getByLabel('Manual XP award').locator('summary').click();await sheet.getByLabel('Award XP amount').fill('2700');await sheet.getByLabel('Award XP reason').fill('Verified rewards');await sheet.getByRole('button',{name:'Record XP award'}).click();
+ await sheet.getByLabel('Level-up hit points').fill('5');await sheet.getByLabel('Warlock invocation 1').selectOption('Agonizing Blast');await sheet.getByLabel('Warlock invocation 2').selectOption('Armor of Shadows');await sheet.getByLabel('Warlock advancement spell').selectOption('Charm Person');await sheet.getByRole('checkbox',{name:'I confirm these level-up choices'}).check();await sheet.getByRole('button',{name:'Confirm and save level 2'}).click();
+ await expect(sheet).toContainText('Level 2');await sheet.getByLabel('Level-up subclass').selectOption('warlock-celestial');await sheet.getByLabel('Warlock advancement spell').selectOption('Protection from Evil and Good');await sheet.getByRole('checkbox',{name:'I confirm these level-up choices'}).check();await sheet.getByRole('button',{name:'Confirm and save level 3'}).click();
+ await expect(sheet).toContainText('Level 3');const c=await saved(page);expect(c.importedWarlockPactSlotLevel).toBe(2);expect(c.importedWarlockInvocations).toContain('Agonizing Blast');expect(c.character.resources['Healing Light'].maximum).toBe(4);await page.reload();await page.getByRole('button',{name:'Continue Adventure'}).click();await navigate(page,'Player');await expect(page.getByLabel('Imported player character')).toContainText('Level 3');
 });

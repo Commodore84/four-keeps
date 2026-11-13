@@ -17,6 +17,8 @@ export interface Campaign {
   adventureSession?:AdventureSession;
   characterIdentity?:{name:string;speciesId:string;lineageId?:string;backgroundId:string;classId:string;draftId:string;pronouns:string;appearance:string;personality:string;backstory:string};
   /** Explicitly verified equipped items from the shared equipment catalog; distinct from carried inventory. */
+  importedWarlockInvocations?:string[];
+  importedWarlockPactSlotLevel?:number;
   encounterLoadout?:{weaponId?:string;armorId?:string;shieldId?:string};
   id: string;
   title: string;

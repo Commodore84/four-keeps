@@ -1,7 +1,7 @@
 import {useState} from 'react';
 import type {Campaign} from '../game/campaign';
 import {classSummary} from '../game/creationClasses';
-import {completePlayerRest,playerLongRestWaitMinutes} from '../game/playerRecovery';
+import {completePlayerRest,playerLongRestWaitMinutes,performWarlockMagicalCunning} from '../game/playerRecovery';
 export function PlayerRestPanel({campaign,saving,onChange}:{campaign:Campaign;saving:boolean;onChange:(next:Campaign,message:string)=>Promise<boolean>|boolean|void}){
  const [safe,setSafe]=useState(false),[die,setDie]=useState(''),[arcane,setArcane]=useState(false),[wait,setWait]=useState(false),[trance,setTrance]=useState(false),[feedback,setFeedback]=useState('');
  const cls=classSummary(campaign.characterIdentity?.classId??''),c=campaign.character;
@@ -11,7 +11,7 @@ export function PlayerRestPanel({campaign,saving,onChange}:{campaign:Campaign;sa
   try{const next=completePlayerRest(campaign,kind,{confirmedSafe:safe,hitDieRolls:kind==='short'&&die.trim()?[Number(die)]:[],arcaneRecovery:kind==='short'&&arcane,waitMinutes:kind==='long'&&wait?required:0,useTrance:kind==='long'&&trance});const persisted=await onChange(next,'Rest saved');if(persisted===false)throw Error('Rest could not be saved; campaign state is unchanged.');setDie('');setArcane(false);setSafe(false);setWait(false);setFeedback('Rest completed and saved.');}catch(error){setFeedback(String(error));}
  }
  return <section aria-label="Player rest recovery" className="space-y-3 rounded-xl border border-gold/30 p-4">
- <h3 className="font-serif text-xl">Rest and recover</h3><p>HP {c.currentHitPoints}/{c.maxHitPoints} · Hit Dice {campaign.hitDiceRemaining??1}/1 d{cls.hitDie} · In-game time {campaign.elapsedMinutes??0} minutes</p>
+ <h3 className="font-serif text-xl">Rest and recover</h3>{cls.id==='warlock'&&(c.level??1)>=2&&<button type="button" disabled={saving||blocked||(c.resources?.['Magical Cunning']?.used??1)>0||(c.spellSlots?.usedLevel1??0)===0} onClick={()=>{try{void onChange(performWarlockMagicalCunning(campaign),'Magical Cunning recovered a Pact Magic slot')}catch(e){setFeedback(String(e))}}}>Magical Cunning (1 minute, once per long rest)</button>}<p>HP {c.currentHitPoints}/{c.maxHitPoints} · Hit Dice {campaign.hitDiceRemaining??(c.level??1)}/{c.level??1} d{cls.hitDie} · In-game time {campaign.elapsedMinutes??0} minutes</p>
  <p className="text-sm">Record a completed rest after the DM confirms safety. A short rest takes 1 hour. A long rest takes 8 hours. Damage, initiative, or a non-cantrip spell interrupts a rest; interrupted rests do not use these completion controls.</p>
  {blocked&&<p>Finish the encounter and resume exploration with at least 1 HP before resting.</p>}
  <label className="flex gap-2"><input type="checkbox" checked={safe} onChange={e=>setSafe(e.target.checked)}/>DM confirms safe, uninterrupted rest and any waiting</label>
