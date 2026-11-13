@@ -1049,7 +1049,7 @@ export function resolveWizardMagicMissileMulti(campaign:Campaign,targets:string[
 export function resolveImportedRogueEvasion(campaign:Campaign,saveSucceeded:boolean,verifiedDamage:number,type:DamageType):Campaign{
  const battle=encounter(campaign),rogue=battle.participants.nighthawk;
  if(battle.mode!=='unified'||campaign.characterIdentity?.classId!=='rogue'||(campaign.character?.level??1)<7)throw Error('Evasion requires imported Rogue level 7');
- if(!rogue||rogue.hp<=0||rogue.conditions.includes('Incapacitated'))throw Error('Evasion unavailable while incapacitated');
+ if(!rogue||rogue.hp<=0||rogue.conditions.some(condition=>['Incapacitated','Paralyzed','Stunned','Unconscious'].includes(condition)))throw Error('Evasion unavailable while incapacitated');
  if(!Number.isInteger(verifiedDamage)||verifiedDamage<0||verifiedDamage>1000)throw Error('Verified Dexterity save damage required');
  const applied=saveSucceeded?0:Math.floor(verifiedDamage/2);
  const next=damageCompanion(campaign,'nighthawk',applied,type);
