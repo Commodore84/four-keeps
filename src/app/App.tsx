@@ -139,29 +139,12 @@ function Adventure({ campaign, fullHistory, onToggleHistory, onAdventureChange, 
   const turns = fullHistory ? allTurns : allTurns.slice(-6);
   if(development)return <section className="space-y-4" aria-label="Classic adventure testing">{campaign&&<details className="rounded-xl border border-white/10 p-3" open><summary className="cursor-pointer text-sm text-gold">Classic adventure and encounter tools</summary><AdventureSessionPanel campaign={campaign} saving={saving} onChange={onAdventureChange}/></details>}</section>;
   return <section className="space-y-5" aria-label="Adventure">
-    {campaign?.characterIdentity ? <section className="rounded-xl border border-gold/30 bg-panel p-4 space-y-2" aria-label="AI adventure session">
-      <h3 className="font-serif text-xl">{campaign.location}</h3>
-      <p className="text-sm text-parchment/70">Explore through the Dungeon Master conversation. Your decisions and discoveries are saved with the campaign.</p>
-      {campaign.adventureSession && <AdventureSessionPanel campaign={campaign} saving={saving} onChange={onAdventureChange}/>}
-      {campaign.adventureSession?.pendingEncounter && <AdventureEncounterSetupPanel key={campaign.id+'-'+campaign.adventureSession.pendingEncounter.actionId} campaign={campaign} saving={saving} onChange={onAdventureChange}/>}
-      {!campaign.adventureSession && <button type="button" disabled={saving} onClick={()=>void onStartOpening()} className="rounded-lg bg-gold px-4 py-2 text-ink disabled:opacity-50">Begin AI-led adventure</button>}
-      {campaign.adventureSession && !campaign.journal.some(e=>e.kind==='dm') && <button type="button" disabled={saving} onClick={()=>void onStartOpening()} className="rounded-lg border border-gold px-4 py-2 text-gold disabled:opacity-50">Generate opening scene</button>}
-    </section> : null}
-    {campaign?.characterIdentity && <details className="rounded-xl border border-white/10 bg-panel p-3 text-sm" aria-label="Adventure journal">
-      <summary className="cursor-pointer text-gold">World journal · {(campaign.world?.npcs??[]).length} people · {(campaign.world?.clues??[]).length} clues</summary>
-      <div className="mt-3 space-y-3">
-        {(campaign.world?.npcs??[]).length>0 && <section><h4 className="font-semibold">People</h4>{campaign.world!.npcs.map(n=><p key={n.id}>{n.name} · {n.role} · {n.location}</p>)}</section>}
-        {(campaign.world?.places??[]).length>0 && <section><h4 className="font-semibold">Places</h4>{campaign.world!.places.map(p=><p key={p.id}>{p.name} · {p.description}</p>)}</section>}
-        {(campaign.world?.clues??[]).length>0 && <section><h4 className="font-semibold">Clues</h4>{campaign.world!.clues.map(c=><p key={c.id}>{c.text} <span className="text-parchment/60">({c.evidence})</span></p>)}</section>}
-      </div>
-    </details>}
+    {campaign?.adventureSession && campaign.adventureSession.status==='encounter' && <AdventureSessionPanel campaign={campaign} saving={saving} onChange={onAdventureChange}/>}
+    {campaign?.adventureSession?.pendingEncounter && <AdventureEncounterSetupPanel key={campaign.id+'-'+campaign.adventureSession.pendingEncounter.actionId} campaign={campaign} saving={saving} onChange={onAdventureChange}/>}
+    {campaign?.characterIdentity && allTurns.length===0 && <p role="status" className="text-sm text-gold">{saving ? 'The Dungeon Master is setting the scene…' : 'The opening scene begins automatically when your DM connection is configured. Check Settings if it does not appear.'} <button type="button" disabled={saving} onClick={()=>void onStartOpening()} className="underline">Retry opening</button></p>}
     {campaign?.pendingAdventureAction && !campaign.pendingClarification && <p role="status" className="text-sm text-gold">Unfinished action saved: {campaign.pendingAdventureAction.message}. <button type="button" disabled={saving} onClick={()=>void onRetryAction()} className="underline text-gold">Retry saved action</button></p>}
     {allTurns.length > 6 && <button type="button" onClick={onToggleHistory} className="w-full rounded-lg border border-gold/30 px-4 py-3 text-sm text-gold">{fullHistory ? "Show recent conversation" : "View full conversation history ("+allTurns.length+" messages)"}</button>}
     
-    {turns.length === 0 && <div className="rounded-xl border border-white/10 bg-panel p-5 space-y-3">
-      <p className="eyebrow">Dungeon Master</p>
-      <p className="leading-7 text-parchment/85">The road bends toward a frontier village, its lanterns glowing beneath the evening mist. Beyond the tree line, an old keep waits in silence.</p>
-    </div>}
     {turns.map((entry) => <article key={entry.id} className={entry.kind === 'player' ? 'ml-8 rounded-xl border border-gold/30 bg-gold/10 p-4' : 'mr-3 rounded-xl border border-white/10 bg-panel p-5'}>
       <p className="eyebrow">{entry.kind === 'player' ? (campaign?.characterIdentity?.name??'Nighthawk') : 'Dungeon Master'}</p>
       <p className="mt-2 whitespace-pre-wrap leading-7 text-parchment/90">{entry.kind==='system'?publicCombatText(entry.text):entry.text}</p>
@@ -325,6 +308,8 @@ function Party({ campaign, onRoll, onSaveRoll, onAwardXP, onLevelUp, onLevelThre
 }
 function Journal({ campaign }: { campaign: Campaign | null }) {
   return <section className="space-y-4"><div className="flex items-center gap-3"><BookOpen className="text-gold"/><h2 className="font-serif text-2xl">Campaign Journal</h2></div>
+    {!!campaign?.world?.npcs?.length && <section className="rounded-xl border border-gold/25 bg-panel p-4"><h3 className="font-serif text-lg">People encountered</h3>{campaign.world.npcs.map(n=><p key={n.id} className="mt-2 text-sm">{n.name} · {n.role} · {n.location}</p>)}</section>}
+    {!!campaign?.world?.clues?.length && <section className="rounded-xl border border-gold/25 bg-panel p-4"><h3 className="font-serif text-lg">Clues</h3>{campaign.world.clues.map(c=><p key={c.id} className="mt-2 text-sm">{c.text} <span className="text-parchment/60">({c.evidence})</span></p>)}</section>}
     {!!campaign?.world?.places?.length && <div className="rounded-xl border border-gold/25 bg-panel p-4 space-y-3"><h3 className="font-serif text-lg">Discovered places</h3>{campaign.world.places.map(place=><div key={place.id} className="border-t border-white/10 pt-2"><p className="font-semibold text-gold">{place.name}</p><p className="text-sm text-parchment/75">{place.description}</p>{place.notes.map((note,i)=><p key={i} className="text-xs text-parchment/60">{note}</p>)}</div>)}</div>}
     {campaign ? campaign.journal.filter(entry => entry.kind === 'note' || entry.kind === 'system').map((entry) => <div key={entry.id} className="rounded-xl border border-white/10 bg-panel p-4">
       <p className="text-xs text-gold">{entry.kind === 'note' ? 'Your note' : entry.kind === 'player' ? 'Nighthawk' : entry.kind === 'dm' ? 'Dungeon Master' : 'Campaign event'} · {new Date(entry.createdAt).toLocaleString()}</p>
@@ -793,6 +778,15 @@ export function App() {
     }catch(error){setNotice('Opening error: '+String(error)+'. You can retry without losing your campaign.');}
     finally{setSaving(false);}
   }
+
+  const openingAttemptRef=useRef<string | null>(null);
+  useEffect(()=>{
+    if(portalScreen!=='adventure'||!campaign?.characterIdentity||!accessCode||saving)return;
+    if(campaign.journal.some(entry=>entry.kind==='dm'))return;
+    if(openingAttemptRef.current===campaign.id)return;
+    openingAttemptRef.current=campaign.id;
+    void startAiAdventure();
+  },[portalScreen,campaign?.id,campaign?.characterIdentity,campaign?.journal,accessCode,saving]);
 
   async function sendToDM(override?:Campaign, messageOverride?:string, alreadySaving=false) {
     const current=override??campaign;

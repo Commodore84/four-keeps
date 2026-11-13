@@ -1049,7 +1049,7 @@ test('AI combat proposal for imported character persists and enters verified com
  await page.getByLabel('Campaign name').fill('Raven Road');
  await page.getByRole('button',{name:'Create campaign'}).click();
  await page.route('**/api/dm',async route=>await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({narration:'A road bandit blocks your path.',combatStart:{enemyName:'Road bandit'},newFacts:[],worldUpdates:{}})}));
- await page.getByRole('button',{name:'Begin AI-led adventure'}).click();
+ await expect(page.getByLabel('Adventure',{exact:true})).toBeVisible();
  await page.getByLabel('Message the Dungeon Master').fill('I approach the road cautiously.');
  await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
  await expect(page.getByText('Opponent: Road bandit',{exact:false})).toBeVisible();
