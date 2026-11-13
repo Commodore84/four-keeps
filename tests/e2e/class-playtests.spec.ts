@@ -479,7 +479,7 @@ test('new Rogue starts at Frontier Village, buys supplies, and sees persisted Pl
  await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
  await expect.poll(()=>dmRequests.length).toBeGreaterThanOrEqual(2);
  expect(dmRequests.at(-1).gameState.merchant.items).toContainEqual({id:'dagger',name:'Dagger',costCp:200});
- expect(dmRequests.at(-1).gameState.merchant.purchaseRule).toContain('Only the Buy item control');
+ expect(dmRequests.at(-1).gameState.merchant.purchaseRule).toContain('explicit confirmation');
  await expect.poll(async()=>Boolean((await saved(page)).pendingAdventureAction)).toBe(false);
  await shop.getByLabel('Shop item').selectOption('dagger');
  await shop.getByLabel('Shop quantity').fill('1');
@@ -504,6 +504,63 @@ test('new Rogue starts at Frontier Village, buys supplies, and sees persisted Pl
  await expect(page.getByLabel('Equipment and inventory')).toContainText('Dagger');
  await navigate(page,'Adventure');
  await expect(page.getByLabel('Frontier Village general store')).toBeVisible();
+});
+
+test('conversational purchase confirms once and persists gold and gear after reload',async({page})=>{
+ test.setTimeout(90000);
+ await createAndImport(page,'rogue');
+ await navigate(page,'Adventure');
+ await page.evaluate(()=>{localStorage.setItem('four-keeps-access-code','browser-test-code');localStorage.setItem('four-keeps-dm-mode','on');});
+ await page.route('**/api/dm',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({narration:'The general store is open.',worldUpdates:{},newFacts:[]})}));
+ await page.reload();await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await page.getByRole('button',{name:'Begin AI-led adventure'}).click();
+ const before=await saved(page);
+ const input=page.getByLabel('Message the Dungeon Master');
+ await input.fill('I will buy 2 daggers');
+ await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
+ await expect.poll(async()=>Boolean((await saved(page)).pendingMerchantPurchase)).toBe(true);
+ const pending=await saved(page);
+ expect(pending.inventoryLedger).toEqual(before.inventoryLedger);
+ await page.reload();await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await page.getByLabel('Message the Dungeon Master').fill('yes');
+ await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
+ await expect.poll(async()=>Boolean((await saved(page)).completedMerchantPurchaseIds?.length)).toBe(true);
+ const after=await saved(page);
+ expect(after.pendingMerchantPurchase).toBeUndefined();
+ expect(after.inventoryLedger.gear.find((g:any)=>g.name==='Dagger')?.quantity).toBeGreaterThanOrEqual(2);
+ expect(after.completedMerchantPurchaseIds).toContain(pending.pendingMerchantPurchase.id);
+ await navigate(page,'Player');
+ await expect(page.getByLabel('Equipment and inventory')).toContainText('GP');
+ await expect(page.getByLabel('Equipment and inventory')).toContainText('Dagger');
+ await page.reload();await page.getByRole('button',{name:'Continue Adventure'}).click();
+ expect((await saved(page)).inventoryLedger).toEqual(after.inventoryLedger);
+});
+
+test('conversational purchase cancellation and duplicate confirmation cannot spend twice',async({page})=>{
+ test.setTimeout(90000);
+ await createAndImport(page,'rogue');
+ await navigate(page,'Adventure');
+ await page.evaluate(()=>{localStorage.setItem('four-keeps-access-code','browser-test-code');localStorage.setItem('four-keeps-dm-mode','on');});
+ await page.route('**/api/dm',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({narration:'The store is open.',worldUpdates:{},newFacts:[]})}));
+ await page.reload();await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await page.getByRole('button',{name:'Begin AI-led adventure'}).click();
+ const input=page.getByLabel('Message the Dungeon Master');
+ const send=page.getByRole('button',{name:'Send message to Dungeon Master'});
+ const before=await saved(page);
+ await input.fill('I will buy a dagger');await send.click();
+ await expect.poll(async()=>Boolean((await saved(page)).pendingMerchantPurchase)).toBe(true);
+ await input.fill('no');await send.click();
+ await expect.poll(async()=>!(await saved(page)).pendingMerchantPurchase).toBe(true);
+ expect((await saved(page)).inventoryLedger).toEqual(before.inventoryLedger);
+ await input.fill('I will buy a dagger');await send.click();
+ await expect.poll(async()=>Boolean((await saved(page)).pendingMerchantPurchase)).toBe(true);
+ await input.fill('yes');await send.click();
+ await expect.poll(async()=>Boolean((await saved(page)).completedMerchantPurchaseIds?.length)).toBe(true);
+ const purchased=await saved(page);
+ await input.fill('yes');await send.click();
+ await page.waitForTimeout(500);
+ expect((await saved(page)).inventoryLedger).toEqual(purchased.inventoryLedger);
+ expect((await saved(page)).completedMerchantPurchaseIds).toEqual(purchased.completedMerchantPurchaseIds);
 });
 
 test('imported character sheet excludes developer tools and rest controls',async({page})=>{

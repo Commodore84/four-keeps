@@ -1,3 +1,4 @@
+import {parseFrontierPurchase,prepareMerchantPurchase,settleMerchantPurchase,frontierShopStock,formatFrontierPrice} from '../game/frontierShop';
 import {classSummary} from '../game/creationClasses';
 import {completePlayerRest,playerLongRestWaitMinutes} from '../game/playerRecovery';
 import {frontierMerchantContext} from '../game/frontierShop';
@@ -632,6 +633,36 @@ export function App() {
     if(campaign?.characterIdentity && (campaign.adventureSession?.status==='encounter'||campaign.adventureSession?.pendingEncounter)){setNotice('Resolve the current encounter before continuing the Dungeon Master conversation.');return;}
     if(campaign?.combat?.status==='awaiting-initiative'){setNotice('Roll initiative using the highlighted button before taking your turn.');return;}
     if(campaign?.combat?.status==='initiative-set'){setNotice('Use the inline combat action buttons to take your turn.');return;}
+    if(campaign?.pendingMerchantPurchase){
+      const response=draft.trim().toLowerCase();
+      if(!/^(yes|confirm|buy|purchase|no|cancel|decline|never mind|nevermind)[.! ]*$/.test(response)){
+        setNotice('Confirm or cancel the pending purchase before continuing.');return;
+      }
+      const confirmed=/^(yes|confirm|buy|purchase)/.test(response);
+      setSaving(true);
+      try{
+        const pending=campaign.pendingMerchantPurchase;
+        const next=settleMerchantPurchase(campaign,pending.id,confirmed);
+        const item=frontierShopStock.find(i=>i.id===pending.itemId);
+        const narration=confirmed?`Purchased ${pending.quantity} × ${item?.name} for ${formatFrontierPrice(pending.quantity*pending.unitCostCp)}. Your inventory and balance are updated.`:'The merchant puts the goods back. No money was spent.';
+        const saved=addExchange(next,draft,narration);
+        await localCampaignStorage.save(saved);setCampaign(saved);setCampaigns(items=>items.map(c=>c.id===saved.id?saved:c));setDraft('');setNotice(confirmed?'Purchase completed and saved.':'Purchase canceled.');
+      }catch(error){setNotice('Purchase error: '+String(error));}finally{setSaving(false);}
+      return;
+    }
+    if(campaign?.characterIdentity && campaign.adventureSession?.site==='frontier' && campaign.adventureSession.status==='exploring'){
+      const intent=parseFrontierPurchase(draft);
+      if(intent){
+        setSaving(true);
+        try{
+          const next=prepareMerchantPurchase(campaign,intent.itemId,intent.quantity,crypto.randomUUID());
+          const item=frontierShopStock.find(i=>i.id===intent.itemId)!;
+          const saved=addExchange(next,draft,`The shopkeeper offers ${intent.quantity} × ${item.name} for ${formatFrontierPrice(item.costCp*intent.quantity)}. Confirm purchase? Reply yes or no.`);
+          await localCampaignStorage.save(saved);setCampaign(saved);setCampaigns(items=>items.map(c=>c.id===saved.id?saved:c));setDraft('');setNotice('Purchase awaiting confirmation.');
+        }catch(error){setNotice('Shopkeeper: '+String(error));}finally{setSaving(false);}
+        return;
+      }
+    }
     const testDamage=/^\s*(?:test damage|damage test)\s+(\d+)\s*$/i.exec(draft);
     if(testDamage){const amount=Number(testDamage[1]);if(amount>=1&&amount<=100){setPendingTestDamage(amount);return;}}
     const lower=draft.toLowerCase();
