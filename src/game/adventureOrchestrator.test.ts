@@ -1,8 +1,9 @@
 import {describe,it,expect} from 'vitest';
 import {newCampaign} from './campaign';
-import {prepareAdventureOpening,commitAdventureOpening,needsAdventureOpening,prepareAdventureAction,commitAdventureAction,adventureMemory} from './adventureOrchestrator';
+import {OPENING_INTENT,prepareAdventureOpening,commitAdventureOpening,needsAdventureOpening,prepareAdventureAction,commitAdventureAction,adventureMemory} from './adventureOrchestrator';
 
 describe('AI adventure opening orchestration',()=>{
+ it('offers a shop without forcing an action or a scripted opening',()=>{expect(OPENING_INTENT).toContain('general-goods shop');expect(OPENING_INTENT).toContain('do not force');expect(OPENING_INTENT).toContain('free-form exploration');});
   const make=()=>({...newCampaign('Journey','opening-test','2026-01-01T00:00:00Z'),characterIdentity:{name:'Aster',speciesId:'human',backgroundId:'sage',classId:'wizard',draftId:'draft',pronouns:'',appearance:'',personality:'',backstory:''}});
   it('starts a compatible authored session without modifying the player character',()=>{
     const c=make(),next=prepareAdventureOpening(c);

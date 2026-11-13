@@ -6,7 +6,7 @@ export interface AdventureSession {
  visited:AdventureSite[];interactions:{site:AdventureSite;choice:string;response:string}[];encounterActorId?:string;pendingEncounter?:{enemyName:string;actionId:string};
 }
 export const ADVENTURE_SITES:Record<AdventureSite,{name:string;description:string;neighbors:AdventureSite[];options:{id:string;label:string;response:string}[]}>={
- frontier:{name:'Frontier Village',description:'Lanterns glow above the village square. A watchkeeper studies travelers arriving from the eastern road.',neighbors:['crossroads'],options:[
+ frontier:{name:'Frontier Village',description:'Lanterns glow above the village square. A general-goods shop is open beside the road; a watchkeeper studies arriving travelers.',neighbors:['crossroads'],options:[
  {id:'speak-watchkeeper',label:'Speak with the watchkeeper',response:'The watchkeeper reports travelers near the old watchtower. No threat has been confirmed.'},
  {id:'inspect-square',label:'Inspect the square',response:'Wagon tracks lead toward the crossroads, but their origin is unknown.'}]},
  crossroads:{name:'Old Crossroads',description:'Two muddy tracks meet beside a weathered marker. The eastern path leads toward a ruined watchtower.',neighbors:['frontier','watchtower'],options:[

@@ -2,7 +2,7 @@ import type {Campaign} from './campaign';
 import {beginAdventureSession} from './adventureSession';
 import {mergeWorld} from './world';
 
-export const OPENING_INTENT = 'Introduce my character to the world with a short, atmospheric scene and an intriguing mystery. Do not decide what I do.';
+export const OPENING_INTENT = 'Begin in Frontier Village, a small lived-in settlement with a general-goods shop that is open and accessible immediately. Establish the shopkeeper and the kinds of ordinary supplies available, without inventing purchases, prices, or changes to inventory. Include one or two natural points of interest and a subtle intriguing mystery, but do not force a quest, combat, shop visit, scripted dialogue, or any player decision. Describe the scene briefly, then ask what my character does. Allow free-form exploration and a shop visit as equally valid first actions.';
 
 export function prepareAdventureOpening(campaign:Campaign, now=new Date().toISOString()):Campaign {
   if (campaign.adventureSession) return campaign;
