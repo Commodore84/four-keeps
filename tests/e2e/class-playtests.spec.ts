@@ -411,3 +411,40 @@ test('imported Wizard advances to Diviner with persistent spellbook and level-tw
  await sheet.getByLabel('Wizard Portent roll 1').fill('17');await sheet.getByLabel('Wizard Portent roll 2').fill('3');await sheet.getByRole('checkbox',{name:'I confirm these level-up choices'}).check();await sheet.getByRole('button',{name:'Confirm and save level 3'}).click();
  await expect(sheet).toContainText('Level 3');const c=await saved(page);expect(c.importedSubclassId).toBe('wizard-diviner');expect(c.character.spellSlots.level2).toBe(2);expect(c.importedWizardPortents).toEqual([17,3]);expect(c.importedWizardSpellbook).toContain('Misty Step');await page.reload();await page.getByRole('button',{name:'Continue Adventure'}).click();await navigate(page,'Player');await expect(page.getByLabel('Imported player character')).toContainText('Level 3');
 });
+
+test('imported Arcane Trickster advances through levels nine and ten with persisted spell and ASI choices',async({page})=>{
+ test.setTimeout(90000);
+ await createAndImport(page,'rogue');
+ await page.evaluate(async()=>{
+  const db=await new Promise<IDBDatabase>((resolve,reject)=>{const req=indexedDB.open('four-keeps-local',1);req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error);});
+  const tx=db.transaction('campaigns','readwrite'),store=tx.objectStore('campaigns');
+  const c:any=await new Promise(resolve=>{const r=store.getAll();r.onsuccess=()=>resolve(r.result[0]);});
+  c.xp=64000;c.character.level=8;c.importedSubclassId='rogue-arcane-trickster';
+  c.character.preparedSpells=['Shield','Magic Missile','Sleep','Charm Person','Disguise Self'];
+  c.character.spellSlots={level1:4,usedLevel1:0,level2:2,usedLevel2:0};
+  store.put(c);
+  await new Promise<void>((resolve,reject)=>{tx.oncomplete=()=>resolve();tx.onerror=()=>reject(tx.error);});
+  db.close();
+ });
+ await page.reload();await page.getByRole('button',{name:'Continue Adventure'}).click();await navigate(page,'Player');
+ const sheet=page.getByLabel('Imported player character');
+ await expect(sheet).toContainText('Level 8');
+ await sheet.getByLabel('Arcane Trickster new spell 1').selectOption('Hold Person');
+ await sheet.getByLabel('Level-up hit points').fill('5');
+ await sheet.getByRole('checkbox',{name:'I confirm these level-up choices'}).check();
+ await sheet.getByRole('button',{name:'Confirm and save level 9'}).click();
+ await expect(sheet).toContainText('Level 9');
+ await sheet.getByLabel('Arcane Trickster new spell 1').selectOption('Detect Magic');
+ await sheet.getByLabel('Level-up improvement').selectOption('Ability Score Improvement');
+ await sheet.getByLabel('First ASI ability').selectOption('Dex');
+ await sheet.getByLabel('Second ASI ability').selectOption('Dex');
+ await sheet.getByRole('checkbox',{name:'I confirm these level-up choices'}).check();
+ await sheet.getByRole('button',{name:'Confirm and save level 10'}).click();
+ await expect(sheet).toContainText('Level 10');
+ const record=await saved(page);
+ expect(record.character.preparedSpells).toContain('Hold Person');
+ expect(record.character.preparedSpells).toContain('Detect Magic');
+ expect(record.character.spellSlots.level2).toBe(3);
+ await page.reload();await page.getByRole('button',{name:'Continue Adventure'}).click();await navigate(page,'Player');
+ await expect(page.getByLabel('Imported player character')).toContainText('Level 10');
+});

@@ -6,6 +6,7 @@ import type {DamageType} from './subclassCombatRules';
 import {abilityModifier} from './checks';
 import {classSummary} from './creationClasses';
 import {ITEMS} from './creationEquipment';
+import {resolveRogueMagicalAmbushSave} from './rogueMagicalAmbush';
 
 /** Isolated companion skirmish. Never mutates Campaign.combat (the Nighthawk training encounter). */
 export interface CompanionEncounter {
@@ -20,6 +21,7 @@ export interface CompanionEncounter {
  order:string[];
  participants:Record<string,{x:number;y:number;hp:number;maxHp:number;initiative:number;conditions:('Charmed'|'Poisoned'|'Blinded'|'Deafened'|'Frightened'|'Grappled'|'Incapacitated'|'Invisible'|'Paralyzed'|'Petrified'|'Prone'|'Restrained'|'Stunned'|'Unconscious'|'Exhaustion')[];speedFeet:number;movementSpentFeet:number;actionUsed:boolean;bonusActionUsed:boolean;dashFeet:number;disengaged:boolean;dodging:boolean;reactionUsed?:boolean;rogueSneakUsed?:boolean;concentratingOn?:string;consumables?:Record<string,number>;faction?:string;reachFeet?:number;actorKind?:'party'|'enemy';armorClass?:number;attackModifier?:number;constitutionSaveModifier?:number;damageModifier?:number;damageDice?:string;enemyTactic?:'hold'|'nearest'|'lowest-hp';rangedAttackFeet?:number;deathSaves?:{successes:number;failures:number;stable:boolean;dead:boolean}}>;
  wizardHoldPersonTargets?:string[];
+ rogueHoldPersonTargets?:string[];
  obstacles?:{x:number;y:number}[];
  cover?:{x:number;y:number}[];
  pendingOpportunity?:{moverId:string;attackerIds:string[];from:{x:number;y:number};to:{x:number;y:number};destination?:{x:number;y:number}};
@@ -37,6 +39,13 @@ function clearWizardHoldPerson(battle:CompanionEncounter):CompanionEncounter{
  for(const id of targets){const actor=participants[id];if(actor)participants[id]={...actor,conditions:actor.conditions.filter(c=>c!=='Paralyzed')};}
  return {...battle,participants,wizardHoldPersonTargets:[],log:[...battle.log,'Wizard Hold Person ended; tracked paralysis removed']};
 }
+function clearRogueHoldPerson(battle:CompanionEncounter):CompanionEncounter{
+ const ids=battle.rogueHoldPersonTargets??[];
+ if(!ids.length)return battle;
+ const participants={...battle.participants};
+ for(const id of ids){const actor=participants[id];if(actor)participants[id]={...actor,conditions:actor.conditions.filter(c=>c!=='Paralyzed')};}
+ return {...battle,participants,rogueHoldPersonTargets:[],log:[...battle.log,'Arcane Trickster Hold Person concentration ended']};
+}
 function encounter(campaign:Campaign):CompanionEncounter{
  if(!campaign.companionEncounter||campaign.companionEncounter.status!=='active')throw Error('No active companion encounter');
  return campaign.companionEncounter;
@@ -52,8 +61,10 @@ function save(campaign:Campaign,battle:CompanionEncounter):Campaign{
  const wizard=battle.participants.nighthawk;
  const interrupted=wizard?.hp===0&&(wizard.concentratingOn||campaign.companionEncounter?.participants.nighthawk?.concentratingOn);
  const cleaned=interrupted&&(wizard.concentratingOn==='Hold Person'||campaign.companionEncounter?.participants.nighthawk?.concentratingOn==='Hold Person')?clearWizardHoldPerson(battle):battle;
- const participants=interrupted?{...cleaned.participants,nighthawk:{...cleaned.participants.nighthawk,concentratingOn:undefined}}:cleaned.participants;
- return {...campaign,companionEncounter:{...cleaned,participants,...(interrupted?{log:[...cleaned.log,'Wizard concentration ended at zero HP']}: {})},updatedAt:new Date().toISOString()};
+ const rogueInterrupted=interrupted&&(cleaned.rogueHoldPersonTargets?.length??0)>0;
+ const cleared=rogueInterrupted?{...cleaned,rogueHoldPersonTargets:[],participants:Object.fromEntries(Object.entries(cleaned.participants).map(([id,a])=>[id,cleaned.rogueHoldPersonTargets?.includes(id)?{...a,conditions:a.conditions.filter(c=>c!=='Paralyzed')}:a]))}:cleaned;
+ const participants=interrupted?{...cleared.participants,nighthawk:{...cleared.participants.nighthawk,concentratingOn:undefined}}:cleared.participants;
+ return {...campaign,companionEncounter:{...cleared,participants,...(interrupted?{log:[...cleaned.log,'Wizard concentration ended at zero HP']}: {})},updatedAt:new Date().toISOString()};
 }
 export function startCompanionEncounter(campaign:Campaign,initiative:Record<string,number>,positions:Record<string,{x:number;y:number}>,hitPoints:Record<string,number>):Campaign{
  if(campaign.companionEncounter?.status==='active')throw Error('Finish the existing companion encounter first');
@@ -381,7 +392,7 @@ export function moveCompanion(campaign:Campaign,actorId:string,x:number,y:number
 }
 export function endCompanionTurn(campaign:Campaign,actorId:string):Campaign{
  const battle=activeActor(campaign,actorId);
- if(battle.mode==='unified'&&battle.wizardHoldPersonTargets?.includes(actorId)&&battle.participants[actorId]?.conditions.includes('Paralyzed'))throw Error('Resolve Hold Person end-of-turn Wisdom save before ending turn');
+ if(battle.mode==='unified'&&(battle.wizardHoldPersonTargets?.includes(actorId)||battle.rogueHoldPersonTargets?.includes(actorId))&&battle.participants[actorId]?.conditions.includes('Paralyzed'))throw Error('Resolve Hold Person end-of-turn Wisdom save before ending turn');
  if(battle.participants[actorId]?.actorKind==='enemy'&&battle.pendingOpportunity?.moverId===actorId&&battle.pendingOpportunity.attackerIds.length)throw Error('Pending opportunity reactions require DM adjudication');
  const next=(battle.turnIndex+1)%battle.order.length;
  const nextId=battle.order[next];const outgoing=battle.participants[actorId];const participants={...battle.participants,[actorId]:{...outgoing,disengaged:false}};participants[nextId]={...participants[nextId],movementSpentFeet:0,actionUsed:false,bonusActionUsed:false,dashFeet:0,disengaged:false,dodging:false,reactionUsed:false,rogueSneakUsed:false};return save(campaign,{...battle,participants,turnIndex:next,round:battle.round+(next===0?1:0),log:[...battle.log,actorId+' ended turn']});
@@ -521,7 +532,7 @@ export function setCompanionConcentration(campaign:Campaign,actorId:string,spell
  const battle=encounter(campaign),actor=battle.participants[actorId];
  if(!actor)throw Error('Unknown concentration actor');
  if(spell!==null&&(!spell.trim()||spell.length>100||actor.hp<=0))throw Error('Invalid concentration spell');
- const updated=actorId==='nighthawk'&&actor.concentratingOn==='Hold Person'&&spell!=='Hold Person'?clearWizardHoldPerson(battle):battle;
+ const updated=actorId==='nighthawk'&&actor.concentratingOn==='Hold Person'&&spell!=='Hold Person'?clearRogueHoldPerson(clearWizardHoldPerson(battle)):battle;
  return save(campaign,{...updated,participants:{...updated.participants,[actorId]:{...updated.participants[actorId],concentratingOn:spell?.trim()??undefined}},log:[...updated.log,actorId+(spell?' concentrating on '+spell:' ended concentration')]});
 }
 /** A caller-supplied Constitution saving throw total determines concentration outcome.
@@ -533,7 +544,7 @@ export function resolveCompanionConcentrationSave(campaign:Campaign,actorId:stri
  if(!Number.isInteger(saveTotal)||saveTotal<0||saveTotal>100)throw Error('Invalid Constitution save total');
  const dc=companionConcentrationSaveDC(damage);
  const passed=saveTotal>=dc;
- const updated=!passed&&actorId==='nighthawk'&&actor.concentratingOn==='Hold Person'?clearWizardHoldPerson(battle):battle;
+ const updated=!passed&&actorId==='nighthawk'&&actor.concentratingOn==='Hold Person'?clearRogueHoldPerson(clearWizardHoldPerson(battle)):battle;
  return save(campaign,{...updated,participants:{...updated.participants,[actorId]:{...updated.participants[actorId],concentratingOn:passed?actor.concentratingOn:undefined}},log:[...updated.log,actorId+' concentration save '+saveTotal+' vs DC '+dc+(passed?' succeeded':' failed; concentration ended')]});
 }
 export function companionConcentrationSaveDC(damage:number):number{
@@ -1054,4 +1065,31 @@ export function resolveImportedRogueEvasion(campaign:Campaign,saveSucceeded:bool
  const applied=saveSucceeded?0:Math.floor(verifiedDamage/2);
  const next=damageCompanion(campaign,'nighthawk',applied,type);
  return save(next,{...next.companionEncounter!,log:[...next.companionEncounter!.log,`Rogue Evasion: ${saveSucceeded?'successful':'failed'} Dexterity save; ${applied} of ${verifiedDamage} damage applied`]});
+}
+
+/** Narrow deterministic Arcane Trickster combat path: Hold Person against one verified humanoid.
+ * Hidden status is DM-adjudicated for this target at the instant of casting, never inferred
+ * from the Invisible condition. The two d20 rolls are independently verified. */
+export function castArcaneTricksterHoldPerson(campaign:Campaign,choice:{targetId:string;slotLevel:2;humanoidConfirmed:boolean;hiddenFromTarget:boolean;saveRolls:[number,number];saveModifier:number}):Campaign{
+ const battle=activeActor(campaign,'nighthawk'),caster=battle.participants.nighthawk,target=battle.participants[choice.targetId],ch=campaign.character;
+ if(battle.mode!=='unified'||campaign.characterIdentity?.classId!=='rogue'||campaign.importedSubclassId!=='rogue-arcane-trickster'||(ch?.level??0)<7||!ch||!caster||caster.hp<=0||caster.actionUsed||cannotAct(caster))throw Error('Arcane Trickster cannot cast on this turn');
+ if(!ch.preparedSpells?.includes('Hold Person')||choice.slotLevel!==2||!choice.humanoidConfirmed)throw Error('Prepared Hold Person and verified humanoid target required');
+ if(!target||target.actorKind!=='enemy'||target.hp<=0||Math.max(Math.abs(target.x-caster.x),Math.abs(target.y-caster.y))*5>60||!companionLineOfSight(battle,caster,target))throw Error('Target is not a visible enemy within 60 feet');
+ const slots=ch.spellSlots;
+ if(!slots||!Number.isInteger(slots.level2)||!Number.isInteger(slots.usedLevel2)||(slots.usedLevel2??-1)<0||(slots.usedLevel2??0)>=(slots.level2??0))throw Error('No available level-two spell slot');
+ if(typeof choice.hiddenFromTarget!=='boolean'||typeof choice.humanoidConfirmed!=='boolean')throw Error('DM must adjudicate hidden state and target type');
+ const dc=8+ch.proficiencyBonus+abilityModifier(ch.scores.int);
+ const result=resolveRogueMagicalAmbushSave(campaign,choice.hiddenFromTarget,choice.saveRolls,choice.saveModifier,dc);
+ const participants={...clearRogueHoldPerson(battle).participants};
+ participants[choice.targetId]=result.success?participants[choice.targetId]:{...participants[choice.targetId],conditions:[...new Set([...participants[choice.targetId].conditions,'Paralyzed' as const])]};
+ participants.nighthawk={...caster,actionUsed:true,concentratingOn:'Hold Person'};
+ const updated={...battle,participants,rogueHoldPersonTargets:result.success?[]:[choice.targetId],log:[...battle.log,`Arcane Trickster Hold Person on ${choice.targetId}: Wisdom save ${result.total} vs DC ${dc}; ${result.disadvantage?'Magical Ambush disadvantage':'normal save'}; ${result.success?'saved':'paralyzed'}`]};
+ return {...save(campaign,updated),character:{...ch,spellSlots:{...slots,usedLevel2:(slots.usedLevel2??0)+1}}};
+}
+export function resolveArcaneTricksterHoldPersonEndSave(campaign:Campaign,targetId:string,total:number):Campaign{
+ const battle=activeActor(campaign,targetId),target=battle.participants[targetId],caster=battle.participants.nighthawk;
+ if(battle.mode!=='unified'||campaign.importedSubclassId!=='rogue-arcane-trickster'||caster?.concentratingOn!=='Hold Person'||!battle.rogueHoldPersonTargets?.includes(targetId)||!target?.conditions.includes('Paralyzed'))throw Error('No active Arcane Trickster Hold Person on this target');
+ if(!Number.isInteger(total)||total<0||total>100)throw Error('Verified Wisdom save total required');
+ const ch=campaign.character!,dc=8+ch.proficiencyBonus+abilityModifier(ch.scores.int),passed=total>=dc;
+ return save(campaign,{...battle,rogueHoldPersonTargets:passed?battle.rogueHoldPersonTargets.filter(id=>id!==targetId):battle.rogueHoldPersonTargets,participants:{...battle.participants,[targetId]:passed?{...target,conditions:target.conditions.filter(c=>c!=='Paralyzed')}:target},log:[...battle.log,`Arcane Trickster Hold Person end save ${total} vs DC ${dc}: ${passed?'passed':'failed'}`]});
 }
