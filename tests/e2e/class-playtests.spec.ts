@@ -474,6 +474,12 @@ test('new Rogue starts at Frontier Village, buys supplies, and sees persisted Pl
  const shop=page.getByLabel('Frontier Village general store');
  await expect(shop).toBeVisible();
  await expect(shop.getByLabel('Shop item')).toContainText('Potion of Healing');
+ await expect(shop.getByLabel('Shop item')).toContainText('2 GP');
+ await page.getByRole('button',{name:'Request rest from DM'}).click();
+ await expect(page.getByLabel('DM rest request')).toContainText('Elf characters can select Trance');
+ await expect(page.getByLabel('Player rest recovery')).toBeVisible();
+ await page.getByRole('button',{name:'Close rest request'}).click();
+ await expect(page.getByLabel('Player rest recovery')).toHaveCount(0);
  await page.getByLabel('Message the Dungeon Master').fill('I ask the shopkeeper what a dagger costs');
  await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
  await expect.poll(()=>dmRequests.length).toBeGreaterThanOrEqual(2);
@@ -492,7 +498,7 @@ test('new Rogue starts at Frontier Village, buys supplies, and sees persisted Pl
  expect((await saved(page)).inventoryLedger).toEqual(before);
  await shop.getByLabel('Shop quantity').fill('1');
  await shop.getByRole('button',{name:'Buy item'}).click();
- await expect(shop.getByLabel('Confirm shop purchase')).toContainText('200 cp total');
+ await expect(shop.getByLabel('Confirm shop purchase')).toContainText('2 GP total');
  await shop.getByRole('button',{name:'Cancel'}).click();
  expect((await saved(page)).inventoryLedger).toEqual(before);
  await shop.getByRole('button',{name:'Buy item'}).click();

@@ -1,6 +1,10 @@
 import type {Campaign} from './campaign';
 import {ITEM_BY_ID} from './creationEquipment';
 
+export function formatFrontierPrice(copper:number):string {
+ const gp=Math.floor(copper/100),sp=Math.floor(copper%100/10),cp=copper%10;
+ return [gp&&`${gp} GP`,sp&&`${sp} SP`,cp&&`${cp} CP`].filter(Boolean).join(' ')||'0 CP';
+}
 /** Fixed-price opening settlement inventory; never trust prices supplied by the DM. */
 export const FRONTIER_SHOP_IDS=['dagger','rope','torch','rations','waterskin','arrows','potion-of-healing'] as const;
 export const frontierShopStock=FRONTIER_SHOP_IDS.map(id=>ITEM_BY_ID[id]).filter((item):item is NonNullable<typeof item>=>Boolean(item));
