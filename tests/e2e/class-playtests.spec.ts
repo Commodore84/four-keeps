@@ -475,11 +475,6 @@ test('new Rogue starts at Frontier Village, buys supplies, and sees persisted Pl
  await expect(shop).toBeVisible();
  await expect(shop.getByLabel('Shop item')).toContainText('Potion of Healing');
  await expect(shop.getByLabel('Shop item')).toContainText('2 GP');
- await page.getByRole('button',{name:'Request rest from DM'}).click();
- await expect(page.getByLabel('DM rest request')).toContainText('Elf characters can select Trance');
- await expect(page.getByLabel('Player rest recovery')).toBeVisible();
- await page.getByRole('button',{name:'Close rest request'}).click();
- await expect(page.getByLabel('Player rest recovery')).toHaveCount(0);
  await page.getByLabel('Message the Dungeon Master').fill('I ask the shopkeeper what a dagger costs');
  await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
  await expect.poll(()=>dmRequests.length).toBeGreaterThanOrEqual(2);
@@ -529,4 +524,44 @@ test('imported character sheet excludes developer tools and rest controls',async
  await expect(page.getByLabel('Manual XP award')).toBeVisible();
  await navigate(page,'Player');
  await expect(page.getByLabel('Manual XP award')).toHaveCount(0);
+});
+
+
+test('imported Rogue requests DM rest, confirms exactly once, and reloads',async({page})=>{
+ await createAndImport(page,'rogue');
+ await page.evaluate(()=>{localStorage.setItem('four-keeps-access-code','browser-test-code');localStorage.setItem('four-keeps-dm-mode','on')});
+ const requests:any[]=[];
+ await page.route('**/api/dm',route=>{const body=route.request().postDataJSON();requests.push(body);return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(body.restRequest?{narration:'The watchkeeper confirms the inn is safe and uninterrupted.',restDecision:'approved'}:{narration:'The village is quiet.',worldUpdates:{},newFacts:[]})})});
+ await page.reload();await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await page.getByRole('button',{name:'Begin AI-led adventure'}).click();
+ await page.getByLabel('Message the Dungeon Master').fill('I want to take a short rest');
+ await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
+ await expect(page.getByRole('dialog',{name:'Rest recovery options'})).toBeVisible();
+ expect(requests.at(-1).restRequest).toBe('short');
+ const before=await saved(page);
+ await page.getByRole('dialog',{name:'Rest recovery options'}).getByRole('button',{name:'Cancel'}).click();
+ expect((await saved(page)).elapsedMinutes).toBe(before.elapsedMinutes);
+ await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
+ await expect(page.getByRole('dialog',{name:'Rest recovery options'})).toBeVisible();
+ await page.getByRole('button',{name:'Finish Short Rest'}).click();
+ await expect(page.getByRole('dialog',{name:'Rest recovery options'})).toHaveCount(0);
+ const after=await saved(page);
+ expect(after.elapsedMinutes).toBe((before.elapsedMinutes??0)+60);
+ await page.reload();await page.getByRole('button',{name:'Continue Adventure'}).click();
+ expect((await saved(page)).elapsedMinutes).toBe(after.elapsedMinutes);
+});
+
+test('DM denial never grants imported rest recovery',async({page})=>{
+ await createAndImport(page,'rogue');
+ await page.evaluate(()=>{localStorage.setItem('four-keeps-access-code','browser-test-code');localStorage.setItem('four-keeps-dm-mode','on')});
+ await page.route('**/api/dm',route=>{const body=route.request().postDataJSON();return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(body.restRequest?{narration:'Bandits interrupt the attempted rest.',restDecision:'denied'}:{narration:'The village is quiet.',newFacts:[],worldUpdates:{}})})});
+ await page.reload();await page.getByRole('button',{name:'Continue Adventure'}).click();await page.getByRole('button',{name:'Begin AI-led adventure'}).click();
+ const before=await saved(page);
+ await page.getByLabel('Message the Dungeon Master').fill('I want to take a long rest');
+ await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
+ await expect(page.getByText('The DM denied or interrupted the rest. No resources changed.')).toBeVisible();
+ await expect(page.getByRole('dialog',{name:'Rest recovery options'})).toHaveCount(0);
+ const after=await saved(page);
+ expect(after.elapsedMinutes).toBe(before.elapsedMinutes);
+ expect(after.character.currentHitPoints).toBe(before.character.currentHitPoints);
 });

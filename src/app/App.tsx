@@ -1,3 +1,5 @@
+import {classSummary} from '../game/creationClasses';
+import {completePlayerRest,playerLongRestWaitMinutes} from '../game/playerRecovery';
 import {frontierMerchantContext} from '../game/frontierShop';
 import {mergeWorld} from '../game/world';
 import {travelAdventure,proposeAdventureEncounter,type AdventureSite} from '../game/adventureSession';
@@ -408,6 +410,8 @@ export function App() {
   const [pendingRest,setPendingRest] = useState<'short'|'long'|null>(null);
   const [restRolls,setRestRolls] = useState<number[]>([]);
   const [restApproved,setRestApproved] = useState(false);
+  const [restTrance,setRestTrance] = useState(false);
+  const [restPortent,setRestPortent] = useState(['','']);
   const [restNarration,setRestNarration] = useState('');
   const [restWaitMinutes,setRestWaitMinutes] = useState(0);
   const [pendingTestDamage,setPendingTestDamage] = useState<number|null>(null);
@@ -631,17 +635,17 @@ export function App() {
     const testDamage=/^\s*(?:test damage|damage test)\s+(\d+)\s*$/i.exec(draft);
     if(testDamage){const amount=Number(testDamage[1]);if(amount>=1&&amount<=100){setPendingTestDamage(amount);return;}}
     const lower=draft.toLowerCase();
-    if(campaign?.characterIdentity){await sendToDM();return;}
     const explicit=/\b(short rest|long rest)\b/.exec(lower);
     const natural=/\b(rest|resting|rests|sleep|sleeping|nap|napping|bed down|turn in for the night|take a break|lie down|lay down)\b/.test(lower) && /\b(want|would like|i'd like|try|take|start|begin|settle|spend|sleep|rest|resting|nap|bed|turn|lie|lay)\b/.test(lower);
     const shortTime=/\b(an? hour|one hour|60 minutes|short rest|nap|brief break)\b/.test(lower);
     const longTime=/\b(eight hours|8 hours|overnight|until morning|through the night|long rest|sleep for the night)\b/.test(lower);
-    if(explicit || natural && (shortTime || longTime)) {
+    if(explicit || natural && (shortTime || longTime || campaign?.characterIdentity)) {
       const kind=explicit?explicit[1].startsWith('long')?'long':'short':longTime?'long':'short';
-      setPendingRest(kind);setRestRolls([]);setRestApproved(false);setRestNarration('');
+      setPendingRest(kind);setRestRolls([]);setRestApproved(false);setRestNarration('');setRestTrance(false);setRestPortent(['','']);
       await requestRestApproval(kind);
       return;
     }
+    if(campaign?.characterIdentity){await sendToDM();return;}
     const found=detectAdventureSpell(draft);
     if(found){setPendingAdventureSpell(found);setAdventureComponentsConfirmed(false);return;}
     await sendToDM();
@@ -649,11 +653,11 @@ export function App() {
   async function requestRestApproval(kind:'short'|'long') {
     if(!campaign || saving)return;
     if(!accessCode){setNotice('Enter your game access code first.');setPendingRest(null);return;}
-    const waitMinutes=kind==='long'?minutesUntilLongRestEligible(campaign):0;
+    const waitMinutes=kind==='long'?(campaign.characterIdentity?playerLongRestWaitMinutes(campaign):minutesUntilLongRestEligible(campaign)):0;
     setSaving(true);setNotice('The Dungeon Master is evaluating your rest request…');
     try {
       const history=campaign.journal.filter(e=>e.kind==='player'||e.kind==='dm').slice(-12).map(e=>({role:e.kind==='player'?'user':'assistant',content:e.text}));
-      const response=await fetch('/api/dm',{method:'POST',headers:{'Content-Type':'application/json','x-four-keeps-access':accessCode},body:JSON.stringify({message:draft,restRequest:kind,restWaitMinutes:waitMinutes,character:campaign.character??prototypeNighthawk,gameState:{familiar:campaign.familiar??null,elapsedMinutes:campaign.elapsedMinutes??0,recentEvents:campaign.journal.filter(e=>e.kind==='system').slice(-8).map(e=>e.text)},history,worldFacts:campaign.worldFacts??[],world:campaign.world??emptyWorld()})});
+      const response=await fetch('/api/dm',{method:'POST',headers:{'Content-Type':'application/json','x-four-keeps-access':accessCode},body:JSON.stringify({message:draft,restRequest:kind,restWaitMinutes:waitMinutes,character:campaign.character??prototypeNighthawk,gameState:{characterIdentity:campaign.characterIdentity??null,adventureSession:campaign.adventureSession??null,familiar:campaign.familiar??null,elapsedMinutes:campaign.elapsedMinutes??0,recentEvents:campaign.journal.filter(e=>e.kind==='system').slice(-8).map(e=>e.text)},history,worldFacts:campaign.worldFacts??[],world:campaign.world??emptyWorld()})});
       const result:{narration?:string;restDecision?:'approved'|'denied';error?:string}=await response.json();
       if(!response.ok||!result.narration||!['approved','denied'].includes(result.restDecision??''))throw new Error(result.error??'Rest adjudication failed');
       if(result.restDecision==='approved'){setRestWaitMinutes(waitMinutes);setRestNarration(result.narration);setRestApproved(true);setNotice('Rest approved. Choose your recovery options below.');return;}
@@ -674,11 +678,11 @@ export function App() {
     
     setSaving(true);
     try {
-      const eligible=pendingRest==='long'?advanceToLongRestEligibility(campaign,restWaitMinutes):campaign;
-      const base=takeNighthawkRest(eligible,pendingRest,pendingRest==='short'?restRolls.length:0,restRolls);
+      const eligible=!campaign.characterIdentity&&pendingRest==='long'?advanceToLongRestEligibility(campaign,restWaitMinutes):campaign;
+      const base=campaign.characterIdentity?completePlayerRest(eligible,pendingRest,{confirmedSafe:true,hitDieRolls:pendingRest==='short'?restRolls:[],waitMinutes:restWaitMinutes,useTrance:pendingRest==='long'&&restTrance,portentRolls:pendingRest==='long'&&campaign.importedSubclassId==='wizard-diviner'?restPortent.map(Number):undefined}):takeNighthawkRest(eligible,pendingRest,pendingRest==='short'?restRolls.length:0,restRolls);
       const next=addExchange(base,draft,restNarration,new Date().toISOString());
       await localCampaignStorage.save(next);setCampaign(next);setCampaigns(items=>items.map(item=>item.id===next.id?next:item));
-      setPendingRest(null);setRestApproved(false);setRestRolls([]);setRestNarration('');setRestWaitMinutes(0);setDraft('');
+      setPendingRest(null);setRestApproved(false);setRestRolls([]);setRestNarration('');setRestWaitMinutes(0);setRestTrance(false);setDraft('');
       setNotice('Rest completed and saved.');
     }catch(error){setNotice('Rest error: '+String(error));}
     finally{setSaving(false);}
@@ -1570,6 +1574,8 @@ export function App() {
           <details className="rounded-lg border border-white/15 p-2 text-sm text-parchment/80"><summary className="cursor-pointer font-semibold">DM narration (tap to expand)</summary><p className="mt-2 whitespace-pre-wrap">{restNarration}</p></details>
           {pendingRest==='long' && restWaitMinutes>0 && <p className="rounded-lg border border-gold/30 p-3 text-sm">The DM approved waiting {Math.floor(restWaitMinutes/60)}h {restWaitMinutes%60}m until eligible, followed by the 8-hour Long Rest. Total time advanced on completion: {Math.floor((restWaitMinutes+480)/60)}h {(restWaitMinutes+480)%60}m.</p>}
           <h3 className="font-serif text-xl">{pendingRest==='long'?'Long Rest · 8 hours':'Short Rest · 1 hour'}</h3>
+          {campaign?.characterIdentity&&pendingRest==='long'&&campaign.characterIdentity.speciesId==='elf'&&<label className="flex gap-2"><input type="checkbox" aria-label="Use Elf Trance" checked={restTrance} onChange={e=>setRestTrance(e.target.checked)}/>Use Elf Trance (4 hours instead of 8)</label>}
+          {campaign?.characterIdentity&&pendingRest==='long'&&campaign.importedSubclassId==='wizard-diviner'&&<div className="flex gap-2">{restPortent.map((v,i)=><input key={i} aria-label={`Portent die ${i+1}`} type="number" min="1" max="20" value={v} onChange={e=>setRestPortent(old=>old.map((x,j)=>i===j?e.target.value:x))} className="w-20 rounded bg-ink p-2"/>)}</div>}
           {pendingRest==='short' ? (() => {
             const character=campaign?.character??prototypeNighthawk;
             const maxHp=character.maxHitPoints??10;
@@ -1578,6 +1584,7 @@ export function App() {
             const healed=restRolls.reduce((total,die)=>total+Math.max(0,die+con),0);
             const previewHp=Math.min(maxHp,startingHp+healed);
             const available=campaign?.hitDiceRemaining??character.level??1;
+            const hitDie=campaign?.characterIdentity?classSummary(campaign.characterIdentity.classId)?.hitDie??8:8;
             return <div className="space-y-3">
               <p className="text-sm">Roll one Hit Die at a time. Stop whenever you're satisfied with your HP recovery.</p>
               <div className="rounded-lg border border-white/20 p-3 space-y-2">
@@ -1586,7 +1593,7 @@ export function App() {
                 <div className="flex justify-between gap-2 text-xs"><span>Hit Dice spent: {restRolls.length}</span><span>Remaining: {available-restRolls.length}/{character.level??1}</span></div>
               </div>
               {restRolls.length>0 && <div className="space-y-1 text-sm">{restRolls.map((die,i)=><p key={i}>Die {i+1}: {die} + {con} CON = {Math.max(0,die+con)} HP</p>)}<p className="font-semibold">Total healing applied: {previewHp-startingHp} HP</p></div>}
-              <button type="button" disabled={saving||restRolls.length>=available||previewHp>=maxHp} className="w-full rounded-lg border border-gold/60 p-3 text-gold disabled:opacity-40" onClick={()=>setRestRolls(v=>[...v,crypto.getRandomValues(new Uint32Array(1))[0]%8+1])}>Roll one Hit Die (d8 + {con} CON)</button>
+              <button type="button" disabled={saving||restRolls.length>=available||previewHp>=maxHp} className="w-full rounded-lg border border-gold/60 p-3 text-gold disabled:opacity-40" onClick={()=>setRestRolls(v=>[...v,crypto.getRandomValues(new Uint32Array(1))[0]%hitDie+1])}>Roll one Hit Die (d{hitDie} + {con} CON)</button>
               {previewHp>=maxHp && <p className="text-xs text-parchment/70">HP is full. You can finish the rest now.</p>}
               {restRolls.length>=available && previewHp<maxHp && <p className="text-xs text-parchment/70">No Hit Dice remain to spend.</p>}
             </div>;
