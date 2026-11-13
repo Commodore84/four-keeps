@@ -2,8 +2,12 @@ import type {Campaign} from './campaign';
 import {ITEM_BY_ID} from './creationEquipment';
 
 /** Fixed-price opening settlement inventory; never trust prices supplied by the DM. */
-export const FRONTIER_SHOP_IDS=['dagger','rope','torch','rations','waterskin','arrows','healing-potion'] as const;
+export const FRONTIER_SHOP_IDS=['dagger','rope','torch','rations','waterskin','arrows','potion-of-healing'] as const;
 export const frontierShopStock=FRONTIER_SHOP_IDS.map(id=>ITEM_BY_ID[id]).filter((item):item is NonNullable<typeof item>=>Boolean(item));
+export function frontierMerchantContext(campaign:Campaign){
+ if(campaign.adventureSession?.site!=='frontier'||campaign.adventureSession.status!=='exploring'||!campaign.characterIdentity)return null;
+ return {location:'Frontier Village',shop:'General store',items:frontierShopStock.map(item=>({id:item.id,name:item.name,costCp:item.costCp})),walletCp:Object.entries(campaign.inventoryLedger?.currency??{}).reduce((sum,[coin,amount])=>sum+amount*({CP:1,SP:10,EP:50,GP:100,PP:1000}[coin as 'CP'|'SP'|'EP'|'GP'|'PP']??0),0),purchaseRule:'Only the Buy item control commits purchases; conversation alone cannot spend money or grant items.'};
+}
 export function buyFrontierItem(campaign:Campaign,itemId:string,quantity=1,now=new Date().toISOString()):Campaign{
  if(!campaign.characterIdentity||campaign.adventureSession?.site!=='frontier'||campaign.adventureSession.status!=='exploring')throw Error('The Frontier Village shop is not available here.');
  if(!Number.isSafeInteger(quantity)||quantity<1||quantity>20)throw Error('Purchase quantity must be 1–20.');
