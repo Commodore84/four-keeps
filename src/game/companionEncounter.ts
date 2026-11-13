@@ -19,7 +19,7 @@ export interface CompanionEncounter {
  round:number;
  turnIndex:number;
  order:string[];
- participants:Record<string,{x:number;y:number;hp:number;maxHp:number;initiative:number;conditions:('Charmed'|'Poisoned'|'Blinded'|'Deafened'|'Frightened'|'Grappled'|'Incapacitated'|'Invisible'|'Paralyzed'|'Petrified'|'Prone'|'Restrained'|'Stunned'|'Unconscious'|'Exhaustion')[];speedFeet:number;movementSpentFeet:number;actionUsed:boolean;bonusActionUsed:boolean;dashFeet:number;disengaged:boolean;dodging:boolean;reactionUsed?:boolean;rogueSneakUsed?:boolean;concentratingOn?:string;consumables?:Record<string,number>;faction?:string;reachFeet?:number;actorKind?:'party'|'enemy';armorClass?:number;attackModifier?:number;constitutionSaveModifier?:number;damageModifier?:number;damageDice?:string;enemyTactic?:'hold'|'nearest'|'lowest-hp';rangedAttackFeet?:number;deathSaves?:{successes:number;failures:number;stable:boolean;dead:boolean}}>;
+ participants:Record<string,{x:number;y:number;hp:number;maxHp:number;initiative:number;conditions:('Charmed'|'Poisoned'|'Blinded'|'Deafened'|'Frightened'|'Grappled'|'Incapacitated'|'Invisible'|'Paralyzed'|'Petrified'|'Prone'|'Restrained'|'Stunned'|'Unconscious'|'Exhaustion')[];speedFeet:number;movementSpentFeet:number;actionUsed:boolean;bonusActionUsed:boolean;dashFeet:number;disengaged:boolean;dodging:boolean;reactionUsed?:boolean;rogueSneakUsed?:boolean;rogueSteadyAim?:boolean;rogueHidden?:boolean;rogueMovedThisTurn?:boolean;concentratingOn?:string;consumables?:Record<string,number>;faction?:string;reachFeet?:number;actorKind?:'party'|'enemy';armorClass?:number;attackModifier?:number;constitutionSaveModifier?:number;damageModifier?:number;damageDice?:string;enemyTactic?:'hold'|'nearest'|'lowest-hp';rangedAttackFeet?:number;deathSaves?:{successes:number;failures:number;stable:boolean;dead:boolean}}>;
  wizardHoldPersonTargets?:string[];
  rogueHoldPersonTargets?:string[];
  obstacles?:{x:number;y:number}[];
@@ -375,6 +375,7 @@ export function moveCompanion(campaign:Campaign,actorId:string,x:number,y:number
  const battle=activeActor(campaign,actorId),actor=battle.participants[actorId];
  if(actor.hp<=0)throw Error('Actor at zero HP cannot move');
  if(actor.conditions.some(c=>IMMOBILE.includes(c)))throw Error('Condition prevents movement');
+ if(actor.rogueSteadyAim)throw Error('Steady Aim prevents movement this turn');
  if(!valid({x,y}))throw Error('Destination outside 20×20 arena');
  if(Object.entries(battle.participants).some(([id,p])=>id!==actorId&&p.hp>0&&p.x===x&&p.y===y))throw Error('Square occupied');
  if(battle.pendingOpportunity?.moverId===actorId&&battle.pendingOpportunity.attackerIds.length)throw Error('Resolve pending opportunity reactions before moving');
@@ -388,14 +389,14 @@ export function moveCompanion(campaign:Campaign,actorId:string,x:number,y:number
  const movementCost=traversedSteps*5*(actor.conditions.includes('Prone')?2:1);
  if(movementCost>actor.speedFeet+actor.dashFeet-actor.movementSpentFeet)throw Error('Move exceeds remaining movement');
  if(Object.entries(battle.participants).some(([id,p])=>id!==actorId&&p.hp>0&&p.x===destination.x&&p.y===destination.y))throw Error('Square occupied');
- return save(campaign,{...battle,participants:{...battle.participants,[actorId]:{...actor,x:destination.x,y:destination.y,movementSpentFeet:actor.movementSpentFeet+movementCost}},pendingOpportunity:candidates.length?{moverId:actorId,attackerIds:candidates,from:interrupt?{x:firstTrigger.from.x,y:firstTrigger.from.y}:{x:actor.x,y:actor.y},to:interrupt?{x:firstTrigger.to.x,y:firstTrigger.to.y}:{x,y},...(interrupt?{destination:{x,y}}:{})}:undefined,log:[...battle.log,actorId+' moved to '+destination.x+','+destination.y+(interrupt?' · interrupted before leaving reach toward '+firstTrigger.to.x+','+firstTrigger.to.y:candidates.length?' · potential opportunity attackers: '+candidates.join(', '):'')]});
+ return save(campaign,{...battle,participants:{...battle.participants,[actorId]:{...actor,x:destination.x,y:destination.y,movementSpentFeet:actor.movementSpentFeet+movementCost,rogueMovedThisTurn:actor.rogueMovedThisTurn||movementCost>0,rogueHidden:movementCost>0?false:actor.rogueHidden}},pendingOpportunity:candidates.length?{moverId:actorId,attackerIds:candidates,from:interrupt?{x:firstTrigger.from.x,y:firstTrigger.from.y}:{x:actor.x,y:actor.y},to:interrupt?{x:firstTrigger.to.x,y:firstTrigger.to.y}:{x,y},...(interrupt?{destination:{x,y}}:{})}:undefined,log:[...battle.log,actorId+' moved to '+destination.x+','+destination.y+(interrupt?' · interrupted before leaving reach toward '+firstTrigger.to.x+','+firstTrigger.to.y:candidates.length?' · potential opportunity attackers: '+candidates.join(', '):'')]});
 }
 export function endCompanionTurn(campaign:Campaign,actorId:string):Campaign{
  const battle=activeActor(campaign,actorId);
  if(battle.mode==='unified'&&(battle.wizardHoldPersonTargets?.includes(actorId)||battle.rogueHoldPersonTargets?.includes(actorId))&&battle.participants[actorId]?.conditions.includes('Paralyzed'))throw Error('Resolve Hold Person end-of-turn Wisdom save before ending turn');
  if(battle.participants[actorId]?.actorKind==='enemy'&&battle.pendingOpportunity?.moverId===actorId&&battle.pendingOpportunity.attackerIds.length)throw Error('Pending opportunity reactions require DM adjudication');
  const next=(battle.turnIndex+1)%battle.order.length;
- const nextId=battle.order[next];const outgoing=battle.participants[actorId];const participants={...battle.participants,[actorId]:{...outgoing,disengaged:false}};participants[nextId]={...participants[nextId],movementSpentFeet:0,actionUsed:false,bonusActionUsed:false,dashFeet:0,disengaged:false,dodging:false,reactionUsed:false,rogueSneakUsed:false};return save(campaign,{...battle,participants,turnIndex:next,round:battle.round+(next===0?1:0),log:[...battle.log,actorId+' ended turn']});
+ const nextId=battle.order[next];const outgoing=battle.participants[actorId];const participants={...battle.participants,[actorId]:{...outgoing,disengaged:false}};participants[nextId]={...participants[nextId],movementSpentFeet:0,actionUsed:false,bonusActionUsed:false,dashFeet:0,disengaged:false,dodging:false,reactionUsed:false,rogueSneakUsed:false,rogueSteadyAim:false,rogueMovedThisTurn:false};return save(campaign,{...battle,participants,turnIndex:next,round:battle.round+(next===0?1:0),log:[...battle.log,actorId+' ended turn']});
 }
 /** 2024 death saves are tracked independently of campaign.character and legacy combat.
  * Natural 20 restores 1 HP; natural 1 causes two failures; other rolls use DC 10.
@@ -691,7 +692,7 @@ export function attackCompanion(campaign:Campaign,attackerId:string,targetId:str
  if((battle.cover??[]).some(p=>p.x===target.x&&p.y===target.y))throw Error('Target has annotated cover: DM must supply adjusted AC and clear cover annotation before attack');
  if(!companionLineOfSight(battle,attacker,target))throw Error('Line of sight blocked by map obstacle');
  const distanceFeet=Math.max(Math.abs(attacker.x-target.x),Math.abs(attacker.y-target.y))*5;
- const attackAdvantage=attacker.conditions.includes('Invisible')||target.conditions.some(c=>['Blinded','Paralyzed','Restrained','Stunned','Unconscious'].includes(c))||(target.conditions.includes('Prone')&&distanceFeet<=5);
+ const attackAdvantage=(attackerId==='nighthawk'&&(attacker.rogueSteadyAim||attacker.rogueHidden))||attacker.conditions.includes('Invisible')||target.conditions.some(c=>['Blinded','Paralyzed','Restrained','Stunned','Unconscious'].includes(c))||(target.conditions.includes('Prone')&&distanceFeet<=5);
  const attackDisadvantage=target.dodging||target.conditions.includes('Invisible')||attacker.conditions.some(c=>['Poisoned','Blinded','Restrained'].includes(c))||(target.conditions.includes('Prone')&&distanceFeet>5);
  if(attackAdvantage!==attackDisadvantage&&secondD20===undefined)throw Error(target.dodging?'Dodge requires a second d20 for disadvantage':'Advantage or disadvantage requires a second d20');
  if(secondD20!==undefined&&(!Number.isInteger(secondD20)||secondD20<1||secondD20>20))throw Error('Invalid second d20');
@@ -704,7 +705,7 @@ export function attackCompanion(campaign:Campaign,attackerId:string,targetId:str
  const critical=effectiveRoll===20;
  const hit=critical||(effectiveRoll!==1&&effectiveRoll+attackModifier>=targetAC);
  const criticalHit=hit&&(critical||(target.conditions.includes('Unconscious')&&distanceFeet<=5));
- const used={...attacker,actionUsed:true};
+ const used={...attacker,actionUsed:true,rogueHidden:false};
  const participants={...battle.participants,[attackerId]:used};
  let dealt=0;
  if(hit){
@@ -853,9 +854,24 @@ export function importedRogueCunningAction(campaign:Campaign,choice:'Dash'|'Dise
  const updated={...actor,bonusActionUsed:true,dashFeet:choice==='Dash'?actor.dashFeet+actor.speedFeet:actor.dashFeet,disengaged:choice==='Disengage'||actor.disengaged};
  return save(campaign,{...battle,participants:{...battle.participants,nighthawk:updated},log:[...battle.log,'Player Cunning Action: '+choice+' (bonus action)']});
 }
+export function importedRogueSteadyAim(campaign:Campaign):Campaign{
+ const battle=activeActor(campaign,'nighthawk'),actor=battle.participants.nighthawk;
+ if(battle.mode!=='unified'||campaign.characterIdentity?.classId!=='rogue'||(campaign.character?.level??0)<3)throw Error('Steady Aim requires imported Rogue level 3');
+ if(actor.bonusActionUsed||actor.rogueMovedThisTurn||actor.movementSpentFeet>0||actor.hp<=0||cannotAct(actor))throw Error('Steady Aim requires unused bonus action and no movement this turn');
+ return save(campaign,{...battle,participants:{...battle.participants,nighthawk:{...actor,bonusActionUsed:true,rogueSteadyAim:true}},log:[...battle.log,'Rogue Steady Aim grants advantage on next attack and prevents movement']});
+}
+export function importedRogueHide(campaign:Campaign,stealthTotal:number):Campaign{
+ const battle=activeActor(campaign,'nighthawk'),actor=battle.participants.nighthawk;
+ if(battle.mode!=='unified'||campaign.characterIdentity?.classId!=='rogue'||(campaign.character?.level??0)<2)throw Error('Hide requires imported Rogue level 2');
+ if(actor.bonusActionUsed||actor.hp<=0||cannotAct(actor))throw Error('Hide requires available bonus action');
+ if(!Number.isInteger(stealthTotal)||stealthTotal<0||stealthTotal>100)throw Error('Verified Stealth total required');
+ if(stealthTotal<15)throw Error('Hide requires DC 15 Stealth');
+ if(!(battle.cover??[]).some(cell=>cell.x===actor.x&&cell.y===actor.y)&&Object.values(battle.participants).some(enemy=>enemy.actorKind==='enemy'&&enemy.hp>0&&companionLineOfSight(battle,enemy,actor)))throw Error('Hide requires cover or breaking enemy sight lines');
+ return save(campaign,{...battle,participants:{...battle.participants,nighthawk:{...actor,bonusActionUsed:true,rogueHidden:true}},log:[...battle.log,'Rogue Hide succeeded with Stealth '+stealthTotal]});
+}
 /** Rogue Sneak Attack is applied only after validating a hit and its eligibility.
  * The player supplies individual d6 results; no rolls are invented. */
-export function attackImportedRogue(campaign:Campaign,targetId:string,roll:number,weaponDamageDice:number,rangeFeet:number,sneakDice:number[],secondD20?:number,cunningStrike?:{effect:'Trip';saveTotal:number}):Campaign{
+export function attackImportedRogue(campaign:Campaign,targetId:string,roll:number,weaponDamageDice:number,rangeFeet:number,sneakDice:number[],secondD20?:number,cunningStrike?:{effect:'Trip';saveTotal:number},elvenAccuracyReroll?:number):Campaign{
  const battle=activeActor(campaign,'nighthawk'),actor=battle.participants.nighthawk,target=battle.participants[targetId];
  const ch=campaign.character;
  if(battle.mode!=='unified'||campaign.characterIdentity?.classId!=='rogue'||!ch)throw Error('Requires imported Rogue in a unified encounter');
@@ -865,11 +881,13 @@ export function attackImportedRogue(campaign:Campaign,targetId:string,roll:numbe
  const attackModifier=equipped.attackModifier,damageModifier=equipped.damageModifier,targetAC=target.armorClass;
  if(targetAC===undefined||!Number.isInteger(targetAC))throw Error('Target AC must be verified');
  const distance=Math.max(Math.abs(actor.x-target.x),Math.abs(actor.y-target.y))*5;
- const advantage=actor.conditions.includes('Invisible')||target.conditions.some(c=>['Blinded','Paralyzed','Restrained','Stunned','Unconscious'].includes(c))||(target.conditions.includes('Prone')&&distance<=5);
+ const advantage=!!(actor.rogueSteadyAim||actor.rogueHidden)||actor.conditions.includes('Invisible')||target.conditions.some(c=>['Blinded','Paralyzed','Restrained','Stunned','Unconscious'].includes(c))||(target.conditions.includes('Prone')&&distance<=5);
  const disadvantage=target.dodging||target.conditions.includes('Invisible')||actor.conditions.some(c=>['Poisoned','Blinded','Restrained'].includes(c))||(target.conditions.includes('Prone')&&distance>5);
  const ally=Object.entries(battle.participants).some(([id,p])=>id!=='nighthawk'&&id!==targetId&&p.hp>0&&p.faction!=='enemies'&&Math.max(Math.abs(p.x-target.x),Math.abs(p.y-target.y))<=1&&!p.conditions.includes('Incapacitated'));
  if(disadvantage&&!advantage||!(advantage&&!disadvantage||ally))throw Error('Sneak Attack requires advantage or an adjacent eligible ally, without disadvantage');
- const hitRoll=advantage!==disadvantage?(advantage?Math.max(roll,secondD20??0):Math.min(roll,secondD20??21)):roll;
+ const elvenEligible=campaign.importedEarnedFeats?.some(f=>f.name==='Elven Accuracy'&&f.legacyApproved&&f.level<=(ch.level??0))&&['Dexterity','Intelligence','Wisdom','Charisma'].includes(equipped.ability);
+ if(elvenAccuracyReroll!==undefined&&(!elvenEligible||!advantage||disadvantage||secondD20===undefined||!Number.isInteger(elvenAccuracyReroll)||elvenAccuracyReroll<1||elvenAccuracyReroll>20))throw Error('Elven Accuracy requires eligible uncancelled advantage and a verified reroll');
+ const hitRoll=elvenAccuracyReroll!==undefined?Math.max(roll,secondD20!,elvenAccuracyReroll):advantage!==disadvantage?(advantage?Math.max(roll,secondD20!):Math.min(roll,secondD20!)):roll;
  const critical=hitRoll===20;
  const diceCount=Math.ceil((ch.level??1)/2)*(critical?2:1);
  if(sneakDice.length!==diceCount||sneakDice.some(n=>!Number.isInteger(n)||n<1||n>6))throw Error('Provide '+diceCount+' verified Sneak Attack d6 rolls');
@@ -878,9 +896,10 @@ export function attackImportedRogue(campaign:Campaign,targetId:string,roll:numbe
   if(!Number.isInteger(cunningStrike.saveTotal)||cunningStrike.saveTotal<0||cunningStrike.saveTotal>100)throw Error('Verified Dexterity saving throw required');
   if(sneakDice.length<1)throw Error('Trip requires a Sneak Attack die to forgo');
  }
+ if(advantage!==disadvantage&&secondD20===undefined)throw Error('Advantage or disadvantage requires second d20');
  if(!Number.isInteger(weaponDamageDice)||weaponDamageDice<1||weaponDamageDice>100)throw Error('Invalid weapon damage roll');
  const hit=hitRoll===20||(hitRoll!==1&&hitRoll+attackModifier>=targetAC);
- const result=attackCompanion(campaign,'nighthawk',targetId,roll,attackModifier,targetAC,weaponDamageDice+(hit?sneakDice.slice(cunningStrike?(critical?2:1):0).reduce((a,b)=>a+b,0):0),damageModifier,'Piercing',rangeFeet,secondD20);
+ const result=attackCompanion(campaign,'nighthawk',targetId,roll,attackModifier,targetAC,weaponDamageDice+(hit?sneakDice.slice(cunningStrike?(critical?2:1):0).reduce((a,b)=>a+b,0):0),damageModifier,'Piercing',rangeFeet,secondD20,elvenAccuracyReroll);
  if(!hit)return result;
  const combat=result.companionEncounter!;
  const tripDC=8+ch.proficiencyBonus+abilityModifier(ch.scores.dex);
