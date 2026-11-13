@@ -18,6 +18,8 @@ export interface Campaign {
   companionEncounter?:CompanionEncounter;
   adventureSession?:AdventureSession;
   pendingMerchantPurchase?:{id:string;itemId:string;quantity:number;unitCostCp:number};
+  merchantStockRemaining?:Record<string,number>;
+  merchantDiscount?:{itemId:string;percent:number;approvalId:string};
   completedMerchantPurchaseIds?:string[];
   characterIdentity?:{name:string;speciesId:string;lineageId?:string;backgroundId:string;classId:string;draftId:string;pronouns:string;appearance:string;personality:string;backstory:string};
   /** Explicitly verified equipped items from the shared equipment catalog; distinct from carried inventory. */

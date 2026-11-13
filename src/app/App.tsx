@@ -1,4 +1,4 @@
-import {parseFrontierPurchase,prepareMerchantPurchase,settleMerchantPurchase,frontierShopStock,formatFrontierPrice} from '../game/frontierShop';
+import {parseFrontierPurchase,prepareMerchantPurchase,settleMerchantPurchase,frontierShopStock,formatFrontierPrice,merchantCatalog,isMerchantBrowseRequest,isMerchantNegotiationRequest,approveMerchantDiscount} from '../game/frontierShop';
 import {classSummary} from '../game/creationClasses';
 import {completePlayerRest,playerLongRestWaitMinutes} from '../game/playerRecovery';
 import {frontierMerchantContext} from '../game/frontierShop';
@@ -651,13 +651,24 @@ export function App() {
       return;
     }
     if(campaign?.characterIdentity && campaign.adventureSession?.site==='frontier' && campaign.adventureSession.status==='exploring'){
+      if(isMerchantBrowseRequest(draft)){
+        setSaving(true);
+        try{
+          const saved=addExchange(campaign,draft,'The shopkeeper lays out the current stock: '+merchantCatalog(campaign)+'. Ask to buy a listed item, or inquire about something else.');
+          await localCampaignStorage.save(saved);setCampaign(saved);setCampaigns(items=>items.map(c=>c.id===saved.id?saved:c));setDraft('');
+        }catch(error){setNotice('Shopkeeper: '+String(error));}finally{setSaving(false);}
+        return;
+      }
+      if(isMerchantNegotiationRequest(draft)){
+        setNotice('The shopkeeper will consider a bargain, but the price stays unchanged until the Dungeon Master approves it.');
+      }
       const intent=parseFrontierPurchase(draft);
       if(intent){
         setSaving(true);
         try{
           const next=prepareMerchantPurchase(campaign,intent.itemId,intent.quantity,crypto.randomUUID());
           const item=frontierShopStock.find(i=>i.id===intent.itemId)!;
-          const saved=addExchange(next,draft,`The shopkeeper offers ${intent.quantity} × ${item.name} for ${formatFrontierPrice(item.costCp*intent.quantity)}. Confirm purchase? Reply yes or no.`);
+          const saved=addExchange(next,draft,`The shopkeeper offers ${intent.quantity} × ${item.name} for ${formatFrontierPrice(next.pendingMerchantPurchase!.unitCostCp*intent.quantity)}. Confirm purchase? Reply yes or no.`);
           await localCampaignStorage.save(saved);setCampaign(saved);setCampaigns(items=>items.map(c=>c.id===saved.id?saved:c));setDraft('');setNotice('Purchase awaiting confirmation.');
         }catch(error){setNotice('Shopkeeper: '+String(error));}finally{setSaving(false);}
         return;
@@ -799,7 +810,7 @@ export function App() {
       const history=memory.recentConversation;
       const response = await fetch('/api/dm', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-four-keeps-access': accessCode },
         body: JSON.stringify({ message:aiSession?prepared.pendingAdventureAction!.message:message, clarification:prepared.pendingClarification??null, actionId, character:current.character ?? prototypeNighthawk, gameState:{ ...campaignPlayerContext(current), adventureSession:current.adventureSession??null, merchant:frontierMerchantContext(current), characterIdentity:current.characterIdentity??null, location:current.location, combat:current.combat??null, familiar:current.familiar ?? null, elapsedMinutes:current.elapsedMinutes ?? 0, concentration:current.concentration??null, spellEffects:(current.spellEffects??[]).slice(-12), recentEvents:current.journal.filter(e=>e.kind==='system').slice(-8).map(e=>e.text) }, history, worldFacts: memory.establishedFacts, world: current.world ?? emptyWorld(), adventureMemory:memory }) });
-      const result: { narration?: string; newFacts?: string[]; worldUpdates?: unknown; checkRequest?: { skill:string; mode:'normal'|'advantage'|'disadvantage'; reason:string; token:string } | null; combatStart?:{enemyName:string}|null; clarificationRequest?:{question:string}|null; travelDestination?:string|null; error?: string } = await response.json();
+      const result: { narration?: string; newFacts?: string[]; worldUpdates?: unknown; checkRequest?: { skill:string; mode:'normal'|'advantage'|'disadvantage'; reason:string; token:string } | null; combatStart?:{enemyName:string}|null; merchantDiscount?:{itemId:string;percent:number}|null; clarificationRequest?:{question:string}|null; travelDestination?:string|null; error?: string } = await response.json();
       if (!response.ok || !result.narration) throw new Error(result.error || 'DM request failed');
       if(aiSession && result.clarificationRequest) {
         if(prepared.pendingClarification?.answer)throw Error('The DM repeated a question you already answered. Your confirmed action is saved; retry to continue.');
@@ -812,9 +823,12 @@ export function App() {
       const narrated = aiSession
         ? {...commitAdventureAction(prepared,actionId!,result.narration,new Date().toISOString(),result.newFacts??[],result.worldUpdates),pendingClarification:undefined,pendingCheck:result.checkRequest??undefined}
         : addExchange(current, message, result.narration, new Date().toISOString(), result.newFacts ?? [], result.worldUpdates, result.checkRequest ?? undefined);
-      const travelled = result.travelDestination && current.adventureSession?.status==='exploring' && ['frontier','crossroads','watchtower'].includes(result.travelDestination)
-        ? (()=>{try{return travelAdventure(narrated,result.travelDestination as AdventureSite)}catch{return narrated}})()
+      const negotiated = result.merchantDiscount && isMerchantNegotiationRequest(message) && current.adventureSession?.site==='frontier' && current.adventureSession.status==='exploring'
+        ? approveMerchantDiscount(narrated,result.merchantDiscount.itemId,result.merchantDiscount.percent,actionId??crypto.randomUUID())
         : narrated;
+      const travelled = result.travelDestination && current.adventureSession?.status==='exploring' && ['frontier','crossroads','watchtower'].includes(result.travelDestination)
+        ? (()=>{try{return travelAdventure(negotiated,result.travelDestination as AdventureSite)}catch{return negotiated}})()
+        : negotiated;
       const next = current.characterIdentity && current.adventureSession && result.combatStart
         ? proposeAdventureEncounter(travelled,result.combatStart.enemyName,actionId!)
         : result.combatStart && !current.adventureSession && !current.characterIdentity && !current.combat && !current.pendingAftermath ? beginDuel(travelled,result.combatStart.enemyName) : current.pendingAftermath ? {...travelled,pendingAftermath:undefined} : travelled;

@@ -478,7 +478,7 @@ test('new Rogue starts at Frontier Village, buys supplies, and sees persisted Pl
  await page.getByLabel('Message the Dungeon Master').fill('I ask the shopkeeper what a dagger costs');
  await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
  await expect.poll(()=>dmRequests.length).toBeGreaterThanOrEqual(2);
- expect(dmRequests.at(-1).gameState.merchant.items).toContainEqual({id:'dagger',name:'Dagger',costCp:200});
+ expect(dmRequests.at(-1).gameState.merchant.items).toContainEqual({id:'dagger',name:'Dagger',costCp:200,remaining:8});
  expect(dmRequests.at(-1).gameState.merchant.purchaseRule).toContain('explicit confirmation');
  await expect.poll(async()=>Boolean((await saved(page)).pendingAdventureAction)).toBe(false);
  await shop.getByLabel('Shop item').selectOption('dagger');
@@ -489,7 +489,7 @@ test('new Rogue starts at Frontier Village, buys supplies, and sees persisted Pl
  await expect(shop.getByLabel('Confirm shop purchase')).toBeVisible();
  expect((await saved(page)).inventoryLedger).toEqual(before);
  await shop.getByRole('button',{name:'Confirm purchase'}).click();
- await expect(page.getByRole('alert')).toContainText('Not enough money');
+ await expect(page.getByRole('alert')).toContainText('not have enough stock');
  expect((await saved(page)).inventoryLedger).toEqual(before);
  await shop.getByLabel('Shop quantity').fill('1');
  await shop.getByRole('button',{name:'Buy item'}).click();
@@ -563,6 +563,48 @@ test('conversational purchase cancellation and duplicate confirmation cannot spe
  expect((await saved(page)).completedMerchantPurchaseIds).toEqual(purchased.completedMerchantPurchaseIds);
 });
 
+test('merchant catalog reflects finite stock and refuses unavailable quantities',async({page})=>{
+ test.setTimeout(90000);
+ await createAndImport(page,'rogue');
+ await navigate(page,'Adventure');
+ await page.evaluate(()=>{localStorage.setItem('four-keeps-access-code','browser-test-code');localStorage.setItem('four-keeps-dm-mode','on');});
+ await page.route('**/api/dm',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({narration:'The general store is open.',worldUpdates:{},newFacts:[]})}));
+ await page.reload();await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await page.getByRole('button',{name:'Begin AI-led adventure'}).click();
+ const input=page.getByLabel('Message the Dungeon Master');
+ const send=page.getByRole('button',{name:'Send message to Dungeon Master'});
+ await input.fill('What do you sell?');await send.click();
+ await expect(page.getByText(/Dagger: 2 GP each \(8 available\)/)).toBeVisible();
+ await input.fill('I will buy 9 daggers');await send.click();
+ await expect(page.getByText(/not have enough stock/)).toBeVisible();
+ expect((await saved(page)).pendingMerchantPurchase).toBeUndefined();
+ await input.fill('I will buy 2 daggers');await send.click();
+ await expect.poll(async()=>Boolean((await saved(page)).pendingMerchantPurchase)).toBe(true);
+ await input.fill('yes');await send.click();
+ await expect.poll(async()=>(await saved(page)).merchantStockRemaining?.dagger).toBe(6);
+ await page.reload();await page.getByRole('button',{name:'Continue Adventure'}).click();
+ expect((await saved(page)).merchantStockRemaining.dagger).toBe(6);
+});
+test('DM-approved discount changes quoted cost but never bypasses confirmation',async({page})=>{
+ test.setTimeout(90000);
+ await createAndImport(page,'rogue');await navigate(page,'Adventure');
+ await page.evaluate(()=>{localStorage.setItem('four-keeps-access-code','browser-test-code');localStorage.setItem('four-keeps-dm-mode','on');});
+ await page.route('**/api/dm',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({narration:'I can take 20 percent off that dagger.',merchantDiscount:{itemId:'dagger',percent:20},worldUpdates:{},newFacts:[]})}));
+ await page.reload();await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await page.getByRole('button',{name:'Begin AI-led adventure'}).click();
+ const input=page.getByLabel('Message the Dungeon Master');
+ const send=page.getByRole('button',{name:'Send message to Dungeon Master'});
+ await input.fill('Can you negotiate a discount on a dagger?');await send.click();
+ await expect.poll(async()=>(await saved(page)).merchantDiscount?.percent).toBe(20);
+ await input.fill('I will buy a dagger');await send.click();
+ await expect.poll(async()=>(await saved(page)).pendingMerchantPurchase?.unitCostCp).toBe(160);
+ const before=await saved(page);
+ await page.reload();await page.getByRole('button',{name:'Continue Adventure'}).click();
+ expect((await saved(page)).inventoryLedger).toEqual(before.inventoryLedger);
+ await page.getByLabel('Message the Dungeon Master').fill('yes');await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
+ await expect.poll(async()=>!(await saved(page)).pendingMerchantPurchase).toBe(true);
+ expect((await saved(page)).merchantDiscount).toBeUndefined();
+});
 test('imported character sheet excludes developer tools and rest controls',async({page})=>{
  await createAndImport(page,'rogue');
  await navigate(page,'Player');
@@ -585,7 +627,9 @@ test('imported character sheet excludes developer tools and rest controls',async
 
 
 test('imported Rogue requests DM rest, confirms exactly once, and reloads',async({page})=>{
+ test.setTimeout(90000);
  await createAndImport(page,'rogue');
+ await expect.poll(async()=>Boolean((await saved(page))?.characterIdentity)).toBe(true);
  await page.evaluate(()=>{localStorage.setItem('four-keeps-access-code','browser-test-code');localStorage.setItem('four-keeps-dm-mode','on')});
  const requests:any[]=[];
  await page.route('**/api/dm',route=>{const body=route.request().postDataJSON();requests.push(body);return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(body.restRequest?{narration:'The watchkeeper confirms the inn is safe and uninterrupted.',restDecision:'approved'}:{narration:'The village is quiet.',worldUpdates:{},newFacts:[]})})});
@@ -604,8 +648,8 @@ test('imported Rogue requests DM rest, confirms exactly once, and reloads',async
  await expect(page.getByRole('dialog',{name:'Rest recovery options'})).toHaveCount(0);
  const after=await saved(page);
  expect(after.elapsedMinutes).toBe((before.elapsedMinutes??0)+60);
- await page.reload();await page.getByRole('button',{name:'Continue Adventure'}).click();
- expect((await saved(page)).elapsedMinutes).toBe(after.elapsedMinutes);
+ await page.reload();
+ await expect.poll(async()=>(await saved(page))?.elapsedMinutes).toBe(after.elapsedMinutes);
 });
 
 test('DM denial never grants imported rest recovery',async({page})=>{

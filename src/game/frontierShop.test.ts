@@ -1,13 +1,13 @@
 import {describe,it,expect} from 'vitest';
 import {newCampaign} from './campaign';
 import {beginAdventureSession} from './adventureSession';
-import {buyFrontierItem,frontierShopStock,frontierMerchantContext,formatFrontierPrice,parseFrontierPurchase,prepareMerchantPurchase,settleMerchantPurchase,walletCopper} from './frontierShop';
+import {buyFrontierItem,frontierShopStock,frontierMerchantContext,formatFrontierPrice,parseFrontierPurchase,prepareMerchantPurchase,settleMerchantPurchase,walletCopper,remainingMerchantStock,merchantCatalog,isMerchantBrowseRequest,approveMerchantDiscount} from './frontierShop';
 function fixture(){const c=newCampaign('Shop','shop-test');return beginAdventureSession({...c,characterIdentity:{name:'Test',speciesId:'elf',backgroundId:'sage',classId:'rogue',draftId:'draft',pronouns:'',appearance:'',personality:'',backstory:''},inventoryLedger:{currency:{GP:10,SP:0,CP:0,EP:0,PP:0},gear:[]}})}
 describe('first visit shop',()=>{
  it('shows standard prices in gold, silver and copper',()=>{expect(formatFrontierPrice(200)).toBe('2 GP');expect(formatFrontierPrice(125)).toBe('1.25 GP');expect(formatFrontierPrice(5)).toBe('0.05 GP');expect(formatFrontierPrice(0)).toBe('0 GP')});
  it('uses the canonical item catalog and deducts exact copper pieces',()=>{const item=frontierShopStock.find(i=>i.id==='dagger')!;expect(item.costCp).toBe(200);const c=buyFrontierItem(fixture(),'dagger',2);expect(c.inventoryLedger?.currency.GP).toBe(6);expect(c.inventoryLedger?.gear).toContainEqual({name:'Dagger',quantity:2});expect(JSON.parse(JSON.stringify(c)).inventoryLedger.gear[0].quantity).toBe(2)});
  it('does not mutate a campaign on invalid, unavailable or unaffordable purchases',()=>{const c=fixture();for(const [id,q] of [['dagger',21],['greatsword',1],['dagger',6]] as const)expect(()=>buyFrontierItem(c,id,q)).toThrow();expect(c.inventoryLedger?.currency.GP).toBe(10)});
- it('exposes authoritative shop prices and wallet to merchant conversation without transactions',()=>{const c=fixture();const ctx=frontierMerchantContext(c)!;expect(ctx.items).toContainEqual({id:'potion-of-healing',name:'Potion of Healing',costCp:5000});expect(ctx.walletCp).toBe(1000);expect(ctx.purchaseRule).toContain('explicit confirmation');expect(c.inventoryLedger?.gear).toEqual([])});
+ it('exposes authoritative shop prices and wallet to merchant conversation without transactions',()=>{const c=fixture();const ctx=frontierMerchantContext(c)!;expect(ctx.items).toContainEqual({id:'potion-of-healing',name:'Potion of Healing',costCp:5000,remaining:3});expect(ctx.walletCp).toBe(1000);expect(ctx.purchaseRule).toContain('explicit confirmation');expect(c.inventoryLedger?.gear).toEqual([])});
  it('requires a started imported character in Frontier Village',()=>{const c=fixture();expect(()=>buyFrontierItem({...c,adventureSession:{...c.adventureSession!,site:'crossroads'}},'dagger')).toThrow('not available')});
 });
 
@@ -36,5 +36,28 @@ describe('conversational merchant transaction lifecycle',()=>{
   expect(canceled.pendingMerchantPurchase).toBeUndefined();
   expect(()=>prepareMerchantPurchase(fixture(),'potion-of-healing',1,'unaffordable')).toThrow();
   expect(()=>prepareMerchantPurchase(pending,'dagger',1,'overlap')).toThrow();
+ });
+});
+
+describe('finite stock and bounded merchant prices',()=>{
+ it('lists actual quantities and rejects purchases beyond stock',()=>{
+  const c=fixture();expect(isMerchantBrowseRequest('What do you sell?')).toBe(true);
+  expect(merchantCatalog(c)).toContain('Dagger: 2 GP each (8 available)');
+  expect(()=>prepareMerchantPurchase(c,'dagger',9,'too-many')).toThrow('stock');
+  const bought=buyFrontierItem(c,'dagger',2);
+  expect(remainingMerchantStock(bought,'dagger')).toBe(6);
+  expect(remainingMerchantStock(JSON.parse(JSON.stringify(bought)),'dagger')).toBe(6);
+  expect(()=>buyFrontierItem(bought,'dagger',7)).toThrow('stock');
+ });
+ it('bounds DM-approved discounts and consumes them on purchase',()=>{
+  const c=fixture();
+  expect(()=>approveMerchantDiscount(c,'dagger',25,'bad')).toThrow();
+  const discounted=approveMerchantDiscount(c,'dagger',20,'dm-approved');
+  const pending=prepareMerchantPurchase(discounted,'dagger',2,'txn');
+  expect(pending.pendingMerchantPurchase?.unitCostCp).toBe(160);
+  const settled=settleMerchantPurchase(pending,'txn',true);
+  expect(walletCopper(settled.inventoryLedger?.currency)).toBe(680);
+  expect(settled.merchantDiscount).toBeUndefined();
+  expect(remainingMerchantStock(settled,'dagger')).toBe(6);
  });
 });
