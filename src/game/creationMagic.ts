@@ -54,3 +54,6 @@ export function validateOriginMagic(backgroundId:string,origin:OriginMagicDraft,
  if(!['Int','Wis','Cha'].includes(origin.ability))errors.push('Choose a valid Magic Initiate spellcasting ability.');
  return errors;
 }
+
+/** Level-two Wizard names are advancement-only until full spell descriptions are integrated into the builder. */
+export const WIZARD_LEVEL2_SPELLS=['Arcane Lock','Blur','Darkness','Detect Thoughts','Hold Person','Invisibility','Levitate','Mirror Image','Misty Step','Scorching Ray','Web'] as const;

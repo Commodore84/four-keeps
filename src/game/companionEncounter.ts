@@ -1,5 +1,6 @@
 import {SPELL_BY_ID} from './creationMagic';
 import type {Campaign} from './campaign';
+import {SPELLS,WIZARD_LEVEL2_SPELLS} from './creationMagic';
 import {adjudicateSubclassActorCondition,adjudicateSubclassActorDamage} from './campaign';
 import type {DamageType} from './subclassCombatRules';
 import {abilityModifier} from './checks';
@@ -616,14 +617,18 @@ export function spendUnifiedNighthawkInventory(campaign:Campaign,item:string,qua
  if(index===undefined||index<0||!gear||gear[index].quantity<quantity)throw Error('Insufficient campaign inventory');
  return {...save(campaign,{...battle,log:[...battle.log,'Nighthawk spent '+quantity+' '+name+' from campaign inventory']}),inventoryLedger:{...campaign.inventoryLedger!,gear:gear.map((entry,i)=>i===index?{...entry,quantity:entry.quantity-quantity}:entry)}};
 }
-export function spendUnifiedNighthawkSpellSlot(campaign:Campaign,spell:string):Campaign{
+export function spendUnifiedNighthawkSpellSlot(campaign:Campaign,spell:string,slotLevel:1|2=1):Campaign{
  const battle=activeActor(campaign,'nighthawk'),actor=battle.participants.nighthawk;
  const character=campaign.character,slots=character?.spellSlots;
  if(battle.mode!=='unified'||!character||!slots)throw Error('Nighthawk has no verified level-one spell slots');
  if(!spell.trim()||spell.length>100||!character.preparedSpells?.includes(spell.trim()))throw Error('Spell is not prepared');
  if(actor.hp<=0||actor.actionUsed||cannotAct(actor))throw Error('Spell action unavailable');
- if(!Number.isInteger(slots.level1)||!Number.isInteger(slots.usedLevel1)||slots.usedLevel1>=slots.level1||slots.usedLevel1<0)throw Error('No level-one spell slots remaining');
- return {...save(campaign,{...battle,participants:{...battle.participants,nighthawk:{...actor,actionUsed:true}},log:[...battle.log,(campaign.characterIdentity?.classId==='warlock'?'Warlock expended rank '+(campaign.importedWarlockPactSlotLevel??1)+' Pact Magic slot for ':'Nighthawk expended level-one slot for ')+spell.trim()+' (spell effect DM adjudicated)']}),character:{...character,spellSlots:{...slots,usedLevel1:slots.usedLevel1+1}}};
+ const isWizard=campaign.characterIdentity?.classId==='wizard';const knownLevel=(WIZARD_LEVEL2_SPELLS as readonly string[]).includes(spell)?2:SPELLS.find(sp=>sp.name===spell)?.level??1;
+ if(slotLevel===2&&(!isWizard||knownLevel>2))throw Error('Second-level slots require an eligible Wizard spell');
+ if(slotLevel<knownLevel)throw Error('Spell requires a higher-level slot');
+ const max=slotLevel===2?slots.level2??0:slots.level1,used=slotLevel===2?slots.usedLevel2??0:slots.usedLevel1;
+ if(!Number.isInteger(max)||!Number.isInteger(used)||used>=max||used<0)throw Error('No spell slots of the selected level remaining');
+ return {...save(campaign,{...battle,participants:{...battle.participants,nighthawk:{...actor,actionUsed:true}},log:[...battle.log,(campaign.characterIdentity?.classId==='warlock'?'Warlock expended rank '+(campaign.importedWarlockPactSlotLevel??1)+' Pact Magic slot for ':(isWizard?'Wizard expended level-'+slotLevel+' slot for ':'Nighthawk expended level-one slot for '))+spell.trim()+' (spell effect DM adjudicated)']}),character:{...character,spellSlots:{...slots,...(slotLevel===2?{usedLevel2:(slots.usedLevel2??0)+1}:{usedLevel1:slots.usedLevel1+1})}}};
 }
 /** Deterministic opportunity attack from an explicitly verified leaving-reach event.
  * Melee range, target AC and damage are supplied by the DM. No dice are generated.
@@ -895,4 +900,14 @@ export function resolveWarlockEldritchMindSave(campaign:Campaign,damage:number,f
  if(![firstTotal,secondTotal].every(n=>Number.isInteger(n)&&n>=0&&n<=100))throw Error('Provide two verified Constitution save totals');
  const next=resolveCompanionConcentrationSave(campaign,'nighthawk',damage,Math.max(firstTotal,secondTotal));
  return {...next,companionEncounter:{...next.companionEncounter!,log:[...next.companionEncounter!.log,`Eldritch Mind advantage: higher of ${firstTotal} and ${secondTotal}`]}};
+}
+/** Diviner Portent replaces the d20 before a verified spell attack is resolved. */
+export function useImportedWizardPortentAttack(campaign:Campaign,index:number,targetId:string,damageRoll:number):Campaign{
+ const battle=activeActor(campaign,'nighthawk'),actor=battle.participants.nighthawk,target=battle.participants[targetId],ch=campaign.character;
+ const portents=campaign.importedWizardPortents??[];
+ if(battle.mode!=='unified'||campaign.characterIdentity?.classId!=='wizard'||campaign.importedSubclassId!=='wizard-diviner'||!ch||!ch.cantrips?.includes('Fire Bolt')||!Number.isInteger(index)||index<0||index>=portents.length||!Number.isInteger(portents[index])||portents[index]<1||portents[index]>20)throw Error('No verified Portent die available');
+ if(!target||target.actorKind!=='enemy'||actor.actionUsed||actor.hp<=0||cannotAct(actor)||!Number.isInteger(damageRoll)||damageRoll<1||damageRoll>10)throw Error('Portent attack unavailable');
+ const roll=portents[index],bonus=ch.proficiencyBonus+abilityModifier(ch.scores.int);
+ const result=attackCompanion(campaign,'nighthawk',targetId,roll,bonus,target.armorClass??10,damageRoll,0,'Fire',120);
+ return {...result,importedWizardPortents:portents.filter((_,i)=>i!==index),companionEncounter:{...result.companionEncounter!,log:[...result.companionEncounter!.log,`Diviner Portent used stored d20 ${roll} for a spell attack (Fire Bolt 1d10 verified; no slot spent)`]}};
 }

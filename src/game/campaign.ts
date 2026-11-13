@@ -19,6 +19,8 @@ export interface Campaign {
   /** Explicitly verified equipped items from the shared equipment catalog; distinct from carried inventory. */
   importedWarlockInvocations?:string[];
   importedWarlockPactSlotLevel?:number;
+  importedWizardSpellbook?:string[];
+  importedWizardPortents?:number[];
   encounterLoadout?:{weaponId?:string;armorId?:string;shieldId?:string};
   id: string;
   title: string;
