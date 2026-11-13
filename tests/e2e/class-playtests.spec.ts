@@ -119,6 +119,16 @@ test('AI-led opening, world memory and saved pending action retry survive reload
  });
  await page.getByRole('button',{name:'Begin AI-led adventure'}).click();
  await expect(page.getByLabel('Adventure',{exact:true})).toContainText('A bell tolls from the abandoned keep.');
+ expect(requests[0].opening).toBe(true);
+ expect(requests[0].gameState.adventureSession.site).toBe('frontier');
+ expect(requests[0].gameState.characterIdentity.classId).toBe('fighter');
+ const firstOpening=(await saved(page)).journal.filter((entry:any)=>entry.id.endsWith('-dm-opening'));
+ expect(firstOpening).toHaveLength(1);
+ await page.reload();await page.getByRole('button',{name:'Continue Adventure'}).click();
+ expect((await saved(page)).journal.filter((entry:any)=>entry.id.endsWith('-dm-opening'))).toEqual(firstOpening);
+ expect(page.getByRole('button',{name:'Generate opening scene'})).toHaveCount(0);
+ expect(requests.filter(request=>request.opening)).toHaveLength(1);
+
  await expect(page.getByLabel('Adventure journal')).toContainText('1 people · 1 clues');
  await page.getByLabel('Adventure journal').locator('summary').click();
  await expect(page.getByLabel('Adventure journal')).toContainText('Mira');

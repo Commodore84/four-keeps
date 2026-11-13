@@ -3,8 +3,16 @@ import {newCampaign} from './campaign';
 import {OPENING_INTENT,prepareAdventureOpening,commitAdventureOpening,needsAdventureOpening,prepareAdventureAction,commitAdventureAction,adventureMemory} from './adventureOrchestrator';
 
 describe('AI adventure opening orchestration',()=>{
- it('offers a shop without forcing an action or a scripted opening',()=>{expect(OPENING_INTENT).toContain('general-goods shop');expect(OPENING_INTENT).toContain('do not force');expect(OPENING_INTENT).toContain('free-form exploration');});
+ it('offers a shop without forcing an action or a scripted opening',()=>{expect(OPENING_INTENT).toContain('general-goods shop');expect(OPENING_INTENT).toContain('do not make the player move');expect(OPENING_INTENT).toContain('free-form exploration');});
   const make=()=>({...newCampaign('Journey','opening-test','2026-01-01T00:00:00Z'),characterIdentity:{name:'Aster',speciesId:'human',backgroundId:'sage',classId:'wizard',draftId:'draft',pronouns:'',appearance:'',personality:'',backstory:''}});
+  it('specifies an immersive grounded opening without commanding the player',()=>{
+    expect(OPENING_INTENT).toContain('150–250 words');
+    expect(OPENING_INTENT).toContain('sensory impressions');
+    expect(OPENING_INTENT).toContain('authoritative saved starting location');
+    expect(OPENING_INTENT).toContain('do not make the player move');
+    expect(OPENING_INTENT).toContain('do not invent personal history');
+    expect(OPENING_INTENT).toContain('Do not demand a choice');
+  });
   it('starts a compatible authored session without modifying the player character',()=>{
     const c=make(),next=prepareAdventureOpening(c);
     expect(next.character).toEqual(c.character);
@@ -17,6 +25,11 @@ describe('AI adventure opening orchestration',()=>{
     const opened=commitAdventureOpening(c,'A bell rings from the old road.');
     expect(opened.journal.filter(e=>e.id==='opening-test-dm-opening')).toHaveLength(1);
     expect(commitAdventureOpening(opened,'A different opening')).toBe(opened);
+    const restored=JSON.parse(JSON.stringify(opened));
+    expect(needsAdventureOpening(restored)).toBe(false);
+    expect(commitAdventureOpening(restored,'A regenerated scene').journal).toEqual(restored.journal);
+    expect(restored.journal.find((e:{id:string})=>e.id==='opening-test-dm-opening').text).toBe('A bell rings from the old road.');
+
     expect(needsAdventureOpening(opened)).toBe(false);
   });
   it('rejects an empty or unstarted opening',()=>{
