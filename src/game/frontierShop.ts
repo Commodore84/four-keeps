@@ -28,7 +28,7 @@ export function isMerchantPurchaseRequest(message:string):boolean {return /\b(?:
 export function isMerchantNegotiationRequest(message:string):boolean {return /\b(haggle|negotiate|discount|lower (?:the )?price|better price|persuade|bargain)\b/i.test(message);}
 export function frontierMerchantContext(campaign:Campaign){
  if(campaign.adventureSession?.site!=='frontier'||campaign.adventureSession.status!=='exploring'||!campaign.characterIdentity)return null;
- return {location:'Frontier Village',shop:'General store',items:frontierShopStock.map(item=>({id:item.id,name:item.name,costCp:item.costCp,packQuantity:item.packQuantity??1,remaining:remainingMerchantStock(campaign,item.id)})),walletCp:walletCopper(campaign.inventoryLedger?.currency),purchaseRule:'Offer an itemized list with exact prices on request. Player purchase requests require explicit confirmation; narration never grants items or spends money. Discounts require structured DM approval, capped at 20 percent, for one named item only.'};
+ return {location:'Frontier Village',shop:'General store',keeper:{name:'Mara Vell',temperament:'Practical and friendly but firm on stock and fair prices; threats damage trust.'},items:frontierShopStock.map(item=>({id:item.id,name:item.name,costCp:item.costCp,packQuantity:item.packQuantity??1,remaining:remainingMerchantStock(campaign,item.id)})),walletCp:walletCopper(campaign.inventoryLedger?.currency),purchaseRule:'Offer an itemized list with exact prices on request. Player purchase requests require explicit confirmation; narration never grants items or spends money. Discounts require a resolved, successful social skill check for one stocked item; the rules engine caps the discount at 20 percent.'};
 }
 export function buyFrontierItem(campaign:Campaign,itemId:string,quantity=1,now=new Date().toISOString()):Campaign{
  if(!campaign.characterIdentity||campaign.adventureSession?.site!=='frontier'||campaign.adventureSession.status!=='exploring')throw Error('The Frontier Village shop is not available here.');
@@ -92,6 +92,21 @@ export function settleMerchantPurchase(campaign:Campaign,id:string,confirmed:boo
  return {...bought,pendingMerchantPurchase:undefined,completedMerchantPurchaseIds:[...(campaign.completedMerchantPurchaseIds??[]),id]};
 }
 
+export function beginMerchantNegotiation(campaign:Campaign,itemId:string,checkToken:string,skill:string):Campaign {
+ if(!['Persuasion','Deception','Intimidation'].includes(skill)||!checkToken||!campaign.pendingCheck||campaign.pendingCheck.token!==checkToken)throw Error('A valid social skill check is required.');
+ if(!frontierShopStock.some(item=>item.id===itemId&&remainingMerchantStock(campaign,itemId)>0))throw Error('The merchant has none to negotiate.');
+ if(campaign.pendingMerchantPurchase||campaign.pendingMerchantNegotiation)throw Error('Finish the existing merchant action.');
+ if(campaign.adventureSession?.site!=='frontier'||campaign.adventureSession.status!=='exploring')throw Error('Merchant not available.');
+ return {...campaign,pendingMerchantNegotiation:{itemId,checkToken}};
+}
+export function resolveMerchantNegotiation(campaign:Campaign,token:string,success:boolean,total:number):Campaign {
+ const pending=campaign.pendingMerchantNegotiation;
+ if(!pending||pending.checkToken!==token||!Number.isFinite(total))throw Error('No matching negotiation check.');
+ const cleared={...campaign,pendingMerchantNegotiation:undefined};
+ if(!success||remainingMerchantStock(campaign,pending.itemId)<1)return cleared;
+ // Fixed, deterministic terms: successful check earns 10%, exceptional total >=20 earns 20%.
+ return approveMerchantDiscount(cleared,pending.itemId,total>=20?20:10,token);
+}
 export function approveMerchantDiscount(campaign:Campaign,itemId:string,percent:number,approvalId:string):Campaign {
  if(!frontierShopStock.some(item=>item.id===itemId)||!Number.isInteger(percent)||percent<0||percent>20||!approvalId)throw Error('Invalid merchant negotiation approval.');
  if(campaign.pendingMerchantPurchase)throw Error('Finish the pending purchase before negotiating.');

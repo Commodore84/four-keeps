@@ -1,8 +1,34 @@
 import {describe,it,expect} from 'vitest';
 import {newCampaign} from './campaign';
 import {beginAdventureSession} from './adventureSession';
-import {buyFrontierItem,frontierShopStock,frontierMerchantContext,formatFrontierPrice,parseFrontierPurchase,prepareMerchantPurchase,settleMerchantPurchase,walletCopper,remainingMerchantStock,merchantCatalog,isMerchantBrowseRequest,approveMerchantDiscount,isMerchantPurchaseRequest,merchantNegotiationTarget} from './frontierShop';
+import {buyFrontierItem,frontierShopStock,frontierMerchantContext,formatFrontierPrice,parseFrontierPurchase,prepareMerchantPurchase,settleMerchantPurchase,walletCopper,remainingMerchantStock,merchantCatalog,isMerchantBrowseRequest,approveMerchantDiscount,isMerchantPurchaseRequest,merchantNegotiationTarget,beginMerchantNegotiation,resolveMerchantNegotiation} from './frontierShop';
 function fixture(){const c=newCampaign('Shop','shop-test');return beginAdventureSession({...c,characterIdentity:{name:'Test',speciesId:'elf',backgroundId:'sage',classId:'rogue',draftId:'draft',pronouns:'',appearance:'',personality:'',backstory:''},inventoryLedger:{currency:{GP:10,SP:0,CP:0,EP:0,PP:0},gear:[]}})}
+describe('deterministic merchant negotiation check lifecycle',()=>{
+ const pending=(token='social-1')=>({...fixture(),pendingCheck:{token,skill:'Persuasion' as const,mode:'normal' as const,reason:'Negotiate the dagger price'}});
+ it('requires an authoritative matching social check before any discount',()=>{
+  const c=pending();
+  expect(()=>beginMerchantNegotiation(c,'dagger','wrong','Persuasion')).toThrow();
+  expect(()=>beginMerchantNegotiation(c,'dagger','social-1','Athletics')).toThrow();
+  const prepared=beginMerchantNegotiation(c,'dagger','social-1','Persuasion');
+  expect(prepared.merchantDiscount).toBeUndefined();
+  expect(prepared.pendingMerchantNegotiation?.itemId).toBe('dagger');
+  const saved=JSON.parse(JSON.stringify(prepared));
+  expect(()=>resolveMerchantNegotiation(saved,'other',true,22)).toThrow();
+  const approved=resolveMerchantNegotiation(saved,'social-1',true,22);
+  expect(approved.merchantDiscount).toMatchObject({itemId:'dagger',percent:20});
+  expect(approved.pendingMerchantNegotiation).toBeUndefined();
+  expect(()=>resolveMerchantNegotiation(approved,'social-1',true,22)).toThrow();
+ });
+ it('refuses failed bargains and grants only 10% for ordinary successful checks',()=>{
+  const c=beginMerchantNegotiation(pending(),'dagger','social-1','Persuasion');
+  expect(resolveMerchantNegotiation(c,'social-1',false,25).merchantDiscount).toBeUndefined();
+  expect(resolveMerchantNegotiation(c,'social-1',true,15).merchantDiscount?.percent).toBe(10);
+  const approved=resolveMerchantNegotiation(c,'social-1',true,15);
+  const purchase=prepareMerchantPurchase(approved,'dagger',1,'negotiated');
+  expect(purchase.pendingMerchantPurchase?.unitCostCp).toBe(180);
+  expect(settleMerchantPurchase(purchase,'negotiated',true).inventoryLedger?.currency.GP).toBe(8);
+ });
+});
 describe('2024 merchant catalog compatibility and ammunition',()=>{
  it('sells only canonical entries from the explicitly selected merchant stock',()=>{
   expect(frontierShopStock.every(item=>item.official2024)).toBe(true);

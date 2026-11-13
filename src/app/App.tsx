@@ -1,4 +1,4 @@
-import {parseFrontierPurchase,prepareMerchantPurchase,settleMerchantPurchase,frontierShopStock,formatFrontierPrice,merchantCatalog,isMerchantBrowseRequest,isMerchantNegotiationRequest,isMerchantPurchaseRequest,merchantNegotiationTarget,approveMerchantDiscount} from '../game/frontierShop';
+import {parseFrontierPurchase,prepareMerchantPurchase,settleMerchantPurchase,frontierShopStock,formatFrontierPrice,merchantCatalog,isMerchantBrowseRequest,isMerchantNegotiationRequest,isMerchantPurchaseRequest,merchantNegotiationTarget,beginMerchantNegotiation,resolveMerchantNegotiation} from '../game/frontierShop';
 import {classSummary} from '../game/creationClasses';
 import {completePlayerRest,playerLongRestWaitMinutes} from '../game/playerRecovery';
 import {frontierMerchantContext} from '../game/frontierShop';
@@ -609,7 +609,9 @@ export function App() {
       if (!response.ok || !result.narration || !result.checkResult) throw new Error(result.error || 'Check resolution failed');
       const r = result.checkResult;
       const rollText = 'Nighthawk · '+r.skill+': '+(r.dice.length === 1 ? String(r.dice[0]) : r.dice.join(' / ')+' ('+pending.mode+': '+r.kept+')')+' '+(r.modifier >= 0 ? '+' : '−')+Math.abs(r.modifier)+' = '+r.total+'.';
-      const next = addExchange(locked, rollText, result.narration, new Date().toISOString(), result.newFacts ?? [], result.worldUpdates);
+      const narrated = addExchange(locked, rollText, result.narration, new Date().toISOString(), result.newFacts ?? [], result.worldUpdates);
+      const next = locked.pendingMerchantNegotiation?.checkToken===pending.token
+        ? resolveMerchantNegotiation(narrated,pending.token,r.success,r.total) : narrated;
       await localCampaignStorage.save(next);
       setCampaign(next);
       setCampaigns(items => items.map(item => item.id === next.id ? next : item));
@@ -827,9 +829,9 @@ export function App() {
       const narrated = aiSession
         ? {...commitAdventureAction(prepared,actionId!,result.narration,new Date().toISOString(),result.newFacts??[],result.worldUpdates),pendingClarification:undefined,pendingCheck:result.checkRequest??undefined}
         : addExchange(current, message, result.narration, new Date().toISOString(), result.newFacts ?? [], result.worldUpdates, result.checkRequest ?? undefined);
-      const negotiated = result.merchantDiscount && merchantNegotiationTarget(message)===result.merchantDiscount.itemId && current.adventureSession?.site==='frontier' && current.adventureSession.status==='exploring'
-        ? approveMerchantDiscount(narrated,result.merchantDiscount.itemId,result.merchantDiscount.percent,actionId??crypto.randomUUID())
-        : narrated;
+      const target=merchantNegotiationTarget(message);
+      const negotiated = target && result.checkRequest && ['Persuasion','Deception','Intimidation'].includes(result.checkRequest.skill) && current.adventureSession?.site==='frontier' && current.adventureSession.status==='exploring'
+        ? beginMerchantNegotiation(narrated,target,result.checkRequest.token,result.checkRequest.skill) : narrated;
       const travelled = result.travelDestination && current.adventureSession?.status==='exploring' && ['frontier','crossroads','watchtower'].includes(result.travelDestination)
         ? (()=>{try{return travelAdventure(negotiated,result.travelDestination as AdventureSite)}catch{return negotiated}})()
         : negotiated;

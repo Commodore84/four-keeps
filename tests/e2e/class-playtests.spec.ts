@@ -609,18 +609,31 @@ test('conversational sling ammunition packs use canonical price and persist 40 p
  await page.reload();await page.getByRole('button',{name:'Continue Adventure'}).click();
  expect((await saved(page)).merchantStockRemaining['bullets-sling']).toBe(3);
 });
-test('DM-approved discount changes quoted cost but never bypasses confirmation',async({page})=>{
+test('merchant negotiation requires a persisted social check and never spends without purchase confirmation',async({page})=>{
  test.setTimeout(90000);
  await createAndImport(page,'rogue');await navigate(page,'Adventure');
  await page.evaluate(()=>{localStorage.setItem('four-keeps-access-code','browser-test-code');localStorage.setItem('four-keeps-dm-mode','on');});
- await page.route('**/api/dm',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({narration:'I can take 20 percent off that dagger.',merchantDiscount:{itemId:'dagger',percent:20},worldUpdates:{},newFacts:[]})}));
+ await page.route('**/api/dm',async route=>{
+  const body=route.request().postDataJSON();
+  const result=body.checkToken
+    ? {narration:'The merchant grudgingly agrees to a discount.',checkResult:{skill:'Persuasion',dice:[20],kept:20,modifier:3,total:23,success:true},newFacts:[],worldUpdates:{}}
+    : body.message?.includes('negotiate')
+      ? {narration:'I might consider it. Make your case.',merchantDiscount:{itemId:'dagger',percent:20},checkRequest:{skill:'Persuasion',mode:'normal',reason:'Negotiate dagger price',token:'merchant-test-token'},newFacts:[],worldUpdates:{}}
+      : {narration:'The shopkeeper is ready.',newFacts:[],worldUpdates:{}};
+  await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(result)});
+ });
  await page.reload();await page.getByRole('button',{name:'Continue Adventure'}).click();
  await page.getByRole('button',{name:'Begin AI-led adventure'}).click();
  const input=page.getByLabel('Message the Dungeon Master');
  const send=page.getByRole('button',{name:'Send message to Dungeon Master'});
  await input.fill('Can you negotiate a discount on a dagger?');await send.click();
+ await expect.poll(async()=>(await saved(page)).pendingMerchantNegotiation?.itemId).toBe('dagger');
+ expect((await saved(page)).merchantDiscount).toBeUndefined();
+ await page.reload();await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await page.getByRole('button',{name:'Roll Persuasion'}).click();
  await expect.poll(async()=>(await saved(page)).merchantDiscount?.percent).toBe(20);
- await input.fill('I will buy a dagger');await send.click();
+ expect((await saved(page)).pendingMerchantNegotiation).toBeUndefined();
+ await page.getByLabel('Message the Dungeon Master').fill('I will buy a dagger');await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
  await expect.poll(async()=>(await saved(page)).pendingMerchantPurchase?.unitCostCp).toBe(160);
  const before=await saved(page);
  await page.reload();await page.getByRole('button',{name:'Continue Adventure'}).click();
