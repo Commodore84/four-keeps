@@ -19,6 +19,7 @@ export interface CompanionEncounter {
  turnIndex:number;
  order:string[];
  participants:Record<string,{x:number;y:number;hp:number;maxHp:number;initiative:number;conditions:('Charmed'|'Poisoned'|'Blinded'|'Deafened'|'Frightened'|'Grappled'|'Incapacitated'|'Invisible'|'Paralyzed'|'Petrified'|'Prone'|'Restrained'|'Stunned'|'Unconscious'|'Exhaustion')[];speedFeet:number;movementSpentFeet:number;actionUsed:boolean;bonusActionUsed:boolean;dashFeet:number;disengaged:boolean;dodging:boolean;reactionUsed?:boolean;rogueSneakUsed?:boolean;concentratingOn?:string;consumables?:Record<string,number>;faction?:string;reachFeet?:number;actorKind?:'party'|'enemy';armorClass?:number;attackModifier?:number;constitutionSaveModifier?:number;damageModifier?:number;damageDice?:string;enemyTactic?:'hold'|'nearest'|'lowest-hp';rangedAttackFeet?:number;deathSaves?:{successes:number;failures:number;stable:boolean;dead:boolean}}>;
+ wizardHoldPersonTargets?:string[];
  obstacles?:{x:number;y:number}[];
  cover?:{x:number;y:number}[];
  pendingOpportunity?:{moverId:string;attackerIds:string[];from:{x:number;y:number};to:{x:number;y:number};destination?:{x:number;y:number}};
@@ -27,6 +28,14 @@ export interface CompanionEncounter {
  /** Ammunition expended from verified inventory, awaiting DM-confirmed recovery. */
  ammunitionPendingRecovery?:Record<string,number>;
  log:string[];
+}
+/** Remove only Paralysis introduced by this Wizard's Hold Person effect. */
+function clearWizardHoldPerson(battle:CompanionEncounter):CompanionEncounter{
+ const targets=battle.wizardHoldPersonTargets??[];
+ if(!targets.length)return battle;
+ const participants={...battle.participants};
+ for(const id of targets){const actor=participants[id];if(actor)participants[id]={...actor,conditions:actor.conditions.filter(c=>c!=='Paralyzed')};}
+ return {...battle,participants,wizardHoldPersonTargets:[],log:[...battle.log,'Wizard Hold Person ended; tracked paralysis removed']};
 }
 function encounter(campaign:Campaign):CompanionEncounter{
  if(!campaign.companionEncounter||campaign.companionEncounter.status!=='active')throw Error('No active companion encounter');
@@ -506,7 +515,8 @@ export function setCompanionConcentration(campaign:Campaign,actorId:string,spell
  const battle=encounter(campaign),actor=battle.participants[actorId];
  if(!actor)throw Error('Unknown concentration actor');
  if(spell!==null&&(!spell.trim()||spell.length>100||actor.hp<=0))throw Error('Invalid concentration spell');
- return save(campaign,{...battle,participants:{...battle.participants,[actorId]:{...actor,concentratingOn:spell?.trim()??undefined}},log:[...battle.log,actorId+(spell?' concentrating on '+spell:' ended concentration')]});
+ const updated=actorId==='nighthawk'&&actor.concentratingOn==='Hold Person'&&spell!=='Hold Person'?clearWizardHoldPerson(battle):battle;
+ return save(campaign,{...updated,participants:{...updated.participants,[actorId]:{...updated.participants[actorId],concentratingOn:spell?.trim()??undefined}},log:[...updated.log,actorId+(spell?' concentrating on '+spell:' ended concentration')]});
 }
 /** A caller-supplied Constitution saving throw total determines concentration outcome.
  * The DM supplies the actual roll and applicable modifiers; no dice are generated.
@@ -517,7 +527,8 @@ export function resolveCompanionConcentrationSave(campaign:Campaign,actorId:stri
  if(!Number.isInteger(saveTotal)||saveTotal<0||saveTotal>100)throw Error('Invalid Constitution save total');
  const dc=companionConcentrationSaveDC(damage);
  const passed=saveTotal>=dc;
- return save(campaign,{...battle,participants:{...battle.participants,[actorId]:{...actor,concentratingOn:passed?actor.concentratingOn:undefined}},log:[...battle.log,actorId+' concentration save '+saveTotal+' vs DC '+dc+(passed?' succeeded':' failed; concentration ended')]});
+ const updated=!passed&&actorId==='nighthawk'&&actor.concentratingOn==='Hold Person'?clearWizardHoldPerson(battle):battle;
+ return save(campaign,{...updated,participants:{...updated.participants,[actorId]:{...updated.participants[actorId],concentratingOn:passed?actor.concentratingOn:undefined}},log:[...updated.log,actorId+' concentration save '+saveTotal+' vs DC '+dc+(passed?' succeeded':' failed; concentration ended')]});
 }
 export function companionConcentrationSaveDC(damage:number):number{
  if(!Number.isInteger(damage)||damage<0||damage>1000)throw Error('Invalid concentration damage');
@@ -649,7 +660,8 @@ export function finishCompanionEncounter(campaign:Campaign):Campaign{
  const battle=encounter(campaign);
  const synced=battle.mode==='unified'?synchronizeNighthawkHitPoints(campaign):campaign;
  const player=battle.participants.nighthawk;
- return save({...synced,character:synced.character&&player?{...synced.character,conditions:[...player.conditions],deathSaves:player.deathSaves}:synced.character},{...synced.companionEncounter!,status:'completed',log:[...battle.log,'Companion encounter completed; player state saved']});
+ const cleaned=clearWizardHoldPerson(synced.companionEncounter!);
+ return save({...synced,character:synced.character&&player?{...synced.character,conditions:[...player.conditions],deathSaves:player.deathSaves}:synced.character},{...cleaned,participants:{...cleaned.participants,nighthawk:cleaned.participants.nighthawk?{...cleaned.participants.nighthawk,concentratingOn:undefined}:cleaned.participants.nighthawk},status:'completed',log:[...cleaned.log,'Companion encounter completed; player state saved']});
 }
 
 /** Manual d20 and damage dice inputs; no automatic attack modifiers or dice invented. */
@@ -939,7 +951,8 @@ export function resolveImportedWizardSpell(campaign:Campaign,choice:WizardSpellR
  if(choice.spell==='Hold Person')success=(portent!==undefined?stored[portent]+choice.saveModifier!:choice.saveTotal!)>=dc;
  // Portent replaces the d20, not a verified total. For saving throws require a separate verified modifier.
  const nextTarget=choice.spell==='Hold Person'&&!success?{...target,conditions:[...new Set([...target.conditions,'Paralyzed' as const])]}:damage?damagedActor(target,damage):target;
- const nextBattle={...battle,participants:{...battle.participants,nighthawk:{...caster,actionUsed:true,...(choice.spell==='Hold Person'?{concentratingOn:'Hold Person'}:{})},[choice.targetId]:nextTarget},log:[...battle.log,`Wizard ${choice.spell} rank ${rank} vs ${choice.targetId}: ${choice.spell==='Hold Person'?(success?'Wisdom save passed':'Wisdom save failed; Paralyzed'):damage+' verified damage'}${portent!==undefined?' (Portent '+stored[portent]+')':''}`]};
+ const preparedBattle=caster.concentratingOn==='Hold Person'&&choice.spell==='Hold Person'?clearWizardHoldPerson(battle):battle;
+ const nextBattle={...preparedBattle,wizardHoldPersonTargets:choice.spell==='Hold Person'&&!success?[choice.targetId]:preparedBattle.wizardHoldPersonTargets,participants:{...preparedBattle.participants,nighthawk:{...caster,actionUsed:true,...(choice.spell==='Hold Person'?{concentratingOn:'Hold Person'}:{})},[choice.targetId]:choice.spell==='Hold Person'&&!success?{...preparedBattle.participants[choice.targetId],conditions:[...new Set([...preparedBattle.participants[choice.targetId].conditions,'Paralyzed' as const])]}:nextTarget},log:[...preparedBattle.log,`Wizard ${choice.spell} rank ${rank} vs ${choice.targetId}: ${choice.spell==='Hold Person'?(success?'Wisdom save passed':'Wisdom save failed; Paralyzed'):damage+' verified damage'}${portent!==undefined?' (Portent '+stored[portent]+')':''}`]};
  const result=save(campaign,nextBattle);
  return {...result,character:{...ch,spellSlots:{...slots!,...(rank===1?{usedLevel1:used+1}:{usedLevel2:used+1})}},...(portent!==undefined?{importedWizardPortents:stored.filter((_,i)=>i!==portent)}:{})};
 }
@@ -958,4 +971,34 @@ export function resolveWizardPortentSave(campaign:Campaign,index:number,actorId:
  if(campaign.companionEncounter?.mode!=='unified'||campaign.characterIdentity?.classId!=='wizard'||campaign.importedSubclassId!=='wizard-diviner'||!Number.isInteger(roll)||roll<1||roll>20||!Number.isInteger(modifier)||modifier< -10||modifier>30)throw Error('Portent save requires a verified modifier and die');
  const result=resolveCompanionSavingThrow(campaign,actorId,ability,roll+modifier,dc);
  return {...result,campaign:{...result.campaign,importedWizardPortents:dice.filter((_,i)=>i!==index)}};
+}
+/** Hold Person target repeats the Wisdom save at the end of its own turn. */
+export function resolveWizardHoldPersonEndSave(campaign:Campaign,targetId:string,total:number,portentIndex?:number,modifier?:number):Campaign{
+ const battle=activeActor(campaign,targetId),target=battle.participants[targetId],caster=battle.participants.nighthawk;
+ if(battle.mode!=='unified'||campaign.characterIdentity?.classId!=='wizard'||caster?.concentratingOn!=='Hold Person'||!battle.wizardHoldPersonTargets?.includes(targetId)||!target?.conditions.includes('Paralyzed'))throw Error('No active Wizard Hold Person on this target');
+ if(!Number.isInteger(total)||total<0||total>100)throw Error('Verified Wisdom save required');
+ const dice=campaign.importedWizardPortents??[],portent=portentIndex===undefined?undefined:dice[portentIndex];
+ if(portentIndex!==undefined&&(campaign.importedSubclassId!=='wizard-diviner'||!Number.isInteger(portent)||portent!<1||portent!>20||!Number.isInteger(modifier)||modifier!< -10||modifier!>30))throw Error('Verified Portent and Wisdom modifier required');
+ const effective=portent===undefined?total:portent+modifier!;
+ const dc=8+campaign.character!.proficiencyBonus+abilityModifier(campaign.character!.scores.int),passed=effective>=dc;
+ const updated={...battle,wizardHoldPersonTargets:passed?battle.wizardHoldPersonTargets.filter(id=>id!==targetId):battle.wizardHoldPersonTargets,participants:{...battle.participants,[targetId]:passed?{...target,conditions:target.conditions.filter(c=>c!=='Paralyzed')}:target},log:[...battle.log,`Hold Person end-of-turn Wisdom save ${effective} vs ${dc}: ${passed?'freed':'remains paralyzed'}`]};
+ const next=save(campaign,updated);
+ return portentIndex===undefined?next:{...next,importedWizardPortents:dice.filter((_,i)=>i!==portentIndex)};
+}
+/** Scorching Ray resolves three independently targeted rays with verified attack and damage dice. */
+export function resolveWizardScorchingRayMulti(campaign:Campaign,targets:[string,string,string],rolls:[number,number,number],damage:[number,number,number],portentIndex?:number):Campaign{
+ const battle=activeActor(campaign,'nighthawk'),caster=battle.participants.nighthawk,ch=campaign.character;
+ if(targets.length!==3||rolls.length!==3||damage.length!==3)throw Error('Exactly three verified rays required');
+ if(battle.mode!=='unified'||campaign.characterIdentity?.classId!=='wizard'||!ch?.preparedSpells?.includes('Scorching Ray')||caster.actionUsed||caster.hp<=0||cannotAct(caster)||!ch.spellSlots?.level2||ch.spellSlots.usedLevel2!>=ch.spellSlots.level2)throw Error('Scorching Ray unavailable');
+ const dice=campaign.importedWizardPortents??[],portent=portentIndex===undefined?undefined:dice[portentIndex];
+ if(portentIndex!==undefined&&(campaign.importedSubclassId!=='wizard-diviner'||!Number.isInteger(portent)||portent!<1||portent!>20))throw Error('Portent unavailable');
+ const participants={...battle.participants},bonus=ch.proficiencyBonus+abilityModifier(ch.scores.int);let total=0;
+ for(let i=0;i<3;i++){
+  const target=participants[targets[i]],roll=i===0&&portent!==undefined?portent:rolls[i];
+  if(!target||target.actorKind!=='enemy'||target.hp<=0||!Number.isInteger(target.armorClass)||target.armorClass!<1||!Number.isInteger(rolls[i])||rolls[i]<1||rolls[i]>20||!Number.isInteger(damage[i])||damage[i]<2||damage[i]>(roll===20?24:12))throw Error('Verify each ray target, attack and damage dice');
+  if(Math.max(Math.abs(caster.x-target.x),Math.abs(caster.y-target.y))*5>120||!companionLineOfSight(battle,caster,target)||(battle.cover??[]).some(p=>p.x===target.x&&p.y===target.y))throw Error('Ray target out of range, obscured or cover unverified');
+  const hit=roll===20||roll!==1&&roll+bonus>=target.armorClass!;if(hit){participants[targets[i]]=damagedActor(target,damage[i]);total+=damage[i];}
+ }
+ const next=save(campaign,{...battle,participants:{...participants,nighthawk:{...caster,actionUsed:true}},log:[...battle.log,`Wizard Scorching Ray: three verified rays, ${total} total fire damage`]});
+ return {...next,character:{...ch,spellSlots:{...ch.spellSlots,usedLevel2:(ch.spellSlots.usedLevel2??0)+1}},...(portentIndex===undefined?{}:{importedWizardPortents:dice.filter((_,i)=>i!==portentIndex)})};
 }
