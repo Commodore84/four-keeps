@@ -1,5 +1,6 @@
+import {MerchantShop} from './MerchantShop';
 import {DMNarration,type NarrationSpeed} from './DMNarration';
-import {parseFrontierPurchase,prepareMerchantPurchase,settleMerchantPurchase,frontierShopStock,formatFrontierPrice,merchantCatalog,isMerchantBrowseRequest,isMerchantNegotiationRequest,isMerchantPurchaseRequest,merchantNegotiationTarget,beginMerchantNegotiation,resolveMerchantNegotiation} from '../game/frontierShop';
+import {parseFrontierPurchase,prepareMerchantPurchase,settleMerchantPurchase,frontierShopStock,formatFrontierPrice,isMerchantBrowseRequest,isMerchantNegotiationRequest,isMerchantPurchaseRequest,merchantNegotiationTarget,beginMerchantNegotiation,resolveMerchantNegotiation} from '../game/frontierShop';
 import {classSummary} from '../game/creationClasses';
 import {completePlayerRest,playerLongRestWaitMinutes} from '../game/playerRecovery';
 import {frontierMerchantContext} from '../game/frontierShop';
@@ -132,7 +133,7 @@ const tabs = [
   { id: 'development', label: 'Developer', Icon: Blocks },
 ] as const;
 
-function Adventure({ campaign, fullHistory, onToggleHistory, onAdventureChange, onStartOpening, onRetryAction, saving, narrationSpeed, development = false }: { campaign: Campaign | null; fullHistory: boolean; onToggleHistory: () => void; onAdventureChange:(next:Campaign,message:string)=>Promise<boolean>|boolean|void; onStartOpening:()=>Promise<void>; onRetryAction:()=>Promise<void>; saving:boolean; narrationSpeed:NarrationSpeed; development?:boolean }) {
+function Adventure({ campaign, fullHistory, onToggleHistory, onAdventureChange, onStartOpening, onRetryAction, onShopClose, onShopPrepare, onShopSettle, saving, narrationSpeed, development = false }: { campaign: Campaign | null; fullHistory: boolean; onToggleHistory: () => void; onAdventureChange:(next:Campaign,message:string)=>Promise<boolean>|boolean|void; onStartOpening:()=>Promise<void>; onRetryAction:()=>Promise<void>; onShopClose:()=>Promise<void>; onShopPrepare:(id:string,quantity:number)=>Promise<void>; onShopSettle:(confirmed:boolean)=>Promise<void>; saving:boolean; narrationSpeed:NarrationSpeed; development?:boolean }) {
   const endRef = useRef<HTMLDivElement>(null);
   const [seen,setSeen]=useState<string[]>(()=>{try{return JSON.parse(sessionStorage.getItem('four-keeps-narration-seen')||'[]')}catch{return []}});
   const markSeen=(id:string)=>setSeen(old=>{if(old.includes(id))return old;const next=[...old,id];sessionStorage.setItem('four-keeps-narration-seen',JSON.stringify(next));return next;});
@@ -146,6 +147,7 @@ function Adventure({ campaign, fullHistory, onToggleHistory, onAdventureChange, 
     {campaign?.adventureSession?.pendingEncounter && <AdventureEncounterSetupPanel key={campaign.id+'-'+campaign.adventureSession.pendingEncounter.actionId} campaign={campaign} saving={saving} onChange={onAdventureChange}/>}
     {campaign?.characterIdentity && allTurns.length===0 && <p role="status" className="text-sm text-gold">{saving ? 'The Dungeon Master is setting the scene…' : 'The opening scene begins automatically when your DM connection is configured. Check Settings if it does not appear.'} <button type="button" disabled={saving} onClick={()=>void onStartOpening()} className="underline">Retry opening</button></p>}
     {campaign?.pendingAdventureAction && !campaign.pendingClarification && <p role="status" className="text-sm text-gold">Unfinished action saved: {campaign.pendingAdventureAction.message}. <button type="button" disabled={saving} onClick={()=>void onRetryAction()} className="underline text-gold">Retry saved action</button></p>}
+    {campaign?.merchantShopOpen && campaign.adventureSession?.site==='frontier' && campaign.adventureSession.status==='exploring' && <MerchantShop campaign={campaign} saving={saving} onClose={onShopClose} onPrepare={onShopPrepare} onSettle={onShopSettle}/>}
     {allTurns.length > 6 && <button type="button" onClick={onToggleHistory} className="w-full rounded-lg border border-gold/30 px-4 py-3 text-sm text-gold">{fullHistory ? "Show recent conversation" : "View full conversation history ("+allTurns.length+" messages)"}</button>}
     
     {turns.map((entry) => <article key={entry.id} className={entry.kind === 'player' ? 'ml-8 rounded-xl border border-gold/30 bg-gold/10 p-4' : 'mr-3 rounded-xl border border-white/10 bg-panel p-5'}>
@@ -622,6 +624,31 @@ export function App() {
     if(!name)return null;
     return {spell:name,ritual:isRitualSpell(name)&&/\britual\b/.test(normalized),intent:message};
   }
+  async function saveMerchantShop(next:Campaign){
+    await localCampaignStorage.save(next);setCampaign(next);setCampaigns(items=>items.map(c=>c.id===next.id?next:c));
+  }
+  async function closeMerchantShop(){
+    if(!campaign||saving||campaign.pendingMerchantPurchase)return;
+    setSaving(true);try{await saveMerchantShop({...campaign,merchantShopOpen:false});}catch(error){setNotice('Shop error: '+String(error));}finally{setSaving(false);}
+  }
+  async function prepareShopPurchase(itemId:string,quantity:number){
+    if(!campaign||saving)return;
+    setSaving(true);try{
+      const next=prepareMerchantPurchase({...campaign,merchantShopOpen:true},itemId,quantity,crypto.randomUUID());
+      await saveMerchantShop(next);setNotice('Review the purchase before confirming.');
+    }catch(error){setNotice('Shopkeeper: '+String(error));}finally{setSaving(false);}
+  }
+  async function settleShopPurchase(confirmed:boolean){
+    if(!campaign?.pendingMerchantPurchase||saving)return;
+    setSaving(true);try{
+      const pending=campaign.pendingMerchantPurchase;
+      const next=settleMerchantPurchase(campaign,pending.id,confirmed);
+      const item=frontierShopStock.find(item=>item.id===pending.itemId);
+      const message=confirmed?`Purchased ${pending.quantity} × ${item?.name} for ${formatFrontierPrice(pending.quantity*pending.unitCostCp)}.`:'Purchase canceled; no money was spent.';
+      await saveMerchantShop(addExchange(next,confirmed?'I confirm the purchase.':'I cancel the purchase.',message));
+      setNotice(message);
+    }catch(error){setNotice('Purchase error: '+String(error));}finally{setSaving(false);}
+  }
   async function submitAdventure() {
     if(pendingAdventureSpell || pendingRest || pendingTestDamage!==null || saving)return;
     if(campaign?.characterIdentity && (campaign.adventureSession?.status==='encounter'||campaign.adventureSession?.pendingEncounter)){setNotice('Resolve the current encounter before continuing the Dungeon Master conversation.');return;}
@@ -648,7 +675,7 @@ export function App() {
       if(isMerchantBrowseRequest(draft)){
         setSaving(true);
         try{
-          const saved=addExchange(campaign,draft,'The shopkeeper lays out the current stock: '+merchantCatalog(campaign)+'. Ask to buy a listed item, or inquire about something else.');
+          const saved=addExchange({...campaign,merchantShopOpen:true},draft,'Mara Vell opens her ledger and shows you the goods available today. You can browse the shop catalog, choose a quantity, or ask her about anything on the shelves.');
           await localCampaignStorage.save(saved);setCampaign(saved);setCampaigns(items=>items.map(c=>c.id===saved.id?saved:c));setDraft('');
         }catch(error){setNotice('Shopkeeper: '+String(error));}finally{setSaving(false);}
         return;
@@ -664,7 +691,7 @@ export function App() {
       if(intent){
         setSaving(true);
         try{
-          const next=prepareMerchantPurchase(campaign,intent.itemId,intent.quantity,crypto.randomUUID());
+          const next=prepareMerchantPurchase({...campaign,merchantShopOpen:true},intent.itemId,intent.quantity,crypto.randomUUID());
           const item=frontierShopStock.find(i=>i.id===intent.itemId)!;
           const saved=addExchange(next,draft,`The shopkeeper offers ${intent.quantity} × ${item.name} for ${formatFrontierPrice(next.pendingMerchantPurchase!.unitCostCp*intent.quantity)}. Confirm purchase? Reply yes or no.`);
           await localCampaignStorage.save(saved);setCampaign(saved);setCampaigns(items=>items.map(c=>c.id===saved.id?saved:c));setDraft('');setNotice('Purchase awaiting confirmation.');
@@ -1254,7 +1281,7 @@ export function App() {
     catch(error){setNotice('Campaign save failed: '+String(error));return false;}
     finally{setSaving(false)}
   }
-  const content = { adventure: campaign?.combat && campaign.combat.status!=='completed' ? null : <Adventure campaign={campaign} fullHistory={fullHistory} onToggleHistory={() => setFullHistory(value => !value)} onAdventureChange={saveSubclassActor} onStartOpening={startAiAdventure} onRetryAction={()=>sendToDM()} saving={saving} narrationSpeed={narrationSpeed}/>, party: <Party campaign={campaign} saving={saving} onRoll={(skill,mode) => void saveSkillRoll(skill,mode)} onSaveRoll={(ability,mode) => void saveSavingThrow(ability,mode)} onAwardXP={(amount,reason) => void updateProgress('award',amount,reason)} onLevelUp={hp => void updateProgress('level',hp)} onLevelThree={(hp,cantrips,spells) => void updateProgress('level3',hp,'',cantrips,spells)} onReconcile={() => void updateProgress('reconcile')} onUndoReconcile={() => void updateProgress('undoReconcile')} onRestore={() => void updateProgress('restore')} onCastSpell={(spell,ritual,components,target)=>void castSpell(spell,ritual,components,target)} onEndConcentration={()=>void endConcentration()} onAdjustEquipment={(item,delta)=>void changeEquipment(item,delta)} onUpdateInventory={ledger=>void updateInventoryLedger(ledger)} onSubclassChange={saveSubclassActor}/> , journal: <Journal campaign={campaign}/>, map: <WorldMap campaign={campaign}/>, settings: <section className="space-y-4"><h2 className="font-serif text-2xl">Settings</h2><p className="text-sm text-parchment/60">Manage campaigns, backups, and Dungeon Master access below.</p></section>, development: campaign?.characterIdentity?<ImportedCharacterSheet campaign={campaign} saving={saving} onChange={saveSubclassActor} development/>:<section aria-label="Developer tools"><h2 className="font-serif text-2xl">Developer tools</h2><p>Legacy testing remains available through the existing development controls.</p></section> };
+  const content = { adventure: campaign?.combat && campaign.combat.status!=='completed' ? null : <Adventure campaign={campaign} fullHistory={fullHistory} onToggleHistory={() => setFullHistory(value => !value)} onAdventureChange={saveSubclassActor} onStartOpening={startAiAdventure} onRetryAction={()=>sendToDM()} onShopClose={closeMerchantShop} onShopPrepare={prepareShopPurchase} onShopSettle={settleShopPurchase} saving={saving} narrationSpeed={narrationSpeed}/>, party: <Party campaign={campaign} saving={saving} onRoll={(skill,mode) => void saveSkillRoll(skill,mode)} onSaveRoll={(ability,mode) => void saveSavingThrow(ability,mode)} onAwardXP={(amount,reason) => void updateProgress('award',amount,reason)} onLevelUp={hp => void updateProgress('level',hp)} onLevelThree={(hp,cantrips,spells) => void updateProgress('level3',hp,'',cantrips,spells)} onReconcile={() => void updateProgress('reconcile')} onUndoReconcile={() => void updateProgress('undoReconcile')} onRestore={() => void updateProgress('restore')} onCastSpell={(spell,ritual,components,target)=>void castSpell(spell,ritual,components,target)} onEndConcentration={()=>void endConcentration()} onAdjustEquipment={(item,delta)=>void changeEquipment(item,delta)} onUpdateInventory={ledger=>void updateInventoryLedger(ledger)} onSubclassChange={saveSubclassActor}/> , journal: <Journal campaign={campaign}/>, map: <WorldMap campaign={campaign}/>, settings: <section className="space-y-4"><h2 className="font-serif text-2xl">Settings</h2><p className="text-sm text-parchment/60">Manage campaigns, backups, and Dungeon Master access below.</p></section>, development: campaign?.characterIdentity?<ImportedCharacterSheet campaign={campaign} saving={saving} onChange={saveSubclassActor} development/>:<section aria-label="Developer tools"><h2 className="font-serif text-2xl">Developer tools</h2><p>Legacy testing remains available through the existing development controls.</p></section> };
   if(portalScreen!=='adventure')return <div className="min-h-dvh bg-ink text-parchment">
     <div className="mx-auto min-h-dvh w-full max-w-3xl space-y-5 px-5 pb-12 pt-[max(2rem,env(safe-area-inset-top))]">
       <header className="flex flex-col items-center gap-2 border-b border-gold/20 pb-6">

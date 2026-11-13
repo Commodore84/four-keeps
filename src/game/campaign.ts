@@ -17,6 +17,7 @@ export interface Campaign {
   subclassActors?:Record<string,SubclassCombatState>;
   companionEncounter?:CompanionEncounter;
   adventureSession?:AdventureSession;
+  merchantShopOpen?:boolean;
   pendingMerchantPurchase?:{id:string;itemId:string;quantity:number;unitCostCp:number};
   merchantStockRemaining?:Record<string,number>;
   merchantDiscount?:{itemId:string;percent:number;approvalId:string};
