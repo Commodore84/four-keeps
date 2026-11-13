@@ -19,7 +19,7 @@ export interface CompanionEncounter {
  round:number;
  turnIndex:number;
  order:string[];
- participants:Record<string,{x:number;y:number;hp:number;maxHp:number;initiative:number;conditions:('Charmed'|'Poisoned'|'Blinded'|'Deafened'|'Frightened'|'Grappled'|'Incapacitated'|'Invisible'|'Paralyzed'|'Petrified'|'Prone'|'Restrained'|'Stunned'|'Unconscious'|'Exhaustion')[];speedFeet:number;movementSpentFeet:number;actionUsed:boolean;bonusActionUsed:boolean;dashFeet:number;disengaged:boolean;dodging:boolean;reactionUsed?:boolean;rogueSneakUsed?:boolean;rogueSteadyAim?:boolean;rogueHidden?:boolean;rogueHideDC?:number;rogueHideConcealment?:boolean;rogueMovedThisTurn?:boolean;concentratingOn?:string;consumables?:Record<string,number>;faction?:string;reachFeet?:number;actorKind?:'party'|'enemy';armorClass?:number;attackModifier?:number;constitutionSaveModifier?:number;damageModifier?:number;damageDice?:string;enemyTactic?:'hold'|'nearest'|'lowest-hp';rangedAttackFeet?:number;deathSaves?:{successes:number;failures:number;stable:boolean;dead:boolean}}>;
+ participants:Record<string,{x:number;y:number;hp:number;maxHp:number;initiative:number;conditions:('Charmed'|'Poisoned'|'Blinded'|'Deafened'|'Frightened'|'Grappled'|'Incapacitated'|'Invisible'|'Paralyzed'|'Petrified'|'Prone'|'Restrained'|'Stunned'|'Unconscious'|'Exhaustion')[];speedFeet:number;movementSpentFeet:number;actionUsed:boolean;bonusActionUsed:boolean;dashFeet:number;disengaged:boolean;dodging:boolean;reactionUsed?:boolean;rogueSneakUsed?:boolean;rogueSteadyAim?:boolean;rogueHidden?:boolean;rogueHideDC?:number;rogueHideConcealment?:boolean;rogueDetectedBy?:string[];rogueMovedThisTurn?:boolean;concentratingOn?:string;consumables?:Record<string,number>;faction?:string;reachFeet?:number;actorKind?:'party'|'enemy';armorClass?:number;attackModifier?:number;constitutionSaveModifier?:number;damageModifier?:number;damageDice?:string;enemyTactic?:'hold'|'nearest'|'lowest-hp';rangedAttackFeet?:number;deathSaves?:{successes:number;failures:number;stable:boolean;dead:boolean}}>;
  wizardHoldPersonTargets?:string[];
  rogueHoldPersonTargets?:string[];
  obstacles?:{x:number;y:number}[];
@@ -703,8 +703,8 @@ export function attackCompanion(campaign:Campaign,attackerId:string,targetId:str
  if((battle.cover??[]).some(p=>p.x===target.x&&p.y===target.y))throw Error('Target has annotated cover: DM must supply adjusted AC and clear cover annotation before attack');
  if(!companionLineOfSight(battle,attacker,target))throw Error('Line of sight blocked by map obstacle');
  const distanceFeet=Math.max(Math.abs(attacker.x-target.x),Math.abs(attacker.y-target.y))*5;
- const attackAdvantage=(attackerId==='nighthawk'&&(attacker.rogueSteadyAim||attacker.rogueHidden))||attacker.conditions.includes('Invisible')||target.conditions.some(c=>['Blinded','Paralyzed','Restrained','Stunned','Unconscious'].includes(c))||(target.conditions.includes('Prone')&&distanceFeet<=5);
- const attackDisadvantage=target.dodging||target.conditions.includes('Invisible')||attacker.conditions.some(c=>['Poisoned','Blinded','Restrained'].includes(c))||(target.conditions.includes('Prone')&&distanceFeet>5);
+ const attackAdvantage=(attackerId==='nighthawk'&&(attacker.rogueSteadyAim||(attacker.rogueHidden&&!(attacker.rogueDetectedBy??[]).includes(targetId))))||attacker.conditions.includes('Invisible')||target.conditions.some(c=>['Blinded','Paralyzed','Restrained','Stunned','Unconscious'].includes(c))||(target.conditions.includes('Prone')&&distanceFeet<=5);
+ const attackDisadvantage=target.dodging||(target.rogueHidden&&!(target.rogueDetectedBy??[]).includes(attackerId))||target.conditions.includes('Invisible')||attacker.conditions.some(c=>['Poisoned','Blinded','Restrained'].includes(c))||(target.conditions.includes('Prone')&&distanceFeet>5);
  if(attackAdvantage!==attackDisadvantage&&secondD20===undefined)throw Error(target.dodging?'Dodge requires a second d20 for disadvantage':'Advantage or disadvantage requires a second d20');
  if(secondD20!==undefined&&(!Number.isInteger(secondD20)||secondD20<1||secondD20>20))throw Error('Invalid second d20');
  if(rangeFeet!==undefined){if(!Number.isInteger(rangeFeet)||rangeFeet<5||rangeFeet>1000||rangeFeet%5!==0)throw Error('Invalid attack range');const distance=Math.max(Math.abs(attacker.x-target.x),Math.abs(attacker.y-target.y))*5;if(distance>rangeFeet)throw Error('Target outside declared attack range');}
@@ -878,7 +878,7 @@ export function importedRogueHide(campaign:Campaign,stealthTotal:number,dmVerifi
  if(!Number.isInteger(stealthTotal)||stealthTotal<0||stealthTotal>100)throw Error('Verified Stealth total required');
  if(stealthTotal<15)throw Error('Hide requires DC 15 Stealth');
  if(!dmVerifiedConcealment&&Object.values(battle.participants).some(enemy=>enemy.actorKind==='enemy'&&enemy.hp>0&&companionLineOfSight(battle,enemy,actor)))throw Error('Hide requires no enemy line of sight or DM-verified heavy obscurity or three-quarters/total cover');
- return save(campaign,{...battle,participants:{...battle.participants,nighthawk:{...actor,bonusActionUsed:true,rogueHidden:true,rogueHideDC:stealthTotal,rogueHideConcealment:dmVerifiedConcealment}},log:[...battle.log,'Rogue Hide succeeded with Stealth '+stealthTotal]});
+ return save(campaign,{...battle,participants:{...battle.participants,nighthawk:{...actor,bonusActionUsed:true,rogueHidden:true,rogueHideDC:stealthTotal,rogueHideConcealment:dmVerifiedConcealment,rogueDetectedBy:[]}},log:[...battle.log,'Rogue Hide succeeded with Stealth '+stealthTotal]});
 }
 /** Verified Search check can reveal a hidden Rogue; never fabricate Perception results. */
 export function resolveImportedRogueDetection(campaign:Campaign,observerId:string,perceptionTotal:number):Campaign{
@@ -887,7 +887,10 @@ export function resolveImportedRogueDetection(campaign:Campaign,observerId:strin
  if(!Number.isInteger(perceptionTotal)||perceptionTotal<0||perceptionTotal>100)throw Error('Verified Perception total required');
  if(!companionLineOfSight(battle,observer,rogue))throw Error('Observer has no line of sight');
  const found=perceptionTotal>=(rogue.rogueHideDC??15);
- return save(campaign,{...battle,participants:{...battle.participants,nighthawk:{...rogue,rogueHidden:!found}},log:[...battle.log,observerId+' Search '+perceptionTotal+(found?' revealed Rogue':' failed to find Rogue')]});
+ const detected=found?[...new Set([...(rogue.rogueDetectedBy??[]),observerId])]:rogue.rogueDetectedBy??[];
+ const allObservers=Object.entries(battle.participants).filter(([,p])=>p.actorKind==='enemy'&&p.hp>0).map(([id])=>id);
+ const globallyFound=allObservers.every(id=>detected.includes(id));
+ return save(campaign,{...battle,participants:{...battle.participants,nighthawk:{...rogue,rogueHidden:!globallyFound,rogueDetectedBy:detected}},log:[...battle.log,observerId+' Search '+perceptionTotal+(found?' detected Rogue':' failed to find Rogue')]});
 }
 /** Rogue Sneak Attack is applied only after validating a hit and its eligibility.
  * The player supplies individual d6 results; no rolls are invented. */
@@ -901,8 +904,8 @@ export function attackImportedRogue(campaign:Campaign,targetId:string,roll:numbe
  const attackModifier=equipped.attackModifier,damageModifier=equipped.damageModifier,targetAC=target.armorClass;
  if(targetAC===undefined||!Number.isInteger(targetAC))throw Error('Target AC must be verified');
  const distance=Math.max(Math.abs(actor.x-target.x),Math.abs(actor.y-target.y))*5;
- const advantage=!!(actor.rogueSteadyAim||actor.rogueHidden)||actor.conditions.includes('Invisible')||target.conditions.some(c=>['Blinded','Paralyzed','Restrained','Stunned','Unconscious'].includes(c))||(target.conditions.includes('Prone')&&distance<=5);
- const disadvantage=target.dodging||target.conditions.includes('Invisible')||actor.conditions.some(c=>['Poisoned','Blinded','Restrained'].includes(c))||(target.conditions.includes('Prone')&&distance>5);
+ const advantage=!!(actor.rogueSteadyAim||(actor.rogueHidden&&!(actor.rogueDetectedBy??[]).includes(targetId)))||actor.conditions.includes('Invisible')||target.conditions.some(c=>['Blinded','Paralyzed','Restrained','Stunned','Unconscious'].includes(c))||(target.conditions.includes('Prone')&&distance<=5);
+ const disadvantage=target.dodging||(target.rogueHidden&&!(target.rogueDetectedBy??[]).includes('nighthawk'))||target.conditions.includes('Invisible')||actor.conditions.some(c=>['Poisoned','Blinded','Restrained'].includes(c))||(target.conditions.includes('Prone')&&distance>5);
  const ally=Object.entries(battle.participants).some(([id,p])=>id!=='nighthawk'&&id!==targetId&&p.hp>0&&p.faction!=='enemies'&&Math.max(Math.abs(p.x-target.x),Math.abs(p.y-target.y))<=1&&!p.conditions.includes('Incapacitated'));
  if(disadvantage&&!advantage||!(advantage&&!disadvantage||ally))throw Error('Sneak Attack requires advantage or an adjacent eligible ally, without disadvantage');
  const elvenEligible=campaign.importedEarnedFeats?.some(f=>f.name==='Elven Accuracy'&&f.legacyApproved&&f.level<=(ch.level??0))&&['Dexterity','Intelligence','Wisdom','Charisma'].includes(equipped.ability);
