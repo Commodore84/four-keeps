@@ -26,6 +26,13 @@ test('fighter creation to adventure, NPC, combat, rewards, save and resume',asyn
  await page.getByLabel('Campaign name',{exact:true}).fill('Aster journey');await page.getByRole('button',{name:'Create campaign',exact:true}).click();
  await navigate(page,'Player');
  await expect(page.getByLabel('Imported player character')).toContainText('Fighter');
+ await expect(page.getByLabel('Imported character level-up')).toContainText('Requires 300 XP');
+ await expect(page.getByRole('button',{name:'Confirm and save level 2'})).toBeDisabled();
+ await page.getByLabel('Level-up hit points').fill('7');
+ await page.getByLabel('Imported character level-up').getByRole('checkbox',{name:'I confirm these level-up choices'}).check();
+ await expect(page.getByRole('button',{name:'Confirm and save level 2'})).toBeDisabled();
+ await expect(page.getByLabel('Imported player character')).toContainText('Level 1');
+
  await expect(page.getByText('Review provisional ability scores',{exact:true})).toHaveCount(0);
  await navigate(page,'Settings');if(!(await page.getByLabel('Development section').getByLabel('Legacy campaign creation').isVisible()))await page.getByLabel('Development section').locator('summary').first().click();
  const manager=page.getByLabel('Subclass actor manager');await manager.getByLabel('New subclass actor ID').fill('ally');await manager.getByRole('button',{name:'Register subclass actor'}).click();

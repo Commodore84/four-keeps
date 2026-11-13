@@ -1,0 +1,11 @@
+import {describe,it,expect} from 'vitest';
+import {newCampaign} from './campaign';
+import {applyImportedLevelUp,importedLevelUpIssues} from './importedLevelUp';
+import type {Campaign} from './campaign';
+function fixture(level=1,xp=0):Campaign{const c=newCampaign('Imported');return {...c,xp,character:{...c.character!,level,classId:'rogue'},characterIdentity:{name:'Test',speciesId:'elf',backgroundId:'sage',classId:'rogue',draftId:'test',pronouns:'',appearance:'',personality:'',backstory:''},characterBuild:{rules:{allowCompatibleLegacy:false}} as Campaign['characterBuild']}}
+describe('imported level up',()=>{
+ it('requires XP and explicit confirmation, and never mutates source',()=>{const c=fixture();const choice={hpGain:5,confirm:true};expect(importedLevelUpIssues(c,choice).join(' ')).toContain('300 XP');expect(()=>applyImportedLevelUp(c,choice)).toThrow();const eligible=fixture(1,300);expect(importedLevelUpIssues(eligible,{hpGain:5,confirm:false})).toContain('Explicit confirmation required.');const next=applyImportedLevelUp(eligible,choice);expect(next.character?.level).toBe(2);expect(eligible.character?.level).toBe(1);expect(next.character!.maxHitPoints).toBe(eligible.character!.maxHitPoints!+5)});
+ it('requires valid subclass at level three',()=>{const c=fixture(2,900);expect(importedLevelUpIssues(c,{hpGain:5,confirm:true})).toContain('Choose a valid subclass.');const next=applyImportedLevelUp(c,{hpGain:5,confirm:true,subclassId:'rogue-thief'});expect(next.importedSubclassId).toBe('rogue-thief');expect(next.character?.level).toBe(3)});
+ it('validates ASI points and updates ability scores at level four',()=>{const c=fixture(3,2700);expect(importedLevelUpIssues(c,{hpGain:5,confirm:true,featPlan:'Ability Score Improvement',abilityIncreases:{Dex:1}})).toContain('Allocate exactly two ASI points.');const next=applyImportedLevelUp(c,{hpGain:5,confirm:true,featPlan:'Ability Score Improvement',abilityIncreases:{Dex:2}});expect(next.character?.scores.dex).toBe(c.character!.scores.dex+2);expect(next.character?.level).toBe(4)});
+ it('rejects incomplete feat application rather than silently granting only ability bonuses',()=>{const c=fixture(3,2700);expect(importedLevelUpIssues(c,{hpGain:5,confirm:true,featPlan:'Fey-Touched',featAbility:'Int'}).join(' ')).toContain('not yet implemented')});
+});
