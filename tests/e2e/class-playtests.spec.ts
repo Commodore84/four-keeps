@@ -93,7 +93,7 @@ for(const id of ['fighter','rogue','cleric','wizard'] as const)test(id+' complet
  c=await saved(page);expect(c.hitDiceRemaining).toBe(0);expect(c.character.currentHitPoints).toBe(config[id].hp);if(id==='fighter')expect(c.character.resources['Second Wind'].used).toBe(0);if(id==='wizard'){expect(c.character.resources['Arcane Recovery'].used).toBe(1);expect(c.character.spellSlots.usedLevel1).toBe(0);}if(id==='cleric')expect(c.character.spellSlots.usedLevel1).toBe(1);
  await rest.getByRole('checkbox',{name:/DM confirms safe/}).check();await rest.getByRole('button',{name:'Complete long rest'}).click();await expect.poll(async()=>(await saved(page)).hitDiceRemaining).toBe(1);await page.reload();await page.getByRole('button',{name:'Continue Adventure'}).click();c=await saved(page);expect(c.hitDiceRemaining).toBe(1);expect(c.character.currentHitPoints).toBe(config[id].hp);expect(c.characterBuild).toEqual(snapshot);expect(c.xp).toBe(30);if(c.character.spellSlots)expect(c.character.spellSlots.usedLevel1).toBe(0);for(const pool of Object.values(c.character.resources??{}) as any[])expect(pool.used).toBe(0);
  if(id==='fighter'){await navigate(page,'Developer');const again=page.getByLabel('Imported player development tools').getByLabel('Player rest recovery');await again.getByRole('checkbox',{name:/DM confirms safe/}).check();await expect(again.getByRole('button',{name:'Complete long rest'})).toBeDisabled();await again.getByRole('checkbox',{name:/Include 960 minutes/}).check();await again.getByRole('button',{name:'Complete long rest'}).click();await expect(again.getByRole('status')).toHaveText('Rest completed and saved.');expect((await saved(page)).elapsedMinutes).toBe(1980);}
- await navigate(page,'Player');await expect(page.getByLabel('Saved character build')).toContainText('Background and character choices');expect(errors).toEqual([]);
+ await navigate(page,'Developer');await expect(page.getByLabel('Saved character build')).toContainText('Background and character choices');expect(errors).toEqual([]);
 });
 
 test('rest save failure preserves Hit Dice, reports the failure, and permits a successful retry',async({page})=>{
@@ -485,10 +485,18 @@ test('new Rogue starts at Frontier Village, buys supplies, and sees persisted Pl
  const before=(await saved(page)).inventoryLedger;
  await shop.getByLabel('Shop quantity').fill('20');
  await shop.getByRole('button',{name:'Buy item'}).click();
+ await expect(shop.getByLabel('Confirm shop purchase')).toBeVisible();
+ expect((await saved(page)).inventoryLedger).toEqual(before);
+ await shop.getByRole('button',{name:'Confirm purchase'}).click();
  await expect(page.getByRole('alert')).toContainText('Not enough money');
  expect((await saved(page)).inventoryLedger).toEqual(before);
  await shop.getByLabel('Shop quantity').fill('1');
  await shop.getByRole('button',{name:'Buy item'}).click();
+ await expect(shop.getByLabel('Confirm shop purchase')).toContainText('200 cp total');
+ await shop.getByRole('button',{name:'Cancel'}).click();
+ expect((await saved(page)).inventoryLedger).toEqual(before);
+ await shop.getByRole('button',{name:'Buy item'}).click();
+ await shop.getByRole('button',{name:'Confirm purchase'}).click();
  await expect.poll(async()=>{const c=await saved(page);return c.inventoryLedger.gear.find((i:any)=>i.name==='Dagger')?.quantity??0}).toBeGreaterThan(before.gear.find((i:any)=>i.name==='Dagger')?.quantity??0);
  await page.reload();await page.getByRole('button',{name:'Continue Adventure'}).click();
  await navigate(page,'Player');
