@@ -1,3 +1,4 @@
+import {DMNarration,type NarrationSpeed} from './DMNarration';
 import {parseFrontierPurchase,prepareMerchantPurchase,settleMerchantPurchase,frontierShopStock,formatFrontierPrice,merchantCatalog,isMerchantBrowseRequest,isMerchantNegotiationRequest,isMerchantPurchaseRequest,merchantNegotiationTarget,beginMerchantNegotiation,resolveMerchantNegotiation} from '../game/frontierShop';
 import {classSummary} from '../game/creationClasses';
 import {completePlayerRest,playerLongRestWaitMinutes} from '../game/playerRecovery';
@@ -133,6 +134,20 @@ const tabs = [
 
 function Adventure({ campaign, fullHistory, onToggleHistory, onAdventureChange, onStartOpening, onRetryAction, saving, development = false }: { campaign: Campaign | null; fullHistory: boolean; onToggleHistory: () => void; onAdventureChange:(next:Campaign,message:string)=>Promise<boolean>|boolean|void; onStartOpening:()=>Promise<void>; onRetryAction:()=>Promise<void>; saving:boolean; development?:boolean }) {
   const endRef = useRef<HTMLDivElement>(null);
+  const [speed,setSpeed]=useState<NarrationSpeed>(()=>(localStorage.getItem('four-keeps-narration-speed') as NarrationSpeed)||'normal');
+  const [seen,setSeen]=useState<string[]>(()=>{try{return JSON.parse(sessionStorage.getItem('four-keeps-narration-seen')||'[]')}catch{return []}});
+  const [pendingReveal,setPendingReveal]=useState<string[]>([]);
+  const previousIds=useRef<Set<string>>(new Set());
+  const initialized=useRef(false);
+  useEffect(()=>{
+    if(!campaign)return;
+    const entries=campaign.journal.filter(entry=>entry.kind==='dm').map(entry=>entry.id);
+    if(!initialized.current){previousIds.current=new Set(entries);initialized.current=true;return;}
+    const newIds=entries.filter(id=>!previousIds.current.has(id));
+    if(newIds.length){previousIds.current=new Set(entries);setPendingReveal(old=>[...new Set([...old,...newIds])]);setSeen(old=>{const next=[...new Set([...old,...entries.filter(id=>!newIds.includes(id))])];sessionStorage.setItem('four-keeps-narration-seen',JSON.stringify(next));return next;});}
+  },[campaign?.id,campaign?.journal]);
+  const markSeen=(id:string)=>{setPendingReveal(old=>old.filter(entry=>entry!==id));setSeen(old=>{if(old.includes(id))return old;const next=[...old,id];sessionStorage.setItem('four-keeps-narration-seen',JSON.stringify(next));return next;});};
+
   const lastTurn = campaign?.journal.filter((entry) => entry.kind === 'player' || entry.kind === 'dm').at(-1)?.id;
   useEffect(() => { if (lastTurn) endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' }); }, [lastTurn]);
   const allTurns = campaign?.journal.filter((entry) => entry.kind === 'player' || entry.kind === 'dm') ?? [];
@@ -145,9 +160,10 @@ function Adventure({ campaign, fullHistory, onToggleHistory, onAdventureChange, 
     {campaign?.pendingAdventureAction && !campaign.pendingClarification && <p role="status" className="text-sm text-gold">Unfinished action saved: {campaign.pendingAdventureAction.message}. <button type="button" disabled={saving} onClick={()=>void onRetryAction()} className="underline text-gold">Retry saved action</button></p>}
     {allTurns.length > 6 && <button type="button" onClick={onToggleHistory} className="w-full rounded-lg border border-gold/30 px-4 py-3 text-sm text-gold">{fullHistory ? "Show recent conversation" : "View full conversation history ("+allTurns.length+" messages)"}</button>}
     
+    <label className="flex items-center justify-end gap-2 text-xs text-parchment/70">Narration speed <select aria-label="Narration speed" value={speed} onChange={e=>{const value=e.target.value as NarrationSpeed;setSpeed(value);localStorage.setItem('four-keeps-narration-speed',value)}}><option value="slow">Slow</option><option value="normal">Normal</option><option value="fast">Fast</option><option value="instant">Instant</option></select></label>
     {turns.map((entry) => <article key={entry.id} className={entry.kind === 'player' ? 'ml-8 rounded-xl border border-gold/30 bg-gold/10 p-4' : 'mr-3 rounded-xl border border-white/10 bg-panel p-5'}>
       <p className="eyebrow">{entry.kind === 'player' ? (campaign?.characterIdentity?.name??'Nighthawk') : 'Dungeon Master'}</p>
-      <p className="mt-2 whitespace-pre-wrap leading-7 text-parchment/90">{entry.kind==='system'?publicCombatText(entry.text):entry.text}</p>
+      {entry.kind==='dm'?<DMNarration key={entry.id} id={entry.id} text={entry.text} speed={speed} animate={pendingReveal.includes(entry.id)&&!seen.includes(entry.id)} onComplete={()=>markSeen(entry.id)}/>:<p className="mt-2 whitespace-pre-wrap leading-7 text-parchment/90">{entry.text}</p>}
     </article>)}
     {campaign && <p className="text-xs text-gold/80">Campaign saved on this device · {turns.length ? 'AI Dungeon Master connected' : 'Ready for your first action'}</p>}
     <div ref={endRef}/>

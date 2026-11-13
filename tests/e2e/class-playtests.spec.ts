@@ -119,6 +119,9 @@ test('AI-led opening, world memory and saved pending action retry survive reload
  });
  await expect.poll(async()=> (await saved(page))?.journal?.some((entry:any)=>entry.id?.endsWith('-dm-opening'))).toBe(true);
  await expect(page.getByLabel('Adventure',{exact:true})).toContainText('A bell tolls from the abandoned keep.');
+ await expect(page.getByLabel('Narration speed')).toHaveValue('normal');
+ await page.getByLabel('Narration speed').selectOption('instant');
+ await expect(page.getByLabel('Dungeon Master narration').first()).toContainText('A bell tolls');
  await expect(page.getByLabel('Adventure journal')).toHaveCount(0);
  await expect(page.getByLabel('AI adventure session')).toHaveCount(0);
  await expect(page.getByLabel('Adventure',{exact:true})).not.toContainText('The road bends toward a frontier village');
