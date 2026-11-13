@@ -1,0 +1,18 @@
+import {describe,it,expect} from 'vitest';
+import {newCampaign} from './campaign';
+import {startUnifiedEncounter,addCompanionEnemy,importedRogueCunningAction,attackImportedRogue,endCompanionTurn,useImportedMageHandLegerdemain} from './companionEncounter';
+import type {Campaign} from './campaign';
+function arena(level=2,subclass=false){
+ const c=newCampaign('Rogue combat');
+ const imported:Campaign={...c,character:{...c.character!,level,classId:'rogue'},characterIdentity:{name:'Test',speciesId:'elf',backgroundId:'sage',classId:'rogue',draftId:'x',pronouns:'',appearance:'',personality:'',backstory:''},characterBuild:{rules:{allowCompatibleLegacy:false}} as Campaign['characterBuild'],...(subclass?{importedSubclassId:'rogue-arcane-trickster'}:{}),inventoryLedger:{currency:{CP:0,SP:0,EP:0,GP:0,PP:0},gear:[{name:'Dagger',quantity:1}]},encounterLoadout:{weaponId:'dagger'}};
+ let b=startUnifiedEncounter(imported,{nighthawk:20},{nighthawk:{x:2,y:2}},{});
+ b=addCompanionEnemy(b,'goblin',10,{x:3,y:2},40,10,3);
+ return b;
+}
+describe('imported Rogue in unified combat',()=>{
+ it('Cunning Action Dash adds movement and spends only bonus action',()=>{const c=arena();const next=importedRogueCunningAction(c,'Dash');expect(next.companionEncounter!.participants.nighthawk.dashFeet).toBe(next.companionEncounter!.participants.nighthawk.speedFeet);expect(next.companionEncounter!.participants.nighthawk.actionUsed).toBe(false);expect(()=>importedRogueCunningAction(next,'Disengage')).toThrow('unavailable');expect(c.companionEncounter!.participants.nighthawk.bonusActionUsed).toBe(false)});
+ it('Cunning Action Disengage prevents opportunity triggers',()=>{const c=importedRogueCunningAction(arena(),'Disengage');expect(c.companionEncounter!.participants.nighthawk.disengaged).toBe(true)});
+ it('validates sneak dice and attack advantage and never grants extra damage on miss',()=>{const c=arena(3);expect(()=>attackImportedRogue(c,'goblin',15,3,5,[2,3])).toThrow('Sneak Attack requires advantage');const advantaged={...c,companionEncounter:{...c.companionEncounter!,participants:{...c.companionEncounter!.participants,nighthawk:{...c.companionEncounter!.participants.nighthawk,conditions:['Invisible' as const]}}}};expect(()=>attackImportedRogue(advantaged,'goblin',15,3,5,[2])).toThrow('2 verified');const hit=attackImportedRogue(advantaged,'goblin',15,3,5,[2,3],12);expect(hit.companionEncounter!.participants.goblin.hp).toBe(40-(3+5+3));expect(hit.companionEncounter!.participants.nighthawk.rogueSneakUsed).toBe(true);expect(()=>attackImportedRogue(hit,'goblin',15,3,5,[2,3],12)).toThrow();});
+ it('requires doubled sneak dice on critical and resets once-per-turn use',()=>{const c=arena(3);const advantaged={...c,companionEncounter:{...c.companionEncounter!,participants:{...c.companionEncounter!.participants,nighthawk:{...c.companionEncounter!.participants.nighthawk,conditions:['Invisible' as const]}}}};expect(()=>attackImportedRogue(advantaged,'goblin',20,6,5,[1,2],18)).toThrow('4 verified');const hit=attackImportedRogue(advantaged,'goblin',20,6,5,[1,2,3,4],18);const enemyTurn=endCompanionTurn(hit,'nighthawk');const next=endCompanionTurn(enemyTurn,'goblin');expect(next.companionEncounter!.participants.nighthawk.rogueSneakUsed).toBe(false)});
+ it('Mage Hand requires confirmed subclass and spends an action without inventing effects',()=>{expect(()=>useImportedMageHandLegerdemain(arena(3),'Pick lock')).toThrow('not available');const c=useImportedMageHandLegerdemain(arena(3,true),'Pick lock');expect(c.companionEncounter!.participants.nighthawk.actionUsed).toBe(true);expect(c.companionEncounter!.log.at(-1)).toContain('DM adjudication required')});
+});

@@ -17,7 +17,7 @@ export interface CompanionEncounter {
  round:number;
  turnIndex:number;
  order:string[];
- participants:Record<string,{x:number;y:number;hp:number;maxHp:number;initiative:number;conditions:('Charmed'|'Poisoned'|'Blinded'|'Deafened'|'Frightened'|'Grappled'|'Incapacitated'|'Invisible'|'Paralyzed'|'Petrified'|'Prone'|'Restrained'|'Stunned'|'Unconscious'|'Exhaustion')[];speedFeet:number;movementSpentFeet:number;actionUsed:boolean;bonusActionUsed:boolean;dashFeet:number;disengaged:boolean;dodging:boolean;reactionUsed?:boolean;concentratingOn?:string;consumables?:Record<string,number>;faction?:string;reachFeet?:number;actorKind?:'party'|'enemy';armorClass?:number;attackModifier?:number;constitutionSaveModifier?:number;damageModifier?:number;damageDice?:string;enemyTactic?:'hold'|'nearest'|'lowest-hp';rangedAttackFeet?:number;deathSaves?:{successes:number;failures:number;stable:boolean;dead:boolean}}>;
+ participants:Record<string,{x:number;y:number;hp:number;maxHp:number;initiative:number;conditions:('Charmed'|'Poisoned'|'Blinded'|'Deafened'|'Frightened'|'Grappled'|'Incapacitated'|'Invisible'|'Paralyzed'|'Petrified'|'Prone'|'Restrained'|'Stunned'|'Unconscious'|'Exhaustion')[];speedFeet:number;movementSpentFeet:number;actionUsed:boolean;bonusActionUsed:boolean;dashFeet:number;disengaged:boolean;dodging:boolean;reactionUsed?:boolean;rogueSneakUsed?:boolean;concentratingOn?:string;consumables?:Record<string,number>;faction?:string;reachFeet?:number;actorKind?:'party'|'enemy';armorClass?:number;attackModifier?:number;constitutionSaveModifier?:number;damageModifier?:number;damageDice?:string;enemyTactic?:'hold'|'nearest'|'lowest-hp';rangedAttackFeet?:number;deathSaves?:{successes:number;failures:number;stable:boolean;dead:boolean}}>;
  obstacles?:{x:number;y:number}[];
  cover?:{x:number;y:number}[];
  pendingOpportunity?:{moverId:string;attackerIds:string[];from:{x:number;y:number};to:{x:number;y:number};destination?:{x:number;y:number}};
@@ -368,7 +368,7 @@ export function endCompanionTurn(campaign:Campaign,actorId:string):Campaign{
  const battle=activeActor(campaign,actorId);
  if(battle.participants[actorId]?.actorKind==='enemy'&&battle.pendingOpportunity?.moverId===actorId&&battle.pendingOpportunity.attackerIds.length)throw Error('Pending opportunity reactions require DM adjudication');
  const next=(battle.turnIndex+1)%battle.order.length;
- const nextId=battle.order[next];const outgoing=battle.participants[actorId];const participants={...battle.participants,[actorId]:{...outgoing,disengaged:false}};participants[nextId]={...participants[nextId],movementSpentFeet:0,actionUsed:false,bonusActionUsed:false,dashFeet:0,disengaged:false,dodging:false,reactionUsed:false};return save(campaign,{...battle,participants,turnIndex:next,round:battle.round+(next===0?1:0),log:[...battle.log,actorId+' ended turn']});
+ const nextId=battle.order[next];const outgoing=battle.participants[actorId];const participants={...battle.participants,[actorId]:{...outgoing,disengaged:false}};participants[nextId]={...participants[nextId],movementSpentFeet:0,actionUsed:false,bonusActionUsed:false,dashFeet:0,disengaged:false,dodging:false,reactionUsed:false,rogueSneakUsed:false};return save(campaign,{...battle,participants,turnIndex:next,round:battle.round+(next===0?1:0),log:[...battle.log,actorId+' ended turn']});
 }
 /** 2024 death saves are tracked independently of campaign.character and legacy combat.
  * Natural 20 restores 1 HP; natural 1 causes two failures; other rolls use DC 10.
@@ -805,4 +805,50 @@ export function spendPlayerOriginSpell(campaign:Campaign):Campaign{
  if(battle.mode!=='unified'||!spell||!pool||pool.used>=pool.maximum||actor.hp<=0||actor.actionUsed||cannotAct(actor))throw Error('Origin spell cast unavailable');
  const spent=spendPlayerResource(campaign,'Magic Initiate');
  return save(spent,{...battle,participants:{...battle.participants,nighthawk:{...actor,actionUsed:true}},log:[...battle.log,'Player used Magic Initiate for '+spell.name+'; no class slot spent (effect DM adjudicated)']});
+}
+
+/** Imported Rogue: mechanical bonus-action Dash/Disengage in the unified encounter.
+ * Hide requires a separate contested check and is deliberately not auto-granted. */
+export function importedRogueCunningAction(campaign:Campaign,choice:'Dash'|'Disengage'):Campaign{
+ const battle=activeActor(campaign,'nighthawk'),actor=battle.participants.nighthawk;
+ if(campaign.characterIdentity?.classId!=='rogue'||(campaign.character?.level??1)<2)throw Error('Cunning Action requires an imported Rogue of level 2 or higher');
+ if(battle.mode!=='unified'||actor.bonusActionUsed||actor.hp<=0||cannotAct(actor))throw Error('Cunning Action is unavailable on this turn');
+ const updated={...actor,bonusActionUsed:true,dashFeet:choice==='Dash'?actor.dashFeet+actor.speedFeet:actor.dashFeet,disengaged:choice==='Disengage'||actor.disengaged};
+ return save(campaign,{...battle,participants:{...battle.participants,nighthawk:updated},log:[...battle.log,'Player Cunning Action: '+choice+' (bonus action)']});
+}
+/** Rogue Sneak Attack is applied only after validating a hit and its eligibility.
+ * The player supplies individual d6 results; no rolls are invented. */
+export function attackImportedRogue(campaign:Campaign,targetId:string,roll:number,weaponDamageDice:number,rangeFeet:number,sneakDice:number[],secondD20?:number):Campaign{
+ const battle=activeActor(campaign,'nighthawk'),actor=battle.participants.nighthawk,target=battle.participants[targetId];
+ const ch=campaign.character;
+ if(battle.mode!=='unified'||campaign.characterIdentity?.classId!=='rogue'||!ch)throw Error('Requires imported Rogue in a unified encounter');
+ if(!target||target.hp<=0||actor.rogueSneakUsed)throw Error('Invalid target or Sneak Attack already used this turn');
+ const equipped=nighthawkEquippedAttack(campaign),item=ITEMS.find(i=>i.id===equipped?.weaponId);
+ if(!equipped||!item||!(item.properties?.includes('Finesse')||item.properties?.some(p=>p.startsWith('Ammunition')||p.startsWith('Range '))))throw Error('Sneak Attack requires a verified equipped Finesse or Ranged weapon');
+ const attackModifier=equipped.attackModifier,damageModifier=equipped.damageModifier,targetAC=target.armorClass;
+ if(targetAC===undefined||!Number.isInteger(targetAC))throw Error('Target AC must be verified');
+ const distance=Math.max(Math.abs(actor.x-target.x),Math.abs(actor.y-target.y))*5;
+ const advantage=actor.conditions.includes('Invisible')||target.conditions.some(c=>['Blinded','Paralyzed','Restrained','Stunned','Unconscious'].includes(c))||(target.conditions.includes('Prone')&&distance<=5);
+ const disadvantage=target.dodging||target.conditions.includes('Invisible')||actor.conditions.some(c=>['Poisoned','Blinded','Restrained'].includes(c))||(target.conditions.includes('Prone')&&distance>5);
+ const ally=Object.entries(battle.participants).some(([id,p])=>id!=='nighthawk'&&id!==targetId&&p.hp>0&&p.faction!=='enemies'&&Math.max(Math.abs(p.x-target.x),Math.abs(p.y-target.y))<=1&&!p.conditions.includes('Incapacitated'));
+ if(disadvantage&&!advantage||!(advantage&&!disadvantage||ally))throw Error('Sneak Attack requires advantage or an adjacent eligible ally, without disadvantage');
+ const hitRoll=advantage!==disadvantage?(advantage?Math.max(roll,secondD20??0):Math.min(roll,secondD20??21)):roll;
+ const critical=hitRoll===20;
+ const diceCount=Math.ceil((ch.level??1)/2)*(critical?2:1);
+ if(sneakDice.length!==diceCount||sneakDice.some(n=>!Number.isInteger(n)||n<1||n>6))throw Error('Provide '+diceCount+' verified Sneak Attack d6 rolls');
+ if(!Number.isInteger(weaponDamageDice)||weaponDamageDice<1||weaponDamageDice>100)throw Error('Invalid weapon damage roll');
+ const hit=hitRoll===20||(hitRoll!==1&&hitRoll+attackModifier>=targetAC);
+ const result=attackCompanion(campaign,'nighthawk',targetId,roll,attackModifier,targetAC,weaponDamageDice+(hit?sneakDice.reduce((a,b)=>a+b,0):0),damageModifier,'Piercing',rangeFeet,secondD20);
+ if(!hit)return result;
+ const combat=result.companionEncounter!;
+ return save(result,{...combat,participants:{...combat.participants,nighthawk:{...combat.participants.nighthawk,rogueSneakUsed:true}},log:[...combat.log,'Rogue Sneak Attack '+diceCount+'d6: '+sneakDice.join('+')+' = '+sneakDice.reduce((a,b)=>a+b,0)+' extra piercing damage']});
+}
+/** Mage Hand Legerdemain: consume the action and record a declared subtle interaction.
+ * Object manipulation is not silently resolved without DM adjudication. */
+export function useImportedMageHandLegerdemain(campaign:Campaign,description:string):Campaign{
+ const battle=activeActor(campaign,'nighthawk'),actor=battle.participants.nighthawk;
+ if(battle.mode!=='unified'||campaign.importedSubclassId!=='rogue-arcane-trickster'||(campaign.character?.level??1)<3)throw Error('Arcane Trickster Mage Hand Legerdemain is not available');
+ if(actor.actionUsed||actor.hp<=0||cannotAct(actor))throw Error('Action unavailable');
+ if(!description.trim()||description.length>160)throw Error('Describe the intended Mage Hand interaction');
+ return save(campaign,{...battle,participants:{...battle.participants,nighthawk:{...actor,actionUsed:true}},log:[...battle.log,'Mage Hand Legerdemain: '+description.trim()+' (DM adjudication required; no automatic object effects)']});
 }
