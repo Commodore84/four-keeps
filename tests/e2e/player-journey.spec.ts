@@ -52,7 +52,7 @@ test('fighter creation to adventure, NPC, combat, rewards, save and resume',asyn
  await page.reload();await page.getByRole('button',{name:'Continue Adventure'}).click();await navigate(page,'Developer');
  await expect(session).toContainText('Rewards saved: 75 XP');await expect(session.getByRole('button',{name:'Save encounter rewards'})).toHaveCount(0);
  await session.getByRole('button',{name:'Resume exploration after encounter'}).click();await expect(session.getByLabel('Adventure session status')).toContainText('exploring');
- await navigate(page,'Player');await expect(page.getByLabel('Imported player character')).toContainText('75 XP');await expect(page.getByLabel('Combat and vital statistics')).toContainText('HP 9/12');await expect(page.getByLabel('Player class resources')).toContainText('Second Wind: 1/2');await expect(page.getByLabel('Equipment and inventory')).toContainText('Tower token ×1');
+ await navigate(page,'Player');await expect(page.getByLabel('Imported player character')).toContainText('75 XP');await expect(page.getByLabel('Persistent character summary')).toContainText('HP9/12');await expect(page.getByLabel('Player class resources')).toContainText('Second Wind: 1/2');await expect(page.getByLabel('Equipment and inventory')).toContainText('Tower token ×1');
  expect(errors).toEqual([]);
 });
 
@@ -74,8 +74,8 @@ test('imported character earns XP, confirms level 2, and retains HP and level af
  await page.getByLabel('Campaign name',{exact:true}).fill('Aster journey');await page.getByRole('button',{name:'Create campaign',exact:true}).click();
  await navigate(page,'Player');
  const sheet=page.getByLabel('Imported player character');
- const initialHP=await sheet.getByLabel('Combat and vital statistics').textContent();
- const match=initialHP?.match(/HP (\d+)\/(\d+)/);expect(match).not.toBeNull();
+ const initialHP=await sheet.getByLabel('Persistent character summary').textContent();
+ const match=initialHP?.match(/HP\s*(\d+)\/(\d+)/);expect(match).not.toBeNull();
  await navigate(page,'Developer');
  const dev=page.getByLabel('Imported player development tools');
  await dev.getByLabel('Manual XP award').locator('summary').click();
@@ -88,8 +88,8 @@ test('imported character earns XP, confirms level 2, and retains HP and level af
  await sheet.getByRole('checkbox',{name:'I confirm these level-up choices'}).check();
  await sheet.getByRole('button',{name:'Confirm and save level 2'}).click();
  await expect(sheet).toContainText('Level 2');
- await expect(sheet.getByLabel('Combat and vital statistics')).toContainText('HP '+(Number(match![1])+7)+'/'+(Number(match![2])+7));
+ await expect(sheet.getByLabel('Persistent character summary')).toContainText('HP'+(Number(match![1])+7)+'/'+(Number(match![2])+7));
  await page.reload();await page.getByRole('button',{name:'Continue Adventure'}).click();await navigate(page,'Player');
  await expect(page.getByLabel('Imported player character')).toContainText('Level 2');
- await expect(page.getByLabel('Imported player character').getByLabel('Combat and vital statistics')).toContainText('HP '+(Number(match![1])+7)+'/'+(Number(match![2])+7));
+ await expect(page.getByLabel('Imported player character').getByLabel('Persistent character summary')).toContainText('HP'+(Number(match![1])+7)+'/'+(Number(match![2])+7));
 });

@@ -494,8 +494,8 @@ test('imported character summary and section navigation survive reload',async({p
  await expect(summary).toContainText('Level 1');
  await expect(summary).toContainText('HP');
  await expect(summary).toContainText('AC');
- await sheet.getByLabel('Jump to character section').selectOption('skills');
- await expect(sheet.getByLabel('Player skills')).toBeInViewport();
+ await sheet.getByLabel('Jump to character section').selectOption('abilities');
+ await expect(sheet.getByLabel('Player ability scores')).toBeInViewport();
  await sheet.getByLabel('Jump to character section').selectOption('equipment');
  await expect(sheet.getByLabel('Equipment and inventory')).toBeInViewport();
  await page.reload();await page.getByRole('button',{name:'Continue Adventure'}).click();await navigate(page,'Player');
@@ -508,7 +508,14 @@ test('new Rogue starts at Frontier Village, buys supplies, and sees persisted Pl
  await navigate(page,'Player');
  const sheet=page.getByLabel('Imported player character');
  await expect(sheet.getByLabel('Player ability scores')).toBeVisible();
- await expect(sheet.getByLabel('Player skills')).toContainText('Stealth');
+ await expect(sheet.getByLabel('Player ability scores')).toContainText('Stealth');
+ const abilities=sheet.getByLabel('Player ability scores');
+ await expect(abilities.getByLabel('DEX ability group')).toContainText('Stealth');
+ await expect(abilities.getByLabel('DEX ability group')).toContainText('Saving throw');
+ await expect(abilities.getByLabel('WIS ability group')).toContainText('Perception');
+ await expect(abilities.getByLabel('STR ability group')).not.toContainText('Stealth');
+ await expect(sheet.getByLabel('Combat and vital statistics')).toContainText('Proficiency bonus');
+
  await expect(sheet.getByLabel('Character details')).toContainText('Background: criminal');
  await expect(sheet.getByLabel('Combat and vital statistics')).toContainText('Passive Perception');
  await expect(sheet.getByLabel('Equipment and inventory')).toBeVisible();
@@ -725,7 +732,7 @@ test('imported character sheet excludes developer tools and rest controls',async
  await navigate(page,'Player');
  const sheet=page.getByLabel('Imported player character');
  await expect(sheet.getByLabel('Character details')).toBeVisible();
- await expect(sheet.getByLabel('Player skills')).toBeVisible();
+ await expect(sheet.getByLabel('Player ability scores')).toBeVisible();
  await expect(sheet.getByText('Subclass actor management')).toHaveCount(0);
  await expect(sheet.getByText('Rest and recover')).toHaveCount(0);
  await expect(sheet.getByLabel('Manual XP award')).toHaveCount(0);
