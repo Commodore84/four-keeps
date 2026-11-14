@@ -518,6 +518,17 @@ test('new Rogue starts at Frontier Village, buys supplies, and sees persisted Pl
  await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
  const shop=page.getByLabel('Frontier Village general store');
  await expect(shop).toBeVisible();
+ // The shop must follow the conversation and be inside the visible scroll area,
+ // not rendered above the latest narration where the user cannot discover it.
+ await expect.poll(async()=>shop.evaluate(el=>{
+   const adventure=el.closest('[aria-label="Adventure"]');
+   const lastDM=Array.from(adventure?.querySelectorAll('article')??[]).at(-1);
+   return Boolean(lastDM && lastDM.compareDocumentPosition(el)&Node.DOCUMENT_POSITION_FOLLOWING);
+ })).toBe(true);
+ await expect.poll(async()=>shop.evaluate(el=>{
+   const rect=el.getBoundingClientRect();
+   return rect.top<window.innerHeight-120 && rect.bottom>120;
+ })).toBe(true);
  await expect(shop.getByLabel('Current wallet')).toBeVisible();
  await expect(shop.getByRole('table',{name:'Merchant inventory'})).toContainText('Dagger');
  await shop.getByRole('button',{name:/Dagger/}).click();
