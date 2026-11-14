@@ -594,6 +594,9 @@ test('new Rogue starts at Frontier Village, buys supplies, and sees persisted Pl
  await expect(sheet.getByLabel('Class features',{exact:true})).toContainText('Only earned features are listed');
  await expect(sheet.getByLabel('Player class resources')).toContainText('Saved resource totals');
  await expect(sheet.getByLabel('Player spellcasting')).toContainText('Saved spell and slot values are authoritative');
+ await expect(sheet.getByLabel('Character identity')).toContainText('criminal');
+ await expect(sheet.getByLabel('Player class resources')).toContainText('Spend 1 use control appears only on your active encounter turn');
+ await expect(sheet.getByLabel('Player spellcasting')).toContainText('this section is read-only');
  await expect(sheet.getByLabel('Equipment and inventory')).toBeVisible();
  await navigate(page,'Adventure');
  await page.evaluate(()=>{localStorage.setItem('four-keeps-access-code','browser-test-code');localStorage.setItem('four-keeps-dm-mode','on');});

@@ -36,3 +36,29 @@ describe('authoritative Player sheet summary',()=>{
   expect(playerSheetSummary(newCampaign('Legacy'))).toBeNull();
  });
 });
+
+import {CLASSES} from './creationClasses';
+describe('Player sheet across all twelve classes',()=>{
+ it('derives defenses and inventory without changing any saved class state',()=>{
+  expect(CLASSES).toHaveLength(12);
+  for(const cls of CLASSES){
+   const base=rogue();
+   const c={...base,characterIdentity:{...base.characterIdentity!,classId:cls.id},character:{...base.character!,classId:cls.id,weaponProficiencies:[...cls.weapons],resources:{'Tracked feature':{maximum:2,used:1,recovery:'long' as const}}}};
+   const snapshot=JSON.stringify(c);
+   const summary=playerSheetSummary(c)!;
+   expect(summary.proficiencyBonus).toBe(c.character.proficiencyBonus);
+   expect(summary.speed).toBe(c.character.speed);
+   expect(summary.tools).toEqual(expect.arrayContaining(cls.tools));
+   expect(summary.attacks.every(a=>Number.isFinite(a.attackModifier))).toBe(true);
+   expect(JSON.stringify(c)).toBe(snapshot);
+   expect(playerSheetSummary(JSON.parse(snapshot))).toEqual(summary);
+  }
+ });
+ it('never treats unknown inventory as zero-weight verified gear',()=>{
+  const c=rogue();c.inventoryLedger={currency:{CP:0,SP:0,EP:0,GP:0,PP:0},gear:[{name:'Uncatalogued relic',quantity:3}]};
+  const s=playerSheetSummary(c)!;
+  expect(s.totalKnownWeight).toBe(0);
+  expect(s.unverifiedWeight).toEqual(['Uncatalogued relic']);
+  expect(s.attacks).toEqual([]);
+ });
+});
