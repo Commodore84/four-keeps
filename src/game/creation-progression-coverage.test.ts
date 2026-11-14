@@ -3,6 +3,16 @@ import {CLASSES} from './creationClasses';
 import {subclassesForClass} from './creationSubclasses';
 import {progressionFeatures,earnedClassMilestones,VERIFIED_MILESTONE_DETAILS,rogueSheetReference} from './creationProgression';
 describe('all-class advancement explanation coverage',()=>{
+ it('uses individual earned Rogue features and excludes generic subclass placeholders',()=>{
+  const rogue=CLASSES.find(cls=>cls.id==='rogue')!;
+  const atSix=earnedClassMilestones('rogue',6,rogue.features);
+  expect(atSix.filter(feature=>feature.name==='Expertise')).toHaveLength(1);
+  expect(atSix.some(feature=>feature.name.includes(' and Uncanny Dodge'))).toBe(false);
+  const atTwenty=earnedClassMilestones('rogue',20,rogue.features);
+  expect(atTwenty.some(feature=>feature.name==='Subclass Feature')).toBe(false);
+  expect(atTwenty.filter(feature=>feature.name==='Ability Score Improvement')).toHaveLength(5);
+  expect(atTwenty.some(feature=>feature.level===19&&feature.name==='Epic Boon')).toBe(true);
+ });
  it('gates Rogue Sneak Attack and Cunning Strike through level twenty',()=>{
   expect(rogueSheetReference(1)).toMatchObject({sneakAttack:'1d6',cunningOptions:[],expertiseChoices:2,hasEvasion:false});
   expect(rogueSheetReference(5)).toMatchObject({sneakAttack:'3d6',cunningEffectsPerHit:1,hasUncannyDodge:true});

@@ -188,8 +188,24 @@ export function rogueSheetReference(level:number){
  const cunningOptions=[...(earned>=5?['Poison (1d6)','Trip (1d6)','Withdraw (1d6)']:[]),...(earned>=14?['Daze (2d6)','Knock Out (6d6)','Obscure (3d6)']:[])];
  return {level:earned,sneakAttack:`${sneakDice}d6`,cunningOptions,cunningEffectsPerHit:earned>=11?2:earned>=5?1:0,expertiseChoices:earned>=6?4:2,weaponMasteries:2,hasUncannyDodge:earned>=5,hasEvasion:earned>=7,hasReliableTalent:earned>=7};
 }
+/** Separate Rogue feature gains from subclass tiers and repeated feat selections. */
+const ROGUE_CLASS_FEATURE_LEVELS:Record<number,string[]>={
+ 2:['Cunning Action'],3:['Steady Aim'],5:['Cunning Strike','Uncanny Dodge'],6:['Expertise'],7:['Evasion','Reliable Talent'],11:['Improved Cunning Strike'],14:['Devious Strikes'],15:['Slippery Mind'],18:['Elusive'],20:['Stroke of Luck']
+};
 /** Display-only earned class milestones. Never changes a character's rules state. */
 export function earnedClassMilestones(classId:string,level:number,existing:{level:number;names:string[]}[]):AdvancementFeature[]{
  const capped=Number.isFinite(level)?Math.max(1,Math.min(20,Math.floor(level))):1;
+ if(classId==='rogue'){
+  const earned:AdvancementFeature[]=[];
+  for(let atLevel=2;atLevel<=capped;atLevel++){
+   for(const name of ROGUE_CLASS_FEATURE_LEVELS[atLevel]??[]){
+    if(existing.some(group=>group.level===atLevel&&group.names.includes(name)))continue;
+    earned.push({level:atLevel,name,description:VERIFIED_MILESTONE_DETAILS[name]?.description??CLASS_FEATURE_EXPLANATIONS[name]??'See the Rogue class feature rules.',source:'class'});
+   }
+   if([4,8,10,12,16].includes(atLevel))earned.push({level:atLevel,name:'Ability Score Improvement',description:'Choose an eligible feat or the Ability Score Improvement feat when advancing.',source:'class'});
+   if(atLevel===19)earned.push({level:19,name:'Epic Boon',description:'Choose an eligible Epic Boon feat or another feat for which you qualify.',source:'class'});
+  }
+  return earned;
+ }
  return Array.from({length:capped-1},(_,index)=>index+2).flatMap(atLevel=>progressionFeatures(classId,atLevel).filter(feature=>feature.source==='class')).filter(feature=>!existing.some(group=>group.level<=feature.level&&group.names.includes(feature.name)));
 }
