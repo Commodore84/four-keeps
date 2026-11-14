@@ -5,7 +5,7 @@ import {skillAbility} from './checks';
 import {xpThresholds} from './campaign';
 import {classSummary} from './creationClasses';
 import {subclassesForClass} from './creationSubclasses';
-import {futureFeat,featEligibility,eligibleFeatAbility} from './creationFutureFeats';
+import {futureFeat,featEligibility,eligibleFeatAbility,EPIC_BOONS} from './creationFutureFeats';
 import {ABILITIES,type Ability,type Scores,modifier} from './creationAbilities';
 import {forecastImprovementLevels} from './creationProjection';
 import type {FeatContext} from './creationFutureFeats';
@@ -14,7 +14,7 @@ export function importedLevelUpIssues(c:Campaign,choice:ImportedLevelChoice):str
  const issues:string[]=[];const ch=c.character,identity=c.characterIdentity,build=c.characterBuild;
  if(!ch||!identity||!build)return ['Only imported characters can use this level-up workflow.'];
  const level=(ch.level??1)+1;
- if(level<2||level>(identity.classId==='rogue'?17:4))return ['Imported level-up supports Rogue levels 2–17 and other classes levels 2–4 only.'];
+ if(level<2||level>(identity.classId==='rogue'?20:4))return ['Imported level-up supports Rogue levels 2–20 and other classes levels 2–4 only.'];
  if((c.xp??0)<xpThresholds[level-1])issues.push(`Requires ${xpThresholds[level-1]} XP for level ${level}.`);
  const cls=classSummary(identity.classId);if(!cls)return ['Unknown class.'];
  const min=1+modifier(ch.scores.con),max=cls.hitDie+modifier(ch.scores.con);
@@ -73,6 +73,9 @@ export function importedLevelUpIssues(c:Campaign,choice:ImportedLevelChoice):str
    }
   }
  }
+ if(identity.classId==='rogue'&&level===19){
+  if(!EPIC_BOONS.some(feat=>feat.name===choice.featPlan))issues.push('Choose a valid level-19 Epic Boon. Other feats require separately implemented choices.');
+ }
  if(identity.classId==='rogue'&&level>=9&&level<=10&&c.importedSubclassId==='rogue-arcane-trickster'){
   const spells=choice.arcaneSpells??[],prior=ch.preparedSpells??[],needed=level===9?Math.max(0,6-prior.length):Math.max(0,7-prior.length);
   if(spells.length!==needed||new Set(spells).size!==spells.length||spells.some(name=>prior.includes(name)||!([...SPELLS.filter(sp=>sp.level===1).filter(sp=>sp.classes.includes('wizard')).map(sp=>sp.name),...WIZARD_LEVEL2_SPELLS].includes(name))))issues.push('Choose distinct supported Wizard spells to reach the Arcane Trickster prepared-spell progression.');
@@ -105,5 +108,5 @@ export function applyImportedLevelUp(c:Campaign,choice:ImportedLevelChoice):Camp
   ...(c.characterIdentity?.classId==='rogue'&&level>=9&&level<=10&&c.importedSubclassId==='rogue-arcane-trickster'?{preparedSpells:[...new Set([...(ch.preparedSpells??[]),...(choice.arcaneSpells??[])])]}:{}),
   ...(level===3&&choice.subclassId==='rogue-arcane-trickster'?{subclass:'Arcane Trickster' as const,cantrips:[...new Set([...(ch.cantrips??[]),'Mage Hand',...(choice.arcaneCantrips??[])])],preparedSpells:[...new Set([...(ch.preparedSpells??[]),...(choice.arcaneSpells??[])])],spellSlots:{level1:2,usedLevel1:0}}:{})};
  // Keep the selected subclass separately; legacy character.subclass is Arcane Trickster-specific.
- return {...c,character:next,...(choice.featPlan==='Elven Accuracy'?{importedEarnedFeats:[...(c.importedEarnedFeats??[]),{level,name:'Elven Accuracy',ability:choice.featAbility,legacyApproved:choice.legacyApproved===true}]}:{}),...(wizard?{hitDiceRemaining:Math.min(level,(c.hitDiceRemaining??(level-1))+1),importedWizardSpellbook:[...(c.importedWizardSpellbook??c.characterBuild?.selections?.magic?.spellbook?.map(id=>SPELL_BY_ID[id]?.name??id)??[]),...(choice.wizardBookSpells??[])],...(level===3?{importedWizardPortents:[...(choice.wizardPortents??[])]}:{})}:{}),...(warlock?{hitDiceRemaining:Math.min(level,(c.hitDiceRemaining??(level-1))+1)}:{}),...(warlock?{importedWarlockPactSlotLevel:level>=3?2:1,importedWarlockInvocations:level===2?[...priorInvocations,...(choice.warlockInvocations??[])]:priorInvocations}:{}),importedSubclassId:level===3?choice.subclassId:c.importedSubclassId,updatedAt:new Date().toISOString(),journal:[...c.journal,{id:crypto.randomUUID(),kind:'system',text:`${c.characterIdentity!.name} confirmed level ${level}: +${choice.hpGain} HP${level===3?`; subclass ${choice.subclassId}`:''}${level===4?'; '+choice.featPlan:''}.`,createdAt:new Date().toISOString()}]};
+ return {...c,character:next,...((choice.featPlan==='Elven Accuracy'||c.characterIdentity?.classId==='rogue'&&level===19)?{importedEarnedFeats:[...(c.importedEarnedFeats??[]),{level,name:choice.featPlan!,legacyApproved:choice.featPlan==='Elven Accuracy'&&choice.legacyApproved===true,...(choice.featPlan==='Elven Accuracy'?{ability:choice.featAbility}:{})}]}:{}),...(wizard?{hitDiceRemaining:Math.min(level,(c.hitDiceRemaining??(level-1))+1),importedWizardSpellbook:[...(c.importedWizardSpellbook??c.characterBuild?.selections?.magic?.spellbook?.map(id=>SPELL_BY_ID[id]?.name??id)??[]),...(choice.wizardBookSpells??[])],...(level===3?{importedWizardPortents:[...(choice.wizardPortents??[])]}:{})}:{}),...(warlock?{hitDiceRemaining:Math.min(level,(c.hitDiceRemaining??(level-1))+1)}:{}),...(warlock?{importedWarlockPactSlotLevel:level>=3?2:1,importedWarlockInvocations:level===2?[...priorInvocations,...(choice.warlockInvocations??[])]:priorInvocations}:{}),importedSubclassId:level===3?choice.subclassId:c.importedSubclassId,updatedAt:new Date().toISOString(),journal:[...c.journal,{id:crypto.randomUUID(),kind:'system',text:`${c.characterIdentity!.name} confirmed level ${level}: +${choice.hpGain} HP${level===3?`; subclass ${choice.subclassId}`:''}${level===4?'; '+choice.featPlan:''}.`,createdAt:new Date().toISOString()}]};
 }

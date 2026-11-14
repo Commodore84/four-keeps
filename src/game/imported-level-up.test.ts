@@ -134,6 +134,30 @@ describe('Rogue level nine and ten advancement',()=>{
    expect(at17.character!.proficiencyBonus).toBe(6);
    expect(at17.character!.resources).toEqual(at16.character!.resources);
    expect(at17.character!.preparedSpells).toEqual(at16.character!.preparedSpells);
-   expect(importedLevelUpIssues({...at17,xp:265000},{hpGain:5,confirm:true}).join(' ')).toContain('supports Rogue levels 2–17');
+   expect(importedLevelUpIssues({...at17,xp:264999},{hpGain:5,confirm:true}).join(' ')).toContain('265000 XP');
+  });
+ });
+
+ describe('Rogue levels eighteen to twenty',()=>{
+  it('gates level 19 Epic Boon selection and persists the selected reference without granting effects',()=>{
+   const at18=fixture(18,305000);
+   expect(importedLevelUpIssues(at18,{hpGain:5,confirm:true}).join(' ')).toContain('Epic Boon');
+   expect(importedLevelUpIssues(at18,{hpGain:5,confirm:true,featPlan:'Boon of Imaginary Power'}).join(' ')).toContain('Epic Boon');
+   const advanced=applyImportedLevelUp(at18,{hpGain:5,confirm:true,featPlan:'Boon of Speed'});
+   expect(advanced.character!.level).toBe(19);
+   expect(advanced.importedEarnedFeats?.at(-1)?.name).toBe('Boon of Speed');
+   expect(advanced.character!.speed).toBe(at18.character!.speed);
+   expect(at18.importedEarnedFeats).toBeUndefined();
+  });
+  it('applies level 18 and 20 confirmed progression and prevents level 21',()=>{
+   const at17=fixture(17,265000);
+   const at18=applyImportedLevelUp(at17,{hpGain:5,confirm:true});
+   expect(at18.character!.level).toBe(18);
+   const at19=applyImportedLevelUp({...at18,xp:305000},{hpGain:5,confirm:true,featPlan:'Boon of Fate'});
+   const at20=applyImportedLevelUp({...at19,xp:355000},{hpGain:5,confirm:true});
+   expect(at20.character!.level).toBe(20);
+   expect(at20.character!.proficiencyBonus).toBe(6);
+   expect(at20.character!.resources).toEqual(at17.character!.resources);
+   expect(importedLevelUpIssues(at20,{hpGain:5,confirm:true}).join(' ')).toContain('supports Rogue levels 2–20');
   });
  });
