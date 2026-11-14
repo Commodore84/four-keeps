@@ -108,6 +108,64 @@ const ORIGIN_FEAT_DETAILS:Record<string,string>={
  'Magic Initiate (Wizard)':'Learn two Wizard cantrips and one level-one Wizard spell; its free casting refreshes after a Long Rest.',
  'Magic Initiate (Bard)':'Learn two Bard cantrips and one level-one Bard spell; its free casting refreshes after a Long Rest.'
 };
+const ADDITIONAL_CLASS_FEATURES:Record<string,{description:string;activation:string}>={
+ 'Fighting Style':{description:'Gain the Fighting Style feat selected for this class. Its benefits depend on that selection.',activation:'Passive'},
+ 'Indomitable':{description:'Reroll a failed saving throw and add your Fighter level to the new roll; expend a use of this feature.',activation:'On failed save'},
+ 'Extra Attack':{description:'Make additional attacks when you take the Attack action, according to your current class level.',activation:'Attack action'},
+ 'Tactical Mind':{description:'When you fail an ability check, you can expend Second Wind to add 1d10 to the check, without expending the use if it still fails.',activation:'On failed check'},
+ 'Tactical Shift':{description:'Move up to half your Speed without provoking Opportunity Attacks when you activate Second Wind.',activation:'With Second Wind'},
+ 'Evasion':{description:'On a Dexterity saving throw that would normally halve damage, take no damage on success and half on failure while eligible.',activation:'Passive'},
+ 'Reliable Talent':{description:'Treat a d20 roll of 9 or lower as 10 for an ability check that uses one of your skill or tool proficiencies.',activation:'Passive'},
+ 'Slippery Mind':{description:'Gain proficiency in Wisdom and Charisma saving throws.',activation:'Passive'},
+ 'Stroke of Luck':{description:'Use your limited-use luck to turn an eligible failed d20 Test into a success, as defined by the feature.',activation:'On failed d20 Test'},
+ 'Jack of All Trades':{description:'Add half your Proficiency Bonus, rounded down, to ability checks that do not otherwise include your Proficiency Bonus.',activation:'Passive'},
+ 'Font of Inspiration':{description:'Recover Bardic Inspiration uses on a Short or Long Rest; you can also expend a spell slot to regain a use.',activation:'Rest / resource'},
+ 'Magical Secrets':{description:'Choose qualifying spells from additional class lists when preparing spells, within your Bard spell limits.',activation:'Spell preparation'},
+ 'Divine Intervention':{description:'Call on your deity to produce an eligible Cleric spell effect within the feature’s restrictions and recovery limit.',activation:'Magic Action'},
+ 'Primal Order':{description:'Gain the selected Druid order benefit, including its permitted equipment or magical training.',activation:'Passive'},
+ 'Wild Resurgence':{description:'Exchange an available spell slot and Wild Shape resource under the feature’s rules.',activation:'Resource'},
+ 'Feral Instinct':{description:'Gain Advantage on Initiative rolls.',activation:'Passive'},
+ 'Brutal Strike':{description:'Give up Reckless Attack Advantage on an eligible attack to add damage and a selected effect.',activation:'On attack'},
+ 'Improved Divine Smite':{description:'Your eligible melee weapon hits deal additional radiant damage as specified by the class feature.',activation:'On hit'},
+ 'Aura of Protection':{description:'You and eligible nearby allies add your Charisma modifier to saving throws, subject to the aura range.',activation:'Passive aura'},
+ 'Aura of Courage':{description:'You and eligible nearby allies are protected from the Frightened condition while in your aura.',activation:'Passive aura'},
+ 'Metamagic':{description:'Spend Sorcery Points to modify a spell using the Metamagic options you have selected.',activation:'When casting'},
+ 'Innate Sorcery':{description:'Activate a temporary sorcerous state to improve spell save DC and gain Advantage on spell attack rolls, within its use limits.',activation:'Bonus Action'},
+ 'Sorcerous Restoration':{description:'Recover Sorcery Points under the feature’s limited recovery rules.',activation:'Rest / resource'},
+ 'Eldritch Invocations':{description:'Gain the invocations you selected; each invocation has its own prerequisites and effects.',activation:'Varies by invocation'},
+ 'Magical Cunning':{description:'Perform a short magical ritual to regain some expended Pact Magic slots, subject to its use limit.',activation:'Ritual'},
+ 'Mystic Arcanum':{description:'Cast the chosen higher-level Warlock spell without spending a Pact Magic slot, subject to its recovery limit.',activation:'Magic Action'},
+ 'Arcane Tradition':{description:'Your chosen Wizard subclass grants features beginning at its unlock level.',activation:'Passive'},
+ 'Spell Mastery':{description:'Choose eligible low-rank Wizard spells for repeatable casting under this feature’s restrictions.',activation:'Spellcasting'},
+ 'Signature Spells':{description:'Choose eligible third-rank Wizard spells that are always prepared and can be cast for free under the feature’s limits.',activation:'Spellcasting'},
+};
+const ADDITIONAL_SPECIES_TRAITS:Record<string,{description:string;action:string}>={
+ 'Celestial Revelation':{description:'Manifest the celestial transformation selected for your Aasimar when this trait becomes available; its effects and duration depend on that choice.',action:'Bonus Action'},
+ 'Draconic Flight':{description:'Manifest spectral wings to gain a Fly Speed for the duration of this species feature, subject to its use limits.',action:'Bonus Action'},
+ 'Giant Ancestry':{description:'Gain the supernatural benefit of your chosen giant ancestry; its action and use limit depend on the selected ancestry.',action:'Varies by ancestry'},
+ 'Large Form':{description:'Temporarily grow to Large size and increase your reach, subject to the trait’s space and use restrictions.',action:'Bonus Action'},
+ 'Powerful Build':{description:'Gain Advantage on saving throws to end Grappled and increased carrying capacity.',action:'Passive'},
+ 'Brave':{description:'You have Advantage on saving throws to avoid or end the Frightened condition.',action:'Passive'},
+ 'Halfling Nimbleness':{description:'Move through the space of a creature that is a size larger than you; you cannot stop there.',action:'Movement'},
+ 'Luck':{description:'When you roll a 1 on a d20 Test, reroll the die and use the new roll.',action:'On d20 Test'},
+ 'Naturally Stealthy':{description:'You can take the Hide action while obscured only by a creature at least one size larger than you.',action:'Hide action'},
+ 'Resourceful':{description:'Gain Heroic Inspiration when you finish a Long Rest.',action:'Long Rest'},
+ 'Skillful':{description:'Gain proficiency in one skill of your choice.',action:'Passive'},
+ 'Versatile':{description:'Gain an Origin feat of your choice in addition to your background feat.',action:'Passive'},
+ 'Adrenaline Rush':{description:'Take Dash as a Bonus Action and gain temporary Hit Points when doing so; uses recover under the species trait.',action:'Bonus Action'},
+ 'Relentless Endurance':{description:'When reduced to 0 Hit Points but not killed outright, drop to 1 Hit Point instead, once per Long Rest.',action:'On damage'},
+ 'Fiendish Legacy':{description:'Your chosen fiendish legacy determines a resistance, cantrip, and additional spells unlocked at higher levels.',action:'Passive'},
+ 'Otherworldly Presence':{description:'Know the Thaumaturgy cantrip.',action:'Magic Action'},
+ 'Necrotic resistance':{description:'You have Resistance to Necrotic damage.',action:'Passive'},
+ 'Poison Spray':{description:'Know the Poison Spray cantrip from your fiendish legacy.',action:'Magic Action'},
+ 'Chill Touch':{description:'Know the Chill Touch cantrip from your fiendish legacy.',action:'Magic Action'},
+ 'Fire Bolt':{description:'Know the Fire Bolt cantrip from your fiendish legacy.',action:'Magic Action'},
+ 'Ray of Sickness':{description:'You can cast Ray of Sickness through your fiendish legacy when unlocked, subject to its casting limits.',action:'Magic Action'},
+ 'Hold Person':{description:'You can cast Hold Person through your fiendish legacy when unlocked, subject to its casting limits.',action:'Magic Action'},
+ 'False Life':{description:'You can cast False Life through your fiendish legacy when unlocked, subject to its casting limits.',action:'Magic Action'},
+ 'Ray of Enfeeblement':{description:'You can cast Ray of Enfeeblement through your fiendish legacy when unlocked, subject to its casting limits.',action:'Magic Action'},
+ 'Hellish Rebuke':{description:'You can cast Hellish Rebuke through your fiendish legacy when unlocked, subject to its casting limits.',action:'Reaction'},
+};
 const FEATURE_ACTIONS:Record<string,string>={'Sneak Attack':'On hit','Cunning Action':'Bonus Action','Cunning Strike':'On hit','Uncanny Dodge':'Reaction','Second Wind':'Bonus Action','Action Surge':'On your turn','Rage':'Bonus Action','Reckless Attack':'On attack','Arcane Recovery':'Short Rest','Lay on Hands':'Bonus Action','Bardic Inspiration':'Bonus Action','Wild Shape':'Bonus Action','Channel Divinity':'Varies by option'};
 const earnedTraitName=(name:string)=>name.replace(/\s*\(level \d+\)/i,'');
 export function ImportedCharacterSheet({campaign,saving,onChange,development=false}:{campaign:Campaign;saving:boolean;onChange:(next:Campaign,message:string)=>Promise<boolean>|boolean|void;development?:boolean}){
@@ -177,9 +235,9 @@ export function ImportedCharacterSheet({campaign,saving,onChange,development=fal
  </section>
  <section id="player-equipment" className="scroll-mt-36" aria-label="Equipment and inventory"><h3 className="font-semibold">Equipment and inventory</h3><p>{formatFrontierPrice(walletCopper(campaign.inventoryLedger?.currency))}</p>{campaign.inventoryLedger?.gear.map(i=><p key={i.name}>{i.name} ×{i.quantity}</p>)}</section>
  <section id="player-features" className="scroll-mt-36 space-y-3 rounded-xl border border-white/20 p-3" aria-label="Class features"><h3 className="font-semibold">Earned features & traits</h3>
- <div aria-label="Earned class features"><h4 className="font-medium">{cls?.name} class features</h4>{cls?.features.filter(f=>f.level<=(c.level??1)).map(group=><div key={group.level} className="mt-2 rounded-lg border border-white/10 p-2 text-sm"><p className="text-xs text-gold">Level {group.level}</p>{[...new Set(group.names)].map(name=><div key={name}><strong>{name}</strong>{FEATURE_ACTIONS[name]&&<span className="ml-2 text-xs text-gold">{FEATURE_ACTIONS[name]}</span>}{FEATURE_SUMMARIES[name]?<p className="text-xs opacity-70">{FEATURE_SUMMARIES[name]}</p>:<p className="text-xs opacity-60">Detailed rules text is not yet verified in the current catalog.</p>}</div>)}</div>)}</div>
+ <div aria-label="Earned class features"><h4 className="font-medium">{cls?.name} class features</h4>{cls?.features.filter(f=>f.level<=(c.level??1)).map(group=><div key={group.level} className="mt-2 rounded-lg border border-white/10 p-2 text-sm"><p className="text-xs text-gold">Level {group.level}</p>{[...new Set(group.names)].map(name=><div key={name}><strong>{name}</strong>{(FEATURE_ACTIONS[name]??ADDITIONAL_CLASS_FEATURES[name]?.activation)&&<span className="ml-2 text-xs text-gold">{FEATURE_ACTIONS[name]??ADDITIONAL_CLASS_FEATURES[name]?.activation}</span>}{(FEATURE_SUMMARIES[name]??ADDITIONAL_CLASS_FEATURES[name]?.description)?<p className="text-xs opacity-70">{FEATURE_SUMMARIES[name]??ADDITIONAL_CLASS_FEATURES[name]?.description}</p>:<p className="text-xs opacity-60">Detailed rules text is not yet verified in the current catalog.</p>}</div>)}</div>)}</div>
  {subclass&&<div aria-label="Earned subclass" className="space-y-2"><h4 className="font-medium">{subclass.name} subclass</h4><p className="text-xs opacity-70">Unlocked at level {subclass.unlockLevel}</p>{(VERIFIED_SUBCLASS_FEATURES[subclass.id]??[]).filter(feature=>feature.level<=(c.level??1)).map(feature=><div key={feature.name} className="rounded-lg border border-white/10 p-2 text-sm"><div className="flex flex-wrap items-baseline gap-x-2"><strong>{feature.name}</strong><span className="text-xs text-gold">Level {feature.level} · {feature.activation}</span></div><p className="text-xs opacity-80">{feature.description}</p></div>)}{!VERIFIED_SUBCLASS_FEATURES[subclass.id]&&<p className="text-sm opacity-70">{subclass.description} Detailed level-specific features are not yet verified in the catalog; no future benefits are granted.</p>}</div>}
- <div aria-label="Species traits"><h4 className="font-medium">{species?.name??identity.speciesId} traits</h4><p className="text-xs opacity-70">{species?.summary}</p>{[...new Set([...(species?.traits??[]),...(lineage?.traits??[])])].filter(name=>{const match=name.match(/\(level (\d+)\)/i);return !match||Number(match[1])<=(c.level??1)}).map(name=>{const detail=TRAIT_DETAILS[earnedTraitName(name)];return <div key={name} className="mt-2 rounded-lg border border-white/10 p-2 text-sm"><strong>{name}</strong>{detail?.action&&<span className="ml-2 text-xs text-gold">{detail.action}</span>}{detail?<p className="text-xs opacity-80">{detail.description}</p>:<p className="text-xs opacity-60">Trait recorded; detailed rules text is not yet verified in the current catalog.</p>}</div>})}</div>
+ <div aria-label="Species traits"><h4 className="font-medium">{species?.name??identity.speciesId} traits</h4><p className="text-xs opacity-70">{species?.summary}</p>{[...new Set([...(species?.traits??[]),...(lineage?.traits??[])])].filter(name=>{const match=name.match(/\(level (\d+)\)/i);return !match||Number(match[1])<=(c.level??1)}).map(name=>{const detail=TRAIT_DETAILS[earnedTraitName(name)]??ADDITIONAL_SPECIES_TRAITS[earnedTraitName(name)];return <div key={name} className="mt-2 rounded-lg border border-white/10 p-2 text-sm"><strong>{name}</strong>{detail?.action&&<span className="ml-2 text-xs text-gold">{detail.action}</span>}{detail?<p className="text-xs opacity-80">{detail.description}</p>:<p className="text-xs opacity-60">Trait recorded; detailed rules text is not yet verified in the current catalog.</p>}</div>})}</div>
  <div aria-label="Earned feats"><h4 className="font-medium">Earned feats</h4>{earnedFeats.length?[...new Map(earnedFeats.map(feat=>[feat.name.toLowerCase(),feat])).values()].map((feat,index)=><div key={feat.name+index} className="mt-2 rounded-lg border border-white/10 p-2 text-sm"><strong>{feat.name}</strong><span className="ml-2 text-xs opacity-70">{feat.source}</span><p>{ORIGIN_FEAT_DETAILS[feat.name]??futureFeat(feat.name)?.description??'Description unavailable in the current rules catalog.'}</p></div>):<p className="text-sm opacity-70">No recorded feats.</p>}</div>
  </section>
  <section id="player-spells" className="scroll-mt-36 space-y-3 rounded-xl border border-white/20 p-3" aria-label="Player spellcasting"><h3 className="font-semibold">Spellcasting</h3>
