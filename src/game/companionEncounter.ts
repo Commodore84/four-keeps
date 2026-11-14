@@ -351,6 +351,11 @@ export function setCompanionTactics(campaign:Campaign,actorId:string,faction:str
 const INCAPACITATING:CompanionCondition[]=['Incapacitated','Paralyzed','Stunned','Unconscious'];
 const IMMOBILE:CompanionCondition[]=['Grappled','Restrained','Paralyzed','Petrified','Stunned','Unconscious'];
 function cannotAct(actor:CompanionEncounter['participants'][string]):boolean{return actor.conditions.some(c=>INCAPACITATING.includes(c))}
+function requireDazeChoice(actor:CompanionEncounter['participants'][string],choice:'movement'|'action'):void{
+ if(actor.rogueDazeTurns===undefined)return;
+ if(choice==='movement'?(actor.rogueDazeChoice==='action'||actor.actionUsed||actor.bonusActionUsed):(actor.rogueDazeChoice==='movement'||actor.movementSpentFeet>0||actor.actionUsed||actor.bonusActionUsed))throw Error('Dazed: choose movement or one action or bonus action');
+}
+
 /** Deterministic condition effects supported without inventing rolls or monster features. */
 /** Explicit saving throw outcome; the caller provides roll totals and any modifiers.
  * Restrained imposes disadvantage on Dexterity saves; incapacitating conditions
@@ -401,7 +406,7 @@ export function moveCompanion(campaign:Campaign,actorId:string,x:number,y:number
  const movementCost=traversedSteps*5*(actor.conditions.includes('Prone')?2:1);
  if(movementCost>actor.speedFeet+actor.dashFeet-actor.movementSpentFeet)throw Error('Move exceeds remaining movement');
  if(Object.entries(battle.participants).some(([id,p])=>id!==actorId&&p.hp>0&&p.x===destination.x&&p.y===destination.y))throw Error('Square occupied');
- return save(campaign,revealRogueOnVisibilityChange({...battle,participants:{...battle.participants,[actorId]:{...actor,x:destination.x,y:destination.y,movementSpentFeet:actor.movementSpentFeet+movementCost,...(actor.rogueDazeTurns!==undefined?{rogueDazeChoice:'movement' as const}:{}),rogueMovedThisTurn:actor.rogueMovedThisTurn||movementCost>0,rogueHidden:actorId==='nighthawk'&&movementCost>0&&Object.values(battle.participants).some(enemy=>enemy.actorKind==='enemy'&&enemy.hp>0&&companionLineOfSight(battle,enemy,destination))?false:actor.rogueHidden}},pendingOpportunity:candidates.length?{moverId:actorId,attackerIds:candidates,from:interrupt?{x:firstTrigger.from.x,y:firstTrigger.from.y}:{x:actor.x,y:actor.y},to:interrupt?{x:firstTrigger.to.x,y:firstTrigger.to.y}:{x,y},...(interrupt?{destination:{x,y}}:{})}:undefined,log:[...battle.log,actorId+' moved to '+destination.x+','+destination.y+(interrupt?' · interrupted before leaving reach toward '+firstTrigger.to.x+','+firstTrigger.to.y:candidates.length?' · potential opportunity attackers: '+candidates.join(', '):'')]}));
+ return save(campaign,revealRogueOnVisibilityChange({...battle,participants:{...battle.participants,[actorId]:{...actor,x:destination.x,y:destination.y,movementSpentFeet:actor.movementSpentFeet+movementCost,...(actor.rogueDazeTurns!==undefined&&movementCost>0?{rogueDazeChoice:'movement' as const}:{}),rogueMovedThisTurn:actor.rogueMovedThisTurn||movementCost>0,rogueHidden:actorId==='nighthawk'&&movementCost>0&&Object.values(battle.participants).some(enemy=>enemy.actorKind==='enemy'&&enemy.hp>0&&companionLineOfSight(battle,enemy,destination))?false:actor.rogueHidden}},pendingOpportunity:candidates.length?{moverId:actorId,attackerIds:candidates,from:interrupt?{x:firstTrigger.from.x,y:firstTrigger.from.y}:{x:actor.x,y:actor.y},to:interrupt?{x:firstTrigger.to.x,y:firstTrigger.to.y}:{x,y},...(interrupt?{destination:{x,y}}:{})}:undefined,log:[...battle.log,actorId+' moved to '+destination.x+','+destination.y+(interrupt?' · interrupted before leaving reach toward '+firstTrigger.to.x+','+firstTrigger.to.y:candidates.length?' · potential opportunity attackers: '+candidates.join(', '):'')]}));
 }
 /** Knock Out ends on a verified Constitution save, damage, or after ten target turns. */
 export function resolveRogueKnockoutSave(campaign:Campaign,targetId:string,saveTotal:number):Campaign{
@@ -539,6 +544,8 @@ export function applyCompanionCondition(campaign:Campaign,targetId:string,condit
  return save(campaign,{...battle,participants:{...battle.participants,[targetId]:{...actor,conditions,concentratingOn:condition==='Incapacitated'||condition==='Unconscious'||condition==='Stunned'||condition==='Paralyzed'?undefined:actor.concentratingOn}},log:[...battle.log,targetId+' gained '+condition+' (DM adjudicated)']});
 }
 export function removeCompanionCondition(campaign:Campaign,targetId:string,condition:CompanionCondition):Campaign{
+ const tracked=encounter(campaign).participants[targetId];
+ if(tracked&&((condition==='Unconscious'&&tracked.rogueKnockoutDC!==undefined)||(condition==='Blinded'&&tracked.rogueObscureUntilTurn!==undefined)))throw Error('Resolve the tracked Rogue strike condition before removing it');
  const battle=encounter(campaign),actor=battle.participants[targetId];
  if(!actor)throw Error('Unknown condition target');
  return save(campaign,{...battle,participants:{...battle.participants,[targetId]:{...actor,conditions:actor.conditions.filter(c=>c!==condition)}},log:[...battle.log,targetId+' ended '+condition+' (DM adjudicated)']});
@@ -873,6 +880,7 @@ export function spendPlayerOriginSpell(campaign:Campaign):Campaign{
  const origin=campaign.characterBuild?.selections.originMagic,spell=origin?.spell?SPELL_BY_ID[origin.spell]:undefined;
  const pool=campaign.character?.resources?.['Magic Initiate'];
  if(battle.mode!=='unified'||!spell||!pool||pool.used>=pool.maximum||actor.hp<=0||actor.actionUsed||cannotAct(actor))throw Error('Origin spell cast unavailable');
+ requireDazeChoice(actor,'action');
  const spent=spendPlayerResource(campaign,'Magic Initiate');
  return save(spent,{...battle,participants:{...battle.participants,nighthawk:{...actor,actionUsed:true}},log:[...battle.log,'Player used Magic Initiate for '+spell.name+'; no class slot spent (effect DM adjudicated)']});
 }
@@ -995,6 +1003,7 @@ export function useImportedMageHandLegerdemain(campaign:Campaign,description:str
  const battle=activeActor(campaign,'nighthawk'),actor=battle.participants.nighthawk;
  if(battle.mode!=='unified'||campaign.importedSubclassId!=='rogue-arcane-trickster'||(campaign.character?.level??1)<3)throw Error('Arcane Trickster Mage Hand Legerdemain is not available');
  if(actor.actionUsed||actor.hp<=0||cannotAct(actor))throw Error('Action unavailable');
+ requireDazeChoice(actor,'action');
  if(!description.trim()||description.length>160)throw Error('Describe the intended Mage Hand interaction');
  return save(campaign,{...battle,participants:{...battle.participants,nighthawk:{...actor,actionUsed:true}},log:[...battle.log,'Mage Hand Legerdemain: '+description.trim()+' (DM adjudication required; no automatic object effects)']});
 }
@@ -1003,6 +1012,7 @@ export function useImportedWarlockInvocation(campaign:Campaign,invocation:'Armor
  const battle=activeActor(campaign,'nighthawk'),actor=battle.participants.nighthawk;
  if(battle.mode!=='unified'||campaign.characterIdentity?.classId!=='warlock'||!(campaign.importedWarlockInvocations??campaign.characterBuild?.selections.magic?.invocations??[]).includes(invocation))throw Error('Warlock invocation is not known');
  if(actor.hp<=0||actor.actionUsed||cannotAct(actor))throw Error('Invocation action unavailable');
+ requireDazeChoice(actor,'action');
  if(invocation==='Armor of Shadows'){
   if(campaign.encounterLoadout?.armorId||campaign.encounterLoadout?.shieldId)throw Error('Armor of Shadows requires no equipped armor or shield');
   const ac=13+abilityModifier(campaign.character!.scores.dex);
@@ -1028,6 +1038,7 @@ export function useImportedHealingLight(campaign:Campaign,targetId:string,dice:n
  const pool=ch?.resources?.['Healing Light'];
  if(battle.mode!=='unified'||campaign.characterIdentity?.classId!=='warlock'||campaign.importedSubclassId!=='warlock-celestial'||!pool||!ch)throw Error('Celestial Healing Light unavailable');
  if(!target||target.actorKind==='enemy'||actor.bonusActionUsed||actor.hp<=0||cannotAct(actor))throw Error('Healing Light target or bonus action unavailable');
+ requireDazeChoice(actor,'action');
  if(!dice.length||dice.length>Math.max(1,abilityModifier(ch.scores.cha))||pool.used+dice.length>pool.maximum||dice.some(n=>!Number.isInteger(n)||n<1||n>6))throw Error('Provide eligible Healing Light d6 rolls within the remaining pool');
  const range=Math.max(Math.abs(actor.x-target.x),Math.abs(actor.y-target.y))*5;
  if(range>60)throw Error('Healing Light range is 60 feet');
@@ -1048,6 +1059,7 @@ export function useImportedWizardPortentAttack(campaign:Campaign,index:number,ta
  const portents=campaign.importedWizardPortents??[];
  if(battle.mode!=='unified'||campaign.characterIdentity?.classId!=='wizard'||campaign.importedSubclassId!=='wizard-diviner'||!ch||!ch.cantrips?.includes('Fire Bolt')||!Number.isInteger(index)||index<0||index>=portents.length||!Number.isInteger(portents[index])||portents[index]<1||portents[index]>20)throw Error('No verified Portent die available');
  if(!target||target.actorKind!=='enemy'||actor.actionUsed||actor.hp<=0||cannotAct(actor)||!Number.isInteger(damageRoll)||damageRoll<1||damageRoll>10)throw Error('Portent attack unavailable');
+ requireDazeChoice(actor,'action');
  const roll=portents[index],bonus=ch.proficiencyBonus+abilityModifier(ch.scores.int);
  const result=attackCompanion(campaign,'nighthawk',targetId,roll,bonus,target.armorClass??10,damageRoll,0,'Fire',120);
  return {...result,importedWizardPortents:portents.filter((_,i)=>i!==index),companionEncounter:{...result.companionEncounter!,log:[...result.companionEncounter!.log,`Diviner Portent used stored d20 ${roll} for a spell attack (Fire Bolt 1d10 verified; no slot spent)`]}};
@@ -1058,6 +1070,7 @@ export type WizardSpellResolution={spell:'Magic Missile'|'Scorching Ray'|'Hold P
 export function resolveImportedWizardSpell(campaign:Campaign,choice:WizardSpellResolution):Campaign{
  const battle=activeActor(campaign,'nighthawk'),caster=battle.participants.nighthawk,target=battle.participants[choice.targetId],ch=campaign.character;
  if(battle.mode!=='unified'||campaign.characterIdentity?.classId!=='wizard'||!ch||!target||target.actorKind!=='enemy'||target.hp<=0||caster.actionUsed||caster.hp<=0||cannotAct(caster))throw Error('Wizard spell requires an eligible turn and enemy target');
+ requireDazeChoice(caster,'action');
  if(!['Magic Missile','Scorching Ray','Hold Person'].includes(choice.spell)||!ch.preparedSpells?.includes(choice.spell))throw Error('Unsupported or unprepared Wizard spell');
  if(![1,2].includes(choice.slotLevel)||choice.slotLevel<(choice.spell==='Magic Missile'?1:2))throw Error('Spell requires an eligible slot rank');
  const range=Math.max(Math.abs(caster.x-target.x),Math.abs(caster.y-target.y))*5;

@@ -122,3 +122,36 @@ describe('imported Rogue in unified combat',()=>{
    expect(both.companionEncounter!.participants.goblin.conditions).toContain('Prone');
   });
  });
+
+describe('Devious Strikes hardening regressions',()=>{
+ function eligible(){const c=arena(14);const b=c.companionEncounter!;return {...c,companionEncounter:{...b,participants:{...b.participants,goblin:{...b.participants.goblin,hp:100,maxHp:100},ally:{...b.participants.nighthawk,x:4,y:2,actorKind:'party' as const,faction:'party'}}}};}
+ it('critical combined Daze and Obscure costs ten of fourteen rolled dice',()=>{
+  const c=eligible();const dice=Array.from({length:14},(_,i)=>i%6+1);
+  const hit=attackImportedRogue(c,'goblin',20,1,5,dice,undefined,[{effect:'Daze',saveTotal:1},{effect:'Obscure',saveTotal:1}]);
+  expect(hit.companionEncounter!.log.join(' ')).toContain('= 14 extra piercing damage');
+  expect(hit.companionEncounter!.participants.goblin.conditions).toContain('Blinded');
+  expect(hit.companionEncounter!.participants.goblin.rogueDazeTurns).toBe(1);
+  expect(()=>attackImportedRogue(c,'goblin',20,1,5,dice.slice(0,7),undefined,[{effect:'Daze',saveTotal:1},{effect:'Obscure',saveTotal:1}])).toThrow('14 verified');
+ });
+ it('condition immunity prevents Knock Out, tracked Unconscious ends on damage, and repeat save survives reload',()=>{
+  const c=eligible();const b=c.companionEncounter!;
+  const immune={...c,companionEncounter:{...b,participants:{...b.participants,goblin:{...b.participants.goblin,conditionImmunities:['Unconscious']}}}};
+  const blocked=attackImportedRogue(immune,'goblin',19,1,5,[1,1,1,1,1,1,1],undefined,{effect:'Knock Out',saveTotal:1});
+  expect(blocked.companionEncounter!.participants.goblin.conditions).not.toContain('Unconscious');
+  const hit=attackImportedRogue(c,'goblin',19,1,5,[1,1,1,1,1,1,1],undefined,{effect:'Knock Out',saveTotal:1});
+  const restored=JSON.parse(JSON.stringify(hit)) as Campaign;
+  const onTurn={...restored,companionEncounter:{...restored.companionEncounter!,order:['goblin','nighthawk'],turnIndex:0}};
+  expect(()=>endCompanionTurn(onTurn,'goblin')).toThrow('Knock Out');
+  const saved=resolveRogueKnockoutSave(onTurn,'goblin',1);
+  expect(saved.companionEncounter!.participants.goblin.rogueKnockoutRounds).toBe(9);
+  expect(damageCompanion(saved,'goblin',2,'Fire').companionEncounter!.participants.goblin.rogueKnockoutDC).toBeUndefined();
+ });
+ it('Daze forbids both bonus action after movement and movement after action',()=>{
+  const c=eligible();const hit=attackImportedRogue(c,'goblin',19,1,5,[1,1,1,1,1,1,1],undefined,{effect:'Daze',saveTotal:1});
+  const b=hit.companionEncounter!;const turn={...hit,companionEncounter:{...b,order:['goblin','nighthawk'],turnIndex:0}};
+  const moved=moveCompanion(turn,'goblin',3,3);
+  expect(()=>useCompanionAction(moved,'goblin','Dodge')).toThrow('Dazed');
+  const acted=useCompanionAction(turn,'goblin','Dodge');
+  expect(()=>moveCompanion(acted,'goblin',3,3)).toThrow('Dazed');
+ });
+});

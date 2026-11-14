@@ -89,4 +89,13 @@ test('Rogue Devious Strike Daze resolves verified hit and persists damage and ac
  await page.getByRole('button',{name:'Open navigation menu'}).click();await page.getByRole('navigation',{name:'Primary navigation'}).getByRole('button',{name:'Developer'}).click();
  await expect(page.getByLabel('Imported player development')).toContainText('enemy: 74/100 HP');
  await expect(page.getByLabel('Imported player development')).toContainText('action used');
+ const restored=page.getByLabel('Imported player development');
+ await restored.getByRole('button',{name:'End companion turn'}).click();
+ await expect(restored).toContainText('Active turn: enemy');
+ await restored.getByLabel('Move X').fill('3');await restored.getByLabel('Move Y').fill('2');
+ await restored.getByRole('button',{name:'Move active actor'}).click();
+ await expect(restored).toContainText('enemy: 74/100 HP · (3,2)');
+ await page.reload();await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await page.getByRole('button',{name:'Open navigation menu'}).click();await page.getByRole('navigation',{name:'Primary navigation'}).getByRole('button',{name:'Developer'}).click();
+ await expect(page.getByLabel('Imported player development')).toContainText('enemy: 74/100 HP · (3,2)');
 });
