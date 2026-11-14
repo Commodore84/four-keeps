@@ -191,3 +191,26 @@ describe('Knock Out and Daze lifecycle regression',()=>{
   expect(()=>attackImportedRogue({...c,character:{...c.character!,level:11}},'goblin',20,1,5,Array(12).fill(2),undefined,[{effect:'Knock Out',saveTotal:1},{effect:'Trip',saveTotal:1}])).toThrow('level 14');
  });
 });
+
+describe('Rogue combat reaction and damage interruption edge cases',()=>{
+ it('Knock Out damage interruption preserves unrelated Poisoned and drops only tracked Unconscious',()=>{
+  const c=arena(14),b=c.companionEncounter!;
+  const target={...b.participants.goblin,hp:35,maxHp:40,conditions:['Unconscious','Poisoned'] as typeof b.participants.goblin.conditions,rogueKnockoutDC:16,rogueKnockoutRounds:8,roguePoisonDC:16,roguePoisonRounds:9};
+  const seeded={...c,companionEncounter:{...b,participants:{...b.participants,goblin:target}}};
+  const hurt=damageCompanion(seeded,'goblin',3,'Fire');
+  expect(hurt.companionEncounter!.participants.goblin.hp).toBe(32);
+  expect(hurt.companionEncounter!.participants.goblin.rogueKnockoutDC).toBeUndefined();
+  expect(hurt.companionEncounter!.participants.goblin.conditions).toEqual(['Poisoned']);
+  expect(hurt.companionEncounter!.participants.goblin.roguePoisonDC).toBe(16);
+  expect(JSON.parse(JSON.stringify(hurt)).companionEncounter.participants.goblin.rogueKnockoutDC).toBeUndefined();
+ });
+ it('Knock Out at zero HP clears tracked DC without removing death-save Unconscious',()=>{
+  const c=arena(14),b=c.companionEncounter!;
+  const target={...b.participants.nighthawk,hp:2,conditions:['Unconscious'] as typeof b.participants.nighthawk.conditions,rogueKnockoutDC:15,rogueKnockoutRounds:9};
+  const seeded={...c,companionEncounter:{...b,participants:{...b.participants,nighthawk:target}}};
+  const hurt=damageCompanion(seeded,'nighthawk',5,'Fire');
+  expect(hurt.companionEncounter!.participants.nighthawk.hp).toBe(0);
+  expect(hurt.companionEncounter!.participants.nighthawk.rogueKnockoutDC).toBeUndefined();
+  expect(hurt.companionEncounter!.participants.nighthawk.conditions).toContain('Unconscious');
+ });
+});

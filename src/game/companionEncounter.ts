@@ -532,6 +532,7 @@ export function recordCompanionReaction(campaign:Campaign,actorId:string,descrip
  const battle=encounter(campaign),actor=battle.participants[actorId];
  if(!actor||actor.hp<=0)throw Error('Invalid reaction actor');
  if(actor.reactionUsed)throw Error('Reaction already used');
+ if(cannotAct(actor))throw Error('Incapacitated actor cannot react');
  if(!description.trim()||description.length>160)throw Error('Reaction requires a short DM description');
  return save(campaign,{...battle,participants:{...battle.participants,[actorId]:{...actor,reactionUsed:true}},log:[...battle.log,actorId+' reaction: '+description.trim()+' (DM adjudicated)']});
 }

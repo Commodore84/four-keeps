@@ -187,7 +187,6 @@ test('newly created fighter completes organic AI encounter, saves rewards and re
  const original=await saved(page);
  expect(original.characterIdentity.name).toBe('fighter Hero');
  await page.evaluate(()=>{localStorage.setItem('four-keeps-access-code','browser-test-code');localStorage.setItem('four-keeps-dm-mode','on');});
- await page.reload();await page.getByRole('button',{name:'Continue Adventure'}).click();
  const calls:any[]=[];let firstFightClarified=false;
  await page.route('**/api/dm',async route=>{
   const request=route.request().postDataJSON();calls.push(request);
@@ -206,6 +205,7 @@ test('newly created fighter completes organic AI encounter, saves rewards and re
    worldUpdates:combat?{clues:[{text:'A robber attacked the bridge',evidence:'confirmed',source:'Fighter'}]}:{quests:[{title:'Secure the bridge',status:'completed',objective:'Defeat the robber',notes:['The bridge is safe']}]}
   })});
  });
+ await page.reload();await page.getByRole('button',{name:'Continue Adventure'}).click();
  await expect.poll(async()=> (await saved(page))?.journal?.some((entry:any)=>entry.id?.endsWith('-dm-opening'))).toBe(true);
  await expect(page.getByLabel('Adventure',{exact:true})).toContainText('The old bridge');
  await page.getByLabel('Message the Dungeon Master').fill('I approach the bridge cautiously.');
