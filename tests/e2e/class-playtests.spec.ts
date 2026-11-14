@@ -591,6 +591,9 @@ test('new Rogue starts at Frontier Village, buys supplies, and sees persisted Pl
  await expect(sheet.getByLabel('Combat and vital statistics')).toContainText('Initiative');
  await expect(sheet.getByLabel('Equipment training and proficiencies')).toContainText('Tool proficiencies:');
  await expect(sheet.getByLabel('Owned weapon attacks')).toContainText('Shortbow');
+ await expect(sheet.getByLabel('Class features',{exact:true})).toContainText('Only earned features are listed');
+ await expect(sheet.getByLabel('Player class resources')).toContainText('Saved resource totals');
+ await expect(sheet.getByLabel('Player spellcasting')).toContainText('Saved spell and slot values are authoritative');
  await expect(sheet.getByLabel('Equipment and inventory')).toBeVisible();
  await navigate(page,'Adventure');
  await page.evaluate(()=>{localStorage.setItem('four-keeps-access-code','browser-test-code');localStorage.setItem('four-keeps-dm-mode','on');});
