@@ -515,6 +515,14 @@ test('new Rogue starts at Frontier Village, buys supplies, and sees persisted Pl
  await expect(abilities.getByLabel('WIS ability group')).toContainText('Perception');
  await expect(abilities.getByLabel('STR ability group')).not.toContainText('Stealth');
  await expect(sheet.getByLabel('Combat and vital statistics')).toContainText('Proficiency bonus');
+ await expect(sheet.getByLabel('Hit points and Hit Dice')).toContainText('Temporary HP');
+ await expect(sheet.getByLabel('Hit points and Hit Dice')).toContainText('Hit Dice remaining');
+ await expect(sheet.getByLabel('Death saving throws')).toContainText('Successes:');
+ await expect(sheet.getByLabel('Attacks and damage cantrips')).toContainText('Selected weapon masteries');
+ await expect(sheet.getByLabel('Equipment training and proficiencies')).toContainText('Weapon proficiencies');
+ await sheet.getByLabel('Jump to character section').selectOption('vitality');
+ await expect(sheet.getByLabel('Hit points and Hit Dice')).toBeInViewport();
+
 
  await expect(sheet.getByLabel('Character details')).toContainText('Background: criminal');
  await expect(sheet.getByLabel('Combat and vital statistics')).toContainText('Passive Perception');
