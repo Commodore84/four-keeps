@@ -483,6 +483,25 @@ test('imported Arcane Trickster advances through levels nine and ten with persis
  await expect(page.getByLabel('Imported player character')).toContainText('Level 10');
 });
 
+test('imported character summary and section navigation survive reload',async({page})=>{
+ await createAndImport(page,'fighter');
+ await navigate(page,'Player');
+ const sheet=page.getByLabel('Imported player character');
+ const summary=sheet.getByLabel('Persistent character summary');
+ await expect(summary).toBeVisible();
+ const campaign=await saved(page);
+ await expect(summary).toContainText(campaign.characterIdentity.name);
+ await expect(summary).toContainText('Level 1');
+ await expect(summary).toContainText('HP');
+ await expect(summary).toContainText('AC');
+ await sheet.getByLabel('Jump to character section').selectOption('skills');
+ await expect(sheet.getByLabel('Player skills')).toBeInViewport();
+ await sheet.getByLabel('Jump to character section').selectOption('equipment');
+ await expect(sheet.getByLabel('Equipment and inventory')).toBeInViewport();
+ await page.reload();await page.getByRole('button',{name:'Continue Adventure'}).click();await navigate(page,'Player');
+ await expect(page.getByLabel('Persistent character summary')).toContainText(campaign.characterIdentity.name);
+ await expect(page.getByLabel('Imported player character')).toContainText('Level 1');
+});
 test('new Rogue starts at Frontier Village, buys supplies, and sees persisted Player sheet',async({page})=>{
  test.setTimeout(90000);
  await createAndImport(page,'rogue');
