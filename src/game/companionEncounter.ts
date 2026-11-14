@@ -19,7 +19,7 @@ export interface CompanionEncounter {
  round:number;
  turnIndex:number;
  order:string[];
- participants:Record<string,{x:number;y:number;hp:number;maxHp:number;initiative:number;conditions:('Charmed'|'Poisoned'|'Blinded'|'Deafened'|'Frightened'|'Grappled'|'Incapacitated'|'Invisible'|'Paralyzed'|'Petrified'|'Prone'|'Restrained'|'Stunned'|'Unconscious'|'Exhaustion')[];speedFeet:number;movementSpentFeet:number;actionUsed:boolean;bonusActionUsed:boolean;dashFeet:number;disengaged:boolean;dodging:boolean;reactionUsed?:boolean;rogueSneakUsed?:boolean;rogueSteadyAim?:boolean;rogueHidden?:boolean;rogueHideDC?:number;rogueHideConcealment?:boolean;rogueDetectedBy?:string[];rogueMovedThisTurn?:boolean;concentratingOn?:string;consumables?:Record<string,number>;faction?:string;reachFeet?:number;actorKind?:'party'|'enemy';armorClass?:number;attackModifier?:number;constitutionSaveModifier?:number;damageModifier?:number;damageDice?:string;enemyTactic?:'hold'|'nearest'|'lowest-hp';rangedAttackFeet?:number;deathSaves?:{successes:number;failures:number;stable:boolean;dead:boolean}}>;
+ participants:Record<string,{x:number;y:number;hp:number;maxHp:number;initiative:number;conditions:('Charmed'|'Poisoned'|'Blinded'|'Deafened'|'Frightened'|'Grappled'|'Incapacitated'|'Invisible'|'Paralyzed'|'Petrified'|'Prone'|'Restrained'|'Stunned'|'Unconscious'|'Exhaustion')[];speedFeet:number;movementSpentFeet:number;actionUsed:boolean;bonusActionUsed:boolean;dashFeet:number;disengaged:boolean;dodging:boolean;reactionUsed?:boolean;rogueSneakUsed?:boolean;roguePoisonDC?:number;roguePoisonRounds?:number;rogueSteadyAim?:boolean;rogueHidden?:boolean;rogueHideDC?:number;rogueHideConcealment?:boolean;rogueDetectedBy?:string[];rogueMovedThisTurn?:boolean;concentratingOn?:string;consumables?:Record<string,number>;faction?:string;reachFeet?:number;actorKind?:'party'|'enemy';armorClass?:number;attackModifier?:number;constitutionSaveModifier?:number;damageModifier?:number;damageDice?:string;enemyTactic?:'hold'|'nearest'|'lowest-hp';rangedAttackFeet?:number;deathSaves?:{successes:number;failures:number;stable:boolean;dead:boolean}}>;
  wizardHoldPersonTargets?:string[];
  rogueHoldPersonTargets?:string[];
  obstacles?:{x:number;y:number}[];
@@ -402,10 +402,19 @@ export function moveCompanion(campaign:Campaign,actorId:string,x:number,y:number
  if(Object.entries(battle.participants).some(([id,p])=>id!==actorId&&p.hp>0&&p.x===destination.x&&p.y===destination.y))throw Error('Square occupied');
  return save(campaign,revealRogueOnVisibilityChange({...battle,participants:{...battle.participants,[actorId]:{...actor,x:destination.x,y:destination.y,movementSpentFeet:actor.movementSpentFeet+movementCost,rogueMovedThisTurn:actor.rogueMovedThisTurn||movementCost>0,rogueHidden:actorId==='nighthawk'&&movementCost>0&&Object.values(battle.participants).some(enemy=>enemy.actorKind==='enemy'&&enemy.hp>0&&companionLineOfSight(battle,enemy,destination))?false:actor.rogueHidden}},pendingOpportunity:candidates.length?{moverId:actorId,attackerIds:candidates,from:interrupt?{x:firstTrigger.from.x,y:firstTrigger.from.y}:{x:actor.x,y:actor.y},to:interrupt?{x:firstTrigger.to.x,y:firstTrigger.to.y}:{x,y},...(interrupt?{destination:{x,y}}:{})}:undefined,log:[...battle.log,actorId+' moved to '+destination.x+','+destination.y+(interrupt?' · interrupted before leaving reach toward '+firstTrigger.to.x+','+firstTrigger.to.y:candidates.length?' · potential opportunity attackers: '+candidates.join(', '):'')]}));
 }
+/** Verified end-of-turn Constitution save for Cunning Strike Poison. No automatic or guessed rolls. */
+export function resolveRoguePoisonSave(campaign:Campaign,targetId:string,saveTotal:number):Campaign{
+ const battle=encounter(campaign),target=battle.participants[targetId];
+ if(!target||battle.order[battle.turnIndex]!==targetId||target.roguePoisonDC===undefined||!Number.isInteger(saveTotal)||saveTotal<0||saveTotal>100)throw Error('Verified end-of-turn Rogue Poison save required');
+ const recovered=saveTotal>=target.roguePoisonDC||target.roguePoisonRounds===1;
+ const updated={...target,roguePoisonDC:recovered?undefined:target.roguePoisonDC,roguePoisonRounds:recovered?undefined:(target.roguePoisonRounds??10)-1,conditions:recovered?target.conditions.filter(condition=>condition!=='Poisoned'):target.conditions};
+ return save(campaign,{...battle,participants:{...battle.participants,[targetId]:updated},log:[...battle.log,`Rogue Poison end-of-turn Constitution save ${saveTotal} vs DC ${target.roguePoisonDC}: ${recovered?'condition ended':'condition persists'}`]});
+}
 export function endCompanionTurn(campaign:Campaign,actorId:string):Campaign{
  const battle=activeActor(campaign,actorId);
  if(battle.mode==='unified'&&(battle.wizardHoldPersonTargets?.includes(actorId)||battle.rogueHoldPersonTargets?.includes(actorId))&&battle.participants[actorId]?.conditions.includes('Paralyzed'))throw Error('Resolve Hold Person end-of-turn Wisdom save before ending turn');
  if(battle.participants[actorId]?.actorKind==='enemy'&&battle.pendingOpportunity?.moverId===actorId&&battle.pendingOpportunity.attackerIds.length)throw Error('Pending opportunity reactions require DM adjudication');
+ if(battle.participants[actorId]?.roguePoisonDC!==undefined)throw Error('Resolve Rogue Poison end-of-turn Constitution save before ending turn');
  const next=(battle.turnIndex+1)%battle.order.length;
  const nextId=battle.order[next];const outgoing=battle.participants[actorId];const participants={...battle.participants,[actorId]:{...outgoing,disengaged:false}};participants[nextId]={...participants[nextId],movementSpentFeet:0,actionUsed:false,bonusActionUsed:false,dashFeet:0,disengaged:false,dodging:false,reactionUsed:false,rogueSneakUsed:false,rogueSteadyAim:false,rogueMovedThisTurn:false};return save(campaign,{...battle,participants,turnIndex:next,round:battle.round+(next===0?1:0),log:[...battle.log,actorId+' ended turn']});
 }
@@ -894,7 +903,7 @@ export function resolveImportedRogueDetection(campaign:Campaign,observerId:strin
 }
 /** Rogue Sneak Attack is applied only after validating a hit and its eligibility.
  * The player supplies individual d6 results; no rolls are invented. */
-export function attackImportedRogue(campaign:Campaign,targetId:string,roll:number,weaponDamageDice:number,rangeFeet:number,sneakDice:number[],secondD20?:number,cunningStrike?:{effect:'Trip';saveTotal:number},elvenAccuracyReroll?:number):Campaign{
+export function attackImportedRogue(campaign:Campaign,targetId:string,roll:number,weaponDamageDice:number,rangeFeet:number,sneakDice:number[],secondD20?:number,cunningStrike?:{effect:'Trip'|'Poison'|'Withdraw';saveTotal?:number;withdrawTo?:{x:number;y:number}},elvenAccuracyReroll?:number):Campaign{
  const battle=activeActor(campaign,'nighthawk'),actor=battle.participants.nighthawk,target=battle.participants[targetId];
  const ch=campaign.character;
  if(battle.mode!=='unified'||campaign.characterIdentity?.classId!=='rogue'||!ch)throw Error('Requires imported Rogue in a unified encounter');
@@ -915,9 +924,10 @@ export function attackImportedRogue(campaign:Campaign,targetId:string,roll:numbe
  const diceCount=Math.ceil((ch.level??1)/2)*(critical?2:1);
  if(sneakDice.length!==diceCount||sneakDice.some(n=>!Number.isInteger(n)||n<1||n>6))throw Error('Provide '+diceCount+' verified Sneak Attack d6 rolls');
  if(cunningStrike){
-  if((ch.level??1)<5||cunningStrike.effect!=='Trip')throw Error('Cunning Strike Trip requires Rogue level 5');
-  if(!Number.isInteger(cunningStrike.saveTotal)||cunningStrike.saveTotal<0||cunningStrike.saveTotal>100)throw Error('Verified Dexterity saving throw required');
-  if(sneakDice.length<1)throw Error('Trip requires a Sneak Attack die to forgo');
+  if((ch.level??1)<5||!['Trip','Poison','Withdraw'].includes(cunningStrike.effect))throw Error('Cunning Strike requires Rogue level 5');
+  if(cunningStrike.effect!=='Withdraw'&&(!Number.isInteger(cunningStrike.saveTotal)||cunningStrike.saveTotal!<0||cunningStrike.saveTotal!>100))throw Error(cunningStrike.effect==='Trip'?'Verified Dexterity saving throw required':'Verified Constitution saving throw required');
+  if(cunningStrike.effect==='Withdraw'&&!cunningStrike.withdrawTo)throw Error('Withdraw requires a verified destination');
+  if(sneakDice.length<1)throw Error('Cunning Strike requires a Sneak Attack die to forgo');
  }
  if(advantage!==disadvantage&&secondD20===undefined)throw Error('Advantage or disadvantage requires second d20');
  if(!Number.isInteger(weaponDamageDice)||weaponDamageDice<1||weaponDamageDice>100)throw Error('Invalid weapon damage roll');
@@ -925,10 +935,24 @@ export function attackImportedRogue(campaign:Campaign,targetId:string,roll:numbe
  const result=attackCompanion(campaign,'nighthawk',targetId,roll,attackModifier,targetAC,weaponDamageDice+(hit?sneakDice.slice(cunningStrike?(critical?2:1):0).reduce((a,b)=>a+b,0):0),damageModifier,'Piercing',rangeFeet,secondD20,elvenAccuracyReroll);
  if(!hit)return result;
  const combat=result.companionEncounter!;
- const tripDC=8+ch.proficiencyBonus+abilityModifier(ch.scores.dex);
- const tripped=!!cunningStrike&&cunningStrike.saveTotal<tripDC;
+ const strikeDC=8+ch.proficiencyBonus+abilityModifier(ch.scores.dex);
+ const failedSave=!!cunningStrike&&cunningStrike.effect!=='Withdraw'&&cunningStrike.saveTotal!<strikeDC;
  const struck=combat.participants[targetId];
- return save(result,{...combat,participants:{...combat.participants,...(tripped?{[targetId]:{...struck,conditions:[...new Set([...struck.conditions,'Prone' as const])]}}:{}),nighthawk:{...combat.participants.nighthawk,rogueSneakUsed:true}},log:[...combat.log,...(cunningStrike?[`Rogue Cunning Strike Trip: one Sneak Attack d6 forgone; Dexterity save ${cunningStrike.saveTotal} vs DC ${tripDC}: ${tripped?'prone':'saved'}`]:[]),'Rogue Sneak Attack '+diceCount+'d6: '+sneakDice.join('+')+' = '+sneakDice.slice(cunningStrike?(critical?2:1):0).reduce((a,b)=>a+b,0)+' extra piercing damage']});
+ const condition=cunningStrike?.effect==='Trip'?'Prone':cunningStrike?.effect==='Poison'?'Poisoned':undefined;
+ const poisoned=condition==='Poisoned'&&failedSave&&struck.hp>0;
+ let next=save(result,{...combat,participants:{...combat.participants,...(failedSave&&condition&&struck.hp>0?{[targetId]:{...struck,conditions:[...new Set([...struck.conditions,condition])],...(condition==='Poisoned'?{roguePoisonDC:strikeDC,roguePoisonRounds:10}:{})}}:{}),nighthawk:{...combat.participants.nighthawk,rogueSneakUsed:true}},log:[...combat.log,...(cunningStrike?[`Rogue Cunning Strike ${cunningStrike.effect}: one Sneak Attack d6 forgone; ${cunningStrike.effect==='Withdraw'?'withdrawal movement':`${cunningStrike.effect==='Trip'?'Dexterity':'Constitution'} save ${cunningStrike.saveTotal} vs DC ${strikeDC}: ${failedSave?'failed':'saved'}`}`]:[]),...(poisoned?['Cunning Strike Poisoned: target repeats Constitution save at end of its turns (DC '+strikeDC+'); resolve explicitly before ending turn.']:[]),'Rogue Sneak Attack '+diceCount+'d6: '+sneakDice.join('+')+' = '+sneakDice.slice(cunningStrike?(critical?2:1):0).reduce((a,b)=>a+b,0)+' extra piercing damage']});
+ if(cunningStrike?.effect==='Withdraw'){
+  const before=next.companionEncounter!.participants.nighthawk;
+  if(before.rogueSteadyAim)throw Error('Withdraw cannot move after Steady Aim');
+  const destination=cunningStrike.withdrawTo!;
+  // Withdraw movement is immediate, costs at most half Speed, and provokes no opportunity attacks.
+  const temporary={...next.companionEncounter!,participants:{...next.companionEncounter!.participants,nighthawk:{...before,disengaged:true}}};
+  const moved=moveCompanion({...next,companionEncounter:temporary},'nighthawk',destination.x,destination.y);
+  const after=moved.companionEncounter!.participants.nighthawk;
+  if(after.movementSpentFeet-before.movementSpentFeet>Math.floor(before.speedFeet/2/5)*5)throw Error('Withdraw exceeds half Speed');
+  next=save(moved,{...moved.companionEncounter!,participants:{...moved.companionEncounter!.participants,nighthawk:{...after,disengaged:before.disengaged}},log:[...moved.companionEncounter!.log,'Rogue Withdraw: moved without provoking opportunity attacks']});
+ }
+ return next;
 }
 /** Uncanny Dodge is a reaction to a verified visible attacker hitting the Rogue. */
 export function importedRogueUncannyDodge(campaign:Campaign,attackerId:string,verifiedIncomingDamage:number,type:DamageType):Campaign{

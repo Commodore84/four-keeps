@@ -1,6 +1,6 @@
 import {describe,it,expect} from 'vitest';
 import {newCampaign} from './campaign';
-import {startUnifiedEncounter,addCompanionEnemy,importedRogueCunningAction,attackImportedRogue,importedRogueUncannyDodge,resolveImportedRogueEvasion,endCompanionTurn,useImportedMageHandLegerdemain} from './companionEncounter';
+import {startUnifiedEncounter,addCompanionEnemy,importedRogueCunningAction,attackImportedRogue,importedRogueUncannyDodge,resolveImportedRogueEvasion,endCompanionTurn,resolveRoguePoisonSave,useImportedMageHandLegerdemain} from './companionEncounter';
 import type {Campaign} from './campaign';
 function arena(level=2,subclass=false){
  const c=newCampaign('Rogue combat');
@@ -23,3 +23,35 @@ describe('imported Rogue in unified combat',()=>{
  it('requires doubled sneak dice on critical and resets once-per-turn use',()=>{const c=arena(3);const advantaged={...c,companionEncounter:{...c.companionEncounter!,participants:{...c.companionEncounter!.participants,nighthawk:{...c.companionEncounter!.participants.nighthawk,conditions:['Invisible' as const]}}}};expect(()=>attackImportedRogue(advantaged,'goblin',20,6,5,[1,2],18)).toThrow('4 verified');const hit=attackImportedRogue(advantaged,'goblin',20,6,5,[1,2,3,4],18);const enemyTurn=endCompanionTurn(hit,'nighthawk');const next=endCompanionTurn(enemyTurn,'goblin');expect(next.companionEncounter!.participants.nighthawk.rogueSneakUsed).toBe(false)});
  it('Mage Hand requires confirmed subclass and spends an action without inventing effects',()=>{expect(()=>useImportedMageHandLegerdemain(arena(3),'Pick lock')).toThrow('not available');const c=useImportedMageHandLegerdemain(arena(3,true),'Pick lock');expect(c.companionEncounter!.participants.nighthawk.actionUsed).toBe(true);expect(c.companionEncounter!.log.at(-1)).toContain('DM adjudication required')});
 });
+
+ describe('2024 Rogue Cunning Strike extensions',()=>{
+  it('Poison costs one die, requires a verified Constitution save and persists Poisoned only on failure',()=>{
+   const c=arena(7);const prepared={...c,companionEncounter:{...c.companionEncounter!,participants:{...c.companionEncounter!.participants,goblin:{...c.companionEncounter!.participants.goblin,hp:60,maxHp:60},ally:{...c.companionEncounter!.participants.nighthawk,x:4,y:2,actorKind:'party' as const,faction:'party'}}}};
+   const hit=attackImportedRogue(prepared,'goblin',19,1,5,[1,2,3,4],undefined,{effect:'Poison',saveTotal:2});
+   expect(hit.companionEncounter!.participants.goblin.conditions).toContain('Poisoned');
+   expect(hit.companionEncounter!.participants.nighthawk.rogueSneakUsed).toBe(true);
+   expect(hit.companionEncounter!.log.join(' ')).toContain('Constitution save');
+   expect(JSON.parse(JSON.stringify(hit)).companionEncounter.participants.goblin.conditions).toContain('Poisoned');
+   expect(hit.companionEncounter!.participants.goblin.roguePoisonRounds).toBe(10);
+   const enemyTurn={...hit,companionEncounter:{...hit.companionEncounter!,order:['goblin','nighthawk'],turnIndex:0}};
+   expect(()=>endCompanionTurn(enemyTurn,'goblin')).toThrow('Resolve Rogue Poison');
+   const failed=resolveRoguePoisonSave(enemyTurn,'goblin',1);
+   expect(failed.companionEncounter!.participants.goblin.roguePoisonRounds).toBe(9);
+   const recovered=resolveRoguePoisonSave(enemyTurn,'goblin',99);
+   expect(recovered.companionEncounter!.participants.goblin.conditions).not.toContain('Poisoned');
+   expect(endCompanionTurn(recovered,'goblin').companionEncounter!.turnIndex).toBe(1);
+   expect(()=>attackImportedRogue(hit,'goblin',19,1,5,[1,2,3,4],undefined,{effect:'Poison',saveTotal:2})).toThrow();
+   const saved=attackImportedRogue(prepared,'goblin',19,1,5,[1,2,3,4],undefined,{effect:'Poison',saveTotal:99});
+   expect(saved.companionEncounter!.participants.goblin.conditions).not.toContain('Poisoned');
+   expect(()=>attackImportedRogue(prepared,'goblin',19,1,5,[1,2,3,4],undefined,{effect:'Poison'})).toThrow('Constitution');
+  });
+  it('Withdraw moves immediately without opportunity attacks, preserves movement cost and rejects excess movement',()=>{
+   const c=arena(7);const prepared={...c,companionEncounter:{...c.companionEncounter!,participants:{...c.companionEncounter!.participants,goblin:{...c.companionEncounter!.participants.goblin,hp:60,maxHp:60},ally:{...c.companionEncounter!.participants.nighthawk,x:4,y:2,actorKind:'party' as const,faction:'party'}}}};
+   const moved=attackImportedRogue(prepared,'goblin',19,1,5,[1,2,3,4],undefined,{effect:'Withdraw',withdrawTo:{x:1,y:2}});
+   expect(moved.companionEncounter!.participants.nighthawk.x).toBe(1);
+   expect(moved.companionEncounter!.participants.nighthawk.disengaged).toBe(false);
+   expect(moved.companionEncounter!.participants.nighthawk.movementSpentFeet).toBe(5);
+   expect(moved.companionEncounter!.pendingOpportunity).toBeUndefined();
+   expect(()=>attackImportedRogue(prepared,'goblin',19,1,5,[1,2,3,4],undefined,{effect:'Withdraw',withdrawTo:{x:19,y:19}})).toThrow();
+  });
+ });
