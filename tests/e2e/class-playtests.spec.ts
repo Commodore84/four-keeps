@@ -587,6 +587,10 @@ test('new Rogue starts at Frontier Village, buys supplies, and sees persisted Pl
 
  await expect(sheet.getByLabel('Character details')).toContainText('Background: criminal');
  await expect(sheet.getByLabel('Combat and vital statistics')).toContainText('Passive Perception');
+ await expect(sheet.getByLabel('Combat and vital statistics')).toContainText('Armor Class');
+ await expect(sheet.getByLabel('Combat and vital statistics')).toContainText('Initiative');
+ await expect(sheet.getByLabel('Equipment training and proficiencies')).toContainText('Tool proficiencies:');
+ await expect(sheet.getByLabel('Owned weapon attacks')).toContainText('Shortbow');
  await expect(sheet.getByLabel('Equipment and inventory')).toBeVisible();
  await navigate(page,'Adventure');
  await page.evaluate(()=>{localStorage.setItem('four-keeps-access-code','browser-test-code');localStorage.setItem('four-keeps-dm-mode','on');});
