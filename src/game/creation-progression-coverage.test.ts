@@ -1,8 +1,19 @@
 import {describe,it,expect} from 'vitest';
 import {CLASSES} from './creationClasses';
 import {subclassesForClass} from './creationSubclasses';
-import {progressionFeatures,earnedClassMilestones,VERIFIED_MILESTONE_DETAILS} from './creationProgression';
+import {progressionFeatures,earnedClassMilestones,VERIFIED_MILESTONE_DETAILS,rogueSheetReference} from './creationProgression';
 describe('all-class advancement explanation coverage',()=>{
+ it('gates Rogue Sneak Attack and Cunning Strike through level twenty',()=>{
+  expect(rogueSheetReference(1)).toMatchObject({sneakAttack:'1d6',cunningOptions:[],expertiseChoices:2,hasEvasion:false});
+  expect(rogueSheetReference(5)).toMatchObject({sneakAttack:'3d6',cunningEffectsPerHit:1,hasUncannyDodge:true});
+  expect(rogueSheetReference(6).expertiseChoices).toBe(4);
+  expect(rogueSheetReference(7)).toMatchObject({sneakAttack:'4d6',hasEvasion:true,hasReliableTalent:true});
+  expect(rogueSheetReference(11).cunningEffectsPerHit).toBe(2);
+  expect(rogueSheetReference(13).cunningOptions).toHaveLength(3);
+  expect(rogueSheetReference(14).cunningOptions).toHaveLength(6);
+  expect(rogueSheetReference(20).sneakAttack).toBe('10d6');
+ });
+
  it('provides concrete action and rules summaries for the audited class milestones',()=>{
   for(const [name,detail] of Object.entries(VERIFIED_MILESTONE_DETAILS)){
    expect(detail.description.length,name).toBeGreaterThan(25);

@@ -181,6 +181,13 @@ export function progressionFeatures(classId:string,level:number,subclassName?:st
 }
 export function mysticArcanumLevel(warlockLevel:number):number[]{return [11,13,15,17].filter(l=>warlockLevel>=l).map(l=>6+(l-11)/2)}
 
+/** 2024 Rogue character-sheet reference, never a gameplay-effect grant. */
+export function rogueSheetReference(level:number){
+ const earned=Math.max(1,Math.min(20,Number.isFinite(level)?Math.floor(level):1));
+ const sneakDice=Math.ceil(earned/2);
+ const cunningOptions=[...(earned>=5?['Poison (1d6)','Trip (1d6)','Withdraw (1d6)']:[]),...(earned>=14?['Daze (2d6)','Knock Out (6d6)','Obscure (3d6)']:[])];
+ return {level:earned,sneakAttack:`${sneakDice}d6`,cunningOptions,cunningEffectsPerHit:earned>=11?2:earned>=5?1:0,expertiseChoices:earned>=6?4:2,weaponMasteries:2,hasUncannyDodge:earned>=5,hasEvasion:earned>=7,hasReliableTalent:earned>=7};
+}
 /** Display-only earned class milestones. Never changes a character's rules state. */
 export function earnedClassMilestones(classId:string,level:number,existing:{level:number;names:string[]}[]):AdvancementFeature[]{
  const capped=Number.isFinite(level)?Math.max(1,Math.min(20,Math.floor(level))):1;

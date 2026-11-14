@@ -54,6 +54,11 @@ const NAMES:Record<string,string[]>={
 };
 /** Independently reviewed reference summaries; display-only until the rules engine implements them. */
 const VERIFIED_REFERENCE:Record<string,Record<number,string>>={
+ 'rogue-soulknife':{
+  3:'Psionic Power grants Psionic Energy Dice for Psi-Bolstered Knack and Psychic Whispers; the dice pool and recovery follow Rogue level and rest rules. Psychic Blades create Finesse, Thrown psychic weapons when you take the Attack action, with an optional Bonus Action follow-up.',
+  9:'Soul Blades improves Psychic Blades with Homing Strikes and Psychic Teleportation, each using Psionic Energy Dice under its feature restrictions.',
+  13:'Psychic Veil: use a Magic Action to become Invisible for up to 1 hour, ending early under the feature’s conditions. Regain its free use on a Long Rest or expend a Psionic Energy Die for another use.',
+  17:'Rend Mind: when dealing Sneak Attack damage with Psychic Blades, force a Wisdom saving throw to Stun the target; the feature has a Long Rest recovery or Psionic Energy Dice cost.'},
  'rogue-arcane-trickster':{
   3:'Spellcasting: prepare Wizard spells using the Arcane Trickster progression. Mage Hand Legerdemain extends Mage Hand with subtle manipulation and permits its control with a Bonus Action.',
   9:'Magical Ambush: when you are Invisible as you cast a spell on a creature, that creature has Disadvantage on saving throws against the spell during that turn.',

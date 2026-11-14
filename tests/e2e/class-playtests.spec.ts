@@ -522,6 +522,9 @@ test('new Rogue starts at Frontier Village, buys supplies, and sees persisted Pl
  await expect(sheet.getByLabel('Equipment training and proficiencies')).toContainText('Weapon proficiencies');
  await expect(sheet.getByLabel('Earned class features')).toContainText('Level 1');
  await expect(sheet.getByLabel('Earned class features')).toContainText('Sneak Attack');
+ await expect(sheet.getByLabel('Rogue rules reference')).toContainText('1d6');
+ await expect(sheet.getByLabel('Rogue rules reference')).not.toContainText('Cunning Strike:');
+ await expect(sheet.getByLabel('Rogue rules reference')).not.toContainText('Evasion');
  await expect(sheet.getByLabel('Earned class features')).not.toContainText('Reliable Talent');
  await expect(sheet.getByLabel('Player class resources')).toBeVisible();
  await expect(sheet.getByLabel('Player spellcasting')).toBeVisible();
