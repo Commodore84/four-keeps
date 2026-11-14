@@ -100,6 +100,28 @@ export const SUBCLASS_FEATURES:SubclassFeatureEntry[]=SUBCLASSES.flatMap(subclas
   choiceRequired:VERIFIED[subclass.id]?.[level]?.choiceRequired??index===0
  }));
 });
+/** Reference-only activation labels. These never unlock or execute mechanics. */
+export const SUBCLASS_ACTIVATIONS:Record<string,Record<number,string>>={
+ 'rogue-arcane-trickster':{3:'Magic Action / Bonus Action',9:'When casting',13:'Bonus Action',17:'Reaction'},
+ 'rogue-assassin':{3:'On initiative / attack',9:'During disguise / infiltration',13:'On Sneak Attack',17:'On first-round attack'},
+ 'rogue-thief':{3:'Bonus Action / movement',9:'While hidden',13:'Magic item use',17:'On initiative'},
+ 'rogue-soulknife':{3:'On attack / resource',9:'On attack / movement',13:'Bonus Action',17:'On Sneak Attack'},
+ 'wizard-diviner':{3:'On d20 Test / Long Rest',6:'On divination spellcasting',10:'Magic Action',14:'Long Rest'},
+ 'wizard-abjurer':{3:'On spellcasting / ward',6:'Reaction',10:'On dispel / counterspell',14:'Passive'},
+ 'wizard-evoker':{3:'On cantrip damage',6:'On area spellcasting',10:'On spell damage',14:'On spellcasting / Long Rest'},
+ 'wizard-illusionist':{3:'On illusion spellcasting',6:'On illusion spellcasting',10:'Reaction',14:'Magic Action'},
+ 'fighter-champion':{3:'Passive / on critical hit',7:'Passive',10:'On initiative',15:'Passive',18:'On death save / turn start'},
+ 'fighter-battle-master':{3:'On attack / Superiority Die',7:'Passive',10:'On maneuver',15:'On initiative',18:'On maneuver'},
+ 'fighter-eldritch-knight':{3:'Spellcasting / bond',7:'On Attack action',10:'On weapon hit',15:'On Action Surge',18:'On Attack action'},
+ 'fighter-psi-warrior':{3:'On attack / Psionic Energy Die',7:'Bonus Action / movement',10:'Passive / resource',15:'Bonus Action',18:'Magic Action'},
+};
+export function earnedSubclassFeatures(subclassId:string,level:number):SubclassFeatureEntry[]{
+ if(!Number.isFinite(level)||level<1)return [];
+ return SUBCLASS_FEATURES.filter(feature=>feature.subclassId===subclassId&&feature.level<=Math.min(20,Math.floor(level)));
+}
+export function subclassActivation(feature:SubclassFeatureEntry):string{
+ return SUBCLASS_ACTIVATIONS[feature.subclassId]?.[feature.level]??'Activation / recovery not yet verified';
+}
 export function subclassFeatureAt(subclassId:string,level:number):SubclassFeatureEntry|undefined{
  return SUBCLASS_FEATURES.find(f=>f.subclassId===subclassId&&f.level===level);
 }

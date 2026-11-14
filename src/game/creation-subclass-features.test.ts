@@ -1,8 +1,27 @@
 import {describe,it,expect} from 'vitest';
 import {SUBCLASSES} from './creationSubclasses';
-import {SUBCLASS_FEATURES,subclassFeatureAt,subclassFeatureCoverage} from './creationSubclassFeatures';
+import {SUBCLASS_FEATURES,subclassFeatureAt,subclassFeatureCoverage,earnedSubclassFeatures,subclassActivation} from './creationSubclassFeatures';
 import {progressionFeatures} from './creationProgression';
 describe('subclass named feature coverage',()=>{
+ it('gates every subclass reference by earned level and labels unverified activation',()=>{
+  for(const subclass of SUBCLASSES){
+   expect(earnedSubclassFeatures(subclass.id,2),subclass.id).toEqual([]);
+   const all=earnedSubclassFeatures(subclass.id,20);
+   expect(all.length,subclass.id).toBeGreaterThanOrEqual(3);
+   for(const level of [3,6,7,9,10,13,14,15,17,18,20]){
+    const earned=earnedSubclassFeatures(subclass.id,level);
+    expect(earned.every(feature=>feature.level<=level),subclass.id).toBe(true);
+    expect(earned.every(feature=>all.includes(feature)),subclass.id).toBe(true);
+   }
+   for(const feature of all){
+    expect(subclassActivation(feature).length).toBeGreaterThan(4);
+    if(!feature.appliedToProjection)expect(feature.description.length).toBeGreaterThan(20);
+   }
+  }
+  expect(earnedSubclassFeatures('wizard-diviner',3).some(f=>f.name.includes('Portent'))).toBe(true);
+  expect(earnedSubclassFeatures('wizard-diviner',3).some(f=>f.name.includes('Greater Portent'))).toBe(false);
+ });
+
  it('indexes each of the 48 PHB 2024 subclasses at all scheduled levels',()=>{
   expect(subclassFeatureCoverage().subclasses).toBe(48);
   for(const subclass of SUBCLASSES){
