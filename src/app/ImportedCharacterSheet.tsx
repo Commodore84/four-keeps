@@ -53,6 +53,18 @@ const TRAIT_DETAILS:Record<string,{description:string;action?:string}>={
  'Breath Weapon':{description:'Replace one attack of your Attack action with a damaging breath weapon; its damage and uses scale with level.',action:'Attack action'},
  'Damage Resistance':{description:'You have Resistance to the damage type selected for your Draconic Ancestry.',action:'Passive'},
  'Gnomish Cunning':{description:'You have Advantage on Intelligence, Wisdom, and Charisma saving throws.',action:'Passive'},
+ 'Draconic Ancestry':{description:'Choose your draconic ancestry, which determines the damage type of your breath weapon and resistance.',action:'Passive'},
+ 'Elven Lineage':{description:'Your chosen lineage determines the additional cantrips, spells, or movement benefits earned at the specified character levels.',action:'Passive'},
+ 'Gnomish Lineage':{description:'Your chosen lineage determines your additional magical or inventive species benefits.',action:'Passive'},
+ 'Darkvision 120 ft.':{description:'Your Drow Darkvision extends to 120 feet, rather than the standard 60 feet.',action:'Passive'},
+ 'Fire resistance':{description:'You have Resistance to Fire damage.',action:'Passive'},
+ 'Poison resistance':{description:'You have Resistance to Poison damage.',action:'Passive'},
+ 'Longstrider':{description:'You can cast Longstrider through your Wood Elf lineage when unlocked, subject to the lineage casting limits.',action:'Magic Action'},
+ 'Pass without Trace':{description:'You can cast Pass without Trace through your Wood Elf lineage when unlocked, subject to the lineage casting limits.',action:'Magic Action'},
+ 'Faerie Fire':{description:'You can cast Faerie Fire through your Drow lineage when unlocked, subject to the lineage casting limits.',action:'Magic Action'},
+ 'Detect Magic':{description:'You can cast Detect Magic through your High Elf lineage when unlocked, subject to the lineage casting limits.',action:'Magic Action'},
+ 'Misty Step':{description:'You can cast Misty Step through your High Elf lineage when unlocked, subject to the lineage casting limits.',action:'Bonus Action'},
+ 'Darkness':{description:'You can cast Darkness through your lineage when unlocked, subject to its casting limits.',action:'Magic Action'},
  'Speed 35 ft.':{description:'Your Wood Elf walking speed is 35 feet; this is already reflected in your Speed statistic.',action:'Passive'},
  'Dancing Lights':{description:'You know the Dancing Lights cantrip from your Drow lineage.',action:'Magic Action'},
  'Druidcraft':{description:'You know the Druidcraft cantrip from your Wood Elf lineage.',action:'Magic Action'},
@@ -93,7 +105,8 @@ const ORIGIN_FEAT_DETAILS:Record<string,string>={
  'Tavern Brawler':'Improve Unarmed Strikes and improvised-weapon use, including rerolling a damage die of 1 for an Unarmed Strike.',
  'Magic Initiate (Cleric)':'Learn two Cleric cantrips and one level-one Cleric spell; its free casting refreshes after a Long Rest.',
  'Magic Initiate (Druid)':'Learn two Druid cantrips and one level-one Druid spell; its free casting refreshes after a Long Rest.',
- 'Magic Initiate (Wizard)':'Learn two Wizard cantrips and one level-one Wizard spell; its free casting refreshes after a Long Rest.'
+ 'Magic Initiate (Wizard)':'Learn two Wizard cantrips and one level-one Wizard spell; its free casting refreshes after a Long Rest.',
+ 'Magic Initiate (Bard)':'Learn two Bard cantrips and one level-one Bard spell; its free casting refreshes after a Long Rest.'
 };
 const FEATURE_ACTIONS:Record<string,string>={'Sneak Attack':'On hit','Cunning Action':'Bonus Action','Cunning Strike':'On hit','Uncanny Dodge':'Reaction','Second Wind':'Bonus Action','Action Surge':'On your turn','Rage':'Bonus Action','Reckless Attack':'On attack','Arcane Recovery':'Short Rest','Lay on Hands':'Bonus Action','Bardic Inspiration':'Bonus Action','Wild Shape':'Bonus Action','Channel Divinity':'Varies by option'};
 const earnedTraitName=(name:string)=>name.replace(/\s*\(level \d+\)/i,'');

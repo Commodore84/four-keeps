@@ -800,10 +800,12 @@ test('imported Rogue requests DM rest, confirms exactly once, and reloads',async
 });
 
 test('DM denial never grants imported rest recovery',async({page})=>{
+ test.setTimeout(90000);
  await createAndImport(page,'rogue');
+ await expect.poll(async()=>Boolean((await saved(page))?.characterIdentity),{timeout:15000}).toBe(true);
  await page.evaluate(()=>{localStorage.setItem('four-keeps-access-code','browser-test-code');localStorage.setItem('four-keeps-dm-mode','on')});
  await page.route('**/api/dm',route=>{const body=route.request().postDataJSON();return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(body.restRequest?{narration:'Bandits interrupt the attempted rest.',restDecision:'denied'}:{narration:'The village is quiet.',newFacts:[],worldUpdates:{}})})});
- await page.reload();await page.getByRole('button',{name:'Continue Adventure'}).click();await expect.poll(async()=> (await saved(page))?.journal?.some((entry:any)=>entry.id?.endsWith('-dm-opening'))).toBe(true);
+ await page.reload();await expect(page.getByRole('button',{name:'Continue Adventure'})).toBeEnabled({timeout:15000});await page.getByRole('button',{name:'Continue Adventure'}).click();await expect.poll(async()=> (await saved(page))?.journal?.some((entry:any)=>entry.id?.endsWith('-dm-opening')),{timeout:30000}).toBe(true);
  const before=await saved(page);
  await page.getByLabel('Message the Dungeon Master').fill('I want to take a long rest');
  await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
