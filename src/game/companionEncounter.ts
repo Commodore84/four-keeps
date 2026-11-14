@@ -903,7 +903,7 @@ export function resolveImportedRogueDetection(campaign:Campaign,observerId:strin
 }
 /** Rogue Sneak Attack is applied only after validating a hit and its eligibility.
  * The player supplies individual d6 results; no rolls are invented. */
-export function attackImportedRogue(campaign:Campaign,targetId:string,roll:number,weaponDamageDice:number,rangeFeet:number,sneakDice:number[],secondD20?:number,cunningStrike?:{effect:'Trip'|'Poison'|'Withdraw';saveTotal?:number;withdrawTo?:{x:number;y:number}},elvenAccuracyReroll?:number):Campaign{
+export function attackImportedRogue(campaign:Campaign,targetId:string,roll:number,weaponDamageDice:number,rangeFeet:number,sneakDice:number[],secondD20?:number,cunningStrike?:{effect:'Trip'|'Poison'|'Withdraw';saveTotal?:number;withdrawTo?:{x:number;y:number}}|{effect:'Trip'|'Poison'|'Withdraw';saveTotal?:number;withdrawTo?:{x:number;y:number}}[],elvenAccuracyReroll?:number):Campaign{
  const battle=activeActor(campaign,'nighthawk'),actor=battle.participants.nighthawk,target=battle.participants[targetId];
  const ch=campaign.character;
  if(battle.mode!=='unified'||campaign.characterIdentity?.classId!=='rogue'||!ch)throw Error('Requires imported Rogue in a unified encounter');
@@ -923,28 +923,39 @@ export function attackImportedRogue(campaign:Campaign,targetId:string,roll:numbe
  const critical=hitRoll===20;
  const diceCount=Math.ceil((ch.level??1)/2)*(critical?2:1);
  if(sneakDice.length!==diceCount||sneakDice.some(n=>!Number.isInteger(n)||n<1||n>6))throw Error('Provide '+diceCount+' verified Sneak Attack d6 rolls');
- if(cunningStrike){
-  if((ch.level??1)<5||!['Trip','Poison','Withdraw'].includes(cunningStrike.effect))throw Error('Cunning Strike requires Rogue level 5');
-  if(cunningStrike.effect!=='Withdraw'&&(!Number.isInteger(cunningStrike.saveTotal)||cunningStrike.saveTotal!<0||cunningStrike.saveTotal!>100))throw Error(cunningStrike.effect==='Trip'?'Verified Dexterity saving throw required':'Verified Constitution saving throw required');
-  if(cunningStrike.effect==='Withdraw'&&!cunningStrike.withdrawTo)throw Error('Withdraw requires a verified destination');
-  if(sneakDice.length<1)throw Error('Cunning Strike requires a Sneak Attack die to forgo');
+ const strikes=cunningStrike?(Array.isArray(cunningStrike)?cunningStrike:[cunningStrike]):[];
+ if(strikes.length>1&&(ch.level??1)<11)throw Error('Improved Cunning Strike requires Rogue level 11');
+ if(strikes.length>2||new Set(strikes.map(strike=>strike.effect)).size!==strikes.length)throw Error('Select at most two different Cunning Strike effects');
+ for(const strike of strikes){
+  if((ch.level??1)<5||!['Trip','Poison','Withdraw'].includes(strike.effect))throw Error('Cunning Strike requires Rogue level 5');
+  if(strike.effect!=='Withdraw'&&(!Number.isInteger(strike.saveTotal)||strike.saveTotal!<0||strike.saveTotal!>100))throw Error(strike.effect==='Trip'?'Verified Dexterity saving throw required':'Verified Constitution saving throw required');
+  if(strike.effect==='Withdraw'&&!strike.withdrawTo)throw Error('Withdraw requires a verified destination');
  }
+ if(strikes.length>Math.ceil((ch.level??1)/2))throw Error('Insufficient Sneak Attack dice for Cunning Strike');
  if(advantage!==disadvantage&&secondD20===undefined)throw Error('Advantage or disadvantage requires second d20');
  if(!Number.isInteger(weaponDamageDice)||weaponDamageDice<1||weaponDamageDice>100)throw Error('Invalid weapon damage roll');
  const hit=hitRoll===20||(hitRoll!==1&&hitRoll+attackModifier>=targetAC);
- const result=attackCompanion(campaign,'nighthawk',targetId,roll,attackModifier,targetAC,weaponDamageDice+(hit?sneakDice.slice(cunningStrike?(critical?2:1):0).reduce((a,b)=>a+b,0):0),damageModifier,'Piercing',rangeFeet,secondD20,elvenAccuracyReroll);
+ const result=attackCompanion(campaign,'nighthawk',targetId,roll,attackModifier,targetAC,weaponDamageDice+(hit?sneakDice.slice(strikes.length*(critical?2:1)).reduce((a,b)=>a+b,0):0),damageModifier,'Piercing',rangeFeet,secondD20,elvenAccuracyReroll);
  if(!hit)return result;
  const combat=result.companionEncounter!;
  const strikeDC=8+ch.proficiencyBonus+abilityModifier(ch.scores.dex);
- const failedSave=!!cunningStrike&&cunningStrike.effect!=='Withdraw'&&cunningStrike.saveTotal!<strikeDC;
  const struck=combat.participants[targetId];
- const condition=cunningStrike?.effect==='Trip'?'Prone':cunningStrike?.effect==='Poison'?'Poisoned':undefined;
- const poisoned=condition==='Poisoned'&&failedSave&&struck.hp>0;
- let next=save(result,{...combat,participants:{...combat.participants,...(failedSave&&condition&&struck.hp>0?{[targetId]:{...struck,conditions:[...new Set([...struck.conditions,condition])],...(condition==='Poisoned'?{roguePoisonDC:strikeDC,roguePoisonRounds:10}:{})}}:{}),nighthawk:{...combat.participants.nighthawk,rogueSneakUsed:true}},log:[...combat.log,...(cunningStrike?[`Rogue Cunning Strike ${cunningStrike.effect}: one Sneak Attack d6 forgone; ${cunningStrike.effect==='Withdraw'?'withdrawal movement':`${cunningStrike.effect==='Trip'?'Dexterity':'Constitution'} save ${cunningStrike.saveTotal} vs DC ${strikeDC}: ${failedSave?'failed':'saved'}`}`]:[]),...(poisoned?['Cunning Strike Poisoned: target repeats Constitution save at end of its turns (DC '+strikeDC+'); resolve explicitly before ending turn.']:[]),'Rogue Sneak Attack '+diceCount+'d6: '+sneakDice.join('+')+' = '+sneakDice.slice(cunningStrike?(critical?2:1):0).reduce((a,b)=>a+b,0)+' extra piercing damage']});
- if(cunningStrike?.effect==='Withdraw'){
+ let affected=struck;
+ const strikeLog:string[]=[];
+ for(const strike of strikes){
+  if(strike.effect==='Withdraw'){strikeLog.push('Rogue Cunning Strike Withdraw: one Sneak Attack d6 forgone');continue;}
+  const failed=strike.saveTotal!<strikeDC;
+  const condition:'Prone'|'Poisoned'=strike.effect==='Trip'?'Prone':'Poisoned';
+  if(failed&&affected.hp>0)affected={...affected,conditions:[...new Set([...affected.conditions,condition])],...(condition==='Poisoned'?{roguePoisonDC:strikeDC,roguePoisonRounds:10}:{})};
+  strikeLog.push(`Rogue Cunning Strike ${strike.effect}: one Sneak Attack d6 forgone; ${strike.effect==='Trip'?'Dexterity':'Constitution'} save ${strike.saveTotal} vs DC ${strikeDC}: ${failed?'failed':'saved'}`);
+ }
+ if(affected.roguePoisonDC!==undefined&&struck.roguePoisonDC===undefined)strikeLog.push('Cunning Strike Poisoned: target repeats Constitution save at end of its turns (DC '+strikeDC+'); resolve explicitly before ending turn.');
+ let next=save(result,{...combat,participants:{...combat.participants,[targetId]:affected,nighthawk:{...combat.participants.nighthawk,rogueSneakUsed:true}},log:[...combat.log,...strikeLog,'Rogue Sneak Attack '+diceCount+'d6: '+sneakDice.join('+')+' = '+sneakDice.slice(strikes.length*(critical?2:1)).reduce((a,b)=>a+b,0)+' extra piercing damage']});
+ const withdraw=strikes.find(strike=>strike.effect==='Withdraw');
+ if(withdraw){
   const before=next.companionEncounter!.participants.nighthawk;
   if(before.rogueSteadyAim)throw Error('Withdraw cannot move after Steady Aim');
-  const destination=cunningStrike.withdrawTo!;
+  const destination=withdraw.withdrawTo!;
   // Withdraw movement is immediate, costs at most half Speed, and provokes no opportunity attacks.
   const temporary={...next.companionEncounter!,participants:{...next.companionEncounter!.participants,nighthawk:{...before,disengaged:true}}};
   const moved=moveCompanion({...next,companionEncounter:temporary},'nighthawk',destination.x,destination.y);

@@ -55,3 +55,17 @@ describe('imported Rogue in unified combat',()=>{
    expect(()=>attackImportedRogue(prepared,'goblin',19,1,5,[1,2,3,4],undefined,{effect:'Withdraw',withdrawTo:{x:19,y:19}})).toThrow();
   });
  });
+
+ describe('2024 Improved Cunning Strike',()=>{
+  it('requires level eleven, different effects, and charges two dice on one hit',()=>{
+   const base=arena(11);const b=base.companionEncounter!;
+   const c={...base,companionEncounter:{...b,participants:{...b.participants,goblin:{...b.participants.goblin,hp:100,maxHp:100},ally:{...b.participants.nighthawk,x:4,y:2,actorKind:'party' as const,faction:'party'}}}};
+   const options=[{effect:'Trip' as const,saveTotal:1},{effect:'Poison' as const,saveTotal:1}];
+   const result=attackImportedRogue(c,'goblin',19,1,5,[1,2,3,4,5,6],undefined,options);
+   expect(result.companionEncounter!.participants.goblin.conditions).toEqual(expect.arrayContaining(['Prone','Poisoned']));
+   expect(result.companionEncounter!.log.join(' ')).toContain('= 18 extra piercing damage');
+   expect(()=>attackImportedRogue({...c,character:{...c.character!,level:10}},'goblin',19,1,5,[1,2,3,4,5],undefined,options)).toThrow('level 11');
+   expect(()=>attackImportedRogue(c,'goblin',19,1,5,[1,2,3,4,5,6],undefined,[options[0],options[0]])).toThrow('different');
+   expect(()=>attackImportedRogue(c,'goblin',19,1,5,[1,2,3,4,5,6],undefined,[...options,options[0]])).toThrow();
+  });
+ });
