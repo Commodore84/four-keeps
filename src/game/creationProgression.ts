@@ -143,3 +143,9 @@ export function progressionFeatures(classId:string,level:number,subclassName?:st
  return features;
 }
 export function mysticArcanumLevel(warlockLevel:number):number[]{return [11,13,15,17].filter(l=>warlockLevel>=l).map(l=>6+(l-11)/2)}
+
+/** Display-only earned class milestones. Never changes a character's rules state. */
+export function earnedClassMilestones(classId:string,level:number,existing:{level:number;names:string[]}[]):AdvancementFeature[]{
+ const capped=Number.isFinite(level)?Math.max(1,Math.min(20,Math.floor(level))):1;
+ return Array.from({length:capped-1},(_,index)=>index+2).flatMap(atLevel=>progressionFeatures(classId,atLevel).filter(feature=>feature.source==='class')).filter(feature=>!existing.some(group=>group.level<=feature.level&&group.names.includes(feature.name)));
+}
