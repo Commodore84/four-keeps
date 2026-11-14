@@ -524,6 +524,7 @@ test('new Rogue starts at Frontier Village, buys supplies, and sees persisted Pl
  await expect(sheet.getByLabel('Earned class features')).toContainText('Sneak Attack');
  await expect(sheet.getByLabel('Rogue rules reference')).toContainText('1d6');
  await expect(sheet.getByLabel('Imported character level-up')).toContainText('Level 2');
+ await expect(sheet.getByLabel('Imported character level-up')).not.toContainText('Level 14');
  await expect(sheet.getByLabel('Rogue rules reference')).not.toContainText('Cunning Strike:');
  await expect(sheet.getByLabel('Rogue rules reference')).not.toContainText('Evasion');
  await expect(sheet.getByLabel('Earned class features')).not.toContainText('Reliable Talent');

@@ -88,6 +88,28 @@ describe('Rogue level nine and ten advancement',()=>{
    expect(next.character!.proficiencyBonus).toBe(4);
    expect(next.importedEarnedFeats??[]).toEqual(atTen.importedEarnedFeats??[]);
    expect(atTen.character!.level).toBe(10);
-   expect(importedLevelUpIssues(next,choice).join(' ')).toContain('supports Rogue levels 2–11');
+   expect(importedLevelUpIssues(next,choice).join(' ')).toContain('Requires 100000 XP');
+  });
+ });
+
+ describe('Rogue levels twelve through fourteen',()=>{
+  it('requires a level-12 improvement and persists earned scores without applying subclass effects',()=>{
+   const twelve=fixture(11,100000);twelve.importedSubclassId='rogue-arcane-trickster';
+   expect(importedLevelUpIssues(twelve,{hpGain:5,confirm:true}).join(' ')).toContain('Choose a valid feat or ASI');
+   const advanced=applyImportedLevelUp(twelve,{hpGain:5,confirm:true,featPlan:'Ability Score Improvement',abilityIncreases:{Dex:2}});
+   expect(advanced.character!.level).toBe(12);
+   expect(advanced.character!.scores.dex).toBe(twelve.character!.scores.dex+2);
+   expect(twelve.character!.level).toBe(11);
+  });
+  it('advances at XP thresholds 120000 and 140000 without granting unsupported spells or resources',()=>{
+   const thirteen=fixture(12,120000);thirteen.importedSubclassId='rogue-arcane-trickster';
+   const after13=applyImportedLevelUp(thirteen,{hpGain:5,confirm:true});
+   expect(after13.character!.level).toBe(13);
+   expect(after13.character!.preparedSpells).toEqual(thirteen.character!.preparedSpells);
+   expect(after13.character!.resources).toEqual(thirteen.character!.resources);
+   const after14=applyImportedLevelUp({...after13,xp:140000},{hpGain:5,confirm:true});
+   expect(after14.character!.level).toBe(14);
+   expect(after14.character!.proficiencyBonus).toBe(5);
+   expect(importedLevelUpIssues({...after14,xp:165000},{hpGain:5,confirm:true}).join(' ')).toContain('supports Rogue levels 2–14');
   });
  });
