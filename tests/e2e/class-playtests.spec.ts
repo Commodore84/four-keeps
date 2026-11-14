@@ -436,6 +436,19 @@ test('imported Rogue unlocks Cunning Action and selects Arcane Trickster spells 
  expect((await saved(page)).character.level).toBe(4);
  await page.reload();await page.getByRole('button',{name:'Continue Adventure'}).click();await navigate(page,'Player');
  await expect(page.getByLabel('Imported player character')).toContainText('Level 4');
+ await awardImportedTestXP(page,'20300','Verified Rogue progression to level seven');
+ const levelSheet=page.getByLabel('Imported player character');
+ for(const level of [5,6,7]){
+  await levelSheet.getByLabel('Level-up hit points').fill('5');
+  if(level===6){const expertise=levelSheet.getByLabel('Rogue level 6 Expertise');await expertise.getByRole('checkbox').nth(0).check();await expertise.getByRole('checkbox').nth(1).check();}
+  await levelSheet.getByRole('checkbox',{name:'I confirm these level-up choices'}).check();
+  await levelSheet.getByRole('button',{name:`Confirm and save level ${level}`}).click();
+  await expect(levelSheet.getByLabel('Rogue rules reference')).toContainText(`${Math.ceil(level/2)}d6`);
+ }
+ expect((await saved(page)).character.level).toBe(7);
+ await expect(levelSheet).toContainText('Reliable Talent');
+ await page.reload();await page.getByRole('button',{name:'Continue Adventure'}).click();await navigate(page,'Player');
+ await expect(page.getByLabel('Imported player character')).toContainText('Level 7');
 });
 
 test('imported Warlock advances to Celestial and persists Pact Magic resources',async({page})=>{

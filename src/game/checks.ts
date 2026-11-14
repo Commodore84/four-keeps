@@ -23,8 +23,12 @@ export const passivePerception = (stats: CharacterStats) => 10 + skillModifier(s
 export function resolveCheck(stats: CharacterStats, skill: Skill, mode: RollMode, dice: number[]): CheckResult {
   if (dice.length !== (mode === 'normal' ? 1 : 2) || dice.some(d => !Number.isInteger(d) || d < 1 || d > 20)) throw new Error('Invalid d20 results');
   const selected = mode === 'advantage' ? Math.max(...dice) : mode === 'disadvantage' ? Math.min(...dice) : dice[0];
+  // 2024 Rogue Reliable Talent: proficient ability checks treat a d20 roll of 9 or less as 10.
+  // Apply after advantage/disadvantage selects the die, not to unproficient checks or saving throws.
+  const reliable = stats.classId === 'rogue' && (stats.level ?? 1) >= 7 && stats.proficientSkills.includes(skill);
+  const effective = reliable ? Math.max(10, selected) : selected;
   const modifier = skillModifier(stats, skill);
-  return { skill, ability: skillAbility[skill], dice, selected, modifier, total: selected + modifier, mode };
+  return { skill, ability: skillAbility[skill], dice, selected: effective, modifier, total: effective + modifier, mode };
 }
 export function rollCheck(stats: CharacterStats, skill: Skill, mode: RollMode, random: () => number = Math.random): CheckResult {
   const count = mode === 'normal' ? 1 : 2;

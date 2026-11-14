@@ -21,3 +21,20 @@ describe('deterministic skill checks', () => {
     expect(()=>resolveCheck(prototypeNighthawk,'Stealth','normal',[21])).toThrow();
   });
 });
+
+ describe('2024 Rogue Reliable Talent',()=>{
+  const rogue={...prototypeNighthawk,classId:'rogue',level:7,proficientSkills:['Stealth' as const],expertiseSkills:['Stealth' as const]};
+  it('raises selected low d20 rolls to ten only on proficient Rogue checks',()=>{
+   const result=resolveCheck(rogue,'Stealth','normal',[2]);
+   expect(result.selected).toBe(10);
+   expect(result.total).toBe(10+result.modifier);
+   expect(resolveCheck(rogue,'Athletics','normal',[2]).selected).toBe(2);
+   expect(resolveCheck({...rogue,level:6},'Stealth','normal',[2]).selected).toBe(2);
+   expect(resolveCheck({...rogue,classId:'fighter'},'Stealth','normal',[2]).selected).toBe(2);
+  });
+  it('applies after advantage/disadvantage and preserves natural high rolls',()=>{
+   expect(resolveCheck(rogue,'Stealth','advantage',[3,19]).selected).toBe(19);
+   expect(resolveCheck(rogue,'Stealth','disadvantage',[3,19]).selected).toBe(10);
+   expect(resolveCheck(rogue,'Stealth','normal',[20]).selected).toBe(20);
+  });
+ });
