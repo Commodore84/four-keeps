@@ -569,6 +569,13 @@ test('new Rogue starts at Frontier Village, buys supplies, and sees persisted Pl
  await expect(sheet.getByLabel('Earned feats')).toBeVisible();
  await expect(sheet.getByLabel('Player class resources')).toBeVisible();
  await expect(sheet.getByLabel('Player spellcasting')).toBeVisible();
+ const sectionMenu=sheet.getByLabel('Jump to character section');
+ await expect(sectionMenu.locator('option')).toHaveCount(10);
+ for(const [value,label] of [['identity','Character Overview'],['combat','Combat & Defenses'],['vitality','Hit Points & Recovery'],['abilities','Abilities, Saves & Skills'],['attacks','Attacks & Weapon Mastery'],['training','Proficiencies & Training'],['features','Features & Resources'],['equipment','Equipment & Inventory'],['spells','Spellcasting']]){
+  await expect(sectionMenu.locator(`option[value="${value}"]`)).toHaveText(label);
+ }
+ await sectionMenu.selectOption('identity');
+ await expect(sheet.getByLabel('Character identity')).toBeInViewport();
  await sheet.getByLabel('Jump to character section').selectOption('features');
  await expect(sheet.getByLabel('Class features',{exact:true})).toBeInViewport();
  await sheet.getByLabel('Jump to character section').selectOption('spells');
