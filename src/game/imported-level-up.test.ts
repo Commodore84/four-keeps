@@ -110,6 +110,30 @@ describe('Rogue level nine and ten advancement',()=>{
    const after14=applyImportedLevelUp({...after13,xp:140000},{hpGain:5,confirm:true});
    expect(after14.character!.level).toBe(14);
    expect(after14.character!.proficiencyBonus).toBe(5);
-   expect(importedLevelUpIssues({...after14,xp:165000},{hpGain:5,confirm:true}).join(' ')).toContain('supports Rogue levels 2–14');
+   expect(importedLevelUpIssues({...after14,xp:164999},{hpGain:5,confirm:true}).join(' ')).toContain('165000 XP');
+  });
+ });
+
+ describe('Rogue levels fifteen through seventeen',()=>{
+  it('grants Slippery Mind saving throw proficiency once, with XP and confirmation checks',()=>{
+   const at14=fixture(14,165000);at14.character!.savingThrowProficiencies=['dex','int'];
+   expect(importedLevelUpIssues({...at14,xp:164999},{hpGain:5,confirm:true}).join(' ')).toContain('165000 XP');
+   expect(importedLevelUpIssues(at14,{hpGain:5,confirm:false}).join(' ')).toContain('Explicit confirmation');
+   const next=applyImportedLevelUp(at14,{hpGain:5,confirm:true});
+   expect(next.character!.savingThrowProficiencies).toEqual(['dex','int','wis','cha']);
+   expect(next.character!.proficiencyBonus).toBe(5);
+   expect(at14.character!.savingThrowProficiencies).toEqual(['dex','int']);
+  });
+  it('requires level sixteen improvement and advances level seventeen without subclass resource grants',()=>{
+   const at15=fixture(15,195000);at15.importedSubclassId='rogue-arcane-trickster';
+   expect(importedLevelUpIssues(at15,{hpGain:5,confirm:true}).join(' ')).toContain('valid feat');
+   const at16=applyImportedLevelUp(at15,{hpGain:5,confirm:true,featPlan:'Ability Score Improvement',abilityIncreases:{Dex:2}});
+   expect(at16.character!.level).toBe(16);
+   const at17=applyImportedLevelUp({...at16,xp:225000},{hpGain:5,confirm:true});
+   expect(at17.character!.level).toBe(17);
+   expect(at17.character!.proficiencyBonus).toBe(6);
+   expect(at17.character!.resources).toEqual(at16.character!.resources);
+   expect(at17.character!.preparedSpells).toEqual(at16.character!.preparedSpells);
+   expect(importedLevelUpIssues({...at17,xp:265000},{hpGain:5,confirm:true}).join(' ')).toContain('supports Rogue levels 2–17');
   });
  });
