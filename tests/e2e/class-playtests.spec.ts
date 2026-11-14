@@ -523,6 +523,7 @@ test('new Rogue starts at Frontier Village, buys supplies, and sees persisted Pl
  await expect(sheet.getByLabel('Earned class features')).toContainText('Level 1');
  await expect(sheet.getByLabel('Player spellcasting')).toBeVisible();
  await expect(sheet.getByLabel('Player spellcasting')).not.toContainText('Level undefined');
+ await expect(sheet.getByLabel('Player spellcasting')).not.toContainText('Level 0 slots');
  await expect(sheet.getByLabel('Species traits')).toBeVisible();
  await expect(sheet.getByLabel('Earned feats')).toBeVisible();
  await expect(sheet.getByLabel('Player class resources')).toBeVisible();
