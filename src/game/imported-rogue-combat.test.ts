@@ -1,6 +1,6 @@
 import {describe,it,expect} from 'vitest';
 import {newCampaign} from './campaign';
-import {startUnifiedEncounter,addCompanionEnemy,importedRogueCunningAction,attackImportedRogue,importedRogueUncannyDodge,resolveImportedRogueEvasion,endCompanionTurn,resolveRoguePoisonSave,useImportedMageHandLegerdemain} from './companionEncounter';
+import {startUnifiedEncounter,addCompanionEnemy,importedRogueCunningAction,attackImportedRogue,importedRogueUncannyDodge,resolveImportedRogueEvasion,endCompanionTurn,resolveRoguePoisonSave,resolveRogueKnockoutSave,damageCompanion,moveCompanion,useCompanionAction,useImportedMageHandLegerdemain} from './companionEncounter';
 import type {Campaign} from './campaign';
 function arena(level=2,subclass=false){
  const c=newCampaign('Rogue combat');
@@ -75,14 +75,50 @@ describe('imported Rogue in unified combat',()=>{
    const base=arena(14);const b=base.companionEncounter!;const c={...base,companionEncounter:{...b,participants:{...b.participants,goblin:{...b.participants.goblin,hp:100,maxHp:100},ally:{...b.participants.nighthawk,x:4,y:2,actorKind:'party' as const,faction:'party'}}}};
    const obscured=attackImportedRogue(c,'goblin',19,1,5,[1,2,3,4,5,6,1],undefined,{effect:'Obscure',saveTotal:1});
    expect(obscured.companionEncounter!.participants.goblin.conditions).toContain('Blinded');
-   expect(obscured.companionEncounter!.participants.goblin.rogueObscureUntilTurn).toBe(2);
+   expect(obscured.companionEncounter!.participants.goblin.rogueObscureUntilTurn).toBe(1);
    expect(obscured.companionEncounter!.log.join(' ')).toContain('= 16 extra piercing damage');
    const enemyTurn={...obscured,companionEncounter:{...obscured.companionEncounter!,order:['goblin','nighthawk'],turnIndex:0}};
-   const once=endCompanionTurn(enemyTurn,'goblin');expect(once.companionEncounter!.participants.goblin.conditions).toContain('Blinded');
+   const once=endCompanionTurn(enemyTurn,'goblin');expect(once.companionEncounter!.participants.goblin.conditions).not.toContain('Blinded');
    const twice=endCompanionTurn({...once,companionEncounter:{...once.companionEncounter!,turnIndex:0}},'goblin');expect(twice.companionEncounter!.participants.goblin.conditions).not.toContain('Blinded');
-   expect(JSON.parse(JSON.stringify(once)).companionEncounter.participants.goblin.rogueObscureUntilTurn).toBe(1);
+   expect(JSON.parse(JSON.stringify(obscured)).companionEncounter.participants.goblin.rogueObscureUntilTurn).toBe(1);
    const resisted=attackImportedRogue(c,'goblin',19,1,5,[1,2,3,4,5,6,1],undefined,{effect:'Obscure',saveTotal:99});expect(resisted.companionEncounter!.participants.goblin.conditions).not.toContain('Blinded');
    expect(()=>attackImportedRogue({...c,character:{...c.character!,level:13}},'goblin',19,1,5,[1,2,3,4,5,6,1],undefined,{effect:'Obscure',saveTotal:1})).toThrow('level 14');
    expect(()=>attackImportedRogue(c,'goblin',19,1,5,[1,2,3,4,5,6,1],undefined,{effect:'Obscure'})).toThrow('Dexterity');
+  });
+ });
+
+ describe('2024 Devious Strikes Daze and Knock Out',()=>{
+  function prepared(){const c=arena(14);const b=c.companionEncounter!;return {...c,companionEncounter:{...b,participants:{...b.participants,goblin:{...b.participants.goblin,hp:100,maxHp:100},ally:{...b.participants.nighthawk,x:4,y:2,actorKind:'party' as const,faction:'party'}}}};}
+  it('Daze costs two d6, constrains next turn action versus movement, and expires',()=>{
+   const c=prepared();const hit=attackImportedRogue(c,'goblin',19,1,5,[1,2,3,4,5,6,1],undefined,{effect:'Daze',saveTotal:1});
+   expect(hit.companionEncounter!.participants.goblin.rogueDazeTurns).toBe(1);
+   expect(hit.companionEncounter!.log.join(' ')).toContain('= 19 extra piercing damage');
+   const turn={...hit,companionEncounter:{...hit.companionEncounter!,order:['goblin','nighthawk'],turnIndex:0}};
+   const moved=moveCompanion(turn,'goblin',3,3);expect(()=>useCompanionAction(moved,'goblin','Dash')).toThrow('Dazed');
+   const acted=useCompanionAction(turn,'goblin','Dash');expect(()=>moveCompanion(acted,'goblin',3,3)).toThrow('Dazed');
+   const first=endCompanionTurn(turn,'goblin');expect(first.companionEncounter!.participants.goblin.rogueDazeTurns).toBeUndefined();
+   const second=endCompanionTurn({...first,companionEncounter:{...first.companionEncounter!,turnIndex:0}},'goblin');expect(second.companionEncounter!.participants.goblin.rogueDazeTurns).toBeUndefined();
+   expect(JSON.parse(JSON.stringify(hit)).companionEncounter.participants.goblin.rogueDazeTurns).toBe(1);
+   expect(attackImportedRogue(c,'goblin',19,1,5,[1,2,3,4,5,6,1],undefined,{effect:'Daze',saveTotal:99}).companionEncounter!.participants.goblin.rogueDazeTurns).toBeUndefined();
+  });
+  it('Knock Out costs six d6, requires a verified Constitution save, wakes on damage and supports repeat saves',()=>{
+   const c=prepared();const hit=attackImportedRogue(c,'goblin',19,1,5,[1,2,3,4,5,6,1],undefined,{effect:'Knock Out',saveTotal:1});
+   expect(hit.companionEncounter!.participants.goblin.conditions).toContain('Unconscious');
+   expect(hit.companionEncounter!.participants.goblin.rogueKnockoutRounds).toBe(10);
+   expect(hit.companionEncounter!.log.join(' ')).toContain('= 1 extra piercing damage');
+   const turn={...hit,companionEncounter:{...hit.companionEncounter!,order:['goblin','nighthawk'],turnIndex:0}};
+   expect(()=>endCompanionTurn(turn,'goblin')).toThrow('Knock Out');
+   const failed=resolveRogueKnockoutSave(turn,'goblin',1);expect(failed.companionEncounter!.participants.goblin.rogueKnockoutRounds).toBe(9);
+   const recovered=resolveRogueKnockoutSave(turn,'goblin',99);expect(recovered.companionEncounter!.participants.goblin.conditions).not.toContain('Unconscious');
+   expect(endCompanionTurn(recovered,'goblin').companionEncounter!.turnIndex).toBe(1);
+   const damaged=damageCompanion(hit,'goblin',1,'Fire');expect(damaged.companionEncounter!.participants.goblin.conditions).not.toContain('Unconscious');
+   expect(damaged.companionEncounter!.participants.goblin.rogueKnockoutDC).toBeUndefined();
+   expect(JSON.parse(JSON.stringify(hit)).companionEncounter.participants.goblin.rogueKnockoutRounds).toBe(10);
+   expect(attackImportedRogue(c,'goblin',19,1,5,[1,2,3,4,5,6,1],undefined,{effect:'Knock Out',saveTotal:99}).companionEncounter!.participants.goblin.conditions).not.toContain('Unconscious');
+   const immune={...c,companionEncounter:{...c.companionEncounter!,participants:{...c.companionEncounter!.participants,goblin:{...c.companionEncounter!.participants.goblin,conditionImmunities:['Unconscious']}}}};
+   expect(attackImportedRogue(immune,'goblin',19,1,5,[1,2,3,4,5,6,1],undefined,{effect:'Knock Out',saveTotal:1}).companionEncounter!.participants.goblin.conditions).not.toContain('Unconscious');
+   const both=attackImportedRogue(c,'goblin',19,1,5,[1,2,3,4,5,6,1],undefined,[{effect:'Knock Out',saveTotal:1},{effect:'Trip',saveTotal:1}]);
+   expect(both.companionEncounter!.log.join(' ')).toContain('= 0 extra piercing damage');
+   expect(both.companionEncounter!.participants.goblin.conditions).toContain('Prone');
   });
  });
