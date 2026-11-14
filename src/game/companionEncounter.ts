@@ -19,7 +19,7 @@ export interface CompanionEncounter {
  round:number;
  turnIndex:number;
  order:string[];
- participants:Record<string,{x:number;y:number;hp:number;maxHp:number;initiative:number;conditions:('Charmed'|'Poisoned'|'Blinded'|'Deafened'|'Frightened'|'Grappled'|'Incapacitated'|'Invisible'|'Paralyzed'|'Petrified'|'Prone'|'Restrained'|'Stunned'|'Unconscious'|'Exhaustion')[];speedFeet:number;movementSpentFeet:number;actionUsed:boolean;bonusActionUsed:boolean;dashFeet:number;disengaged:boolean;dodging:boolean;reactionUsed?:boolean;rogueSneakUsed?:boolean;roguePoisonDC?:number;roguePoisonRounds?:number;rogueObscureUntilTurn?:number;rogueDazeTurns?:number;rogueDazeChoice?:'movement'|'action';rogueKnockoutDC?:number;rogueKnockoutRounds?:number;conditionImmunities?:string[];rogueSteadyAim?:boolean;rogueHidden?:boolean;rogueHideDC?:number;rogueHideConcealment?:boolean;rogueDetectedBy?:string[];rogueMovedThisTurn?:boolean;concentratingOn?:string;consumables?:Record<string,number>;faction?:string;reachFeet?:number;actorKind?:'party'|'enemy';armorClass?:number;attackModifier?:number;constitutionSaveModifier?:number;damageModifier?:number;damageDice?:string;enemyTactic?:'hold'|'nearest'|'lowest-hp';rangedAttackFeet?:number;deathSaves?:{successes:number;failures:number;stable:boolean;dead:boolean}}>;
+ participants:Record<string,{x:number;y:number;hp:number;maxHp:number;initiative:number;conditions:('Charmed'|'Poisoned'|'Blinded'|'Deafened'|'Frightened'|'Grappled'|'Incapacitated'|'Invisible'|'Paralyzed'|'Petrified'|'Prone'|'Restrained'|'Stunned'|'Unconscious'|'Exhaustion')[];speedFeet:number;movementSpentFeet:number;actionUsed:boolean;bonusActionUsed:boolean;dashFeet:number;disengaged:boolean;dodging:boolean;reactionUsed?:boolean;rogueSneakUsed?:boolean;roguePoisonDC?:number;roguePoisonRounds?:number;roguePoisonSaveResolved?:boolean;rogueObscureUntilTurn?:number;rogueDazeTurns?:number;rogueDazeChoice?:'movement'|'action';rogueKnockoutDC?:number;rogueKnockoutRounds?:number;rogueKnockoutSaveResolved?:boolean;conditionImmunities?:string[];rogueSteadyAim?:boolean;rogueHidden?:boolean;rogueHideDC?:number;rogueHideConcealment?:boolean;rogueDetectedBy?:string[];rogueMovedThisTurn?:boolean;concentratingOn?:string;consumables?:Record<string,number>;faction?:string;reachFeet?:number;actorKind?:'party'|'enemy';armorClass?:number;attackModifier?:number;constitutionSaveModifier?:number;damageModifier?:number;damageDice?:string;enemyTactic?:'hold'|'nearest'|'lowest-hp';rangedAttackFeet?:number;deathSaves?:{successes:number;failures:number;stable:boolean;dead:boolean}}>;
  wizardHoldPersonTargets?:string[];
  rogueHoldPersonTargets?:string[];
  obstacles?:{x:number;y:number}[];
@@ -262,6 +262,7 @@ export function previewEnemyTurn(campaign:Campaign,enemyId:string):{tactic:'hold
 function executeEnemyMovement(campaign:Campaign,enemyId:string,finishTurn:boolean):Campaign{
  const battle=activeActor(campaign,enemyId),actor=battle.participants[enemyId];
  if(actor.actorKind!=='enemy')throw Error('Enemy actor required');
+ if(actor.rogueDazeTurns!==undefined&&(actor.rogueDazeChoice==='action'||actor.actionUsed||actor.bonusActionUsed))return finishTurn?endCompanionTurn(campaign,enemyId):campaign;
  const preview=previewEnemyTurn(campaign,enemyId);
  if(preview.targetId===null||preview.inReach)return finishTurn?endCompanionTurn(campaign,enemyId):campaign;
  const target=battle.participants[preview.targetId];
@@ -411,26 +412,26 @@ export function moveCompanion(campaign:Campaign,actorId:string,x:number,y:number
 /** Knock Out ends on a verified Constitution save, damage, or after ten target turns. */
 export function resolveRogueKnockoutSave(campaign:Campaign,targetId:string,saveTotal:number):Campaign{
  const battle=encounter(campaign),target=battle.participants[targetId];
- if(!target||battle.order[battle.turnIndex]!==targetId||target.rogueKnockoutDC===undefined||!Number.isInteger(saveTotal)||saveTotal<0||saveTotal>100)throw Error('Verified Knock Out end-of-turn Constitution save required');
+ if(!target||battle.order[battle.turnIndex]!==targetId||(target.rogueKnockoutDC===undefined||target.rogueKnockoutSaveResolved)||!Number.isInteger(saveTotal)||saveTotal<0||saveTotal>100)throw Error('Verified Knock Out end-of-turn Constitution save required');
  const recovered=saveTotal>=target.rogueKnockoutDC||target.rogueKnockoutRounds===1;
- return save(campaign,{...battle,participants:{...battle.participants,[targetId]:{...target,rogueKnockoutDC:recovered?undefined:target.rogueKnockoutDC,rogueKnockoutRounds:recovered?undefined:(target.rogueKnockoutRounds??10)-1,conditions:recovered?target.conditions.filter(c=>c!=='Unconscious'):target.conditions}},log:[...battle.log,`Rogue Knock Out Constitution save ${saveTotal}: ${recovered?'ended':'continues'}`]});
+ return save(campaign,{...battle,participants:{...battle.participants,[targetId]:{...target,rogueKnockoutDC:recovered?undefined:target.rogueKnockoutDC,rogueKnockoutRounds:recovered?undefined:(target.rogueKnockoutRounds??10)-1,rogueKnockoutSaveResolved:!recovered,conditions:recovered?target.conditions.filter(c=>c!=='Unconscious'):target.conditions}},log:[...battle.log,`Rogue Knock Out Constitution save ${saveTotal}: ${recovered?'ended':'continues'}`]});
 }
 /** Verified end-of-turn Constitution save for Cunning Strike Poison. No automatic or guessed rolls. */
 export function resolveRoguePoisonSave(campaign:Campaign,targetId:string,saveTotal:number):Campaign{
  const battle=encounter(campaign),target=battle.participants[targetId];
- if(!target||battle.order[battle.turnIndex]!==targetId||target.roguePoisonDC===undefined||!Number.isInteger(saveTotal)||saveTotal<0||saveTotal>100)throw Error('Verified end-of-turn Rogue Poison save required');
+ if(!target||battle.order[battle.turnIndex]!==targetId||(target.roguePoisonDC===undefined||target.roguePoisonSaveResolved)||!Number.isInteger(saveTotal)||saveTotal<0||saveTotal>100)throw Error('Verified end-of-turn Rogue Poison save required');
  const recovered=saveTotal>=target.roguePoisonDC||target.roguePoisonRounds===1;
- const updated={...target,roguePoisonDC:recovered?undefined:target.roguePoisonDC,roguePoisonRounds:recovered?undefined:(target.roguePoisonRounds??10)-1,conditions:recovered?target.conditions.filter(condition=>condition!=='Poisoned'):target.conditions};
+ const updated={...target,roguePoisonDC:recovered?undefined:target.roguePoisonDC,roguePoisonRounds:recovered?undefined:(target.roguePoisonRounds??10)-1,roguePoisonSaveResolved:!recovered,conditions:recovered?target.conditions.filter(condition=>condition!=='Poisoned'):target.conditions};
  return save(campaign,{...battle,participants:{...battle.participants,[targetId]:updated},log:[...battle.log,`Rogue Poison end-of-turn Constitution save ${saveTotal} vs DC ${target.roguePoisonDC}: ${recovered?'condition ended':'condition persists'}`]});
 }
 export function endCompanionTurn(campaign:Campaign,actorId:string):Campaign{
  const battle=activeActor(campaign,actorId);
  if(battle.mode==='unified'&&(battle.wizardHoldPersonTargets?.includes(actorId)||battle.rogueHoldPersonTargets?.includes(actorId))&&battle.participants[actorId]?.conditions.includes('Paralyzed'))throw Error('Resolve Hold Person end-of-turn Wisdom save before ending turn');
  if(battle.participants[actorId]?.actorKind==='enemy'&&battle.pendingOpportunity?.moverId===actorId&&battle.pendingOpportunity.attackerIds.length)throw Error('Pending opportunity reactions require DM adjudication');
- if(battle.participants[actorId]?.roguePoisonDC!==undefined)throw Error('Resolve Rogue Poison end-of-turn Constitution save before ending turn');
- if(battle.participants[actorId]?.rogueKnockoutDC!==undefined)throw Error('Resolve Rogue Knock Out end-of-turn Constitution save before ending turn');
+ if(battle.participants[actorId]?.roguePoisonDC!==undefined&&!battle.participants[actorId]?.roguePoisonSaveResolved)throw Error('Resolve Rogue Poison end-of-turn Constitution save before ending turn');
+ if(battle.participants[actorId]?.rogueKnockoutDC!==undefined&&!battle.participants[actorId]?.rogueKnockoutSaveResolved)throw Error('Resolve Rogue Knock Out end-of-turn Constitution save before ending turn');
  const next=(battle.turnIndex+1)%battle.order.length;
- const nextId=battle.order[next];const outgoing=battle.participants[actorId];const participants={...battle.participants,[actorId]:{...outgoing,disengaged:false,...(outgoing.rogueDazeTurns!==undefined?(outgoing.rogueDazeTurns<=1?{rogueDazeTurns:undefined,rogueDazeChoice:undefined}:{rogueDazeTurns:outgoing.rogueDazeTurns-1,rogueDazeChoice:undefined}):{}),...(outgoing.rogueObscureUntilTurn!==undefined?(outgoing.rogueObscureUntilTurn<=1?{rogueObscureUntilTurn:undefined,conditions:outgoing.conditions.filter(c=>c!=='Blinded')}:{rogueObscureUntilTurn:outgoing.rogueObscureUntilTurn-1}):{})}};participants[nextId]={...participants[nextId],movementSpentFeet:0,actionUsed:false,bonusActionUsed:false,dashFeet:0,disengaged:false,dodging:false,reactionUsed:false,rogueSneakUsed:false,rogueSteadyAim:false,rogueMovedThisTurn:false};return save(campaign,{...battle,participants,turnIndex:next,round:battle.round+(next===0?1:0),log:[...battle.log,actorId+' ended turn']});
+ const nextId=battle.order[next];const outgoing=battle.participants[actorId];const participants={...battle.participants,[actorId]:{...outgoing,disengaged:false,roguePoisonSaveResolved:false,rogueKnockoutSaveResolved:false,...(outgoing.rogueDazeTurns!==undefined?(outgoing.rogueDazeTurns<=1?{rogueDazeTurns:undefined,rogueDazeChoice:undefined}:{rogueDazeTurns:outgoing.rogueDazeTurns-1,rogueDazeChoice:undefined}):{}),...(outgoing.rogueObscureUntilTurn!==undefined?(outgoing.rogueObscureUntilTurn<=1?{rogueObscureUntilTurn:undefined,conditions:outgoing.conditions.filter(c=>c!=='Blinded')}:{rogueObscureUntilTurn:outgoing.rogueObscureUntilTurn-1}):{})}};participants[nextId]={...participants[nextId],movementSpentFeet:0,actionUsed:false,bonusActionUsed:false,dashFeet:0,disengaged:false,dodging:false,reactionUsed:false,rogueSneakUsed:false,rogueSteadyAim:false,rogueMovedThisTurn:false};return save(campaign,{...battle,participants,turnIndex:next,round:battle.round+(next===0?1:0),log:[...battle.log,actorId+' ended turn']});
 }
 /** 2024 death saves are tracked independently of campaign.character and legacy combat.
  * Natural 20 restores 1 HP; natural 1 causes two failures; other rolls use DC 10.
@@ -440,13 +441,13 @@ export function endCompanionTurn(campaign:Campaign,actorId:string):Campaign{
  */
 function damagedActor(actor:CompanionEncounter['participants'][string],taken:number,critical=false):CompanionEncounter['participants'][string]{
  const hp=Math.max(0,actor.hp-taken);
- if(hp>0||actor.actorKind==='enemy')return {...actor,hp,concentratingOn:hp===0?undefined:actor.concentratingOn,...(taken>0&&actor.rogueKnockoutDC!==undefined?{rogueKnockoutDC:undefined,rogueKnockoutRounds:undefined,conditions:actor.conditions.filter(c=>c!=='Unconscious')}:{})};
+ if(hp>0||actor.actorKind==='enemy')return {...actor,hp,concentratingOn:hp===0?undefined:actor.concentratingOn,...(taken>0&&actor.rogueKnockoutDC!==undefined?{rogueKnockoutDC:undefined,rogueKnockoutRounds:undefined,rogueKnockoutSaveResolved:false,conditions:actor.conditions.filter(c=>c!=='Unconscious')}:{})};
  const previous=actor.deathSaves;
  const excess=Math.max(0,taken-actor.hp);
  const instantDeath=taken>0&&excess>=actor.maxHp;
  const failures=Math.min(3,(previous?.failures??0)+(actor.hp===0&&taken>0?(critical?2:1):0));
  const dead=previous?.dead===true||instantDeath||failures>=3;
- return {...actor,hp,concentratingOn:undefined,conditions:[...new Set([...actor.conditions,'Unconscious' as const])],deathSaves:{successes:previous?.successes??0,failures,stable:!dead&&taken===0&&(previous?.stable??false),dead}};
+ return {...actor,hp,rogueKnockoutDC:undefined,rogueKnockoutRounds:undefined,concentratingOn:undefined,conditions:[...new Set([...actor.conditions,'Unconscious' as const])],deathSaves:{successes:previous?.successes??0,failures,stable:!dead&&taken===0&&(previous?.stable??false),dead}};
 }
 export function resolveCompanionDeathSave(campaign:Campaign,actorId:string,roll:number):Campaign{
  const battle=activeActor(campaign,actorId),actor=battle.participants[actorId];
@@ -560,7 +561,7 @@ export function nighthawkEncounterStatistics(campaign:Campaign){
 export function useCompanionBonusAction(campaign:Campaign,actorId:string,description:string,eligible:boolean):Campaign{
  const battle=activeActor(campaign,actorId),actor=battle.participants[actorId];
  if(!eligible)throw Error('Bonus action requires verified feature eligibility');
- if(actor.hp<=0||actor.bonusActionUsed)throw Error('Bonus action unavailable');
+ if(actor.hp<=0||actor.bonusActionUsed||cannotAct(actor))throw Error('Bonus action unavailable');
  if(actor.rogueDazeTurns!==undefined&&(actor.rogueDazeChoice==='movement'||actor.movementSpentFeet>0||actor.actionUsed))throw Error('Dazed: choose movement or one action or bonus action');
  if(!description.trim()||description.length>160)throw Error('Bonus action requires a description');
  return save(campaign,{...battle,participants:{...battle.participants,[actorId]:{...actor,bonusActionUsed:true,...(actor.rogueDazeTurns!==undefined?{rogueDazeChoice:'action' as const}:{})}},log:[...battle.log,actorId+' bonus action: '+description.trim()+' (feature eligibility supplied; effect DM adjudicated)']});
@@ -968,7 +969,7 @@ export function attackImportedRogue(campaign:Campaign,targetId:string,roll:numbe
   if(strike.effect==='Withdraw'){strikeLog.push('Rogue Cunning Strike Withdraw: one Sneak Attack d6 forgone');continue;}
   const failed=strike.saveTotal!<strikeDC;
   const condition:'Prone'|'Poisoned'|'Blinded'|'Unconscious'|undefined=strike.effect==='Trip'?'Prone':strike.effect==='Obscure'?'Blinded':strike.effect==='Knock Out'?'Unconscious':strike.effect==='Poison'?'Poisoned':undefined;
-  if(failed&&affected.hp>0&&!(condition&&affected.conditionImmunities?.includes(condition)))affected={...affected,...(condition?{conditions:[...new Set([...affected.conditions,condition])]}:{}),...(condition==='Poisoned'?{roguePoisonDC:strikeDC,roguePoisonRounds:10}:condition==='Blinded'?{rogueObscureUntilTurn:1}:condition==='Unconscious'?{rogueKnockoutDC:strikeDC,rogueKnockoutRounds:10}:strike.effect==='Daze'?{rogueDazeTurns:1}: {})};
+  if(failed&&affected.hp>0&&!(condition&&affected.conditionImmunities?.includes(condition)))affected={...affected,...(condition?{conditions:[...new Set([...affected.conditions,condition])]}:{}),...(condition==='Poisoned'?{roguePoisonDC:strikeDC,roguePoisonRounds:10,roguePoisonSaveResolved:false}:condition==='Blinded'?{rogueObscureUntilTurn:1}:condition==='Unconscious'?{rogueKnockoutDC:strikeDC,rogueKnockoutRounds:10,rogueKnockoutSaveResolved:false}:strike.effect==='Daze'?{rogueDazeTurns:1}: {})};
   strikeLog.push(`Rogue Cunning Strike ${strike.effect}: ${strike.effect==='Knock Out'?'six Sneak Attack d6 forgone':strike.effect==='Obscure'?'three Sneak Attack d6 forgone':strike.effect==='Daze'?'two Sneak Attack d6 forgone':'one Sneak Attack d6 forgone'}; ${strike.effect==='Trip'||strike.effect==='Obscure'?'Dexterity':'Constitution'} save ${strike.saveTotal} vs DC ${strikeDC}: ${failed?'failed':'saved'}`);
  }
  if(affected.roguePoisonDC!==undefined&&struck.roguePoisonDC===undefined)strikeLog.push('Cunning Strike Poisoned: target repeats Constitution save at end of its turns (DC '+strikeDC+'); resolve explicitly before ending turn.');

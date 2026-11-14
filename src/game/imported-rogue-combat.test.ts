@@ -155,3 +155,39 @@ describe('Devious Strikes hardening regressions',()=>{
   expect(()=>moveCompanion(acted,'goblin',3,3)).toThrow('Dazed');
  });
 });
+
+describe('Knock Out and Daze lifecycle regression',()=>{
+ function highLevel(){const c=arena(14);const b=c.companionEncounter!;return {...c,companionEncounter:{...b,participants:{...b.participants,goblin:{...b.participants.goblin,hp:100,maxHp:100},ally:{...b.participants.nighthawk,x:4,y:2,actorKind:'party' as const,faction:'party'}}}};}
+ it('Knock Out expires on the tenth verified failed end-turn save and survives serialization each round',()=>{
+  const c=highLevel();let hit=attackImportedRogue(c,'goblin',19,1,5,[1,1,1,1,1,1,1],undefined,{effect:'Knock Out',saveTotal:1});
+  for(let i=0;i<10;i++){
+   const b=hit.companionEncounter!;const turn={...hit,companionEncounter:{...b,order:['goblin','nighthawk'],turnIndex:0}};
+   hit=JSON.parse(JSON.stringify(resolveRogueKnockoutSave(turn,'goblin',1))) as Campaign;
+   expect(hit.companionEncounter!.participants.goblin.rogueKnockoutRounds).toBe(i===9?undefined:9-i);
+   expect(hit.companionEncounter!.participants.goblin.conditions.includes('Unconscious')).toBe(i!==9);
+   hit=endCompanionTurn(hit,'goblin');
+  }
+  expect(hit.companionEncounter!.participants.goblin.rogueKnockoutDC).toBeUndefined();
+ });
+ it('Knock Out and Poison coexist and each needs its own save',()=>{
+  const c=highLevel();const hit=attackImportedRogue(c,'goblin',19,1,5,[1,1,1,1,1,1,1],undefined,[{effect:'Knock Out',saveTotal:1},{effect:'Poison',saveTotal:1}]);
+  const b=hit.companionEncounter!;const turn={...hit,companionEncounter:{...b,order:['goblin','nighthawk'],turnIndex:0}};
+  expect(b.participants.goblin.conditions).toEqual(expect.arrayContaining(['Unconscious','Poisoned']));
+  expect(()=>endCompanionTurn(turn,'goblin')).toThrow('Poison');
+  const poison=resolveRoguePoisonSave(turn,'goblin',99);
+  expect(poison.companionEncounter!.participants.goblin.conditions).toContain('Unconscious');
+  expect(()=>endCompanionTurn(poison,'goblin')).toThrow('Knock Out');
+  const recovered=resolveRogueKnockoutSave(poison,'goblin',99);
+  expect(recovered.companionEncounter!.participants.goblin.conditions).not.toContain('Unconscious');
+  expect(recovered.companionEncounter!.participants.goblin.conditions).not.toContain('Poisoned');
+  expect(endCompanionTurn(recovered,'goblin').companionEncounter!.turnIndex).toBe(1);
+ });
+ it('critical combined Knock Out and Trip costs fourteen dice and cannot spend beyond available dice',()=>{
+  const c=highLevel();const dice=Array(14).fill(2);
+  const hit=attackImportedRogue(c,'goblin',20,1,5,dice,undefined,[{effect:'Knock Out',saveTotal:1},{effect:'Trip',saveTotal:1}]);
+  expect(hit.companionEncounter!.log.join(' ')).toContain('= 0 extra piercing damage');
+  expect(hit.companionEncounter!.participants.goblin.conditions).toContain('Unconscious');
+  expect(hit.companionEncounter!.participants.goblin.conditions).toContain('Prone');
+  expect(()=>attackImportedRogue({...c,character:{...c.character!,level:11}},'goblin',20,1,5,Array(12).fill(2),undefined,[{effect:'Knock Out',saveTotal:1},{effect:'Trip',saveTotal:1}])).toThrow('level 14');
+ });
+});
