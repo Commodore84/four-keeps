@@ -52,7 +52,7 @@ test('fighter creation to adventure, NPC, combat, rewards, save and resume',asyn
  await page.reload();await page.getByRole('button',{name:'Continue Adventure'}).click();await navigate(page,'Developer');
  await expect(session).toContainText('Rewards saved: 75 XP');await expect(session.getByRole('button',{name:'Save encounter rewards'})).toHaveCount(0);
  await session.getByRole('button',{name:'Resume exploration after encounter'}).click();await expect(session.getByLabel('Adventure session status')).toContainText('exploring');
- await navigate(page,'Player');await expect(page.getByLabel('Imported player character')).toContainText('75 XP');await expect(page.getByLabel('Persistent character summary')).toContainText('HP9/12');await expect(page.getByLabel('Player class resources')).toContainText('Second Wind: 1/2');await expect(page.getByLabel('Equipment and inventory')).toContainText('Tower token ×1');
+ await navigate(page,'Player');await expect(page.getByLabel('Imported player character')).toContainText('75 XP');await expect(page.getByLabel('Persistent character summary')).toContainText('HP9/12');await expect(page.getByLabel('Player class resources')).toContainText('Second Wind1 / 2 remaining');await expect(page.getByLabel('Equipment and inventory')).toContainText('Tower token ×1');
  expect(errors).toEqual([]);
 });
 

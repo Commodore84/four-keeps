@@ -520,6 +520,16 @@ test('new Rogue starts at Frontier Village, buys supplies, and sees persisted Pl
  await expect(sheet.getByLabel('Death saving throws')).toContainText('Successes:');
  await expect(sheet.getByLabel('Attacks and damage cantrips')).toContainText('Selected weapon masteries');
  await expect(sheet.getByLabel('Equipment training and proficiencies')).toContainText('Weapon proficiencies');
+ await expect(sheet.getByLabel('Earned class features')).toContainText('Level 1');
+ await expect(sheet.getByLabel('Species traits')).toBeVisible();
+ await expect(sheet.getByLabel('Earned feats')).toBeVisible();
+ await expect(sheet.getByLabel('Player class resources')).toBeVisible();
+ await expect(sheet.getByLabel('Player spellcasting')).toBeVisible();
+ await sheet.getByLabel('Jump to character section').selectOption('features');
+ await expect(sheet.getByLabel('Class features',{exact:true})).toBeInViewport();
+ await sheet.getByLabel('Jump to character section').selectOption('spells');
+ await expect(sheet.getByLabel('Player spellcasting')).toBeInViewport();
+
  await sheet.getByLabel('Jump to character section').selectOption('vitality');
  await expect(sheet.getByLabel('Hit points and Hit Dice')).toBeInViewport();
 
