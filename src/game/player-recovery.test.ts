@@ -81,3 +81,18 @@ it('rejects a malformed solo setup without creating or mutating a battle',()=>{
 it('does not permit recovery while a pending check has locked an action',()=>{
  const c={...player(),pendingCheck:{skill:'Stealth',mode:'normal' as const,reason:'Hide',token:'locked'}};expect(()=>completePlayerRest(c,'short',{confirmedSafe:true})).toThrow('encounter');
 });
+
+describe('higher-rank persisted spell slots',()=>{
+ it('restores ranks 3 through 9 on a long rest without changing stored maxima',()=>{
+  const c=player('wizard');c.character!.spellSlots={level1:4,usedLevel1:1,level2:3,usedLevel2:2,level3:3,usedLevel3:2,level4:2,usedLevel4:1,level5:2,usedLevel5:1,level6:1,usedLevel6:1,level7:1,usedLevel7:1,level8:1,usedLevel8:1,level9:1,usedLevel9:1};
+  const next=completePlayerRest(c,'long',{confirmedSafe:true,waitMinutes:playerLongRestWaitMinutes(c)});
+  for(let rank=3;rank<=9;rank++){expect((next.character!.spellSlots as Record<string,number>)[`usedLevel${rank}`]).toBe(0);expect((next.character!.spellSlots as Record<string,number>)[`level${rank}`]).toBe((c.character!.spellSlots as Record<string,number>)[`level${rank}`]);}
+  expect(c.character!.spellSlots!.usedLevel9).toBe(1);
+ });
+ it('does not restore higher-rank wizard slots on ordinary short rests and rejects invalid persisted usage',()=>{
+  const c=player('wizard');c.character!.spellSlots={level1:4,usedLevel1:0,level3:2,usedLevel3:1};
+  expect(completePlayerRest(c,'short',{confirmedSafe:true}).character!.spellSlots!.usedLevel3).toBe(1);
+  c.character!.spellSlots.usedLevel3=3;
+  expect(()=>completePlayerRest(c,'long',{confirmedSafe:true,waitMinutes:playerLongRestWaitMinutes(c)})).toThrow('Invalid level-3 spell slots');
+ });
+});

@@ -55,6 +55,10 @@ export function completePlayerRest(campaign:Campaign,kind:'short'|'long',options
  let slots=c.spellSlots?{...c.spellSlots}:undefined;
  if(slots&&(!Number.isInteger(slots.level1)||!Number.isInteger(slots.usedLevel1)||slots.usedLevel1<0||slots.usedLevel1>slots.level1))throw Error('Invalid spell-slot state');
  if(slots&&(slots.level2!==undefined||slots.usedLevel2!==undefined)&&(!Number.isInteger(slots.level2)||!Number.isInteger(slots.usedLevel2)||slots.level2!<0||slots.usedLevel2!<0||slots.usedLevel2!>slots.level2!))throw Error('Invalid second-level spell slots');
+ for(const rank of [3,4,5,6,7,8,9] as const){
+  const total=slots?.[`level${rank}` as keyof typeof slots],used=slots?.[`usedLevel${rank}` as keyof typeof slots];
+  if(total!==undefined||used!==undefined){if(!Number.isInteger(total)||!Number.isInteger(used)||total!<0||used!<0||used!>total!)throw Error(`Invalid level-${rank} spell slots`);}
+ }
  if(options.arcaneRecovery){
   const pool=resources['Arcane Recovery'];
   if(kind!=='short'||cls.id!=='wizard'||!pool||pool.used>=pool.maximum||!slots||slots.usedLevel1<1&&(slots.usedLevel2??0)<1)throw Error('Arcane Recovery unavailable');
@@ -67,6 +71,7 @@ export function completePlayerRest(campaign:Campaign,kind:'short'|'long',options
  }
  if(slots&&(kind==='long'||cls.id==='warlock'))slots.usedLevel1=0;
  if(slots&&kind==='long'&&slots.level2!==undefined)slots.usedLevel2=0;
+ if(slots&&(kind==='long'||cls.id==='warlock'))for(const rank of [2,3,4,5,6,7,8,9] as const){const key=`usedLevel${rank}` as keyof typeof slots;if(slots[key]!==undefined)(slots as Record<string,number>)[key]=0;}
  const healing=rolls.reduce((total,die)=>total+Math.max(1,die+abilityModifier(c.scores.con)),0);
  const hp=kind==='long'?c.maxHitPoints!:Math.min(c.maxHitPoints!,c.currentHitPoints!+healing);
  const duration=kind==='short'?60:options.useTrance?240:480;
