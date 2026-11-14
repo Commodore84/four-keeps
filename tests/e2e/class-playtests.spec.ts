@@ -526,6 +526,9 @@ test('new Rogue starts at Frontier Village, buys supplies, and sees persisted Pl
  await expect(sheet.getByLabel('Player spellcasting')).not.toContainText('Level 0 slots');
  await expect(sheet.getByLabel('Class spell progression')).toHaveCount(0); // A level-one Rogue has no spellcasting progression.
  await expect(sheet.getByLabel('Species traits')).toBeVisible();
+ await expect(sheet.getByLabel('Species traits')).toContainText('Fey Ancestry');
+ await expect(sheet.getByLabel('Species traits')).toContainText('Passive');
+ await expect(sheet.getByLabel('Species traits')).not.toContainText('Misty Step (level 5)');
  await expect(sheet.getByLabel('Earned feats')).toBeVisible();
  await expect(sheet.getByLabel('Player class resources')).toBeVisible();
  await expect(sheet.getByLabel('Player spellcasting')).toBeVisible();

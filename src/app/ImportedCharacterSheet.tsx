@@ -39,6 +39,29 @@ const FEATURE_SUMMARIES:Record<string,string>={
  'Sorcery Points':'Fuel Sorcerer abilities and metamagic options.',
  'Arcane Recovery':'Recover eligible expended spell slots after a Short Rest.'
 };
+const TRAIT_DETAILS:Record<string,{description:string;action?:string}>={
+ 'Darkvision':{description:'See in dim light within your Darkvision range as if it were bright light, and in darkness as if it were dim light; colors appear as shades of gray.',action:'Passive'},
+ 'Fey Ancestry':{description:'You have Advantage on saving throws to avoid or end the Charmed condition.',action:'Passive'},
+ 'Trance':{description:'You do not need to sleep, and magic cannot put you to sleep. Complete a Long Rest in 4 hours of trance when the rest conditions are met.',action:'Rest'},
+ 'Keen Senses':{description:'You gain proficiency in Insight, Perception, or Survival, as selected for your character.',action:'Passive'},
+ 'Dwarven Toughness':{description:'Your Hit Point maximum increases by 1, and increases by 1 again whenever you gain a level.',action:'Passive'},
+ 'Dwarven Resilience':{description:'You have Resistance to Poison damage and Advantage on saving throws to avoid or end the Poisoned condition.',action:'Passive'},
+ 'Stonecunning':{description:'Gain Tremorsense for 10 minutes while standing on stone; uses and recovery follow your species trait.',action:'Bonus Action'},
+ 'Healing Hands':{description:'Restore hit points to a creature you touch, using the species trait’s limited-use healing.',action:'Magic Action'},
+ 'Celestial Resistance':{description:'You have Resistance to Necrotic and Radiant damage.',action:'Passive'},
+ 'Light Bearer':{description:'You know the Light cantrip.',action:'Magic Action'},
+ 'Breath Weapon':{description:'Replace one attack of your Attack action with a damaging breath weapon; its damage and uses scale with level.',action:'Attack action'},
+ 'Damage Resistance':{description:'You have Resistance to the damage type selected for your Draconic Ancestry.',action:'Passive'},
+ 'Gnomish Cunning':{description:'You have Advantage on Intelligence, Wisdom, and Charisma saving throws.',action:'Passive'},
+ 'Speed 35 ft.':{description:'Your Wood Elf walking speed is 35 feet; this is already reflected in your Speed statistic.',action:'Passive'},
+ 'Dancing Lights':{description:'You know the Dancing Lights cantrip from your Drow lineage.',action:'Magic Action'},
+ 'Druidcraft':{description:'You know the Druidcraft cantrip from your Wood Elf lineage.',action:'Magic Action'},
+ 'Prestidigitation':{description:'You know the Prestidigitation cantrip from your High Elf lineage.',action:'Magic Action'},
+ 'Minor Illusion':{description:'You know the Minor Illusion cantrip from your Forest Gnome lineage.',action:'Magic Action'},
+ 'Speak with Animals':{description:'You can communicate with beasts using the species spellcasting trait.',action:'Magic Action'},
+};
+const FEATURE_ACTIONS:Record<string,string>={'Sneak Attack':'On hit','Cunning Action':'Bonus Action','Cunning Strike':'On hit','Uncanny Dodge':'Reaction','Second Wind':'Bonus Action','Action Surge':'On your turn','Rage':'Bonus Action','Reckless Attack':'On attack','Arcane Recovery':'Short Rest','Lay on Hands':'Bonus Action','Bardic Inspiration':'Bonus Action','Wild Shape':'Bonus Action','Channel Divinity':'Varies by option'};
+const earnedTraitName=(name:string)=>name.replace(/\s*\(level \d+\)/i,'');
 export function ImportedCharacterSheet({campaign,saving,onChange,development=false}:{campaign:Campaign;saving:boolean;onChange:(next:Campaign,message:string)=>Promise<boolean>|boolean|void;development?:boolean}){
  const c=campaign.character!,identity=campaign.characterIdentity!,cls=classSummary(identity.classId),attack=playerEquippedAttack(campaign),handoff=campaignAdvancementReview(campaign);
  const mastered=campaign.characterBuild?.selections.classChoices?.['weapon-mastery']??[];
@@ -106,10 +129,10 @@ export function ImportedCharacterSheet({campaign,saving,onChange,development=fal
  </section>
  <section id="player-equipment" className="scroll-mt-36" aria-label="Equipment and inventory"><h3 className="font-semibold">Equipment and inventory</h3><p>{formatFrontierPrice(walletCopper(campaign.inventoryLedger?.currency))}</p>{campaign.inventoryLedger?.gear.map(i=><p key={i.name}>{i.name} ×{i.quantity}</p>)}</section>
  <section id="player-features" className="scroll-mt-36 space-y-3 rounded-xl border border-white/20 p-3" aria-label="Class features"><h3 className="font-semibold">Earned features & traits</h3>
- <div aria-label="Earned class features"><h4 className="font-medium">{cls?.name} class features</h4>{cls?.features.filter(f=>f.level<=(c.level??1)).map(group=><div key={group.level} className="mt-2 rounded-lg border border-white/10 p-2 text-sm"><p className="text-xs text-gold">Level {group.level}</p>{[...new Set(group.names)].map(name=><div key={name}><strong>{name}</strong>{FEATURE_SUMMARIES[name]&&<p className="text-xs opacity-70">{FEATURE_SUMMARIES[name]}</p>}</div>)}</div>)}</div>
+ <div aria-label="Earned class features"><h4 className="font-medium">{cls?.name} class features</h4>{cls?.features.filter(f=>f.level<=(c.level??1)).map(group=><div key={group.level} className="mt-2 rounded-lg border border-white/10 p-2 text-sm"><p className="text-xs text-gold">Level {group.level}</p>{[...new Set(group.names)].map(name=><div key={name}><strong>{name}</strong>{FEATURE_ACTIONS[name]&&<span className="ml-2 text-xs text-gold">{FEATURE_ACTIONS[name]}</span>}{FEATURE_SUMMARIES[name]&&<p className="text-xs opacity-70">{FEATURE_SUMMARIES[name]}</p>}</div>)}</div>)}</div>
  {subclass&&<div aria-label="Earned subclass"><h4 className="font-medium">{subclass.name}</h4><p className="text-sm">{subclass.description}</p><p className="text-xs opacity-70">Subclass unlocked at level {subclass.unlockLevel}. Later features are not granted by this summary.</p></div>}
- <div aria-label="Species traits"><h4 className="font-medium">{species?.name??identity.speciesId} traits</h4><p className="text-xs opacity-70">{species?.summary}</p>{[...(species?.traits??[]),...(lineage?.traits??[])].filter(name=>{const match=name.match(/\(level (\d+)\)/i);return !match||Number(match[1])<=(c.level??1)}).map(name=><p key={name} className="text-sm">{name}</p>)}</div>
- <div aria-label="Earned feats"><h4 className="font-medium">Earned feats</h4>{earnedFeats.length?earnedFeats.map((feat,index)=><div key={feat.name+index} className="mt-2 rounded-lg border border-white/10 p-2 text-sm"><strong>{feat.name}</strong><span className="ml-2 text-xs opacity-70">{feat.source}</span><p>{futureFeat(feat.name)?.description??'Description unavailable in the current rules catalog.'}</p></div>):<p className="text-sm opacity-70">No recorded feats.</p>}</div>
+ <div aria-label="Species traits"><h4 className="font-medium">{species?.name??identity.speciesId} traits</h4><p className="text-xs opacity-70">{species?.summary}</p>{[...new Set([...(species?.traits??[]),...(lineage?.traits??[])])].filter(name=>{const match=name.match(/\(level (\d+)\)/i);return !match||Number(match[1])<=(c.level??1)}).map(name=>{const detail=TRAIT_DETAILS[earnedTraitName(name)];return <div key={name} className="mt-2 rounded-lg border border-white/10 p-2 text-sm"><strong>{name}</strong>{detail?.action&&<span className="ml-2 text-xs text-gold">{detail.action}</span>}{detail?<p className="text-xs opacity-80">{detail.description}</p>:<p className="text-xs opacity-60">Trait recorded; detailed rules text is not yet verified in the current catalog.</p>}</div>})}</div>
+ <div aria-label="Earned feats"><h4 className="font-medium">Earned feats</h4>{earnedFeats.length?[...new Map(earnedFeats.map(feat=>[feat.name.toLowerCase(),feat])).values()].map((feat,index)=><div key={feat.name+index} className="mt-2 rounded-lg border border-white/10 p-2 text-sm"><strong>{feat.name}</strong><span className="ml-2 text-xs opacity-70">{feat.source}</span><p>{futureFeat(feat.name)?.description??'Description unavailable in the current rules catalog.'}</p></div>):<p className="text-sm opacity-70">No recorded feats.</p>}</div>
  </section>
  <section id="player-spells" className="scroll-mt-36 space-y-3 rounded-xl border border-white/20 p-3" aria-label="Player spellcasting"><h3 className="font-semibold">Spellcasting</h3>
  {knownSpells.length||slots.length?<><div className="grid grid-cols-2 gap-2 text-sm"><p>Spellcasting ability <strong>{castingAbility?.toUpperCase()??'Not recorded'}</strong></p><p>Spell attack <strong>{spellBonus===undefined?'—':signed(spellBonus)}</strong></p><p>Spell save DC <strong>{spellBonus===undefined?'—':8+spellBonus}</strong></p>{identity.classId==='warlock'&&<p>Pact slot rank <strong>{campaign.importedWarlockPactSlotLevel??1}</strong></p>}</div>
