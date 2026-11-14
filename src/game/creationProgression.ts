@@ -111,9 +111,46 @@ const CLASS_FEATURE_EXPLANATIONS:Record<string,string>={
 'Superior Inspiration':'Recover Bardic Inspiration when you would otherwise begin a fight without it.',
 'Words of Creation':'Your mastery of Bard magic enables extraordinary high-level spellcasting.'
 };
+/** Display metadata only; none of these entries grants a gameplay effect. */
+export const VERIFIED_MILESTONE_DETAILS:Record<string,{description:string;activation:string}>={
+ 'Countercharm':{description:'When you or a creature within 30 feet fails a saving throw against Charmed or Frightened, use a Reaction to cause the save to be rerolled with Advantage.',activation:'Reaction'},
+ 'Sear Undead':{description:'When Turn Undead succeeds, eligible Undead also take Radiant damage determined by your Wisdom modifier and Cleric level.',activation:'Channel Divinity'},
+ 'Blessed Strikes':{description:'Choose Divine Strike or Potent Spellcasting to enhance your weapon or cantrip damage as your Cleric advances.',activation:'On hit / spellcasting'},
+ 'Improved Blessed Strikes':{description:'Improve the Blessed Strikes option you selected at the earlier Cleric level.',activation:'Passive'},
+ 'Elemental Fury':{description:'Choose Potent Spellcasting or Primal Strike to improve your Druid spellcasting or weapon and Wild Shape attacks.',activation:'On attack / spellcasting'},
+ 'Elemental Fury Improvement':{description:'Improve the Elemental Fury option selected at level 7, increasing its effectiveness without granting the unselected option.',activation:'Passive'},
+ 'Tactical Master':{description:'When attacking with a mastered weapon, you can replace its Push, Sap, or Slow mastery property with another of those three.',activation:'On attack'},
+ 'Studied Attacks':{description:'After missing a creature with an attack roll, gain Advantage on your next attack roll against that creature before the end of your next turn.',activation:'On miss'},
+ 'Action Surge Improvement':{description:'Gain an additional use of Action Surge; the uses return when you finish a Short or Long Rest.',activation:'Short or Long Rest'},
+ 'Two Extra Attacks':{description:'Make three attacks instead of one when taking the Attack action.',activation:'Attack action'},
+ 'Three Extra Attacks':{description:'Make four attacks instead of one when taking the Attack action.',activation:'Attack action'},
+ 'Deflect Energy':{description:'Your Deflect Attacks feature can also reduce eligible damage types beyond physical attacks.',activation:'Reaction'},
+ 'Disciplined Survivor':{description:'Gain proficiency in all saving throws, with a limited ability to reroll failed saving throws.',activation:'On failed save'},
+ 'Superior Defense':{description:'Spend Focus Points to gain Resistance to most damage types for a limited duration.',activation:'Bonus Action'},
+ 'Nature’s Veil':{description:'Expend a use of Nature’s Veil to become Invisible briefly without casting a spell.',activation:'Bonus Action'},
+ 'Tireless':{description:'Gain temporary Hit Points using a limited-use Magic action and recover Exhaustion more effectively after a Short Rest.',activation:'Magic Action / Short Rest'},
+ 'Relentless Hunter':{description:'Taking damage no longer breaks Concentration on Hunter’s Mark.',activation:'Passive'},
+ 'Precise Hunter':{description:'Gain Advantage on attack rolls against the creature currently marked by your Hunter’s Mark.',activation:'On attack'},
+ 'Feral Senses':{description:'Gain Blindsight out to 30 feet.',activation:'Passive'},
+ 'Improved Cunning Strike':{description:'Apply up to two Cunning Strike effects to one eligible Sneak Attack, paying the dice cost of both.',activation:'On Sneak Attack'},
+ 'Devious Strikes':{description:'Unlock additional Cunning Strike options with higher Sneak Attack dice costs.',activation:'On Sneak Attack'},
+ 'Elusive':{description:'Attack rolls cannot have Advantage against you while you are not Incapacitated.',activation:'Passive'},
+ 'Sorcery Incarnate':{description:'While Innate Sorcery is active, you can apply up to two Metamagic options to a spell, within their individual restrictions.',activation:'When casting'},
+ 'Memorize Spell':{description:'After a Short Rest, replace one prepared Wizard spell with another eligible spell in your spellbook.',activation:'Short Rest'},
+ 'Spell Mastery':{description:'Choose one eligible level-one and one level-two Wizard spell to cast at their lowest level without expending slots, subject to the feature’s limits.',activation:'Spellcasting'},
+ 'Signature Spells':{description:'Choose two level-three Wizard spells; they are always prepared and each can be cast once without a slot per Short or Long Rest.',activation:'Spellcasting / rest'},
+ 'Font of Inspiration':{description:'Recover Bardic Inspiration uses on a Short or Long Rest, and expend spell slots to regain additional uses.',activation:'Rest / resource'},
+ 'Magical Secrets':{description:'When preparing Bard spells, select qualifying spells from the Cleric, Druid, or Wizard spell lists as permitted by the feature.',activation:'Spell preparation'},
+ 'Divine Intervention':{description:'Invoke a qualifying Cleric spell of level 5 or lower without expending a slot or material components, within the feature’s use limits.',activation:'Magic Action'},
+ 'Wild Resurgence':{description:'Exchange spell slots and Wild Shape uses under the feature’s stated restrictions.',activation:'Resource'},
+ 'Beast Spells':{description:'Cast spells while in Wild Shape, subject to the feature’s material-component restrictions.',activation:'Spellcasting'},
+ 'Primal Champion':{description:'Increase Strength and Constitution by 4, to a maximum of 25 each.',activation:'Passive'},
+ 'Indomitable Might':{description:'When a Strength check or saving throw total is lower than your Strength score, use the score instead.',activation:'On check / save'},
+ 'Stroke of Luck':{description:'Turn an eligible failed d20 Test into a success, subject to the Rogue feature’s recovery limit.',activation:'On failed d20 Test'},
+};
 function classMilestoneDescription(name:string):string{
  const parts=name.split(' and ');
- const details=parts.map(part=>CLASS_FEATURE_EXPLANATIONS[part]??'This class feature changes your available actions, resources, or defenses; its numerical effects still require rules-engine support.');
+ const details=parts.map(part=>VERIFIED_MILESTONE_DETAILS[part]?.description??CLASS_FEATURE_EXPLANATIONS[part]??'This milestone is recorded in the advancement catalog; detailed rules and gameplay support have not been verified.');
  return details.join(' ');
 }
 const SUBCLASS_TIER_GUIDE:Record<string,string[]>={

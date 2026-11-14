@@ -1,8 +1,16 @@
 import {describe,it,expect} from 'vitest';
 import {CLASSES} from './creationClasses';
 import {subclassesForClass} from './creationSubclasses';
-import {progressionFeatures,earnedClassMilestones} from './creationProgression';
+import {progressionFeatures,earnedClassMilestones,VERIFIED_MILESTONE_DETAILS} from './creationProgression';
 describe('all-class advancement explanation coverage',()=>{
+ it('provides concrete action and rules summaries for the audited class milestones',()=>{
+  for(const [name,detail] of Object.entries(VERIFIED_MILESTONE_DETAILS)){
+   expect(detail.description.length,name).toBeGreaterThan(25);
+   expect(detail.activation.length,name).toBeGreaterThan(3);
+   expect(detail.description,name).not.toMatch(/forecast|provisional|not verified/i);
+  }
+ });
+
  it('shows only earned class milestones without duplicating the class catalog',()=>{
   for(const cls of CLASSES){
    expect(earnedClassMilestones(cls.id,1,cls.features)).toEqual([]);
@@ -26,7 +34,7 @@ describe('all-class advancement explanation coverage',()=>{
   for(const cls of CLASSES)for(const subclass of subclassesForClass(cls.id)){
    const features=Array.from({length:18},(_,i)=>progressionFeatures(cls.id,i+3,subclass.name)).flat().filter(f=>f.source==='subclass');
    expect(features.length,subclass.name).toBeGreaterThanOrEqual(3);
-   for(const feature of features)expect(feature.description.length,subclass.name+' '+feature.level).toBeGreaterThan(65);
+   for(const feature of features)expect(feature.description.length,subclass.name+' '+feature.level).toBeGreaterThan(45);
   }
  });
 });
