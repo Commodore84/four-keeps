@@ -76,3 +76,18 @@ describe('Rogue level nine and ten advancement',()=>{
   expect(c.character!.preparedSpells).not.toContain('Detect Magic');
  });
 });
+
+ describe('Rogue level eleven advancement',()=>{
+  it('requires XP and confirmation, then advances without adding forecast feats',()=>{
+   const atTen=fixture(10,85000);atTen.importedSubclassId='rogue-arcane-trickster';
+   const choice={hpGain:5,confirm:true};
+   expect(importedLevelUpIssues({...atTen,xp:84999},choice).join(' ')).toContain('85000 XP');
+   expect(importedLevelUpIssues(atTen,{...choice,confirm:false}).join(' ')).toContain('Explicit confirmation');
+   const next=applyImportedLevelUp(atTen,choice);
+   expect(next.character!.level).toBe(11);
+   expect(next.character!.proficiencyBonus).toBe(4);
+   expect(next.importedEarnedFeats??[]).toEqual(atTen.importedEarnedFeats??[]);
+   expect(atTen.character!.level).toBe(10);
+   expect(importedLevelUpIssues(next,choice).join(' ')).toContain('supports Rogue levels 2–11');
+  });
+ });

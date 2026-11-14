@@ -14,7 +14,7 @@ export function importedLevelUpIssues(c:Campaign,choice:ImportedLevelChoice):str
  const issues:string[]=[];const ch=c.character,identity=c.characterIdentity,build=c.characterBuild;
  if(!ch||!identity||!build)return ['Only imported characters can use this level-up workflow.'];
  const level=(ch.level??1)+1;
- if(level<2||level>(identity.classId==='rogue'?10:4))return ['Imported level-up supports Rogue levels 2–10 and other classes levels 2–4 only.'];
+ if(level<2||level>(identity.classId==='rogue'?11:4))return ['Imported level-up supports Rogue levels 2–11 and other classes levels 2–4 only.'];
  if((c.xp??0)<xpThresholds[level-1])issues.push(`Requires ${xpThresholds[level-1]} XP for level ${level}.`);
  const cls=classSummary(identity.classId);if(!cls)return ['Unknown class.'];
  const min=1+modifier(ch.scores.con),max=cls.hitDie+modifier(ch.scores.con);
@@ -73,7 +73,7 @@ export function importedLevelUpIssues(c:Campaign,choice:ImportedLevelChoice):str
    }
   }
  }
- if(identity.classId==='rogue'&&level>=9&&c.importedSubclassId==='rogue-arcane-trickster'){
+ if(identity.classId==='rogue'&&level>=9&&level<=10&&c.importedSubclassId==='rogue-arcane-trickster'){
   const spells=choice.arcaneSpells??[],prior=ch.preparedSpells??[],needed=level===9?Math.max(0,6-prior.length):Math.max(0,7-prior.length);
   if(spells.length!==needed||new Set(spells).size!==spells.length||spells.some(name=>prior.includes(name)||!([...SPELLS.filter(sp=>sp.level===1).filter(sp=>sp.classes.includes('wizard')).map(sp=>sp.name),...WIZARD_LEVEL2_SPELLS].includes(name))))issues.push('Choose distinct supported Wizard spells to reach the Arcane Trickster prepared-spell progression.');
  }
@@ -102,7 +102,7 @@ export function applyImportedLevelUp(c:Campaign,choice:ImportedLevelChoice):Camp
   ...(wizard?{preparedSpells:[...(choice.wizardPrepared??[])],spellSlots:{level1:level===2?3:4,usedLevel1:Math.min(ch.spellSlots?.usedLevel1??0,level===2?3:4),...(level>=3?{level2:level===3?2:3,usedLevel2:Math.min(ch.spellSlots?.usedLevel2??0,level===3?2:3)}:{})},resources:{...ch.resources,'Arcane Recovery':{maximum:1,used:ch.resources?.['Arcane Recovery']?.used??0,recovery:'long' as const},...(level===3?{'Portent':{maximum:2,used:0,recovery:'long' as const}}:{})}}:{}),
   ...(warlock?{preparedSpells:[...new Set([...(ch.preparedSpells??[]),...(choice.warlockSpells??[])])],spellSlots:{level1:level>=2?2:1,usedLevel1:Math.min(ch.spellSlots?.usedLevel1??0,level>=2?2:1)},resources:{...ch.resources,...(level===2?{'Magical Cunning':{maximum:1,used:0,recovery:'long' as const}}:{}),...(level===3?{'Healing Light':{maximum:4,used:0,recovery:'long' as const}}:{}),...(level===4?{'Healing Light':{maximum:5,used:ch.resources?.['Healing Light']?.used??0,recovery:'long' as const}}:{})}}:{}),
   ...(c.characterIdentity?.classId==='rogue'&&level>=5&&c.importedSubclassId==='rogue-arcane-trickster'?{spellSlots:{...ch.spellSlots!,level1:level>=7?4:3,usedLevel1:Math.min(ch.spellSlots?.usedLevel1??0,level>=7?4:3),...(level>=7?{level2:level>=10?3:2,usedLevel2:Math.min(ch.spellSlots?.usedLevel2??0,level>=10?3:2)}:{})}}:{}),
-  ...(c.characterIdentity?.classId==='rogue'&&level>=9&&c.importedSubclassId==='rogue-arcane-trickster'?{preparedSpells:[...new Set([...(ch.preparedSpells??[]),...(choice.arcaneSpells??[])])]}:{}),
+  ...(c.characterIdentity?.classId==='rogue'&&level>=9&&level<=10&&c.importedSubclassId==='rogue-arcane-trickster'?{preparedSpells:[...new Set([...(ch.preparedSpells??[]),...(choice.arcaneSpells??[])])]}:{}),
   ...(level===3&&choice.subclassId==='rogue-arcane-trickster'?{subclass:'Arcane Trickster' as const,cantrips:[...new Set([...(ch.cantrips??[]),'Mage Hand',...(choice.arcaneCantrips??[])])],preparedSpells:[...new Set([...(ch.preparedSpells??[]),...(choice.arcaneSpells??[])])],spellSlots:{level1:2,usedLevel1:0}}:{})};
  // Keep the selected subclass separately; legacy character.subclass is Arcane Trickster-specific.
  return {...c,character:next,...(choice.featPlan==='Elven Accuracy'?{importedEarnedFeats:[...(c.importedEarnedFeats??[]),{level,name:'Elven Accuracy',ability:choice.featAbility,legacyApproved:choice.legacyApproved===true}]}:{}),...(wizard?{hitDiceRemaining:Math.min(level,(c.hitDiceRemaining??(level-1))+1),importedWizardSpellbook:[...(c.importedWizardSpellbook??c.characterBuild?.selections?.magic?.spellbook?.map(id=>SPELL_BY_ID[id]?.name??id)??[]),...(choice.wizardBookSpells??[])],...(level===3?{importedWizardPortents:[...(choice.wizardPortents??[])]}:{})}:{}),...(warlock?{hitDiceRemaining:Math.min(level,(c.hitDiceRemaining??(level-1))+1)}:{}),...(warlock?{importedWarlockPactSlotLevel:level>=3?2:1,importedWarlockInvocations:level===2?[...priorInvocations,...(choice.warlockInvocations??[])]:priorInvocations}:{}),importedSubclassId:level===3?choice.subclassId:c.importedSubclassId,updatedAt:new Date().toISOString(),journal:[...c.journal,{id:crypto.randomUUID(),kind:'system',text:`${c.characterIdentity!.name} confirmed level ${level}: +${choice.hpGain} HP${level===3?`; subclass ${choice.subclassId}`:''}${level===4?'; '+choice.featPlan:''}.`,createdAt:new Date().toISOString()}]};
