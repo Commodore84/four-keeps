@@ -425,6 +425,17 @@ test('imported Rogue unlocks Cunning Action and selects Arcane Trickster spells 
  expect(record.character.spellSlots.level1).toBe(2);
  await page.reload();await page.getByRole('button',{name:'Continue Adventure'}).click();await navigate(page,'Player');
  await expect(page.getByLabel('Imported player character')).toContainText('Level 3');
+ await awardImportedTestXP(page,'1800','Verified Rogue level-four rewards');
+ const advanced=page.getByLabel('Imported player character');
+ await expect(advanced.getByLabel('Imported character level-up')).toContainText('Level 4');
+ await advanced.getByLabel('Level-up improvement').selectOption('Ability Score Improvement');
+ await advanced.getByLabel('Level-up hit points').fill('5');
+ await advanced.getByRole('checkbox',{name:'I confirm these level-up choices'}).check();
+ await advanced.getByRole('button',{name:'Confirm and save level 4'}).click();
+ await expect(advanced.getByLabel('Rogue rules reference')).toContainText('2d6');
+ expect((await saved(page)).character.level).toBe(4);
+ await page.reload();await page.getByRole('button',{name:'Continue Adventure'}).click();await navigate(page,'Player');
+ await expect(page.getByLabel('Imported player character')).toContainText('Level 4');
 });
 
 test('imported Warlock advances to Celestial and persists Pact Magic resources',async({page})=>{

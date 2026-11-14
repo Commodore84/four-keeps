@@ -1,6 +1,8 @@
 import {describe,it,expect} from 'vitest';
 import {newCampaign} from './campaign';
 import {applyImportedLevelUp,importedLevelUpIssues} from './importedLevelUp';
+import {xpThresholds} from './campaign';
+import {rogueSheetReference} from './creationProgression';
 import type {Campaign} from './campaign';
 function fixture(level=1,xp=0):Campaign{const c=newCampaign('Imported');return {...c,xp,character:{...c.character!,level,classId:'rogue'},characterIdentity:{name:'Test',speciesId:'elf',backgroundId:'sage',classId:'rogue',draftId:'test',pronouns:'',appearance:'',personality:'',backstory:''},characterBuild:{rules:{allowCompatibleLegacy:false}} as Campaign['characterBuild']}}
 describe('imported level up',()=>{
@@ -159,5 +161,54 @@ describe('Rogue level nine and ten advancement',()=>{
    expect(at20.character!.proficiencyBonus).toBe(6);
    expect(at20.character!.resources).toEqual(at17.character!.resources);
    expect(importedLevelUpIssues(at20,{hpGain:5,confirm:true}).join(' ')).toContain('supports Rogue levels 2–20');
+  });
+ });
+
+ describe('integrated imported Rogue progression 1–20',()=>{
+  it('validates each XP gate and confirmed choice, preserves immutable snapshots and all earned milestones',()=>{
+   let current=fixture();
+   current.hitDiceRemaining=1;
+   const levels:Campaign[]=[current];
+   for(let target=2;target<=20;target++){
+    const base={hpGain:5,confirm:true};
+    const choice:any={...base};
+    if(target===3)Object.assign(choice,{subclassId:'rogue-arcane-trickster',arcaneCantrips:['Minor Illusion','Message'],arcaneSpells:['Shield','Magic Missile','Disguise Self']});
+    if([4,8,10,12,16].includes(target))Object.assign(choice,{featPlan:'Ability Score Improvement',abilityIncreases:{Str:2}});
+    if(target===6)choice.rogueExpertise=current.character!.proficientSkills.filter(skill=>!current.character!.expertiseSkills?.includes(skill)).slice(0,2);
+    if(target===9)choice.arcaneSpells=['Sleep','Charm Person','Detect Magic'];
+    if(target===10)choice.arcaneSpells=['Feather Fall'];
+    if(target===19)choice.featPlan='Boon of Speed';
+    const xp=xpThresholds[target-1];
+    expect(importedLevelUpIssues({...current,xp:xp-1},choice).join(' '),`XP gate for ${target}`).toContain(`${xp} XP`);
+    expect(importedLevelUpIssues({...current,xp},{...choice,confirm:false}).join(' ')).toContain('Explicit confirmation');
+    const prior=current;
+    const next=applyImportedLevelUp({...current,xp},choice);
+    expect(next.character!.level).toBe(target);
+    expect(next.character!.proficiencyBonus).toBe(Math.ceil(target/4)+1);
+    expect(next.character!.maxHitPoints).toBe(prior.character!.maxHitPoints!+5);
+    expect(next.hitDiceRemaining).toBe(target);
+    expect(rogueSheetReference(target).sneakAttack).toBe(`${Math.ceil(target/2)}d6`);
+    expect(prior.character!.level).toBe(target-1);
+    expect(next.character!.resources).toEqual(prior.character!.resources);
+    if(target>=15)expect(next.character!.savingThrowProficiencies).toEqual(expect.arrayContaining(['wis','cha']));
+    if(target>=19)expect(next.importedEarnedFeats?.some(feat=>feat.level===19&&feat.name==='Boon of Speed')).toBe(true);
+    current=JSON.parse(JSON.stringify(next)) as Campaign;
+    levels.push(current);
+   }
+   expect(levels).toHaveLength(20);
+   expect(levels[2].importedSubclassId).toBe('rogue-arcane-trickster');
+   expect(levels[5].character!.expertiseSkills?.length).toBeGreaterThanOrEqual(2);
+   expect(levels[19].character!.level).toBe(20);
+   expect(importedLevelUpIssues(current,{hpGain:5,confirm:true}).join(' ')).toContain('supports Rogue levels 2–20');
+  });
+ });
+
+ describe('Rogue hit dice on confirmed advancement',()=>{
+  it('adds one unspent hit die without restoring previously spent dice',()=>{
+   const c=fixture(7,34000);c.hitDiceRemaining=2;
+   const next=applyImportedLevelUp(c,{hpGain:5,confirm:true,featPlan:'Ability Score Improvement',abilityIncreases:{Str:2}});
+   expect(next.hitDiceRemaining).toBe(3);
+   expect(c.hitDiceRemaining).toBe(2);
+   expect(next.character!.level).toBe(8);
   });
  });
