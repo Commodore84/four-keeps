@@ -69,3 +69,20 @@ describe('imported Rogue in unified combat',()=>{
    expect(()=>attackImportedRogue(c,'goblin',19,1,5,[1,2,3,4,5,6],undefined,[...options,options[0]])).toThrow();
   });
  });
+
+ describe('2024 Devious Strikes safe deterministic subset',()=>{
+  it('Obscure charges three d6, validates level/save, persists Blindness and expires at end of next target turn',()=>{
+   const base=arena(14);const b=base.companionEncounter!;const c={...base,companionEncounter:{...b,participants:{...b.participants,goblin:{...b.participants.goblin,hp:100,maxHp:100},ally:{...b.participants.nighthawk,x:4,y:2,actorKind:'party' as const,faction:'party'}}}};
+   const obscured=attackImportedRogue(c,'goblin',19,1,5,[1,2,3,4,5,6,1],undefined,{effect:'Obscure',saveTotal:1});
+   expect(obscured.companionEncounter!.participants.goblin.conditions).toContain('Blinded');
+   expect(obscured.companionEncounter!.participants.goblin.rogueObscureUntilTurn).toBe(2);
+   expect(obscured.companionEncounter!.log.join(' ')).toContain('= 16 extra piercing damage');
+   const enemyTurn={...obscured,companionEncounter:{...obscured.companionEncounter!,order:['goblin','nighthawk'],turnIndex:0}};
+   const once=endCompanionTurn(enemyTurn,'goblin');expect(once.companionEncounter!.participants.goblin.conditions).toContain('Blinded');
+   const twice=endCompanionTurn({...once,companionEncounter:{...once.companionEncounter!,turnIndex:0}},'goblin');expect(twice.companionEncounter!.participants.goblin.conditions).not.toContain('Blinded');
+   expect(JSON.parse(JSON.stringify(once)).companionEncounter.participants.goblin.rogueObscureUntilTurn).toBe(1);
+   const resisted=attackImportedRogue(c,'goblin',19,1,5,[1,2,3,4,5,6,1],undefined,{effect:'Obscure',saveTotal:99});expect(resisted.companionEncounter!.participants.goblin.conditions).not.toContain('Blinded');
+   expect(()=>attackImportedRogue({...c,character:{...c.character!,level:13}},'goblin',19,1,5,[1,2,3,4,5,6,1],undefined,{effect:'Obscure',saveTotal:1})).toThrow('level 14');
+   expect(()=>attackImportedRogue(c,'goblin',19,1,5,[1,2,3,4,5,6,1],undefined,{effect:'Obscure'})).toThrow('Dexterity');
+  });
+ });

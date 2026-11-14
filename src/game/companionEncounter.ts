@@ -19,7 +19,7 @@ export interface CompanionEncounter {
  round:number;
  turnIndex:number;
  order:string[];
- participants:Record<string,{x:number;y:number;hp:number;maxHp:number;initiative:number;conditions:('Charmed'|'Poisoned'|'Blinded'|'Deafened'|'Frightened'|'Grappled'|'Incapacitated'|'Invisible'|'Paralyzed'|'Petrified'|'Prone'|'Restrained'|'Stunned'|'Unconscious'|'Exhaustion')[];speedFeet:number;movementSpentFeet:number;actionUsed:boolean;bonusActionUsed:boolean;dashFeet:number;disengaged:boolean;dodging:boolean;reactionUsed?:boolean;rogueSneakUsed?:boolean;roguePoisonDC?:number;roguePoisonRounds?:number;rogueSteadyAim?:boolean;rogueHidden?:boolean;rogueHideDC?:number;rogueHideConcealment?:boolean;rogueDetectedBy?:string[];rogueMovedThisTurn?:boolean;concentratingOn?:string;consumables?:Record<string,number>;faction?:string;reachFeet?:number;actorKind?:'party'|'enemy';armorClass?:number;attackModifier?:number;constitutionSaveModifier?:number;damageModifier?:number;damageDice?:string;enemyTactic?:'hold'|'nearest'|'lowest-hp';rangedAttackFeet?:number;deathSaves?:{successes:number;failures:number;stable:boolean;dead:boolean}}>;
+ participants:Record<string,{x:number;y:number;hp:number;maxHp:number;initiative:number;conditions:('Charmed'|'Poisoned'|'Blinded'|'Deafened'|'Frightened'|'Grappled'|'Incapacitated'|'Invisible'|'Paralyzed'|'Petrified'|'Prone'|'Restrained'|'Stunned'|'Unconscious'|'Exhaustion')[];speedFeet:number;movementSpentFeet:number;actionUsed:boolean;bonusActionUsed:boolean;dashFeet:number;disengaged:boolean;dodging:boolean;reactionUsed?:boolean;rogueSneakUsed?:boolean;roguePoisonDC?:number;roguePoisonRounds?:number;rogueObscureUntilTurn?:number;rogueSteadyAim?:boolean;rogueHidden?:boolean;rogueHideDC?:number;rogueHideConcealment?:boolean;rogueDetectedBy?:string[];rogueMovedThisTurn?:boolean;concentratingOn?:string;consumables?:Record<string,number>;faction?:string;reachFeet?:number;actorKind?:'party'|'enemy';armorClass?:number;attackModifier?:number;constitutionSaveModifier?:number;damageModifier?:number;damageDice?:string;enemyTactic?:'hold'|'nearest'|'lowest-hp';rangedAttackFeet?:number;deathSaves?:{successes:number;failures:number;stable:boolean;dead:boolean}}>;
  wizardHoldPersonTargets?:string[];
  rogueHoldPersonTargets?:string[];
  obstacles?:{x:number;y:number}[];
@@ -416,7 +416,7 @@ export function endCompanionTurn(campaign:Campaign,actorId:string):Campaign{
  if(battle.participants[actorId]?.actorKind==='enemy'&&battle.pendingOpportunity?.moverId===actorId&&battle.pendingOpportunity.attackerIds.length)throw Error('Pending opportunity reactions require DM adjudication');
  if(battle.participants[actorId]?.roguePoisonDC!==undefined)throw Error('Resolve Rogue Poison end-of-turn Constitution save before ending turn');
  const next=(battle.turnIndex+1)%battle.order.length;
- const nextId=battle.order[next];const outgoing=battle.participants[actorId];const participants={...battle.participants,[actorId]:{...outgoing,disengaged:false}};participants[nextId]={...participants[nextId],movementSpentFeet:0,actionUsed:false,bonusActionUsed:false,dashFeet:0,disengaged:false,dodging:false,reactionUsed:false,rogueSneakUsed:false,rogueSteadyAim:false,rogueMovedThisTurn:false};return save(campaign,{...battle,participants,turnIndex:next,round:battle.round+(next===0?1:0),log:[...battle.log,actorId+' ended turn']});
+ const nextId=battle.order[next];const outgoing=battle.participants[actorId];const participants={...battle.participants,[actorId]:{...outgoing,disengaged:false,...(outgoing.rogueObscureUntilTurn!==undefined?(outgoing.rogueObscureUntilTurn<=1?{rogueObscureUntilTurn:undefined,conditions:outgoing.conditions.filter(c=>c!=='Blinded')}:{rogueObscureUntilTurn:outgoing.rogueObscureUntilTurn-1}):{})}};participants[nextId]={...participants[nextId],movementSpentFeet:0,actionUsed:false,bonusActionUsed:false,dashFeet:0,disengaged:false,dodging:false,reactionUsed:false,rogueSneakUsed:false,rogueSteadyAim:false,rogueMovedThisTurn:false};return save(campaign,{...battle,participants,turnIndex:next,round:battle.round+(next===0?1:0),log:[...battle.log,actorId+' ended turn']});
 }
 /** 2024 death saves are tracked independently of campaign.character and legacy combat.
  * Natural 20 restores 1 HP; natural 1 causes two failures; other rolls use DC 10.
@@ -903,7 +903,7 @@ export function resolveImportedRogueDetection(campaign:Campaign,observerId:strin
 }
 /** Rogue Sneak Attack is applied only after validating a hit and its eligibility.
  * The player supplies individual d6 results; no rolls are invented. */
-export function attackImportedRogue(campaign:Campaign,targetId:string,roll:number,weaponDamageDice:number,rangeFeet:number,sneakDice:number[],secondD20?:number,cunningStrike?:{effect:'Trip'|'Poison'|'Withdraw';saveTotal?:number;withdrawTo?:{x:number;y:number}}|{effect:'Trip'|'Poison'|'Withdraw';saveTotal?:number;withdrawTo?:{x:number;y:number}}[],elvenAccuracyReroll?:number):Campaign{
+export function attackImportedRogue(campaign:Campaign,targetId:string,roll:number,weaponDamageDice:number,rangeFeet:number,sneakDice:number[],secondD20?:number,cunningStrike?:{effect:'Trip'|'Poison'|'Withdraw'|'Obscure';saveTotal?:number;withdrawTo?:{x:number;y:number}}|{effect:'Trip'|'Poison'|'Withdraw'|'Obscure';saveTotal?:number;withdrawTo?:{x:number;y:number}}[],elvenAccuracyReroll?:number):Campaign{
  const battle=activeActor(campaign,'nighthawk'),actor=battle.participants.nighthawk,target=battle.participants[targetId];
  const ch=campaign.character;
  if(battle.mode!=='unified'||campaign.characterIdentity?.classId!=='rogue'||!ch)throw Error('Requires imported Rogue in a unified encounter');
@@ -927,15 +927,17 @@ export function attackImportedRogue(campaign:Campaign,targetId:string,roll:numbe
  if(strikes.length>1&&(ch.level??1)<11)throw Error('Improved Cunning Strike requires Rogue level 11');
  if(strikes.length>2||new Set(strikes.map(strike=>strike.effect)).size!==strikes.length)throw Error('Select at most two different Cunning Strike effects');
  for(const strike of strikes){
-  if((ch.level??1)<5||!['Trip','Poison','Withdraw'].includes(strike.effect))throw Error('Cunning Strike requires Rogue level 5');
-  if(strike.effect!=='Withdraw'&&(!Number.isInteger(strike.saveTotal)||strike.saveTotal!<0||strike.saveTotal!>100))throw Error(strike.effect==='Trip'?'Verified Dexterity saving throw required':'Verified Constitution saving throw required');
+  if((ch.level??1)<5||!['Trip','Poison','Withdraw','Obscure'].includes(strike.effect))throw Error('Cunning Strike requires Rogue level 5');
+  if(strike.effect!=='Withdraw'&&(!Number.isInteger(strike.saveTotal)||strike.saveTotal!<0||strike.saveTotal!>100))throw Error(strike.effect==='Trip'||strike.effect==='Obscure'?'Verified Dexterity saving throw required':'Verified Constitution saving throw required');
   if(strike.effect==='Withdraw'&&!strike.withdrawTo)throw Error('Withdraw requires a verified destination');
  }
- if(strikes.length>Math.ceil((ch.level??1)/2))throw Error('Insufficient Sneak Attack dice for Cunning Strike');
+ if(strikes.some(strike=>strike.effect==='Obscure')&&(ch.level??1)<14)throw Error('Devious Strikes requires Rogue level 14');
+ const diceCost=strikes.reduce((total,strike)=>total+(strike.effect==='Obscure'?3:1),0);
+ if(diceCost>Math.ceil((ch.level??1)/2))throw Error('Insufficient Sneak Attack dice for Cunning Strike');
  if(advantage!==disadvantage&&secondD20===undefined)throw Error('Advantage or disadvantage requires second d20');
  if(!Number.isInteger(weaponDamageDice)||weaponDamageDice<1||weaponDamageDice>100)throw Error('Invalid weapon damage roll');
  const hit=hitRoll===20||(hitRoll!==1&&hitRoll+attackModifier>=targetAC);
- const result=attackCompanion(campaign,'nighthawk',targetId,roll,attackModifier,targetAC,weaponDamageDice+(hit?sneakDice.slice(strikes.length*(critical?2:1)).reduce((a,b)=>a+b,0):0),damageModifier,'Piercing',rangeFeet,secondD20,elvenAccuracyReroll);
+ const result=attackCompanion(campaign,'nighthawk',targetId,roll,attackModifier,targetAC,weaponDamageDice+(hit?sneakDice.slice(diceCost*(critical?2:1)).reduce((a,b)=>a+b,0):0),damageModifier,'Piercing',rangeFeet,secondD20,elvenAccuracyReroll);
  if(!hit)return result;
  const combat=result.companionEncounter!;
  const strikeDC=8+ch.proficiencyBonus+abilityModifier(ch.scores.dex);
@@ -945,12 +947,12 @@ export function attackImportedRogue(campaign:Campaign,targetId:string,roll:numbe
  for(const strike of strikes){
   if(strike.effect==='Withdraw'){strikeLog.push('Rogue Cunning Strike Withdraw: one Sneak Attack d6 forgone');continue;}
   const failed=strike.saveTotal!<strikeDC;
-  const condition:'Prone'|'Poisoned'=strike.effect==='Trip'?'Prone':'Poisoned';
-  if(failed&&affected.hp>0)affected={...affected,conditions:[...new Set([...affected.conditions,condition])],...(condition==='Poisoned'?{roguePoisonDC:strikeDC,roguePoisonRounds:10}:{})};
-  strikeLog.push(`Rogue Cunning Strike ${strike.effect}: one Sneak Attack d6 forgone; ${strike.effect==='Trip'?'Dexterity':'Constitution'} save ${strike.saveTotal} vs DC ${strikeDC}: ${failed?'failed':'saved'}`);
+  const condition:'Prone'|'Poisoned'|'Blinded'=strike.effect==='Trip'?'Prone':strike.effect==='Obscure'?'Blinded':'Poisoned';
+  if(failed&&affected.hp>0)affected={...affected,conditions:[...new Set([...affected.conditions,condition])],...(condition==='Poisoned'?{roguePoisonDC:strikeDC,roguePoisonRounds:10}:condition==='Blinded'?{rogueObscureUntilTurn:2}:{})};
+  strikeLog.push(`Rogue Cunning Strike ${strike.effect}: ${strike.effect==='Obscure'?'three Sneak Attack d6 forgone':'one Sneak Attack d6 forgone'}; ${strike.effect==='Trip'||strike.effect==='Obscure'?'Dexterity':'Constitution'} save ${strike.saveTotal} vs DC ${strikeDC}: ${failed?'failed':'saved'}`);
  }
  if(affected.roguePoisonDC!==undefined&&struck.roguePoisonDC===undefined)strikeLog.push('Cunning Strike Poisoned: target repeats Constitution save at end of its turns (DC '+strikeDC+'); resolve explicitly before ending turn.');
- let next=save(result,{...combat,participants:{...combat.participants,[targetId]:affected,nighthawk:{...combat.participants.nighthawk,rogueSneakUsed:true}},log:[...combat.log,...strikeLog,'Rogue Sneak Attack '+diceCount+'d6: '+sneakDice.join('+')+' = '+sneakDice.slice(strikes.length*(critical?2:1)).reduce((a,b)=>a+b,0)+' extra piercing damage']});
+ let next=save(result,{...combat,participants:{...combat.participants,[targetId]:affected,nighthawk:{...combat.participants.nighthawk,rogueSneakUsed:true}},log:[...combat.log,...strikeLog,'Rogue Sneak Attack '+diceCount+'d6: '+sneakDice.join('+')+' = '+sneakDice.slice(diceCost*(critical?2:1)).reduce((a,b)=>a+b,0)+' extra piercing damage']});
  const withdraw=strikes.find(strike=>strike.effect==='Withdraw');
  if(withdraw){
   const before=next.companionEncounter!.participants.nighthawk;
