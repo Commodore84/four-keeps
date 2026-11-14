@@ -333,6 +333,9 @@ function WorldMap({campaign}:{campaign:Campaign|null}) {
  const [detail,setDetail]=useState<'world'|'frontier'>('world');
  const [zoom,setZoom]=useState(1);
  const [offset,setOffset]=useState({x:0,y:0});
+ const viewportKey=`four-keeps-map-view-${campaign?.id??'preview'}`;
+ useEffect(()=>{try{const saved=JSON.parse(localStorage.getItem(viewportKey)??'null');if(saved&&['world','frontier'].includes(saved.detail)&&Number.isFinite(saved.zoom)&&saved.zoom>=1&&saved.zoom<=5&&Number.isFinite(saved.x)&&Number.isFinite(saved.y)){setDetail(saved.detail);setZoom(saved.zoom);setOffset({x:saved.x,y:saved.y});}else{setDetail('world');setZoom(1);setOffset({x:0,y:0});}}catch{setDetail('world');setZoom(1);setOffset({x:0,y:0});}},[viewportKey]);
+ useEffect(()=>{try{localStorage.setItem(viewportKey,JSON.stringify({detail,zoom,x:offset.x,y:offset.y}));}catch{/* Browser storage may be unavailable. */}},[viewportKey,detail,zoom,offset.x,offset.y]);
  const gesture=useRef<{x:number;y:number;distance?:number}|null>(null);
  const current=campaign?.location??'Frontier Village';
  const known=new Set(['frontier',...(campaign?.mapDiscovered??[])]);
@@ -341,14 +344,15 @@ function WorldMap({campaign}:{campaign:Campaign|null}) {
  const showDetail=()=>{setDetail('frontier');reset();};
  const showWorld=()=>{setDetail('world');reset();};
  const distance=(a:React.Touch,b:React.Touch)=>Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY);
- const touchStart=(e:React.TouchEvent)=>{if(e.touches.length===2)gesture.current={x:0,y:0,distance:distance(e.touches[0],e.touches[1])};else if(e.touches.length===1)gesture.current={x:e.touches[0].clientX,y:e.touches[0].clientY};};
- const touchMove=(e:React.TouchEvent)=>{const g=gesture.current;if(!g)return;if(e.touches.length===2&&g.distance){const d=distance(e.touches[0],e.touches[1]);setZoom(v=>Math.max(1,Math.min(5,v*d/g.distance!)));gesture.current={...g,distance:d};}else if(e.touches.length===1&&!g.distance){setOffset(v=>({x:v.x+e.touches[0].clientX-g.x,y:v.y+e.touches[0].clientY-g.y}));gesture.current={x:e.touches[0].clientX,y:e.touches[0].clientY};}};
+ const touchStart=(e:React.TouchEvent)=>{if(e.touches.length===2)gesture.current={x:(e.touches[0].clientX+e.touches[1].clientX)/2,y:(e.touches[0].clientY+e.touches[1].clientY)/2,distance:distance(e.touches[0],e.touches[1])};};
+ const touchMove=(e:React.TouchEvent)=>{const g=gesture.current;if(!g)return;if(e.touches.length===2&&g.distance){const d=distance(e.touches[0],e.touches[1]);const x=(e.touches[0].clientX+e.touches[1].clientX)/2,y=(e.touches[0].clientY+e.touches[1].clientY)/2;setZoom(v=>Math.max(1,Math.min(5,v*d/g.distance!)));setOffset(v=>({x:v.x+x-g.x,y:v.y+y-g.y}));gesture.current={x,y,distance:d};}};
  return <section aria-label="World map" className="flex h-full min-h-0 flex-col">
   <div className="mb-2 flex shrink-0 items-center justify-between gap-2">
    <div className="flex min-w-0 items-center gap-2">{detail==='frontier'?<button type="button" aria-label="Back to Four Keeps world map" onClick={showWorld} className="rounded-lg border border-gold/40 px-3 py-2 text-sm text-gold">← Back</button>:<Map className="text-gold" size={20}/>}<h2 className="truncate font-serif text-lg">{detail==='world'?'Four Keeps':'Frontier Village'}</h2></div>
    <div className="flex shrink-0 items-center gap-1"><button type="button" aria-label="Zoom out" onClick={()=>setZoom(v=>Math.max(1,v-.5))} className="rounded border border-gold/40 px-3 py-1.5">−</button><button type="button" aria-label="Zoom in" onClick={()=>setZoom(v=>Math.min(5,v+.5))} className="rounded border border-gold/40 px-3 py-1.5">+</button><button type="button" onClick={reset} className="rounded border border-gold/40 px-2 py-1.5 text-xs">Reset</button></div>
   </div>
-  <div className="relative min-h-0 w-full flex-1 overflow-hidden rounded-xl border border-gold/40 bg-[#d6c39a] touch-none" onTouchStart={touchStart} onTouchMove={touchMove} onTouchEnd={()=>{gesture.current=null;}} onPointerDown={e=>{if(e.pointerType==='mouse')gesture.current={x:e.clientX,y:e.clientY};}} onPointerMove={e=>{if(e.pointerType==='mouse'&&e.buttons===1&&gesture.current){setOffset(v=>({x:v.x+e.clientX-gesture.current!.x,y:v.y+e.clientY-gesture.current!.y}));gesture.current={x:e.clientX,y:e.clientY};}}} onPointerUp={()=>{gesture.current=null;}}>
+  <p className="mb-1 text-xs text-parchment/60">Pinch to zoom · Two-finger drag to pan · Reset to fit</p>
+  <div className="relative min-h-0 w-full flex-1 overflow-hidden rounded-xl border border-gold/40 bg-[#d6c39a] touch-pan-y" onTouchStart={touchStart} onTouchMove={touchMove} onTouchEnd={()=>{gesture.current=null;}} onPointerDown={e=>{if(e.pointerType==='mouse')gesture.current={x:e.clientX,y:e.clientY};}} onPointerMove={e=>{if(e.pointerType==='mouse'&&e.buttons===1&&gesture.current){setOffset(v=>({x:v.x+e.clientX-gesture.current!.x,y:v.y+e.clientY-gesture.current!.y}));gesture.current={x:e.clientX,y:e.clientY};}}} onPointerUp={()=>{gesture.current=null;}}>
    <div className="absolute inset-0 mx-auto h-full max-w-full origin-center" style={{aspectRatio:'4 / 5',transform:`translate(${offset.x}px,${offset.y}px) scale(${zoom})`}}>
     {detail==='world'?<>
      <svg viewBox="0 0 400 500" className="absolute inset-0 h-full w-full" role="img" aria-label="Parchment continent with northern mountains, western forest, eastern greenlands and southern coast">

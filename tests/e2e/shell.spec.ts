@@ -827,6 +827,9 @@ test('mobile tactical grid selects a square and persists movement after reload',
  await panel.getByRole('button',{name:'Start companion encounter'}).click();
  await panel.getByRole('button',{name:'Toggle tactical grid'}).click();
  await expect(panel.getByLabel('Tactical grid',{exact:true})).toBeVisible();
+ await panel.getByRole('button',{name:'Toggle full tactical map'}).click();
+ await expect(panel.getByRole('button',{name:'Grid square 19,19'})).toBeVisible();
+ await panel.getByRole('button',{name:'Toggle full tactical map'}).click();
  await panel.getByRole('button',{name:'Grid square 1,0'}).click();
  await panel.getByRole('button',{name:'Confirm grid move'}).click();
  await expect(panel).toContainText('paladin: 20/20 HP · (1,0)');
