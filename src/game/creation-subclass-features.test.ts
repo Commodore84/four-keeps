@@ -36,6 +36,17 @@ describe('subclass named feature coverage',()=>{
    }
   }
  });
+ it('distinguishes reviewed reference text from applied mechanics',()=>{
+  for(const id of ['rogue-arcane-trickster','rogue-assassin','rogue-thief','wizard-diviner','wizard-abjurer','fighter-champion']){
+   const features=earnedSubclassFeatures(id,20);
+   expect(features.length,id).toBeGreaterThanOrEqual(4);
+   for(const feature of features){
+    expect(['verified-reference','verified-mechanics'],id+' '+feature.level).toContain(feature.confidence);
+    if(feature.confidence==='verified-reference')expect(feature.appliedToProjection).toBe(false);
+    expect(feature.description.length).toBeGreaterThan(60);
+   }
+  }
+ });
  it('never claims unverified feature mechanics are calculated',()=>{
   expect(subclassFeatureCoverage().verified).toBeGreaterThan(0);
   expect(SUBCLASS_FEATURES.filter(f=>f.confidence==='preview-needs-verification').every(f=>!f.appliedToProjection)).toBe(true);

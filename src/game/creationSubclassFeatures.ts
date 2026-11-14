@@ -1,5 +1,5 @@
 import {SUBCLASSES} from './creationSubclasses';
-export type FeatureConfidence='verified-mechanics'|'preview-needs-verification';
+export type FeatureConfidence='verified-mechanics'|'verified-reference'|'preview-needs-verification';
 export interface SubclassFeatureEntry {subclassId:string;level:number;name:string;description:string;confidence:FeatureConfidence;appliedToProjection:boolean;choiceRequired:boolean}
 const TIERS:Record<string,number[]>={barbarian:[3,6,10,14],bard:[3,6,14],cleric:[3,6,17],druid:[3,6,10,14],fighter:[3,7,10,15,18],monk:[3,6,11,17],paladin:[3,7,15,20],ranger:[3,7,11,15],rogue:[3,9,13,17],sorcerer:[3,6,14,18],warlock:[3,6,10,14],wizard:[3,6,10,14]};
 const NAMES:Record<string,string[]>={
@@ -52,6 +52,40 @@ const NAMES:Record<string,string[]>={
 'wizard-evoker':['Evocation Savant and Potent Cantrip','Sculpt Spells','Empowered Evocation','Overchannel'],
 'wizard-illusionist':['Illusion Savant and Improved Illusions','Phantasmal Creatures','Illusory Self','Illusory Reality']
 };
+/** Independently reviewed reference summaries; display-only until the rules engine implements them. */
+const VERIFIED_REFERENCE:Record<string,Record<number,string>>={
+ 'rogue-arcane-trickster':{
+  3:'Spellcasting: prepare Wizard spells using the Arcane Trickster progression. Mage Hand Legerdemain extends Mage Hand with subtle manipulation and permits its control with a Bonus Action.',
+  9:'Magical Ambush: when you are Invisible as you cast a spell on a creature, that creature has Disadvantage on saving throws against the spell during that turn.',
+  13:'Versatile Trickster: when you use the Trip option of Cunning Strike, you can also use Mage Hand to target a second creature within its reach, subject to the feature’s restrictions.',
+  17:'Spell Thief: use a Reaction after a creature casts a spell that targets you or includes you in its area; attempt to negate and temporarily learn the spell under the feature’s limits.'},
+ 'rogue-assassin':{
+  3:'Assassinate improves initiative and attacks against creatures that have not acted in the first round. Assassin’s Tools grants the subclass tool and disguise benefits.',
+  9:'Infiltration Expertise: create a convincing false identity and imitate another person’s speech and writing using the subclass’s infiltration abilities.',
+  13:'Envenom Weapons: the Poison option of Cunning Strike deals additional Poison damage when the target fails its saving throw.',
+  17:'Death Strike: after hitting a creature during the first round of combat, force a Constitution save to increase the damage under the feature’s restrictions.'},
+ 'rogue-thief':{
+  3:'Fast Hands expands the Cunning Action Bonus Action options for eligible objects and checks. Second-Story Work improves climbing and jumping.',
+  9:'Supreme Sneak: gain the subclass’s additional Stealth benefit when wearing appropriate armor.',
+  13:'Use Magic Device: attune to additional magic items and gain expanded access to magic items, including eligible scrolls and charged items.',
+  17:'Thief’s Reflexes: take two turns during the first round of combat, using your normal initiative and an additional later initiative count.'},
+ 'wizard-diviner':{
+  3:'Divination Savant reduces the cost of adding Divination spells to your spellbook. Portent lets you replace eligible d20 Tests with rolls recorded after a Long Rest.',
+  6:'Expert Divination: casting a Divination spell using a spell slot can restore an expended lower-level spell slot, subject to its limits.',
+  10:'The Third Eye: use a Bonus Action to gain one of the subclass’s special senses until the specified ending condition.',
+  14:'Greater Portent: roll three Portent dice after a Long Rest instead of two.'},
+ 'wizard-abjurer':{
+  3:'Abjuration Savant improves access to Abjuration spells. Arcane Ward absorbs damage and can be restored by casting Abjuration spells under its rules.',
+  6:'Projected Ward: use your Reaction to have Arcane Ward absorb damage dealt to another creature you can see within 30 feet.',
+  10:'Spell Breaker: add your Proficiency Bonus to eligible ability checks for Dispel Magic and Counterspell.',
+  14:'Spell Resistance: gain Advantage on saving throws against spells and Resistance to damage from spells.'},
+ 'fighter-champion':{
+  3:'Improved Critical expands critical hits for weapon and Unarmed Strike attacks to natural 19 or 20. Remarkable Athlete enhances initiative and Athletics and permits movement after a critical hit.',
+  7:'Additional Fighting Style: choose another eligible Fighting Style feat during advancement; the benefit depends on the saved selection.',
+  10:'Heroic Warrior: gain Heroic Inspiration at the start of your turn in combat if you lack it.',
+  15:'Superior Critical: weapon and Unarmed Strike attacks score a critical hit on a natural 18, 19, or 20.',
+  18:'Survivor: gain Advantage on death saving throws and additional recovery while Bloodied but above zero Hit Points.'},
+};
 const VERIFIED:Record<string,Record<number,{description:string;applied:boolean;choiceRequired?:boolean}>>={
  // 2024 Basic Rules: https://www.dndbeyond.com/sources/dnd/br-2024/character-classes
  'paladin-devotion':{
@@ -93,9 +127,9 @@ export const SUBCLASS_FEATURES:SubclassFeatureEntry[]=SUBCLASSES.flatMap(subclas
  return levels.map((level,index)=>({
   subclassId:subclass.id,level,
   name:names[index]??subclass.name+' advancement',
-  description:VERIFIED[subclass.id]?.[level]?.description??(index===0?subclass.description:
+  description:VERIFIED[subclass.id]?.[level]?.description??VERIFIED_REFERENCE[subclass.id]?.[level]??(index===0?subclass.description:
    'This feature expands the '+subclass.name+' specialization in '+subclass.focus.toLowerCase()+'. The exact action economy, resource costs, range, duration, saving throws, and scaling must be verified against the 2024 rules before it can be used by the campaign engine.'),
-  confidence:(VERIFIED[subclass.id]?.[level]&&!(subclass.id==='sorcerer-draconic-sorcery'&&level===18)?'verified-mechanics':'preview-needs-verification') as FeatureConfidence,
+  confidence:(VERIFIED[subclass.id]?.[level]&&!(subclass.id==='sorcerer-draconic-sorcery'&&level===18)?'verified-mechanics':VERIFIED_REFERENCE[subclass.id]?.[level]?'verified-reference':'preview-needs-verification') as FeatureConfidence,
   appliedToProjection:VERIFIED[subclass.id]?.[level]?.applied??false,
   choiceRequired:VERIFIED[subclass.id]?.[level]?.choiceRequired??index===0
  }));
