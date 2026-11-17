@@ -996,11 +996,27 @@ test('validated character draft becomes a persistent campaign without replacing 
  await expect(page.getByRole('button',{name:'Dasahi'})).toBeVisible();
  await expect(page.getByText('1 of 36 locations discovered')).toBeVisible();
  await expect(page.getByRole('button',{name:'Mount Varkos'})).toHaveCount(0);
+ await page.evaluate(async()=>{
+  const db=await new Promise<IDBDatabase>((resolve,reject)=>{const r=indexedDB.open('four-keeps-local',1);r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});
+  await new Promise<void>((resolve,reject)=>{
+   const tx=db.transaction('campaigns','readwrite'),store=tx.objectStore('campaigns');
+   const all=store.getAll();
+   all.onsuccess=()=>{
+    const campaign=all.result.find(c=>c.characterBuild);
+    if(!campaign){reject(new Error('Campaign missing'));return;}
+    campaign.mapDynamicSites=[{id:'dm-hidden-camp',name:'Hidden Camp',description:'An old campsite',x:48,y:52,kind:'minor',createdAt:100,discovered:true}];
+    store.put(campaign);
+   };
+   tx.oncomplete=()=>resolve();tx.onerror=()=>reject(tx.error);
+  });db.close();
+ });
  await page.getByRole('button',{name:'Zoom in'}).click();
  await page.reload();
  await page.getByRole('button',{name:'Continue Adventure'}).click();
  await navigate(page,'Map');
  await expect(page.getByRole('heading',{name:'Anchamida'})).toBeVisible();
+ await expect(page.getByRole('button',{name:'Hidden Camp'})).toBeVisible();
+ await expect(page.getByText('1 additional mapped')).toBeVisible();
  await openDevelopment(page);
  await page.getByLabel('Adventure session',{exact:true}).getByRole('button',{name:'Start frontier adventure'}).click();
  await expect(page.getByLabel('Adventure session status')).toContainText('Raven');

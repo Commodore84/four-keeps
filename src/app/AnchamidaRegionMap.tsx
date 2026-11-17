@@ -1,3 +1,4 @@
+import {visibleDynamicSites,clusterDynamicSites} from '../game/anchamidaDynamic';
 import {useEffect,useRef,useState} from 'react';
 import type {PointerEvent, WheelEvent} from 'react';
 import type {Campaign} from '../game/campaign';
@@ -28,7 +29,10 @@ export function AnchamidaRegionMap({campaign}:{campaign:Campaign|null}) {
     try {localStorage.setItem(key,JSON.stringify({zoom,x:offset.x,y:offset.y}));}catch{/* Private browsing */}
   },[key,zoom,offset.x,offset.y]);
   const visible=visibleAnchamidaLocations(campaign?.mapDiscovered??[]);
+  const dynamic=visibleDynamicSites(campaign,Date.now());
+  const clusters=clusterDynamicSites(dynamic,zoom);
   const site=selected?visible.find(p=>p.id===selected):undefined;
+  const dynamicSite=selected?dynamic.find(p=>p.id===selected):undefined;
   const identity=site?campaign?.mapPoiIdentities?.[site.id]:undefined;
   const reset=()=>{setZoom(1);setOffset({x:0,y:0});};
   const move=(e:PointerEvent<HTMLDivElement>)=>{
@@ -63,11 +67,13 @@ export function AnchamidaRegionMap({campaign}:{campaign:Campaign|null}) {
       <div className="absolute inset-0 flex items-center justify-center" style={{transform:`translate(${offset.x}px,${offset.y}px) scale(${zoom})`,transformOrigin:'center'}}>
         <div className="relative h-full max-w-full" style={{aspectRatio:'2 / 3'}}>
           {!imageFailed?<img src="/anchamida-region.webp" draggable={false} alt="Anchamida illustrated regional terrain" className="absolute inset-0 h-full w-full object-contain select-none" onError={()=>setImageFailed(true)}/>:<div role="img" aria-label="Regional artwork unavailable" className="absolute inset-0 flex items-center justify-center bg-[#b8b092] px-5 text-center text-sm text-[#40372a]">Regional artwork pending installation</div>}
+          {clusters.map(cluster=><button key={cluster.sites.map(s=>s.id).join('-')} type="button" title={cluster.sites.map(s=>s.name).join(', ')} aria-label={cluster.sites.length>1?cluster.sites.length+' nearby locations':cluster.sites[0].name} style={{left:cluster.x+'%',top:cluster.y+'%',transform:`translate(-50%,-50%) scale(${1/zoom})`}} className="absolute z-20 flex h-6 min-w-6 items-center justify-center rounded-full border-2 border-white bg-emerald-800 px-1 text-xs text-white shadow-md" onClick={()=>{if(cluster.sites.length===1)setSelected(cluster.sites[0].id);else setZoom(v=>Math.min(v+1,6));}}>{cluster.sites.length>1?cluster.sites.length:'•'}</button>)}
           {visible.map(p=><button key={p.id} type="button" onClick={()=>setSelected(p.id)} title={identity?.name||p.name||'Uncharted location'} aria-label={identity?.name||p.name||'Discovered location'} style={{left:p.x+'%',top:p.y+'%',transform:`translate(-50%,-50%) scale(${1/zoom})`}} className="absolute z-10 flex h-6 w-6 items-center justify-center rounded-full border-2 border-[#fff4d9] bg-[#8e342d] text-xs text-white shadow-md">{p.type==='city'?'⌂':'•'}</button>)}
         </div>
       </div>
     </div>
-    <div className="mt-2 text-xs text-parchment/70">{visible.length} of {anchamidaLocations.length} locations discovered</div>
+    <div className="mt-2 text-xs text-parchment/70">{visible.length} of {anchamidaLocations.length} locations discovered · {dynamic.length} additional mapped</div>
+    {dynamicSite&&<div role="region" aria-label="Discovered location details" className="mt-2 rounded-lg border border-gold/30 p-3 text-sm"><div className="flex justify-between"><strong>{dynamicSite.name}</strong><button onClick={()=>setSelected(null)}>Close</button></div><p>{dynamicSite.description}</p></div>}
     {site&&<div role="region" aria-label="Discovered location details" className="mt-2 rounded-lg border border-gold/30 p-3 text-sm">
       <div className="flex justify-between gap-3"><strong>{identity?.name||site.name||'Uncharted location'}</strong><button onClick={()=>setSelected(null)} aria-label="Close location details">Close</button></div>
       {(identity?.description||anchamidaDMConstraints(site).terrain)&&<p className="mt-1 text-parchment/75">{identity?.description||anchamidaDMConstraints(site).terrain}</p>}

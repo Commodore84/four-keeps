@@ -1,3 +1,4 @@
+import type {DynamicSite} from './anchamidaDynamic';
 import type {CharacterDraft} from '../app/CharacterCreator';
 import {validPlayerState,validCampaignBuild} from './playerState';
 import type {CompanionEncounter} from './companionEncounter';
@@ -37,6 +38,7 @@ export interface Campaign {
   mapDiscovered?: string[];
   /** Campaign-specific identities assigned by the DM to discovered flexible sites. */
   mapPoiIdentities?:Record<string,{name:string;description:string}>;
+  mapDynamicSites?:DynamicSite[];
   createdAt: string;
   updatedAt: string;
   journal: JournalEntry[];
