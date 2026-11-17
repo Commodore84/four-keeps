@@ -16,6 +16,7 @@ export function AnchamidaRegionMap({campaign}:{campaign:Campaign|null}) {
   const [showList,setShowList]=useState(false);
   const [filter,setFilter]=useState<'all'|'predefined'|'dynamic'>('all');
   const [search,setSearch]=useState('');
+  const frame=useRef<HTMLDivElement|null>(null);
   const gesture=useRef<Gesture|null>(null);
   const pointers=useRef(new Map<number,{x:number;y:number}>());
   const key='four-keeps-anchamida-viewport-'+(campaign?.id??'preview');
@@ -39,6 +40,16 @@ export function AnchamidaRegionMap({campaign}:{campaign:Campaign|null}) {
   const dynamicSite=selected?allDynamic.find(p=>p.id===selected):undefined;
   const identity=site?campaign?.mapPoiIdentities?.[site.id]:undefined;
   const reset=()=>{setZoom(1);setOffset({x:0,y:0});};
+  const focusSite=(id:string,x:number,y:number)=>{
+    setSelected(id);
+    const rect=frame.current?.getBoundingClientRect();
+    if(!rect)return;
+    const width=Math.min(rect.width,rect.height*2/3);
+    const height=width*1.5;
+    const targetZoom=3;
+    setZoom(targetZoom);
+    setOffset({x:-(x/100-.5)*width*targetZoom,y:-(y/100-.5)*height*targetZoom});
+  };
   const move=(e:PointerEvent<HTMLDivElement>)=>{
     if(!pointers.current.has(e.pointerId))return;
     pointers.current.set(e.pointerId,{x:e.clientX,y:e.clientY});
@@ -69,10 +80,10 @@ export function AnchamidaRegionMap({campaign}:{campaign:Campaign|null}) {
       {[
         ...(filter==='dynamic'?[]:visible.map(s=>({id:s.id,name:campaign?.mapPoiIdentities?.[s.id]?.name||s.name||'Unnamed discovery',x:s.x,y:s.y}))),
         ...(filter==='predefined'?[]:allDynamic.map(s=>({id:s.id,name:s.name,x:s.x,y:s.y})))
-      ].filter(s=>s.name.toLowerCase().includes(search.toLowerCase())).map(s=><button key={s.id} className="block w-full border-b border-gold/20 py-1 text-left" onClick={()=>{setSelected(s.id);setZoom(3);setOffset({x:0,y:0});}}>{s.name}</button>)}
+      ].filter(s=>s.name.toLowerCase().includes(search.toLowerCase())).map(s=><button key={s.id} className="block w-full border-b border-gold/20 py-1 text-left" onClick={()=>focusSite(s.id,s.x,s.y)}>{s.name}</button>)}
     </div>}
     <p className="mb-1 text-xs text-parchment/60">Drag to pan · Pinch to zoom · Only discovered locations appear</p>
-    <div className="relative min-h-0 flex-1 overflow-hidden rounded-xl border border-gold/40 bg-[#d6c39a]" style={{touchAction:'none'}}
+    <div ref={frame} className="relative min-h-0 flex-1 overflow-hidden rounded-xl border border-gold/40 bg-[#d6c39a]" style={{touchAction:'none'}}
       onPointerDown={e=>{e.currentTarget.setPointerCapture(e.pointerId);pointers.current.set(e.pointerId,{x:e.clientX,y:e.clientY});gesture.current=null;}}
       onPointerMove={move}
       onPointerUp={e=>{pointers.current.delete(e.pointerId);gesture.current=null;}}

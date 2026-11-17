@@ -1024,6 +1024,30 @@ test('validated character draft becomes a persistent campaign without replacing 
  await expect(page.getByRole('button',{name:'Hidden Camp'})).toHaveCount(2);
  await page.getByRole('textbox',{name:'Search map locations'}).fill('missing');
  await expect(page.getByRole('button',{name:'Hidden Camp'})).toHaveCount(1);
+ await page.evaluate(async()=>{
+  const db=await new Promise<IDBDatabase>((resolve,reject)=>{const r=indexedDB.open('four-keeps-local',1);r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});
+  await new Promise<void>((resolve,reject)=>{
+   const tx=db.transaction('campaigns','readwrite'),store=tx.objectStore('campaigns');
+   const all=store.getAll();
+   all.onsuccess=()=>{
+    const campaign=all.result.find(c=>c.characterBuild);
+    if(!campaign){reject(new Error('Campaign missing'));return;}
+    campaign.mapDynamicSites=Array.from({length:35},(_,i)=>({id:'dm-test-'+i,name:'Location '+i,description:'Discovered campsite',x:3+(i%7)*13,y:5+Math.floor(i/7)*18,kind:'minor',createdAt:i+1,discovered:true}));
+    store.put(campaign);
+   };
+   tx.oncomplete=()=>resolve();tx.onerror=()=>reject(tx.error);
+  });db.close();
+ });
+ await page.reload();
+ await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await navigate(page,'Map');
+ await expect(page.getByText('30 additional mapped')).toBeVisible();
+ await page.getByRole('button',{name:'Toggle location list'}).click();
+ await expect(page.getByText('35 additional discovered · 30 shown as markers')).toBeVisible();
+ await page.getByRole('button',{name:'Additional'}).click();
+ await page.getByRole('textbox',{name:'Search map locations'}).fill('Location 34');
+ await page.getByRole('button',{name:'Location 34'}).click();
+ await expect(page.getByRole('region',{name:'Discovered location details'})).toContainText('Location 34');
  await openDevelopment(page);
  await page.getByLabel('Adventure session',{exact:true}).getByRole('button',{name:'Start frontier adventure'}).click();
  await expect(page.getByLabel('Adventure session status')).toContainText('Raven');

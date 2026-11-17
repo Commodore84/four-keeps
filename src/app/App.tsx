@@ -875,7 +875,11 @@ export function App() {
       const next = current.characterIdentity && current.adventureSession && result.combatStart
         ? proposeAdventureEncounter(travelled,result.combatStart.enemyName,actionId!)
         : result.combatStart && !current.adventureSession && !current.characterIdentity && !current.combat && !current.pendingAftermath ? beginDuel(travelled,result.combatStart.enemyName) : current.pendingAftermath ? {...travelled,pendingAftermath:undefined} : travelled;
-      const mapped = current.characterBuild && !result.clarificationRequest && !result.checkRequest ? applyAnchamidaActions(next,result.mapActions) : next;
+      let mapped=next;
+      if(current.characterBuild && !result.clarificationRequest && !result.checkRequest) {
+        try {mapped=applyAnchamidaActions(next,result.mapActions);}
+        catch(error) {console.warn('Rejected invalid DM map action batch',error);}
+      }
       await localCampaignStorage.save(mapped);
       setCampaign(mapped);
       setCampaigns((items) => items.map((item) => item.id === mapped.id ? mapped : item));
