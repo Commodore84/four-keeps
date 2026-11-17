@@ -56,9 +56,10 @@ export function AnchamidaRegionMap({campaign}:{campaign:Campaign|null}) {
     const pts=[...pointers.current.values()];
     const center={x:pts.reduce((s,p)=>s+p.x,0)/pts.length,y:pts.reduce((s,p)=>s+p.y,0)/pts.length};
     const distance=pts.length>1?Math.hypot(pts[0].x-pts[1].x,pts[0].y-pts[1].y):undefined;
-    if(gesture.current) {
-      setOffset(v=>({x:v.x+center.x-gesture.current!.x,y:v.y+center.y-gesture.current!.y}));
-      if(distance&&gesture.current.distance)setZoom(v=>clamp(v*distance/gesture.current!.distance!,1,6));
+    const previous=gesture.current;
+    if(previous) {
+      setOffset(v=>({x:v.x+center.x-previous.x,y:v.y+center.y-previous.y}));
+      if(distance&&previous.distance)setZoom(v=>clamp(v*distance/previous.distance!,1,6));
     }
     gesture.current={...center,distance};
   };
@@ -83,14 +84,14 @@ export function AnchamidaRegionMap({campaign}:{campaign:Campaign|null}) {
       ].filter(s=>s.name.toLowerCase().includes(search.toLowerCase())).map(s=><button key={s.id} className="block w-full border-b border-gold/20 py-1 text-left" onClick={()=>focusSite(s.id,s.x,s.y)}>{s.name}</button>)}
     </div>}
     <p className="mb-1 text-xs text-parchment/60">Drag to pan · Pinch to zoom · Only discovered locations appear</p>
-    <div ref={frame} className="relative min-h-0 flex-1 overflow-hidden rounded-xl border border-gold/40 bg-[#d6c39a]" style={{touchAction:'none'}}
+    <div ref={frame} className="relative min-h-0 flex-1 overflow-hidden rounded-xl border border-gold/40 bg-[#d6c39a]" style={{touchAction:'none',containerType:'size'}}
       onPointerDown={e=>{e.currentTarget.setPointerCapture(e.pointerId);pointers.current.set(e.pointerId,{x:e.clientX,y:e.clientY});gesture.current=null;}}
       onPointerMove={move}
       onPointerUp={e=>{pointers.current.delete(e.pointerId);gesture.current=null;}}
       onPointerCancel={e=>{pointers.current.delete(e.pointerId);gesture.current=null;}}
       onWheel={onWheel}>
       <div className="absolute inset-0 flex items-center justify-center" style={{transform:`translate(${offset.x}px,${offset.y}px) scale(${zoom})`,transformOrigin:'center'}}>
-        <div className="relative h-full max-w-full" style={{aspectRatio:'2 / 3'}}>
+        <div className="relative" style={{aspectRatio:'2 / 3',width:'min(100cqw, calc(100cqh * 2 / 3))'}}>
           {!imageFailed?<img src="/anchamida-region.webp" draggable={false} alt="Anchamida illustrated regional terrain" className="absolute inset-0 h-full w-full object-contain select-none" onError={()=>setImageFailed(true)}/>:<div role="img" aria-label="Regional artwork unavailable" className="absolute inset-0 flex items-center justify-center bg-[#b8b092] px-5 text-center text-sm text-[#40372a]">Regional artwork pending installation</div>}
           {clusters.map(cluster=><button key={cluster.sites.map(s=>s.id).join('-')} type="button" title={cluster.sites.map(s=>s.name).join(', ')} aria-label={cluster.sites.length>1?cluster.sites.length+' nearby locations':cluster.sites[0].name} style={{left:cluster.x+'%',top:cluster.y+'%',transform:`translate(-50%,-50%) scale(${1/zoom})`}} className="absolute z-20 flex h-6 min-w-6 items-center justify-center rounded-full border-2 border-white bg-emerald-800 px-1 text-xs text-white shadow-md" onClick={()=>{if(cluster.sites.length===1)setSelected(cluster.sites[0].id);else setZoom(v=>Math.min(v+1,6));}}>{cluster.sites.length>1?cluster.sites.length:'•'}</button>)}
           {visible.map(p=><button key={p.id} type="button" onClick={()=>setSelected(p.id)} title={identity?.name||p.name||'Uncharted location'} aria-label={identity?.name||p.name||'Discovered location'} style={{left:p.x+'%',top:p.y+'%',transform:`translate(-50%,-50%) scale(${1/zoom})`}} className="absolute z-10 flex h-6 w-6 items-center justify-center rounded-full border-2 border-[#fff4d9] bg-[#8e342d] text-xs text-white shadow-md">{p.type==='city'?'⌂':'•'}</button>)}
