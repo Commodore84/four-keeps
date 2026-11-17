@@ -25,6 +25,8 @@ describe('validated character draft to campaign import',()=>{
   const d=validRogue();
   expect(reviewErrors(d)).toEqual([]);
   const c=campaignFromCharacterDraft(d,'Raven adventure','raven-campaign','2026-11-10T00:00:00.000Z');
+  expect(c.location).toBe('Dasahi');
+  expect(c.journal[0].text).toContain('Dasahi');
   expect(c.characterIdentity).toMatchObject({name:'Raven',classId:'rogue',speciesId:'elf',lineageId:'wood-elf',draftId:d.id});
   expect(c.character).toMatchObject({scores:{str:8,dex:17,con:14,int:14,wis:12,cha:10},level:1,maxHitPoints:10,currentHitPoints:10,speed:35,proficiencyBonus:2});
   expect(c.character?.proficientSkills).toContain('Stealth');

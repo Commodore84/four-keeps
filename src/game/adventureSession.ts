@@ -20,13 +20,13 @@ export function beginAdventureSession(campaign:Campaign,now=new Date().toISOStri
  if(!campaign.character||!Number.isInteger(campaign.character.maxHitPoints)||!(campaign.character.maxHitPoints!>0))throw Error('A campaign character is required');
  if(campaign.adventureSession)throw Error('Adventure session already exists');
  const session:AdventureSession={status:'exploring',site:'frontier',characterSource:'campaign-character',visited:['frontier'],interactions:[]};
- return {...campaign,adventureSession:session,location:ADVENTURE_SITES.frontier.name,updatedAt:now,journal:[...campaign.journal,{id:campaign.id+'-adventure-start',kind:'system',text:'Adventure session started with the saved campaign character.',createdAt:now}]};
+ return {...campaign,adventureSession:session,location:campaign.characterBuild&&campaign.location==='Dasahi'?'Dasahi':ADVENTURE_SITES.frontier.name,updatedAt:now,journal:[...campaign.journal,{id:campaign.id+'-adventure-start',kind:'system',text:'Adventure session started with the saved campaign character.',createdAt:now}]};
 }
 export function travelAdventure(campaign:Campaign,destination:AdventureSite,now=new Date().toISOString()):Campaign{
  const session=campaign.adventureSession;
  if(!session||session.status!=='exploring')throw Error('Adventure exploration is not active');
  if(!ADVENTURE_SITES[session.site].neighbors.includes(destination))throw Error('Destination is not adjacent');
- return {...campaign,adventureSession:{...session,site:destination,visited:session.visited.includes(destination)?session.visited:[...session.visited,destination]},location:ADVENTURE_SITES[destination].name,updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:'Travelled to '+ADVENTURE_SITES[destination].name+'. '+ADVENTURE_SITES[destination].description,createdAt:now}]};
+ return {...campaign,adventureSession:{...session,site:destination,visited:session.visited.includes(destination)?session.visited:[...session.visited,destination]},location:campaign.characterBuild&&destination==='frontier'?'Dasahi':ADVENTURE_SITES[destination].name,updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:'Travelled to '+ADVENTURE_SITES[destination].name+'. '+ADVENTURE_SITES[destination].description,createdAt:now}]};
 }
 export function interactAdventure(campaign:Campaign,choiceId:string,now=new Date().toISOString()):Campaign{
  const session=campaign.adventureSession;

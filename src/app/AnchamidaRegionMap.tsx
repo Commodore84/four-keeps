@@ -13,6 +13,9 @@ export function AnchamidaRegionMap({campaign}:{campaign:Campaign|null}) {
   const [offset,setOffset]=useState({x:0,y:0});
   const [selected,setSelected]=useState<string|null>(null);
   const [imageFailed,setImageFailed]=useState(false);
+  const [showList,setShowList]=useState(false);
+  const [filter,setFilter]=useState<'all'|'predefined'|'dynamic'>('all');
+  const [search,setSearch]=useState('');
   const gesture=useRef<Gesture|null>(null);
   const pointers=useRef(new Map<number,{x:number;y:number}>());
   const key='four-keeps-anchamida-viewport-'+(campaign?.id??'preview');
@@ -30,9 +33,10 @@ export function AnchamidaRegionMap({campaign}:{campaign:Campaign|null}) {
   },[key,zoom,offset.x,offset.y]);
   const visible=visibleAnchamidaLocations(campaign?.mapDiscovered??[]);
   const dynamic=visibleDynamicSites(campaign,Date.now());
+  const allDynamic=(campaign?.mapDynamicSites??[]).filter(s=>s.discovered&&!s.archived&&!s.hidden&&(s.kind!=='temporary'||s.expiresAt===undefined||s.expiresAt>Date.now()));
   const clusters=clusterDynamicSites(dynamic,zoom);
   const site=selected?visible.find(p=>p.id===selected):undefined;
-  const dynamicSite=selected?dynamic.find(p=>p.id===selected):undefined;
+  const dynamicSite=selected?allDynamic.find(p=>p.id===selected):undefined;
   const identity=site?campaign?.mapPoiIdentities?.[site.id]:undefined;
   const reset=()=>{setZoom(1);setOffset({x:0,y:0});};
   const move=(e:PointerEvent<HTMLDivElement>)=>{
@@ -52,11 +56,21 @@ export function AnchamidaRegionMap({campaign}:{campaign:Campaign|null}) {
     <div className="mb-2 flex items-center justify-between gap-2">
       <h2 className="font-serif text-lg">Anchamida</h2>
       <div className="flex gap-1">
+        <button aria-label="Toggle location list" className="rounded border border-gold/40 px-2 py-1.5 text-xs" onClick={()=>setShowList(v=>!v)}>Locations</button>
         <button aria-label="Zoom out" className="rounded border border-gold/40 px-3 py-1.5" onClick={()=>setZoom(v=>clamp(v-.5,1,6))}>−</button>
         <button aria-label="Zoom in" className="rounded border border-gold/40 px-3 py-1.5" onClick={()=>setZoom(v=>clamp(v+.5,1,6))}>+</button>
         <button className="rounded border border-gold/40 px-2 py-1.5 text-xs" onClick={reset}>Reset</button>
       </div>
     </div>
+    {showList&&<div className="mb-2 max-h-48 overflow-auto rounded border border-gold/40 p-2 text-sm" aria-label="Discovered map locations">
+      <label className="block text-xs">Search locations <input aria-label="Search map locations" value={search} onChange={e=>setSearch(e.target.value)} className="w-full rounded border bg-transparent p-1"/></label>
+      <div className="flex gap-2 py-1">{(['all','predefined','dynamic'] as const).map(v=><button key={v} aria-pressed={filter===v} onClick={()=>setFilter(v)} className="rounded border px-2 py-1 text-xs">{v==='all'?'All':v==='predefined'?'Predefined':'Additional'}</button>)}</div>
+      <p className="text-xs">{allDynamic.length} additional discovered · {dynamic.length} shown as markers</p>
+      {[
+        ...(filter==='dynamic'?[]:visible.map(s=>({id:s.id,name:campaign?.mapPoiIdentities?.[s.id]?.name||s.name||'Unnamed discovery',x:s.x,y:s.y}))),
+        ...(filter==='predefined'?[]:allDynamic.map(s=>({id:s.id,name:s.name,x:s.x,y:s.y})))
+      ].filter(s=>s.name.toLowerCase().includes(search.toLowerCase())).map(s=><button key={s.id} className="block w-full border-b border-gold/20 py-1 text-left" onClick={()=>{setSelected(s.id);setZoom(3);setOffset({x:0,y:0});}}>{s.name}</button>)}
+    </div>}
     <p className="mb-1 text-xs text-parchment/60">Drag to pan · Pinch to zoom · Only discovered locations appear</p>
     <div className="relative min-h-0 flex-1 overflow-hidden rounded-xl border border-gold/40 bg-[#d6c39a]" style={{touchAction:'none'}}
       onPointerDown={e=>{e.currentTarget.setPointerCapture(e.pointerId);pointers.current.set(e.pointerId,{x:e.clientX,y:e.clientY});gesture.current=null;}}

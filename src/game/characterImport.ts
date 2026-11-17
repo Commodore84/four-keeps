@@ -27,10 +27,10 @@ export function campaignFromCharacterDraft(draft:CharacterDraft,title:string,id:
  const ledger={currency:{CP:Math.round(review.remainingGold*100),SP:0,EP:0,GP:0,PP:0},gear};
  const counted=(id:string)=>items.find(item=>item.name===ITEM_BY_ID[id]?.name)?.quantity??0;
  const base=newCampaign(title,id,now);
- return {...base,character,hitDiceRemaining:1,characterBuild:structuredClone(draft),characterIdentity:{name:draft.identity.name.trim(),speciesId:draft.selections.speciesId!,lineageId:draft.selections.lineageId,backgroundId:draft.selections.backgroundId!,classId:draft.selections.classId!,draftId:draft.id,pronouns:draft.identity.pronouns,appearance:draft.identity.appearance,personality:draft.identity.personality,backstory:draft.identity.backstory},
+ return {...base,location:'Dasahi',character,hitDiceRemaining:1,characterBuild:structuredClone(draft),characterIdentity:{name:draft.identity.name.trim(),speciesId:draft.selections.speciesId!,lineageId:draft.selections.lineageId,backgroundId:draft.selections.backgroundId!,classId:draft.selections.classId!,draftId:draft.id,pronouns:draft.identity.pronouns,appearance:draft.identity.appearance,personality:draft.identity.personality,backstory:draft.identity.backstory},
  inventoryLedger:ledger,equipment:{daggers:counted('dagger'),arrows:counted('arrows'),caltrops:counted('caltrops'),ballBearings:counted('ball-bearings')},
  encounterLoadout:{weaponId:eq.equipped.weapons[0],armorId:eq.equipped.armor,shieldId:eq.equipped.shield},
- journal:[{id:id+'-intro',kind:'system',text:draft.identity.name.trim()+' begins a new adventure at Frontier Village.',createdAt:now}]};
+ journal:[{id:id+'-intro',kind:'system',text:draft.identity.name.trim()+' begins a new adventure in Dasahi.',createdAt:now}]};
 }
 export function characterDraftImportOptions(drafts:CharacterDraft[]):{id:string;name:string;classId:string;valid:boolean;errors:string[]}[]{
  return drafts.filter(d=>d?.schemaVersion===1&&d.status==='draft').map(d=>{try{const errors=reviewErrors(d);return {id:d.id,name:d.identity.name||'Unnamed character',classId:d.selections.classId??'unselected',valid:errors.length===0,errors};}catch{return {id:d.id,name:d.identity?.name||'Unnamed character',classId:'unselected',valid:false,errors:['Draft could not be validated']};}});

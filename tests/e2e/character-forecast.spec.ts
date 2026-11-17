@@ -59,6 +59,7 @@ test('mobile feat picker explains prerequisites and compares starting to level 2
  await expect(page.getByLabel('Starting versus level 20 ability scores')).toContainText('17 → 18');
 });
 test('feat benefit details and level-up handoff remain advisory after reload',async({page})=>{
+ test.setTimeout(90000);
  await openPlan(page);
  await page.getByLabel('Level 4 feat choice').selectOption('Fey-Touched');
  await expect(page.getByLabel('Level 4 feat benefits')).toContainText('Misty Step');

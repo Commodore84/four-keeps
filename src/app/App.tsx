@@ -1,3 +1,5 @@
+import {anchamidaLocations} from '../game/anchamida';
+import {applyAnchamidaActions} from '../game/anchamidaActions';
 import {AnchamidaRegionMap} from './AnchamidaRegionMap';
 import {MerchantShop} from './MerchantShop';
 import {DMNarration,type NarrationSpeed} from './DMNarration';
@@ -850,8 +852,8 @@ export function App() {
       const memory=adventureMemory(prepared);
       const history=memory.recentConversation;
       const response = await fetch('/api/dm', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-four-keeps-access': accessCode },
-        body: JSON.stringify({ message:aiSession?prepared.pendingAdventureAction!.message:message, clarification:prepared.pendingClarification??null, actionId, character:current.character ?? prototypeNighthawk, gameState:{ ...campaignPlayerContext(current), adventureSession:current.adventureSession??null, merchant:frontierMerchantContext(current), characterIdentity:current.characterIdentity??null, location:current.location, combat:current.combat??null, familiar:current.familiar ?? null, elapsedMinutes:current.elapsedMinutes ?? 0, concentration:current.concentration??null, spellEffects:(current.spellEffects??[]).slice(-12), recentEvents:current.journal.filter(e=>e.kind==='system').slice(-8).map(e=>e.text) }, history, worldFacts: memory.establishedFacts, world: current.world ?? emptyWorld(), adventureMemory:memory }) });
-      const result: { narration?: string; newFacts?: string[]; worldUpdates?: unknown; checkRequest?: { skill:string; mode:'normal'|'advantage'|'disadvantage'; reason:string; token:string } | null; combatStart?:{enemyName:string}|null; merchantDiscount?:{itemId:string;percent:number}|null; clarificationRequest?:{question:string}|null; travelDestination?:string|null; error?: string } = await response.json();
+        body: JSON.stringify({ message:aiSession?prepared.pendingAdventureAction!.message:message, clarification:prepared.pendingClarification??null, actionId, character:current.character ?? prototypeNighthawk, gameState:{ ...campaignPlayerContext(current), adventureSession:current.adventureSession??null, merchant:frontierMerchantContext(current), characterIdentity:current.characterIdentity??null, location:current.location, combat:current.combat??null, familiar:current.familiar ?? null, elapsedMinutes:current.elapsedMinutes ?? 0, concentration:current.concentration??null, spellEffects:(current.spellEffects??[]).slice(-12), recentEvents:current.journal.filter(e=>e.kind==='system').slice(-8).map(e=>e.text) }, history, worldFacts: memory.establishedFacts, world: current.world ?? emptyWorld(), anchamida:current.characterBuild?{predefined:anchamidaLocations.map(s=>({id:s.id,name:s.name,x:s.x,y:s.y,notes:s.notes})),discovered:current.mapDiscovered??[],dynamic:current.mapDynamicSites??[]}:null, adventureMemory:memory }) });
+      const result: { narration?: string; newFacts?: string[]; worldUpdates?: unknown; checkRequest?: { skill:string; mode:'normal'|'advantage'|'disadvantage'; reason:string; token:string } | null; combatStart?:{enemyName:string}|null; merchantDiscount?:{itemId:string;percent:number}|null; clarificationRequest?:{question:string}|null; travelDestination?:string|null; mapActions?:unknown; error?: string } = await response.json();
       if (!response.ok || !result.narration) throw new Error(result.error || 'DM request failed');
       if(aiSession && result.clarificationRequest) {
         if(prepared.pendingClarification?.answer)throw Error('The DM repeated a question you already answered. Your confirmed action is saved; retry to continue.');
@@ -873,9 +875,10 @@ export function App() {
       const next = current.characterIdentity && current.adventureSession && result.combatStart
         ? proposeAdventureEncounter(travelled,result.combatStart.enemyName,actionId!)
         : result.combatStart && !current.adventureSession && !current.characterIdentity && !current.combat && !current.pendingAftermath ? beginDuel(travelled,result.combatStart.enemyName) : current.pendingAftermath ? {...travelled,pendingAftermath:undefined} : travelled;
-      await localCampaignStorage.save(next);
-      setCampaign(next);
-      setCampaigns((items) => items.map((item) => item.id === next.id ? next : item));
+      const mapped = current.characterBuild && !result.clarificationRequest && !result.checkRequest ? applyAnchamidaActions(next,result.mapActions) : next;
+      await localCampaignStorage.save(mapped);
+      setCampaign(mapped);
+      setCampaigns((items) => items.map((item) => item.id === mapped.id ? mapped : item));
       setDraft('');
       setActiveView('adventure');
       setNotice(next.adventureSession?.pendingEncounter?'The DM initiated combat. Confirm enemy statistics and initiative below.':next.combat?.status==='awaiting-initiative'?'Combat started. Tap Roll initiative.':'The DM replied. Conversation saved locally.');

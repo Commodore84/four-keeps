@@ -8,6 +8,15 @@ import {settleEncounterRewards} from './encounterRewards';
 import {prepareAdventureAction,commitAdventureAction,pauseAdventureForClarification,answerAdventureClarification} from './adventureOrchestrator';
 describe('persistent adventure session',()=>{
  const base=()=>newCampaign('Frontier Test','adventure-test','2026-11-10T00:00:00.000Z');
+ it('keeps Dasahi for new imported campaigns while preserving legacy Frontier Village',()=>{
+  const legacy=beginAdventureSession(base());
+  expect(legacy.location).toBe('Frontier Village');
+  const imported={...base(),location:'Dasahi',characterBuild:{} as Campaign['characterBuild']};
+  const started=beginAdventureSession(imported);
+  expect(started.location).toBe('Dasahi');
+  expect(travelAdventure(travelAdventure(started,'crossroads'),'frontier').location).toBe('Dasahi');
+  expect(imported.location).toBe('Dasahi');
+ });
  it('pauses clarification without advancing world and resolves the original action once',()=>{
   const initial=beginAdventureSession(base());
   const pending=prepareAdventureAction(initial,'Attack the dragon with my dagger','dragon-action');

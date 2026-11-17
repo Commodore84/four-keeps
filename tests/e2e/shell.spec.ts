@@ -1017,6 +1017,13 @@ test('validated character draft becomes a persistent campaign without replacing 
  await expect(page.getByRole('heading',{name:'Anchamida'})).toBeVisible();
  await expect(page.getByRole('button',{name:'Hidden Camp'})).toBeVisible();
  await expect(page.getByText('1 additional mapped')).toBeVisible();
+ await page.getByRole('button',{name:'Toggle location list'}).click();
+ await expect(page.getByRole('button',{name:'Hidden Camp'})).toHaveCount(2);
+ await page.getByRole('button',{name:'Additional'}).click();
+ await page.getByRole('textbox',{name:'Search map locations'}).fill('Hidden');
+ await expect(page.getByRole('button',{name:'Hidden Camp'})).toHaveCount(2);
+ await page.getByRole('textbox',{name:'Search map locations'}).fill('missing');
+ await expect(page.getByRole('button',{name:'Hidden Camp'})).toHaveCount(1);
  await openDevelopment(page);
  await page.getByLabel('Adventure session',{exact:true}).getByRole('button',{name:'Start frontier adventure'}).click();
  await expect(page.getByLabel('Adventure session status')).toContainText('Raven');
