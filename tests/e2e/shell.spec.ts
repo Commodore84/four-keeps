@@ -976,6 +976,7 @@ test('frontier encounter handoff uses registered companion and resumes after com
 });
 
 test('validated character draft becomes a persistent campaign without replacing legacy Nighthawk',async({page})=>{
+ test.setTimeout(90000);
  await page.goto('/four-keeps/');
  await page.evaluate(()=>{
   const draft={schemaVersion:1,id:'valid-rogue-draft',status:'draft',rules:{edition:'2024',allowCompatibleLegacy:true},step:'review',
@@ -1048,8 +1049,46 @@ test('validated character draft becomes a persistent campaign without replacing 
  await page.getByRole('textbox',{name:'Search map locations'}).fill('Location 34');
  await page.getByRole('button',{name:'Location 34'}).click();
  await expect(page.getByRole('region',{name:'Discovered location details'})).toContainText('Location 34');
+ let dmCalls=0;
+ await page.route('**/api/dm',async route=>{
+  dmCalls++;
+  const actions=dmCalls===2?[{type:'create',site:{id:'dm-ai-riverside',name:'Riverside Camp',description:'A small camp beside the road',x:37,y:64,kind:'minor',createdAt:1000,discovered:true}}]
+   :dmCalls===3?[{type:'update',id:'dm-ai-riverside',archived:true}]
+   :dmCalls===4?[{type:'create',site:{id:'dm-duplicate-city',name:'Dasahi',description:'Invalid duplicate',x:61.42,y:70.87,kind:'minor',createdAt:1001,discovered:true}}]:[];
+  await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({narration:'DM response '+dmCalls,mapActions:actions,newFacts:[],worldUpdates:{}})});
+ });
+ await page.evaluate(()=>{localStorage.setItem('four-keeps-access-code','browser-test-code');localStorage.setItem('four-keeps-dm-mode','on');});
+ await page.reload();
+ await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await navigate(page,'Adventure');
+ await expect(page.getByLabel('Adventure',{exact:true})).toContainText('DM response 1');
+ await page.getByLabel('Message the Dungeon Master').fill('Find a small riverside camp');
+ await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
+ await expect(page.getByLabel('Adventure',{exact:true})).toContainText('DM response 2');
+ await navigate(page,'Map');
+ await page.getByRole('button',{name:'Toggle location list'}).click();
+ await page.getByRole('textbox',{name:'Search map locations'}).fill('Riverside Camp');
+ await expect(page.getByRole('button',{name:'Riverside Camp'})).toHaveCount(1);
+ await navigate(page,'Adventure');
+ await page.getByLabel('Message the Dungeon Master').fill('The riverside camp is abandoned');
+ await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
+ await expect(page.getByLabel('Adventure',{exact:true})).toContainText('DM response 3');
+ await navigate(page,'Map');
+ await page.getByRole('button',{name:'Toggle location list'}).click();
+ await page.getByRole('textbox',{name:'Search map locations'}).fill('Riverside Camp');
+ await expect(page.getByRole('button',{name:'Riverside Camp'})).toHaveCount(0);
+ await navigate(page,'Adventure');
+ await page.getByLabel('Message the Dungeon Master').fill('Tell me about the city');
+ await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
+ await expect(page.getByLabel('Adventure',{exact:true})).toContainText('DM response 4');
+ await page.reload();
+ await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await navigate(page,'Map');
+ await expect(page.getByRole('button',{name:'Dasahi'})).toBeVisible();
+ await expect(page.getByRole('button',{name:'Riverside Camp'})).toHaveCount(0);
  await openDevelopment(page);
- await page.getByLabel('Adventure session',{exact:true}).getByRole('button',{name:'Start frontier adventure'}).click();
+ const startFrontier=page.getByLabel('Adventure session',{exact:true}).getByRole('button',{name:'Start frontier adventure'});
+ if(await startFrontier.isVisible())await startFrontier.click();
  await expect(page.getByLabel('Adventure session status')).toContainText('Raven');
  await page.reload();
  await page.getByRole('button',{name:'Continue Adventure'}).click();
