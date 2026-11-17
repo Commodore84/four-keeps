@@ -991,6 +991,16 @@ test('validated character draft becomes a persistent campaign without replacing 
  await page.getByLabel('Starting character').selectOption('valid-rogue-draft');
  await page.getByLabel('Campaign name').fill('Raven Campaign');
  await page.getByRole('button',{name:'Create campaign'}).click();
+ await navigate(page,'Map');
+ await expect(page.getByRole('heading',{name:'Anchamida'})).toBeVisible();
+ await expect(page.getByRole('button',{name:'Dasahi'})).toBeVisible();
+ await expect(page.getByText('1 of 36 locations discovered')).toBeVisible();
+ await expect(page.getByRole('button',{name:'Mount Varkos'})).toHaveCount(0);
+ await page.getByRole('button',{name:'Zoom in'}).click();
+ await page.reload();
+ await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await navigate(page,'Map');
+ await expect(page.getByRole('heading',{name:'Anchamida'})).toBeVisible();
  await openDevelopment(page);
  await page.getByLabel('Adventure session',{exact:true}).getByRole('button',{name:'Start frontier adventure'}).click();
  await expect(page.getByLabel('Adventure session status')).toContainText('Raven');

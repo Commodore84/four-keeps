@@ -35,6 +35,8 @@ export interface Campaign {
   location: string;
   mapLocation?: 'frontier'|'crossroads'|'watchtower';
   mapDiscovered?: string[];
+  /** Campaign-specific identities assigned by the DM to discovered flexible sites. */
+  mapPoiIdentities?:Record<string,{name:string;description:string}>;
   createdAt: string;
   updatedAt: string;
   journal: JournalEntry[];
