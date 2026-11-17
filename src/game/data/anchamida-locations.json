@@ -1,0 +1,325 @@
+{
+  "map": "Anchamida",
+  "baseAsset": "Anchamida_refined_8x.png",
+  "coordinateSystem": "percent-of-image",
+  "imageWidth": 8192,
+  "imageHeight": 12288,
+  "locations": [
+    {
+      "id": "city-ancolo",
+      "type": "city",
+      "name": "Ancolo",
+      "x": 19,
+      "y": 14.3
+    },
+    {
+      "id": "city-miwillia",
+      "type": "city",
+      "name": "Miwillia",
+      "x": 14.8,
+      "y": 41.14
+    },
+    {
+      "id": "city-chashar",
+      "type": "city",
+      "name": "Chasha’r",
+      "x": 67.5,
+      "y": 25.8
+    },
+    {
+      "id": "city-dasahi",
+      "type": "city",
+      "name": "Dasahi",
+      "x": 61.42,
+      "y": 70.87
+    },
+    {
+      "id": "map-feature-001",
+      "type": "discovery",
+      "name": "Lakefall Cascades",
+      "x": 20.65,
+      "y": 10.71,
+      "notes": "A waterfall dropping from the snowy alpine slopes into the lake; visible water and steep rock with a cave behind the falls.",
+      "confirmed": true
+    },
+    {
+      "id": "map-feature-002",
+      "type": "discovery",
+      "name": "Calderian High Pass",
+      "x": 39,
+      "y": 9.3,
+      "notes": "A narrow saddle among snow-covered peaks; possible mountain crossing.",
+      "confirmed": true
+    },
+    {
+      "id": "map-feature-003",
+      "type": "discovery",
+      "name": "",
+      "x": 76,
+      "y": 11.5,
+      "notes": "A slender stone tower or ruined structure standing on the northern foothills.",
+      "confirmed": true
+    },
+    {
+      "id": "map-feature-004",
+      "type": "discovery",
+      "name": "Cliffs of Etretat",
+      "x": 91.5,
+      "y": 12.8,
+      "notes": "Fortified-looking stone remains above the northeastern sea cliffs.",
+      "confirmed": true
+    },
+    {
+      "id": "map-feature-005",
+      "type": "discovery",
+      "name": "",
+      "x": 31.28,
+      "y": 14.12,
+      "notes": "",
+      "confirmed": true
+    },
+    {
+      "id": "map-feature-006",
+      "type": "discovery",
+      "name": "Old River Crossing",
+      "x": 52,
+      "y": 20.8,
+      "notes": "River crossing area near a cluster of structures and paths.",
+      "confirmed": true
+    },
+    {
+      "id": "map-feature-007",
+      "type": "discovery",
+      "name": "",
+      "x": 58.3,
+      "y": 17.3,
+      "notes": "Stone-built remains or settlement-like cluster near the northern river.",
+      "confirmed": true
+    },
+    {
+      "id": "map-feature-008",
+      "type": "discovery",
+      "name": "Enchanted Forest Pillars",
+      "x": 7.26,
+      "y": 29.58,
+      "notes": "Tall pale stone columns or ruins standing inside the dense western woodland.",
+      "confirmed": true
+    },
+    {
+      "id": "map-feature-009",
+      "type": "discovery",
+      "name": "",
+      "x": 39.75,
+      "y": 26.48,
+      "notes": "Abandoned building project that was partially completed",
+      "confirmed": true
+    },
+    {
+      "id": "map-feature-010",
+      "type": "discovery",
+      "name": "Westwood Ruined Hall",
+      "x": 31.92,
+      "y": 38.08,
+      "notes": "Prominent pale stone columns and a ruined hall at the woodland edge.",
+      "confirmed": true
+    },
+    {
+      "id": "map-feature-011",
+      "type": "discovery",
+      "name": "Old Plains Arch",
+      "x": 44.5,
+      "y": 35,
+      "notes": "A small surviving stone arch or ruin among grassy plains.",
+      "confirmed": true
+    },
+    {
+      "id": "map-feature-012",
+      "type": "discovery",
+      "name": "",
+      "x": 54,
+      "y": 32.5,
+      "notes": "Broad pale stone foundations or ruined complex in open central terrain.",
+      "confirmed": true
+    },
+    {
+      "id": "map-feature-013",
+      "type": "discovery",
+      "name": "",
+      "x": 75,
+      "y": 31,
+      "notes": "Dense braided streams and wet lowland channels east of the main river.",
+      "confirmed": true
+    },
+    {
+      "id": "map-feature-014",
+      "type": "discovery",
+      "name": "",
+      "x": 89,
+      "y": 27.3,
+      "notes": "Farmland built up around a bluff overlooking the ocean",
+      "confirmed": true
+    },
+    {
+      "id": "map-feature-015",
+      "type": "discovery",
+      "name": "Greenreach Standing Stones",
+      "x": 40.5,
+      "y": 43.4,
+      "notes": "Stone slabs or upright structures on a low rocky rise.",
+      "confirmed": true
+    },
+    {
+      "id": "map-feature-016",
+      "type": "discovery",
+      "name": "Stoneveil Falls",
+      "x": 16.4,
+      "y": 45.6,
+      "notes": "Tall waterfall and gorge beside the western road, visibly cut through dark rock.",
+      "confirmed": true
+    },
+    {
+      "id": "map-feature-018",
+      "type": "discovery",
+      "name": "Greystone Hilltop Ruins",
+      "x": 48.5,
+      "y": 47.7,
+      "notes": "Low stone remains on a rocky rise near branching tracks.",
+      "confirmed": true
+    },
+    {
+      "id": "map-feature-019",
+      "type": "discovery",
+      "name": "",
+      "x": 67.4,
+      "y": 45.4,
+      "notes": "",
+      "confirmed": true
+    },
+    {
+      "id": "map-feature-020",
+      "type": "discovery",
+      "name": "",
+      "x": 86.15,
+      "y": 45.22,
+      "notes": "Beautiful beach with a mysterious aura",
+      "confirmed": true
+    },
+    {
+      "id": "map-feature-021",
+      "type": "discovery",
+      "name": "Western Forest Tower",
+      "x": 7.44,
+      "y": 55.45,
+      "notes": "Tall pale tower-like ruin rising above forest and broken cliffs.",
+      "confirmed": true
+    },
+    {
+      "id": "map-feature-022",
+      "type": "discovery",
+      "name": "",
+      "x": 12.82,
+      "y": 61.57,
+      "notes": "Small village on top of cliffs near the south",
+      "confirmed": true
+    },
+    {
+      "id": "map-feature-023",
+      "type": "discovery",
+      "name": "Riverside Crossroads",
+      "x": 32.05,
+      "y": 54.04,
+      "notes": "Road junction amid grassland and low hills, suitable for a roadside site.",
+      "confirmed": true
+    },
+    {
+      "id": "map-feature-024",
+      "type": "discovery",
+      "name": "Southern Stone Circle",
+      "x": 25.5,
+      "y": 69.5,
+      "notes": "Pale standing stone or masonry remains near the southern forest edge.",
+      "confirmed": true
+    },
+    {
+      "id": "map-feature-025",
+      "type": "discovery",
+      "name": "",
+      "x": 60.33,
+      "y": 61.28,
+      "notes": "",
+      "confirmed": true
+    },
+    {
+      "id": "map-feature-026",
+      "type": "discovery",
+      "name": "Southern Harbor Sewers",
+      "x": 60.3,
+      "y": 71.51,
+      "notes": "Sewer system under development for Dasahi’s expanding residents",
+      "confirmed": true
+    },
+    {
+      "id": "map-feature-027",
+      "type": "discovery",
+      "name": "",
+      "x": 17,
+      "y": 85.5,
+      "notes": "Small settlement among the braided waterways and marshy-looking lowlands along the southwestern coast.",
+      "confirmed": true
+    },
+    {
+      "id": "map-feature-028",
+      "type": "discovery",
+      "name": "",
+      "x": 13,
+      "y": 91.8,
+      "notes": "",
+      "confirmed": true
+    },
+    {
+      "id": "map-feature-029",
+      "type": "discovery",
+      "name": "",
+      "x": 35.48,
+      "y": 82.13,
+      "notes": "Small cave entrance on the beach",
+      "confirmed": true
+    },
+    {
+      "id": "map-feature-030",
+      "type": "discovery",
+      "name": "Eastern Lagoon Isles",
+      "x": 88.29,
+      "y": 56.46,
+      "notes": "Small islands and shoals off the eastern shoreline.",
+      "confirmed": true
+    },
+    {
+      "id": "map-feature-031",
+      "type": "discovery",
+      "name": "Sapphire Headland",
+      "x": 89.96,
+      "y": 60.37,
+      "notes": "Rocky point projecting into the sea above a pale beach.",
+      "confirmed": true
+    },
+    {
+      "id": "map-feature-032",
+      "type": "discovery",
+      "name": "",
+      "x": 78,
+      "y": 90.5,
+      "notes": "Hidden entrance to an underground lair",
+      "confirmed": true
+    },
+    {
+      "id": "map-feature-033",
+      "type": "discovery",
+      "name": "Mount Varkos",
+      "x": 88.19,
+      "y": 92.13,
+      "notes": "Active volcanic peak on the southeastern island, with a visible glowing summit.",
+      "confirmed": true
+    }
+  ]
+}
