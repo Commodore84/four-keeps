@@ -860,6 +860,14 @@ export function App() {
         body: JSON.stringify({ message:aiSession?prepared.pendingAdventureAction!.message:message, clarification:prepared.pendingClarification??null, actionId, character:current.character ?? prototypeNighthawk, gameState:{ ...campaignPlayerContext(current), adventureSession:current.adventureSession??null, merchant:frontierMerchantContext(current), characterIdentity:current.characterIdentity??null, location:current.location, combat:current.combat??null, familiar:current.familiar ?? null, elapsedMinutes:current.elapsedMinutes ?? 0, concentration:current.concentration??null, spellEffects:(current.spellEffects??[]).slice(-12), recentEvents:current.journal.filter(e=>e.kind==='system').slice(-8).map(e=>e.text) }, history, worldFacts: memory.establishedFacts, world: current.world ?? emptyWorld(), anchamida:current.characterBuild?{predefined:anchamidaLocations.map(s=>({id:s.id,name:s.name,x:s.x,y:s.y,notes:s.notes})),discovered:current.mapDiscovered??[],dynamic:current.mapDynamicSites??[]}:null, adventureMemory:memory }) });
       const result: { narration?: string; newFacts?: string[]; worldUpdates?: unknown; checkRequest?: { skill:string; mode:'normal'|'advantage'|'disadvantage'; reason:string; token:string } | null; combatStart?:{enemyName:string}|null; merchantDiscount?:{itemId:string;percent:number}|null; clarificationRequest?:{question:string}|null; travelDestination?:string|null; mapActions?:unknown; error?: string } = await response.json();
       if (!response.ok || !result.narration) throw new Error(result.error || 'DM request failed');
+      // Do not trust the network boundary to enforce mutually exclusive gameplay transitions.
+      // A rejected response leaves the persisted pending action available for an exact-ID retry.
+      if(result.combatStart && result.travelDestination)
+        throw new Error('Conflicting DM combat and travel actions. Retry the saved action.');
+      if(result.clarificationRequest && (result.combatStart || result.travelDestination || result.checkRequest))
+        throw new Error('Conflicting DM clarification and gameplay actions. Retry the saved action.');
+      if(result.checkRequest && (result.combatStart || result.travelDestination))
+        throw new Error('Conflicting DM check and gameplay actions. Retry the saved action.');
       if(aiSession && result.clarificationRequest) {
         if(prepared.pendingClarification?.answer)throw Error('The DM repeated a question you already answered. Your confirmed action is saved; retry to continue.');
         const next=pauseAdventureForClarification(prepared,actionId!,result.clarificationRequest.question);

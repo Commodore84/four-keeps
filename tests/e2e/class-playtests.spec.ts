@@ -896,6 +896,7 @@ test('DM denial never grants imported rest recovery',async({page})=>{
 test('invalid DM map batch is rejected without partial locations and later valid discovery survives reload',async({page})=>{
  test.setTimeout(90000);
  await createAndImport(page,'fighter');
+ await expect.poll(async()=>Boolean((await saved(page))?.characterIdentity)).toBe(true);
  await page.evaluate(()=>{localStorage.setItem('four-keeps-access-code','browser-test-code');localStorage.setItem('four-keeps-dm-mode','on');});
  let turns=0;
  const site={id:'dm-recovery-lanterns',name:'Recovery Lanterns',description:'A camp on the Dasahi road',x:60,y:72,kind:'minor',createdAt:1000,discovered:true};
@@ -916,4 +917,37 @@ test('invalid DM map batch is rejected without partial locations and later valid
  await expect.poll(async()=> (await saved(page)).mapDynamicSites?.filter((s:any)=>s.id==='dm-recovery-lanterns').length).toBe(1);
  await page.reload();await page.getByRole('button',{name:'Continue Adventure'}).click();
  expect((await saved(page)).mapDynamicSites?.filter((s:any)=>s.id==='dm-recovery-lanterns')).toHaveLength(1);
+});
+
+test('conflicting provider transitions are rejected before narration and retry preserves the same player action',async({page})=>{
+ test.setTimeout(90000);
+ await createAndImport(page,'fighter');
+ await expect.poll(async()=>Boolean((await saved(page))?.characterIdentity)).toBe(true);
+ await page.evaluate(()=>{localStorage.setItem('four-keeps-access-code','browser-test-code');localStorage.setItem('four-keeps-dm-mode','on');});
+ const requests:any[]=[];let conflicting=true;
+ await page.route('**/api/dm',async route=>{
+  const body=route.request().postDataJSON();requests.push(body);
+  const result=body.opening?{narration:'The Dasahi watchkeeper greets you at the gate.'}:{narration:conflicting?'You travel and fight simultaneously.':'The watchkeeper explains the road is safe.',combatStart:conflicting?{enemyName:'Bandit'}:null,travelDestination:conflicting?'crossroads':null};
+  await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({...result,newFacts:[],worldUpdates:{},mapActions:[]})});
+ });
+ await page.reload();await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await expect.poll(async()=> (await saved(page))?.journal?.some((e:any)=>e.id?.endsWith('-dm-opening'))).toBe(true);
+ const initial=await saved(page);
+ await page.getByLabel('Message the Dungeon Master').fill('I ask about the road ahead.');
+ await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
+ await expect(page.getByRole('button',{name:'Retry saved action'})).toBeVisible();
+ const pending=await saved(page);
+ expect(pending.pendingAdventureAction.message).toBe('I ask about the road ahead.');
+ expect(pending.journal).toEqual(initial.journal);
+ expect(pending.adventureSession).toEqual(initial.adventureSession);
+ expect(pending.combat).toEqual(initial.combat);
+ await page.reload();await page.getByRole('button',{name:'Continue Adventure'}).click();
+ conflicting=false;
+ await page.getByRole('button',{name:'Retry saved action'}).click();
+ await expect(page.getByLabel('Adventure',{exact:true})).toContainText('The watchkeeper explains the road is safe.');
+ const last=await saved(page);
+ expect(last.pendingAdventureAction).toBeUndefined();
+ expect(last.journal.filter((e:any)=>e.id===pending.pendingAdventureAction.id+'-player')).toHaveLength(1);
+ expect(requests.at(-1).actionId).toBe(pending.pendingAdventureAction.id);
+ expect(last.combat).toEqual(initial.combat);
 });
