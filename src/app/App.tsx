@@ -457,12 +457,12 @@ export function App() {
   }, [hideToast]);
 
   async function createCampaign() {
-    if (saving || !newTitle.trim() || !selectedCharacterDraft) return;
+    if (saving || !selectedCharacterDraft) return;
     setSaving(true);
     try {
       const selected=selectedCharacterDraft?readCharacterDrafts().find(d=>d.id===selectedCharacterDraft):undefined;
       if(!selected)throw Error('Select a fully validated level-one character before creating a campaign');
-      const next = campaignFromCharacterDraft(selected,newTitle);
+      const next = campaignFromCharacterDraft(selected,(selected.identity.name || 'Adventurer') + ' · ' + new Date().toLocaleString());
       await localCampaignStorage.save(next);
       setCampaign(next);
       setCampaigns((items) => [next, ...items]);
@@ -1329,14 +1329,20 @@ export function App() {
         <option value="">Choose a completed character</option>
         {characterDraftImportOptions(readCharacterDrafts()).map(item=><option key={item.id} value={item.id} disabled={!item.valid}>{item.name} · {item.classId}{item.valid?'':' (incomplete)'}</option>)}
         </select></label>
-        <label className="block space-y-2 text-sm">Campaign name<input value={newTitle} onChange={event=>setNewTitle(event.target.value)} className="w-full rounded-lg border border-white/20 bg-ink p-3" placeholder="Campaign name"/></label>
-        <button type="button" disabled={saving||loading||!newTitle.trim()||!selectedCharacterDraft||!characterDraftImportOptions(readCharacterDrafts()).some(item=>item.id===selectedCharacterDraft&&item.valid)} onClick={()=>void createCampaign()} className="rounded-lg bg-gold px-4 py-3 font-semibold text-ink disabled:opacity-40">Create campaign</button>
+        <button type="button" disabled={saving||loading||!selectedCharacterDraft||!characterDraftImportOptions(readCharacterDrafts()).some(item=>item.id===selectedCharacterDraft&&item.valid)} onClick={()=>void createCampaign()} className="rounded-lg bg-gold px-4 py-3 font-semibold text-ink disabled:opacity-40">Begin Adventure</button>
       </section>}
-      {portalScreen==='campaigns'&&<section className="space-y-3"><h2 className="font-serif text-2xl">My Campaigns</h2>
-        {loading&&<p>Loading saved campaigns…</p>}
-        {!loading&&campaigns.length===0&&<p className="text-sm text-parchment/65">No campaigns saved on this device.</p>}
-        {campaigns.map(item=><div key={item.id} className="rounded-xl border border-white/20 bg-panel p-4 space-y-2"><div className="flex items-center justify-between gap-2"><button type="button" onClick={()=>{setCampaign(item);setDeleteCampaignId(null);setActiveView('adventure');setPortalScreen('adventure');}} className="min-w-0 flex-1 text-left"><strong className="block">{item.title}</strong><span className="text-xs text-parchment/60">Resume adventure</span></button><button type="button" disabled={saving||loading} aria-label={'Delete adventure '+item.title} onClick={()=>setDeleteCampaignId(item.id)} className="shrink-0 rounded border border-red-400/50 px-3 py-2 text-sm text-red-200 disabled:opacity-40">Delete</button></div>{deleteCampaignId===item.id&&<div role="group" aria-label="Confirm adventure deletion" className="space-y-2 rounded border border-red-400/50 p-3"><p className="text-sm">Permanently delete {item.title} and its adventure progress from this device? The original character is not deleted. This cannot be undone unless you have a backup.</p><div className="flex gap-2"><button type="button" disabled={saving||loading} onClick={()=>void deleteSelectedCampaign(item.id)} className="rounded bg-red-700 px-3 py-2 text-sm text-white disabled:opacity-40">Confirm delete adventure</button><button type="button" onClick={()=>setDeleteCampaignId(null)} className="rounded border border-white/30 px-3 py-2 text-sm">Cancel</button></div></div>}</div>)}
-        <button type="button" onClick={()=>setPortalScreen('new')} className="rounded-lg border border-gold/40 px-4 py-2 text-gold">New adventure</button>
+      {portalScreen==='campaigns'&&<section className="space-y-4"><h2 className="font-serif text-2xl">Campaigns</h2>
+        {loading&&<p>Loading saved adventures…</p>}
+        {!loading&&campaigns.length===0&&<p className="text-sm text-parchment/65">No adventures saved on this device.</p>}
+        {[...campaigns].sort((a,b)=>Date.parse(b.updatedAt)-Date.parse(a.updatedAt)).map(item=><div key={item.id} className="space-y-3 rounded-xl border border-white/20 bg-panel p-4">
+          <div className="flex items-start justify-between gap-3"><h3 className="min-w-0 font-serif text-xl">{item.characterIdentity?.name||item.characterBuild?.identity.name||'Nighthawk'}</h3><span className="shrink-0 text-sm text-gold">Level {item.character?.level??1} {(item.characterIdentity?.classId||item.character?.classId||'Rogue').replace(/^./,c=>c.toUpperCase())}</span></div>
+          <p className="text-sm text-parchment/80">⌖ {item.location||'Location unknown'}</p>
+          <p className="text-xs text-parchment/60">Started {Number.isFinite(Date.parse(item.createdAt))?new Date(item.createdAt).toLocaleString():'date unavailable'}</p>
+          <button type="button" onClick={()=>{setCampaign(item);setDeleteCampaignId(null);setActiveView('adventure');setPortalScreen('adventure');}} className="w-full rounded-lg bg-gold px-4 py-3 font-semibold text-ink">Continue Adventure</button>
+          <div className="flex justify-end"><button type="button" disabled={saving||loading} aria-label={'Delete adventure '+item.title} onClick={()=>setDeleteCampaignId(item.id)} className="rounded border border-red-400/40 px-3 py-2 text-xs text-red-200 disabled:opacity-40">Delete</button></div>
+          {deleteCampaignId===item.id&&<div role="group" aria-label="Confirm adventure deletion" className="space-y-2 rounded border border-red-400/50 p-3"><p className="text-sm">Permanently delete this adventure and its progress from this device? The original character is not deleted. This cannot be undone without a backup.</p><div className="flex gap-2"><button type="button" disabled={saving||loading} onClick={()=>void deleteSelectedCampaign(item.id)} className="rounded bg-red-700 px-3 py-2 text-sm text-white">Confirm delete adventure</button><button type="button" onClick={()=>setDeleteCampaignId(null)} className="rounded border border-white/30 px-3 py-2 text-sm">Cancel</button></div></div>}
+        </div>)}
+        <button type="button" onClick={()=>setPortalScreen('new')} className="flex w-full flex-col items-center gap-2 rounded-xl border border-dashed border-white/30 p-6 text-center"><span className="text-2xl text-gold">+</span><span className="font-semibold">New Adventure</span><span className="text-sm text-parchment/60">Choose a character to begin</span></button>
       </section>}
       {portalScreen==='help'&&<section className="space-y-3"><h2 className="font-serif text-2xl">Help</h2><p className="text-sm text-parchment/75">Create a character in My Characters. Start or resume a saved campaign through New Adventure or My Campaigns. Campaigns and character drafts are saved locally on this device; export campaign backups from Settings.</p><p className="text-sm text-parchment/60">Additional rules reference and tutorials are planned.</p></section>}
       {notice&&<p role="status" className="text-sm text-gold">{notice}</p>}
