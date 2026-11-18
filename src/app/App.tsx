@@ -1313,7 +1313,7 @@ export function App() {
     <div className="mx-auto min-h-dvh w-full max-w-3xl space-y-5 px-5 pb-12 pt-[max(2rem,env(safe-area-inset-top))]">
       <header className="flex flex-col items-center gap-2 border-b border-gold/20 pb-6">
         <h1 className="four-keeps-wordmark text-center text-white">Four Keeps</h1>
-        <p className="text-sm text-parchment/65">Your story begins here</p>
+        <p className="text-sm text-parchment/65">Roll for glory. Write your own story.</p>
       </header>
       {portalScreen!=='home'&&<button type="button" className="rounded-lg border border-white/25 px-3 py-2 text-sm" onClick={()=>setPortalScreen('home')}>← Home</button>}
       {portalScreen==='home'&&<div className="grid grid-cols-2 gap-3" aria-label="Four Keeps landing page">
