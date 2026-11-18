@@ -190,11 +190,13 @@ test('newly created fighter completes organic AI encounter, saves rewards and re
  await createAndImport(page,'fighter');
  const original=await saved(page);
  expect(original.characterIdentity.name).toBe('fighter Hero');
+ expect(original.location).toBe('Dasahi');
  await page.evaluate(()=>{localStorage.setItem('four-keeps-access-code','browser-test-code');localStorage.setItem('four-keeps-dm-mode','on');});
  const calls:any[]=[];let firstFightClarified=false;
  await page.route('**/api/dm',async route=>{
   const request=route.request().postDataJSON();calls.push(request);
   const opening=request.opening;
+  const investigate=!opening && request.message.includes('investigate the road');
   const secondFight=!opening && request.message.includes('investigate the riverbank');
   const firstFight=!opening && request.message.includes('approach the bridge');
   const combat=firstFight || secondFight;
@@ -204,14 +206,29 @@ test('newly created fighter completes organic AI encounter, saves rewards and re
   }
   if(firstFight && request.clarification?.answer)firstFightClarified=true;
   await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({
-   narration:opening?'The old bridge is watched by the town guard.':secondFight?'A poacher blocks the riverbank with a drawn blade.':combat?'A highway robber draws a sword and attacks.':'The guard acknowledges your return and the bridge is safe.',
+   narration:opening?'In Dasahi, the city watchkeeper reports strange lanterns along the road.':investigate?'A scout points out a camp beside the road outside Dasahi.':secondFight?'A poacher blocks the riverbank with a drawn blade.':combat?'A highway robber draws a sword and attacks.':'The guard acknowledges your return and the bridge is safe.',
+   mapActions:investigate?[{type:'create',site:{id:'dm-first-journey-camp',name:'Lantern Camp',description:'A small camp beside the road outside Dasahi',x:61,y:72,kind:'minor',createdAt:1000,discovered:true}}]:[],
    combatStart:combat?{enemyName:secondFight?'Poacher':'Highway robber'}:null,newFacts:combat?['A highway robber attacked the bridge']:['The bridge is safe after the battle'],
    worldUpdates:combat?{clues:[{text:'A robber attacked the bridge',evidence:'confirmed',source:'Fighter'}]}:{quests:[{title:'Secure the bridge',status:'completed',objective:'Defeat the robber',notes:['The bridge is safe']}]}
   })});
  });
  await page.reload();await page.getByRole('button',{name:'Continue Adventure'}).click();
  await expect.poll(async()=> (await saved(page))?.journal?.some((entry:any)=>entry.id?.endsWith('-dm-opening'))).toBe(true);
- await expect(page.getByLabel('Adventure',{exact:true})).toContainText('The old bridge');
+ await expect(page.getByLabel('Adventure',{exact:true})).toContainText('In Dasahi');
+ await page.getByLabel('Message the Dungeon Master').fill('I investigate the road and ask the watchkeeper about the lanterns.');
+ await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
+ await expect.poll(async()=> (await saved(page)).mapDynamicSites?.filter((site:any)=>site.id==='dm-first-journey-camp').length).toBe(1);
+ const beforeRepeat=await saved(page);
+ expect(beforeRepeat.inventoryLedger.currency).toEqual(original.inventoryLedger.currency);
+ await page.getByLabel('Message the Dungeon Master').fill('I investigate the road again for the same lantern camp.');
+ await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
+ await expect.poll(async()=> (await saved(page)).mapDynamicSites?.filter((site:any)=>site.id==='dm-first-journey-camp').length).toBe(1);
+ await navigate(page,'Developer');
+ const routeSession=page.getByLabel('Adventure session',{exact:true});
+ await routeSession.getByRole('button',{name:'Speak with the city watchkeeper'}).click();
+ await routeSession.getByRole('button',{name:'Travel to Road outside Dasahi'}).click();
+ await expect.poll(async()=> (await saved(page)).location).toBe('Road outside Dasahi');
+ await navigate(page,'Adventure');
  await page.getByLabel('Message the Dungeon Master').fill('I approach the bridge cautiously.');
  await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
  await expect(page.getByLabel('Dungeon Master clarification')).toContainText('guarded bridge');
@@ -231,7 +248,8 @@ test('newly created fighter completes organic AI encounter, saves rewards and re
  await page.reload();await page.getByRole('button',{name:'Continue Adventure'}).click();
  const before=await saved(page);
  expect(before.adventureSession.pendingEncounter.enemyName).toBe('Highway robber');
- expect(before.location).toBe(original.location);
+ expect(before.location).toBe('Road outside Dasahi');
+ expect(before.mapDynamicSites.filter((site:any)=>site.id==='dm-first-journey-camp')).toHaveLength(1);
  expect(before.characterBuild).toEqual(original.characterBuild);
  await page.getByLabel('Quick player initiative').fill('18');
  await page.getByLabel('Quick enemy initiative').fill('12');
@@ -265,12 +283,13 @@ test('newly created fighter completes organic AI encounter, saves rewards and re
  await expect(session).toContainText('Rewards saved: 45 XP');
  await page.reload();await page.getByRole('button',{name:'Continue Adventure'}).click();
  const afterBattle=await saved(page);
+ expect(afterBattle.mapDynamicSites.filter((site:any)=>site.id==='dm-first-journey-camp')).toHaveLength(1);
  expect(afterBattle.character.currentHitPoints).toBe(config.fighter.hp-3);
  expect(afterBattle.character.resources['Second Wind'].used).toBe(1);
  expect(afterBattle.inventoryLedger.currency.GP).toBe((original.inventoryLedger?.currency?.GP??0)+7);
  expect(afterBattle.inventoryLedger.gear).toEqual(expect.arrayContaining([expect.objectContaining({name:'Bridge token',quantity:1})]));
  expect(afterBattle.characterBuild).toEqual(original.characterBuild);
- expect(afterBattle.location).toBe(original.location);
+ expect(afterBattle.location).toBe('Road outside Dasahi');
  expect(afterBattle.companionEncounter.settlement.xp).toBe(45);
  await page.getByLabel('Adventure session',{exact:true}).getByRole('button',{name:'Resume exploration after encounter'}).click();
  await expect.poll(async()=> (await saved(page)).adventureSession.status).toBe('exploring');
@@ -282,7 +301,7 @@ test('newly created fighter completes organic AI encounter, saves rewards and re
  expect(last.characterBuild).toEqual(original.characterBuild);
  expect(last.character.currentHitPoints).toBe(config.fighter.hp-3);
  expect(last.character.resources['Second Wind'].used).toBe(1);
- expect(last.location).toBe(original.location);
+ expect(last.location).toBe('Road outside Dasahi');
  expect(last.adventureSession.status).toBe('exploring');
  expect(last.inventoryLedger.currency.GP).toBe(afterBattle.inventoryLedger.currency.GP);
  expect(last.companionEncounter.settlement).toEqual(afterBattle.companionEncounter.settlement);
@@ -291,7 +310,7 @@ test('newly created fighter completes organic AI encounter, saves rewards and re
  expect(last.world.quests.some((q:any)=>q.title==='Secure the bridge')).toBe(true);
  expect(calls.at(-1).gameState.characterIdentity.name).toBe('fighter Hero');
  expect(calls.at(-1).gameState.sharedEncounter.status).toBe('completed');
- expect(calls.at(-1).gameState.location).toBe(original.location);
+ expect(calls.at(-1).gameState.location).toBe('Road outside Dasahi');
  await page.getByLabel('Message the Dungeon Master').fill('I investigate the riverbank.');
  await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
  await expect(page.getByText('Opponent: Poacher',{exact:false})).toBeVisible();
