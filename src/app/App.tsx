@@ -1312,8 +1312,7 @@ export function App() {
   if(portalScreen!=='adventure')return <div className="min-h-dvh bg-ink text-parchment">
     <div className="mx-auto min-h-dvh w-full max-w-3xl space-y-5 px-5 pb-12 pt-[max(2rem,env(safe-area-inset-top))]">
       <header className="flex flex-col items-center gap-2 border-b border-gold/20 pb-6">
-        <img src="/four-keeps-approved.webp" alt="Four Keeps" className="h-auto w-full max-w-[min(80vw,360px)] object-contain"/>
-        <h1 className="sr-only">Four Keeps</h1>
+        <h1 className="four-keeps-wordmark text-center text-white">Four Keeps</h1>
         <p className="text-sm text-parchment/65">Your story begins here</p>
       </header>
       {portalScreen!=='home'&&<button type="button" className="rounded-lg border border-white/25 px-3 py-2 text-sm" onClick={()=>setPortalScreen('home')}>← Home</button>}
