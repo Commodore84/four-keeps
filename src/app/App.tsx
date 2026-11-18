@@ -1319,6 +1319,7 @@ export function App() {
       {portalScreen==='home'&&<div className="grid grid-cols-2 gap-3" aria-label="Four Keeps landing page">
         <button type="button" onClick={()=>setPortalScreen('characters')} className="rounded-xl border border-white/20 bg-panel p-5 text-center font-serif text-xl"><UserRound className="mx-auto mb-3 text-gold" size={28}/>Characters</button>
         <button type="button" onClick={()=>setPortalScreen('campaigns')} className="rounded-xl border border-white/20 bg-panel p-5 text-center font-serif text-xl"><BookOpen className="mx-auto mb-3 text-gold" size={28}/>Campaigns</button>
+        <button type="button" onClick={()=>{setActiveView('settings');setPortalScreen('adventure');}} className="col-span-2 mx-auto mt-5 flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-parchment/70"><Settings size={16}/>Settings</button>
       </div>}
       {portalScreen==='characters'&&<div className="space-y-3"><h2 className="font-serif text-2xl">My Characters</h2><CharacterCreator onBeginAdventure={(draftId)=>{const selected=readCharacterDrafts().find(item=>item.id===draftId);if(!selected)return;setSelectedCharacterDraft(draftId);setNewTitle(`${selected.identity.name || "New Hero"}’s Adventure`);setPortalScreen('new');}}/></div>}
       {portalScreen==='new'&&<section className="space-y-4 rounded-xl border border-white/20 bg-panel p-4">
