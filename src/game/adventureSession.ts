@@ -16,22 +16,35 @@ export const ADVENTURE_SITES:Record<AdventureSite,{name:string;description:strin
  {id:'inspect-ruins',label:'Inspect the ruins',response:'Footprints cross the dust. Their age and origin remain uncertain.'},
  {id:'call-out',label:'Call into the tower',response:'Your voice echoes through the stone. There is no immediate answer.'}]}
 };
+/** Local starter-adventure labels; never mutate the approved regional map. */
+const ANCHAMIDA_STARTER_SITES:typeof ADVENTURE_SITES={
+ frontier:{...ADVENTURE_SITES.frontier,name:'Dasahi',description:'A busy street in Dasahi leads past a general-goods shop and the city watch. The player may investigate the road without leaving the city.',options:[
+  {id:'speak-watchkeeper',label:'Speak with the city watchkeeper',response:'The watchkeeper mentions travelers along the road beyond Dasahi. No threat has been confirmed.'},
+  {id:'inspect-square',label:'Inspect the street',response:'Wagon tracks lead toward the road outside Dasahi; their origin is unknown.'}]},
+ crossroads:{...ADVENTURE_SITES.crossroads,name:'Road outside Dasahi',description:'A local road junction outside Dasahi, not a separate marked regional landmark.',options:[
+  {id:'inspect-marker',label:'Inspect the road marker',response:'A weathered marker points farther along the local road.'},
+  {id:'listen-road',label:'Listen for activity',response:'Wind stirs the grass along the road. Whether anyone is nearby remains uncertain.'}]},
+ watchtower:{...ADVENTURE_SITES.watchtower,name:'Roadside ruins',description:'A small ruined structure near the road outside Dasahi, not a named regional landmark.'}
+};
+export function adventureSiteForCampaign(campaign:Campaign,site:AdventureSite) {
+ return campaign.characterBuild ? ANCHAMIDA_STARTER_SITES[site] : ADVENTURE_SITES[site];
+}
 export function beginAdventureSession(campaign:Campaign,now=new Date().toISOString()):Campaign{
  if(!campaign.character||!Number.isInteger(campaign.character.maxHitPoints)||!(campaign.character.maxHitPoints!>0))throw Error('A campaign character is required');
  if(campaign.adventureSession)throw Error('Adventure session already exists');
  const session:AdventureSession={status:'exploring',site:'frontier',characterSource:'campaign-character',visited:['frontier'],interactions:[]};
- return {...campaign,adventureSession:session,location:campaign.characterBuild&&campaign.location==='Dasahi'?'Dasahi':ADVENTURE_SITES.frontier.name,updatedAt:now,journal:[...campaign.journal,{id:campaign.id+'-adventure-start',kind:'system',text:'Adventure session started with the saved campaign character.',createdAt:now}]};
+ return {...campaign,adventureSession:session,location:campaign.characterBuild?'Dasahi':ADVENTURE_SITES.frontier.name,updatedAt:now,journal:[...campaign.journal,{id:campaign.id+'-adventure-start',kind:'system',text:'Adventure session started with the saved campaign character.',createdAt:now}]};
 }
 export function travelAdventure(campaign:Campaign,destination:AdventureSite,now=new Date().toISOString()):Campaign{
  const session=campaign.adventureSession;
  if(!session||session.status!=='exploring')throw Error('Adventure exploration is not active');
  if(!ADVENTURE_SITES[session.site].neighbors.includes(destination))throw Error('Destination is not adjacent');
- return {...campaign,adventureSession:{...session,site:destination,visited:session.visited.includes(destination)?session.visited:[...session.visited,destination]},location:campaign.characterBuild&&destination==='frontier'?'Dasahi':ADVENTURE_SITES[destination].name,updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:'Travelled to '+ADVENTURE_SITES[destination].name+'. '+ADVENTURE_SITES[destination].description,createdAt:now}]};
+ return {...campaign,adventureSession:{...session,site:destination,visited:session.visited.includes(destination)?session.visited:[...session.visited,destination]},location:adventureSiteForCampaign(campaign,destination).name,updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:'Travelled to '+adventureSiteForCampaign(campaign,destination).name+'. '+adventureSiteForCampaign(campaign,destination).description,createdAt:now}]};
 }
 export function interactAdventure(campaign:Campaign,choiceId:string,now=new Date().toISOString()):Campaign{
  const session=campaign.adventureSession;
  if(!session||session.status!=='exploring')throw Error('Adventure exploration is not active');
- const choice=ADVENTURE_SITES[session.site].options.find(o=>o.id===choiceId);
+ const choice=adventureSiteForCampaign(campaign,session.site).options.find(o=>o.id===choiceId);
  if(!choice)throw Error('Interaction is unavailable at this location');
  return {...campaign,adventureSession:{...session,interactions:[...session.interactions,{site:session.site,choice:choiceId,response:choice.response}]},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:choice.label+': '+choice.response,createdAt:now}]};
 }
@@ -49,7 +62,7 @@ export function resumeAdventureExploration(campaign:Campaign,now=new Date().toIS
  const session=campaign.adventureSession;
  if(!session||session.status!=='encounter'||campaign.companionEncounter?.status!=='completed')throw Error('Finish the linked encounter before exploring');
  if(campaign.characterIdentity&&!campaign.companionEncounter?.settlement)throw Error('Record encounter rewards, including zero rewards, before exploring');
- return {...campaign,adventureSession:{...session,status:'exploring'},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:'The encounter ended. Exploration resumes at '+ADVENTURE_SITES[session.site].name+'.',createdAt:now}]};
+ return {...campaign,adventureSession:{...session,status:'exploring'},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:'The encounter ended. Exploration resumes at '+adventureSiteForCampaign(campaign,session.site).name+'.',createdAt:now}]};
 }
 
 /** Persist an AI-proposed encounter; never invent combat statistics or initiative. */

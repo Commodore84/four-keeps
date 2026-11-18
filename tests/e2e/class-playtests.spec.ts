@@ -65,7 +65,7 @@ for(const id of ['fighter','rogue','cleric','wizard'] as const)test(id+' complet
  test.setTimeout(90000);const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));await createAndImport(page,id);
  const snapshot=structuredClone((await saved(page)).characterBuild);expect(snapshot.selections.equipment.equipped.weapons).toHaveLength(1);
  await openDevelopment(page);
- const session=page.getByLabel('Adventure session',{exact:true});await session.getByRole('button',{name:'Start frontier adventure'}).click();await session.getByRole('button',{name:'Speak with the watchkeeper'}).click();await session.getByRole('button',{name:'Travel to Old Crossroads'}).click();await session.getByRole('button',{name:'Travel to Old Watchtower'}).click();await expect(session).toContainText('Visited 3/3 locations');
+ const session=page.getByLabel('Adventure session',{exact:true});await session.getByRole('button',{name:'Start frontier adventure'}).click();await session.getByRole('button',{name:'Speak with the city watchkeeper'}).click();await session.getByRole('button',{name:'Travel to Road outside Dasahi'}).click();await session.getByRole('button',{name:'Travel to Roadside ruins'}).click();await expect(session).toContainText('Visited 3/3 locations');
  if(id==='wizard'){
   await page.evaluate(()=>{localStorage.setItem('four-keeps-access-code','browser-only-test-code');localStorage.setItem('four-keeps-dm-mode','on');});await page.reload();await page.getByRole('button',{name:'Continue Adventure'}).click();let sent:any;
   await page.route('**/api/dm',async route=>{sent=route.request().postDataJSON();await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({narration:'The reported footprints remain uncertain.',newFacts:[],worldUpdates:{},combatStart:null})});});
@@ -608,7 +608,7 @@ test('new Rogue starts at Frontier Village, buys supplies, and sees persisted Pl
  await page.route('**/api/dm',route=>{dmRequests.push(route.request().postDataJSON());return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({narration:'The village shop is open; the watchkeeper watches the road.',worldUpdates:{},newFacts:[]})});});
  await page.reload();await page.getByRole('button',{name:'Continue Adventure'}).click();
  await expect.poll(async()=> (await saved(page))?.journal?.some((entry:any)=>entry.id?.endsWith('-dm-opening'))).toBe(true);
- await expect(page.getByLabel('Frontier Village general store')).toHaveCount(0);
+ await expect(page.getByLabel('Dasahi general store')).toHaveCount(0);
  await page.getByLabel('Message the Dungeon Master').fill('I ask the shopkeeper what a dagger costs');
  await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
  await expect.poll(()=>dmRequests.length).toBeGreaterThanOrEqual(2);
@@ -625,7 +625,7 @@ test('new Rogue starts at Frontier Village, buys supplies, and sees persisted Pl
  await expect(page.getByText('The merchant cannot prepare that purchase')).toHaveCount(0);
  await page.getByLabel('Message the Dungeon Master').fill('Show me your inventory');
  await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
- const shop=page.getByLabel('Frontier Village general store');
+ const shop=page.getByLabel('Dasahi general store');
  await expect(shop).toBeVisible();
  // The shop must follow the conversation and be inside the visible scroll area,
  // not rendered above the latest narration where the user cannot discover it.
@@ -648,9 +648,9 @@ test('new Rogue starts at Frontier Village, buys supplies, and sees persisted Pl
  await page.reload();await page.getByRole('button',{name:'Continue Adventure'}).click();
  await expect(page.getByLabel('Confirm merchant purchase')).toBeVisible();
  await page.getByLabel('Confirm merchant purchase').getByRole('button',{name:'Cancel'}).click();
- await expect(page.getByLabel('Frontier Village general store')).toBeVisible();
+ await expect(page.getByLabel('Dasahi general store')).toBeVisible();
  expect((await saved(page)).inventoryLedger).toEqual(before);
- const shopAfterCancel=page.getByLabel('Frontier Village general store');
+ const shopAfterCancel=page.getByLabel('Dasahi general store');
  await shopAfterCancel.getByRole('button',{name:/Rope/}).click();
  await shopAfterCancel.getByLabel('Purchase quantity').fill('2');
  await shopAfterCancel.getByRole('button',{name:'Review purchase'}).click();
@@ -658,9 +658,9 @@ test('new Rogue starts at Frontier Village, buys supplies, and sees persisted Pl
  await shopAfterCancel.getByLabel('Confirm merchant purchase').getByRole('button',{name:'Confirm purchase'}).click();
  await expect.poll(async()=> (await saved(page)).merchantStockRemaining?.rope).toBe(10);
  await expect.poll(async()=> (await saved(page)).inventoryLedger.gear.find((item:any)=>item.name==='Rope')?.quantity).toBeGreaterThan(0);
- await expect(page.getByLabel('Frontier Village general store')).toBeVisible();
+ await expect(page.getByLabel('Dasahi general store')).toBeVisible();
  await page.reload();await page.getByRole('button',{name:'Continue Adventure'}).click();
- await expect(page.getByLabel('Frontier Village general store')).toContainText('10 in stock');
+ await expect(page.getByLabel('Dasahi general store')).toContainText('10 in stock');
  const beforeDagger=(await saved(page)).inventoryLedger;
  await page.getByLabel('Message the Dungeon Master').fill('I buy one dagger');
  await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
@@ -742,7 +742,7 @@ test('merchant catalog reflects finite stock and refuses unavailable quantities'
  const input=page.getByLabel('Message the Dungeon Master');
  const send=page.getByRole('button',{name:'Send message to Dungeon Master'});
  await input.fill('What do you sell?');await send.click();
- await expect(page.getByLabel('Frontier Village general store').getByRole('button',{name:/Dagger/})).toContainText('8 in stock');
+ await expect(page.getByLabel('Dasahi general store').getByRole('button',{name:/Dagger/})).toContainText('8 in stock');
  await input.fill('I will buy 9 daggers');await send.click();
  await expect(page.getByText(/not have enough stock/)).toBeVisible();
  expect((await saved(page)).pendingMerchantPurchase).toBeUndefined();

@@ -38,8 +38,8 @@ test('fighter creation to adventure, NPC, combat, rewards, save and resume',asyn
  const manager=page.getByLabel('Subclass actor manager');await manager.getByLabel('New subclass actor ID').fill('ally');await manager.getByRole('button',{name:'Register subclass actor'}).click();
  await navigate(page,'Developer');
  const session=page.getByLabel('Adventure session',{exact:true});
- await session.getByRole('button',{name:'Start frontier adventure'}).click();await session.getByRole('button',{name:'Speak with the watchkeeper'}).click();
- await session.getByRole('button',{name:'Travel to Old Crossroads'}).click();await session.getByRole('button',{name:'Travel to Old Watchtower'}).click();
+ await session.getByRole('button',{name:'Start frontier adventure'}).click();await session.getByRole('button',{name:'Speak with the city watchkeeper'}).click();
+ await session.getByRole('button',{name:'Travel to Road outside Dasahi'}).click();await session.getByRole('button',{name:'Travel to Roadside ruins'}).click();
  await session.getByLabel('Adventure companion',{exact:true}).selectOption('ally');await session.getByLabel('Adventure player initiative').fill('20');await session.getByLabel('Adventure companion initiative').fill('10');await session.getByLabel('Adventure companion HP').fill('20');await session.getByRole('button',{name:'Enter linked encounter'}).click();
  await session.getByRole('button',{name:/Spend Second Wind/}).click();
  await session.getByLabel('Owned encounter equipment').selectOption('greatsword');await session.getByRole('button',{name:'Equip verified item'}).click();

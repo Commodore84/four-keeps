@@ -2,10 +2,21 @@ import type {Campaign} from './campaign';
 import {describe,it,expect} from 'vitest';
 import {newCampaign,registerSubclassActor} from './campaign';
 import {initialSubclassCombatState} from './subclassCombatRules';
-import {beginAdventureSession,travelAdventure,interactAdventure,enterAdventureEncounter,resumeAdventureExploration,proposeAdventureEncounter,declineAdventureEncounter,enterSoloAdventureEncounter} from './adventureSession';
+import {adventureSiteForCampaign,beginAdventureSession,travelAdventure,interactAdventure,enterAdventureEncounter,resumeAdventureExploration,proposeAdventureEncounter,declineAdventureEncounter,enterSoloAdventureEncounter} from './adventureSession';
 import {finishCompanionEncounter,damageCompanion,spendPlayerResource} from './companionEncounter';
 import {settleEncounterRewards} from './encounterRewards';
 import {prepareAdventureAction,commitAdventureAction,pauseAdventureForClarification,answerAdventureClarification} from './adventureOrchestrator';
+describe('Anchamida starter route isolation',()=>{
+ it('keeps imported Dasahi route and encounters separate from legacy Frontier Village',()=>{
+  const base=newCampaign('Anchamida route');
+  const imported={...base,characterBuild:{} as Campaign['characterBuild'],location:'Dasahi'};
+  expect(adventureSiteForCampaign(imported,'frontier').name).toBe('Dasahi');
+  expect(adventureSiteForCampaign(imported,'crossroads').name).toBe('Road outside Dasahi');
+  expect(adventureSiteForCampaign(imported,'watchtower').name).toBe('Roadside ruins');
+  expect(adventureSiteForCampaign(base,'frontier').name).toBe('Frontier Village');
+  expect(adventureSiteForCampaign(base,'crossroads').name).toBe('Old Crossroads');
+ });
+});
 describe('persistent adventure session',()=>{
  const base=()=>newCampaign('Frontier Test','adventure-test','2026-11-10T00:00:00.000Z');
  it('keeps Dasahi for new imported campaigns while preserving legacy Frontier Village',()=>{
