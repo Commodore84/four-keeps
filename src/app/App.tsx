@@ -1316,21 +1316,9 @@ export function App() {
         <p className="text-sm text-parchment/65">Your story begins here</p>
       </header>
       {portalScreen!=='home'&&<button type="button" className="rounded-lg border border-white/25 px-3 py-2 text-sm" onClick={()=>setPortalScreen('home')}>← Home</button>}
-      {portalScreen==='home'&&<div className="space-y-4" aria-label="Four Keeps landing page">
-        <button type="button" disabled={!campaign||loading} onClick={()=>{setActiveView('adventure');setPortalScreen('adventure');}} className="block w-full rounded-xl border border-gold/40 bg-panel p-5 text-left disabled:opacity-45">
-          <span className="flex items-center gap-2 font-serif text-xl"><Swords size={21}/>Continue Adventure</span>
-          <span className="mt-1 block text-sm text-parchment/65">{campaign?campaign.title:'No saved adventure selected'}</span>
-        </button>
-        <div className="grid grid-cols-2 gap-3">
-          <button type="button" onClick={()=>setPortalScreen('new')} className="rounded-xl border border-white/20 bg-panel p-4 text-left"><Compass className="mb-3 text-gold"/><strong className="block">New Adventure</strong><span className="text-xs text-parchment/60">Start a campaign</span></button>
-          <button type="button" onClick={()=>setPortalScreen('characters')} className="rounded-xl border border-white/20 bg-panel p-4 text-left"><UserRound className="mb-3 text-gold"/><strong className="block">My Characters</strong><span className="text-xs text-parchment/60">Create and manage</span></button>
-          <button type="button" onClick={()=>setPortalScreen('campaigns')} className="rounded-xl border border-white/20 bg-panel p-4 text-left"><BookOpen className="mb-3 text-gold"/><strong className="block">My Campaigns</strong><span className="text-xs text-parchment/60">Saved adventures</span></button>
-          <div aria-disabled="true" className="rounded-xl border border-white/10 bg-panel/50 p-4 opacity-50"><Users className="mb-3 text-gold"/><strong className="block">Join Adventure</strong><span className="text-xs">Multiplayer · Coming later</span></div>
-        </div>
-        <div className="flex justify-center gap-5 pt-3 text-sm">
-          <button type="button" onClick={()=>{setActiveView('settings');setPortalScreen('adventure');}} className="flex items-center gap-2 text-parchment/75"><Settings size={17}/>Settings</button>
-          <button type="button" onClick={()=>setPortalScreen('help')} className="flex items-center gap-2 text-parchment/75"><BookOpen size={17}/>Help</button>
-        </div>
+      {portalScreen==='home'&&<div className="grid grid-cols-2 gap-3" aria-label="Four Keeps landing page">
+        <button type="button" onClick={()=>setPortalScreen('characters')} className="rounded-xl border border-white/20 bg-panel p-5 text-center font-serif text-xl"><UserRound className="mx-auto mb-3 text-gold" size={28}/>Characters</button>
+        <button type="button" onClick={()=>setPortalScreen('campaigns')} className="rounded-xl border border-white/20 bg-panel p-5 text-center font-serif text-xl"><BookOpen className="mx-auto mb-3 text-gold" size={28}/>Campaigns</button>
       </div>}
       {portalScreen==='characters'&&<div className="space-y-3"><h2 className="font-serif text-2xl">My Characters</h2><CharacterCreator onBeginAdventure={(draftId)=>{const selected=readCharacterDrafts().find(item=>item.id===draftId);if(!selected)return;setSelectedCharacterDraft(draftId);setNewTitle(`${selected.identity.name || "New Hero"}’s Adventure`);setPortalScreen('new');}}/></div>}
       {portalScreen==='new'&&<section className="space-y-4 rounded-xl border border-white/20 bg-panel p-4">
