@@ -1,8 +1,20 @@
 import {describe,it,expect} from 'vitest';
 import {newCampaign} from './campaign';
-import {OPENING_INTENT,prepareAdventureOpening,commitAdventureOpening,needsAdventureOpening,prepareAdventureAction,commitAdventureAction,adventureMemory} from './adventureOrchestrator';
+import {OPENING_INTENT,openingIntentForCampaign,prepareAdventureOpening,commitAdventureOpening,needsAdventureOpening,prepareAdventureAction,commitAdventureAction,adventureMemory} from './adventureOrchestrator';
 
 describe('AI adventure opening orchestration',()=>{
+ it('grounds imported campaign opening in Dasahi without moving a legacy campaign',()=>{
+  const imported={...newCampaign('imported'),location:'Dasahi',characterBuild:{} as ReturnType<typeof newCampaign>['characterBuild']};
+  const opening=openingIntentForCampaign(imported);
+  expect(opening).toContain('Dasahi');
+  expect(opening).toContain('Anchamida');
+  expect(opening).toContain('structured mapAction');
+  expect(opening).not.toContain('Frontier Village');
+  const legacy={...newCampaign('legacy'),location:'Frontier Village'};
+  expect(openingIntentForCampaign(legacy)).toContain('Frontier Village');
+  expect(openingIntentForCampaign(legacy)).not.toContain('Dasahi');
+ });
+
  it('offers a shop without forcing an action or a scripted opening',()=>{expect(OPENING_INTENT).toContain('general-goods shop');expect(OPENING_INTENT).toContain('do not make the player move');expect(OPENING_INTENT).toContain('free-form exploration');});
   const make=()=>({...newCampaign('Journey','opening-test','2026-01-01T00:00:00Z'),characterIdentity:{name:'Aster',speciesId:'human',backgroundId:'sage',classId:'wizard',draftId:'draft',pronouns:'',appearance:'',personality:'',backstory:''}});
   it('specifies an immersive grounded opening without commanding the player',()=>{

@@ -9,7 +9,7 @@ import {completePlayerRest,playerLongRestWaitMinutes} from '../game/playerRecove
 import {frontierMerchantContext} from '../game/frontierShop';
 import {mergeWorld} from '../game/world';
 import {travelAdventure,proposeAdventureEncounter,type AdventureSite} from '../game/adventureSession';
-import {OPENING_INTENT,prepareAdventureOpening,commitAdventureOpening,needsAdventureOpening,adventureMemory,prepareAdventureAction, pauseAdventureForClarification, answerAdventureClarification,commitAdventureAction} from '../game/adventureOrchestrator';
+import {openingIntentForCampaign,prepareAdventureOpening,commitAdventureOpening,needsAdventureOpening,adventureMemory,prepareAdventureAction, pauseAdventureForClarification, answerAdventureClarification,commitAdventureAction} from '../game/adventureOrchestrator';
 import {campaignPlayerContext} from '../game/campaignContext';
 import {ImportedCharacterSheet} from './ImportedCharacterSheet';
 import {CompanionEncounterPanel} from './CompanionEncounterPanel';
@@ -807,14 +807,19 @@ export function App() {
       const memory=adventureMemory(started);
       const history=memory.recentConversation;
       const response=await fetch('/api/dm',{method:'POST',headers:{'Content-Type':'application/json','x-four-keeps-access':accessCode},body:JSON.stringify({
-        message:OPENING_INTENT,opening:true,character:started.character??prototypeNighthawk,
+        message:openingIntentForCampaign(started),opening:true,character:started.character??prototypeNighthawk,
         gameState:{...campaignPlayerContext(started),adventureSession:started.adventureSession,characterIdentity:started.characterIdentity,location:started.location},
         history,worldFacts:memory.establishedFacts,world:started.world??emptyWorld(),adventureMemory:memory
       })});
-      const result:{narration?:string;newFacts?:string[];worldUpdates?:unknown;error?:string}=await response.json();
+      const result:{narration?:string;newFacts?:string[];worldUpdates?:unknown;mapActions?:unknown;error?:string}=await response.json();
       if(!response.ok||!result.narration)throw Error(result.error||'The DM could not create the opening.');
       const opening=commitAdventureOpening(started,result.narration);
-      const next={...opening,world:mergeWorld(opening.world,result.worldUpdates),worldFacts:[...new Set([...(opening.worldFacts??[]),...(result.newFacts??[])])]};
+      let mapped=opening;
+      if(started.characterBuild) {
+        try {mapped=applyAnchamidaActions(opening,result.mapActions);}
+        catch(error) {console.warn('Rejected invalid DM opening map actions',error);}
+      }
+      const next={...mapped,world:mergeWorld(mapped.world,result.worldUpdates),worldFacts:[...new Set([...(mapped.worldFacts??[]),...(result.newFacts??[])])]};
       await localCampaignStorage.save(next);
       setCampaign(next);setCampaigns(items=>items.map(item=>item.id===next.id?next:item));
       setNotice('Your adventure has begun.');

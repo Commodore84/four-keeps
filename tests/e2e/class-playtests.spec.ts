@@ -115,7 +115,7 @@ test('AI-led opening, world memory and saved pending action retry survive reload
  await page.route('**/api/dm',async route=>{
    const body=route.request().postDataJSON();requests.push(body);
    if(failure){await route.fulfill({status:502,contentType:'application/json',body:JSON.stringify({error:failure})});return;}
-   await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({narration:body.opening?'A bell tolls from the abandoned keep. The road winds through a crowded marketplace, where a suspicious merchant argues with a particularly uncooperative mule. Beyond the village gates, the old tower waits beneath the gathering clouds.':'Mira says the bell rang at dusk.',newFacts:['A bell rang at dusk'],worldUpdates:{npcs:[{name:'Mira',role:'Watchkeeper',location:'Frontier Village',relationship:'neutral',notes:['Knows the old road']}],clues:[{text:'A stranger passed at dusk',evidence:'reported',source:'Mira'}]},combatStart:null})});
+   await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({narration:body.opening?'A bell tolls from the abandoned keep. The road winds through a crowded marketplace, where a suspicious merchant argues with a particularly uncooperative mule. Beyond the village gates, the old tower waits beneath the gathering clouds.':'Mira says the bell rang at dusk.',newFacts:['A bell rang at dusk'],mapActions:body.opening?[{type:'create',site:{id:'dm-opening-bell-camp',name:'Bell Camp',description:'A quiet camp near the road',x:38,y:63,kind:'minor',createdAt:1000,discovered:true}}]:[],worldUpdates:{npcs:[{name:'Mira',role:'Watchkeeper',location:'Dasahi',relationship:'neutral',notes:['Knows the old road']}],clues:[{text:'A stranger passed at dusk',evidence:'reported',source:'Mira'}]},combatStart:null})});
  })
  await page.reload();await page.getByRole('button',{name:'Continue Adventure'}).click();
  await expect.poll(async()=> (await saved(page))?.journal?.some((entry:any)=>entry.id?.endsWith('-dm-opening'))).toBe(true);
@@ -136,6 +136,10 @@ test('AI-led opening, world memory and saved pending action retry survive reload
  await expect(page.getByLabel('Adventure',{exact:true})).not.toContainText('The road bends toward a frontier village');
 
  expect(requests[0].opening).toBe(true);
+ expect(requests[0].message).toContain('Dasahi');
+ expect(requests[0].message).toContain('Anchamida');
+ await expect.poll(async()=> (await saved(page))?.mapDynamicSites?.some((site:any)=>site.id==='dm-opening-bell-camp')).toBe(true);
+
  expect(requests[0].gameState.adventureSession.site).toBe('frontier');
  expect(requests[0].gameState.characterIdentity.classId).toBe('fighter');
  const firstOpening=(await saved(page)).journal.filter((entry:any)=>entry.id.endsWith('-dm-opening'));
@@ -149,7 +153,7 @@ test('AI-led opening, world memory and saved pending action retry survive reload
  await page.getByRole('button',{name:'Open navigation menu'}).click();
  await page.getByRole('button',{name:'Journal',exact:true}).click();
  await expect(page.getByLabel('Adventure',{exact:true})).toHaveCount(0);
- await expect(page.getByText('Mira · Watchkeeper · Frontier Village')).toBeVisible();
+ await expect(page.getByText('Mira · Watchkeeper · Dasahi')).toBeVisible();
  await expect(page.getByRole('heading',{name:'Clues'})).toBeVisible();
  await page.reload();await page.getByRole('button',{name:'Continue Adventure'}).click();
  await expect(page.getByLabel('Adventure',{exact:true})).toContainText('A bell tolls from the abandoned keep.');
