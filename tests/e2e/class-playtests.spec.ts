@@ -892,3 +892,28 @@ test('DM denial never grants imported rest recovery',async({page})=>{
  expect(after.elapsedMinutes).toBe(before.elapsedMinutes);
  expect(after.character.currentHitPoints).toBe(before.character.currentHitPoints);
 });
+
+test('invalid DM map batch is rejected without partial locations and later valid discovery survives reload',async({page})=>{
+ test.setTimeout(90000);
+ await createAndImport(page,'fighter');
+ await page.evaluate(()=>{localStorage.setItem('four-keeps-access-code','browser-test-code');localStorage.setItem('four-keeps-dm-mode','on');});
+ let turns=0;
+ const site={id:'dm-recovery-lanterns',name:'Recovery Lanterns',description:'A camp on the Dasahi road',x:60,y:72,kind:'minor',createdAt:1000,discovered:true};
+ await page.route('**/api/dm',async route=>{
+  const body=route.request().postDataJSON();
+  if(!body.opening)turns++;
+  const actions=body.opening?[]:turns===1?[{type:'create',site},{type:'update',id:'dm-recovery-lanterns',archived:'false'}]:[{type:'create',site}];
+  await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({narration:body.opening?'The watchkeeper stands near the Dasahi gate.':'The watchkeeper describes lanterns beside the road.',newFacts:[],worldUpdates:{},mapActions:actions,combatStart:null})});
+ });
+ await page.reload();await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await expect.poll(async()=> (await saved(page))?.journal?.some((entry:any)=>entry.id?.endsWith('-dm-opening'))).toBe(true);
+ await page.getByLabel('Message the Dungeon Master').fill('I investigate the lanterns outside Dasahi.');
+ await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
+ await expect.poll(async()=> (await saved(page))?.journal?.some((entry:any)=>entry.text?.includes('lanterns beside the road')||entry.narration?.includes('lanterns beside the road'))).toBe(true);
+ expect((await saved(page)).mapDynamicSites?.filter((s:any)=>s.id==='dm-recovery-lanterns')??[]).toHaveLength(0);
+ await page.getByLabel('Message the Dungeon Master').fill('I ask again where the lanterns are.');
+ await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
+ await expect.poll(async()=> (await saved(page)).mapDynamicSites?.filter((s:any)=>s.id==='dm-recovery-lanterns').length).toBe(1);
+ await page.reload();await page.getByRole('button',{name:'Continue Adventure'}).click();
+ expect((await saved(page)).mapDynamicSites?.filter((s:any)=>s.id==='dm-recovery-lanterns')).toHaveLength(1);
+});

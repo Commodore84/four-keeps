@@ -1,5 +1,6 @@
 import {describe,it,expect} from 'vitest';
 import {applyAnchamidaActions} from './anchamidaActions';
+import {visibleDynamicSites} from './anchamidaDynamic';
 import type {Campaign} from './campaign';
 const c={id:'campaign-a',mapDiscovered:[],mapDynamicSites:[]} as unknown as Campaign;
 const site={id:'dm-camp-1',name:'Pine Camp',description:'Tents near the river',x:46,y:58,kind:'minor',createdAt:100,discovered:true};
@@ -54,5 +55,35 @@ describe('DM map actions persistence and isolation',()=>{
   expect(()=>applyAnchamidaActions(created,[{type:'update',id:site.id,hidden:'yes'}])).toThrow();
   expect(()=>applyAnchamidaActions(c,[{type:'create',site:{...site,createdAt:'yesterday'}}])).toThrow();
   expect(()=>applyAnchamidaActions(c,[{type:'create',site:{...site,x:Infinity}}])).toThrow();
+ });
+});
+
+describe('provider map-action contract hardening',()=>{
+ it('rejects contradictory and unexpected payloads atomically',()=>{
+  for(const invalid of [
+   [{type:'create',site},{type:'update',id:'dm-camp-1',archived:'yes'}],
+   [{type:'create',site:{...site,hidden:'false'}}],
+   [{type:'create',site:{...site,unknown:'surprise'}}],
+   [{type:'discover',id:'map-feature-001',unknown:true}],
+   [{type:'create',site:{...site,kind:'temporary'}}],
+   [{type:'create',site:{...site,kind:'temporary',expiresAt:99}}],
+   [{type:'create',site:{...site,kind:'minor',expiresAt:200}}],
+  ])expect(()=>applyAnchamidaActions(c,invalid)).toThrow();
+  expect(c.mapDynamicSites).toEqual([]);
+ });
+ it('accepts idempotent replay with reordered JSON fields, rejects changed identity',()=>{
+  const first=applyAnchamidaActions(c,[{type:'create',site}]);
+  const reordered=Object.fromEntries(Object.entries(site).reverse());
+  expect(applyAnchamidaActions(first,[{type:'create',site:reordered}])).toBe(first);
+  expect(()=>applyAnchamidaActions(first,[{type:'create',site:{...site,name:'Different camp'}}])).toThrow('Location ID already assigned');
+ });
+ it('temporary sites expire from visibility without deleting campaign history',()=>{
+  const temp={...site,id:'dm-temp-1',kind:'temporary',createdAt:100,expiresAt:200};
+  const created=applyAnchamidaActions(c,[{type:'create',site:temp}]);
+  expect(created.mapDynamicSites).toHaveLength(1);
+  expect(created.mapDynamicSites?.[0].expiresAt).toBe(200);
+  expect(visibleDynamicSites(created,199)).toHaveLength(1);
+  expect(visibleDynamicSites(created,200)).toHaveLength(0);
+  expect(created.mapDynamicSites).toHaveLength(1);
  });
 });

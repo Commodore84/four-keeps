@@ -19,10 +19,13 @@ export function addDynamicSite(campaign:Campaign,site:DynamicSite):Campaign {
   if(!Number.isFinite(site.createdAt)||site.createdAt<0)throw new Error('Invalid creation time');
   if(site.expiresAt!==undefined&&(!Number.isFinite(site.expiresAt)||site.expiresAt<0))throw new Error('Invalid expiry');
   if(!['permanent','minor','temporary'].includes(site.kind))throw new Error('Invalid location kind');
+  if(site.kind==='temporary'&&(site.expiresAt===undefined||site.expiresAt<=site.createdAt))throw new Error('Temporary location needs a future expiry');
+  if(site.kind!=='temporary'&&site.expiresAt!==undefined)throw new Error('Only temporary locations may expire');
   const current=campaign.mapDynamicSites??[];
   const prior=current.find(x=>x.id===site.id);
   if(prior) {
-    if(JSON.stringify(prior)!==JSON.stringify(site))throw new Error('Location ID already assigned');
+    const fields=(Object.keys(site) as (keyof DynamicSite)[]);
+    if(fields.length!==Object.keys(prior).length||fields.some(key=>prior[key]!==site[key]))throw new Error('Location ID already assigned');
     return campaign;
   }
   if(current.some(x=>!x.archived&&normalize(x.name)===normalize(site.name)&&distance(x,site)<2))throw new Error('Duplicate nearby location');
