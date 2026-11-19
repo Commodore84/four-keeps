@@ -1,5 +1,5 @@
 import {describe,it,expect} from 'vitest';
-import {narrationLines,narrationDelay,narrationBlocks} from './DMNarration';
+import {narrationLines,narrationDelay,narrationBlocks,visualNarrationLines} from './DMNarration';
 describe('DM narration line segmentation',()=>{
  it('preserves paragraph pauses and all words',()=>{
   const text='The market wakes as bells ring. A cart rattles down the lane.\n\nA watchman raises one eyebrow.';
@@ -40,5 +40,15 @@ describe('paragraph and dialogue structure',()=>{
    {kind:'narration',text:'Mara says,'},
    {kind:'dialogue',speaker:'Mara',text:'"Hello."'}
   ]);
+ });
+});
+
+describe('visual line layout',()=>{
+ it('reveals complete measured lines without changing source paragraphs',()=>{
+  expect(visualNarrationLines('one two three four five',9,value=>value.length)).toEqual(['one two','three','four five']);
+ });
+ it('reflows lines when viewport width changes',()=>{
+  const text='Morning settles over the harbor';
+  expect(visualNarrationLines(text,12,value=>value.length).length).toBeGreaterThan(visualNarrationLines(text,40,value=>value.length).length);
  });
 });

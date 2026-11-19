@@ -237,8 +237,8 @@ test('newly created fighter completes organic AI encounter, saves rewards and re
  expect(beforeClarification.pendingAdventureAction.message).toBe('I approach the bridge cautiously.');
  const originalActionId=beforeClarification.pendingAdventureAction.id;
  await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();await page.getByRole('button',{name:'Continue Adventure'}).click();
- await page.getByLabel('Answer the Dungeon Master').fill('I mean the guarded bridge. I approach cautiously.');
- await page.getByRole('button',{name:'Confirm and continue'}).click();
+ await page.getByLabel('Message the Dungeon Master').fill('I mean the guarded bridge. I approach cautiously.');
+ await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
  await expect(page.getByText('Opponent: Highway robber',{exact:false})).toBeVisible();
  expect(firstFightClarified).toBe(true);
  expect(calls.at(-1).actionId).toBe(originalActionId);
@@ -334,8 +334,8 @@ test('organic combat proposal can be declined and AI narration resumes without l
  await page.getByLabel('Message the Dungeon Master').fill('I question the stranger.');
  await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
  await expect(page.getByLabel('Dungeon Master clarification')).toContainText('Which stranger');
- await page.getByLabel('Answer the Dungeon Master').fill('The stranger in the blue cloak by the door.');
- await page.getByRole('button',{name:'Confirm and continue'}).click();
+ await page.getByLabel('Message the Dungeon Master').fill('The stranger in the blue cloak by the door.');
+ await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
  await expect(page.getByText('Opponent: Suspicious stranger',{exact:false})).toBeVisible();
  await expect(page.getByRole('button',{name:'Send message to Dungeon Master'})).toBeDisabled();
  await expect(page.getByRole('button',{name:'Decline encounter and continue exploring'})).toBeVisible();
@@ -371,6 +371,7 @@ test('DM clarification pauses dangerous action, persists answer, and resumes exa
    : {narration:'You draw your dagger and approach. The dragon notices you.',newFacts:[],worldUpdates:{},combatStart:null};
   await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(response)});
  });
+ await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();await page.getByRole('button',{name:'Continue Adventure'}).click();
  await expect.poll(async()=> (await saved(page))?.journal?.some((entry:any)=>entry.id?.endsWith('-dm-opening'))).toBe(true);
  await page.getByLabel('Message the Dungeon Master').fill('I attack the dragon with my dagger');
  await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
@@ -380,11 +381,11 @@ test('DM clarification pauses dangerous action, persists answer, and resumes exa
  expect(paused.journal.filter((e:any)=>e.text.includes('I attack the dragon'))).toHaveLength(0);
  await page.getByRole('button',{name:'Open navigation menu'}).click();
  await page.getByRole('navigation',{name:'Primary navigation'}).getByRole('button',{name:'Home'}).click();
- await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await page.getByRole('button',{name:'Campaigns',exact:true}).click();await page.getByRole('button',{name:'Continue Adventure'}).click();
  await expect(page.getByLabel('Dungeon Master clarification')).toContainText('Are you sure');
  failConfirmed=true;
- await page.getByLabel('Answer the Dungeon Master').fill('Yes, I know it is dangerous. I attack.');
- await page.getByRole('button',{name:'Confirm and continue'}).click();
+ await page.getByLabel('Message the Dungeon Master').fill('Yes, I know it is dangerous. I attack.');
+ await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
  await expect(page.getByRole('button',{name:'Retry confirmed action'})).toBeVisible();
  const pendingAfterError=await saved(page);
  expect(pendingAfterError.pendingClarification.answer).toContain('Yes, I know');
@@ -1086,8 +1087,8 @@ test('iPhone narration uses paragraphs, speaker dialogue and survives reload',as
  const narration=page.getByLabel('Dungeon Master narration').first();
  await expect(narration).toBeVisible();
  await expect(narration.locator('p').first()).toContainText('Morning');
- // Progressive text must appear within paragraphs, never as block-level line spans.
- expect(await narration.locator('span.dm-narration-line').count()).toBe(0);
+ // Each progressive unit is a measured visual line within its paragraph.
+ expect(await narration.locator('span.dm-narration-line').count()).toBeGreaterThan(0);
  await narration.click();
  await expect(narration.locator('p')).toHaveCount(4);
  await expect(narration.locator('blockquote')).toHaveCount(2);

@@ -164,6 +164,11 @@ function Adventure({ campaign, fullHistory, onToggleHistory, onAdventureChange, 
       <p className="eyebrow">{entry.kind === 'player' ? (campaign?.characterIdentity?.name??'Nighthawk') : 'Dungeon Master'}</p>
       {entry.kind==='dm'?<DMNarration key={entry.id} id={entry.id} text={entry.text} speed={narrationSpeed} animate={!seen.includes(entry.id)} onComplete={()=>markSeen(entry.id)}/>:<p className="mt-2 whitespace-pre-wrap leading-7 text-parchment/90">{entry.text}</p>}
     </article>)}
+    {campaign?.pendingClarification && <section aria-label="Dungeon Master clarification" className="mr-3 rounded-xl border border-white/10 bg-panel p-5 space-y-3">
+      <p className="eyebrow">Dungeon Master</p>
+      <p className="text-parchment/90">{campaign.pendingClarification.question}</p>
+      {campaign.pendingClarification.answer ? <><p className="ml-6 rounded-xl border border-gold/30 bg-gold/10 p-3">{campaign.pendingClarification.answer}</p><button type="button" disabled={saving} className="text-sm text-gold underline" onClick={()=>void onRetryAction()}>Retry confirmed action</button></> : <p className="text-xs text-parchment/60">Reply using the message field below. Your original action is saved.</p>}
+    </section>}
     {campaign?.merchantShopOpen && campaign.adventureSession?.site==='frontier' && campaign.adventureSession.status==='exploring' && <div ref={shopRef}><MerchantShop campaign={campaign} saving={saving} onClose={onShopClose} onPrepare={onShopPrepare} onSettle={onShopSettle}/></div>}
     {campaign && <p className="text-xs text-gold/80">Campaign saved on this device · {turns.length ? 'AI Dungeon Master connected' : campaign.characterIdentity ? 'Opening scene pending' : 'Ready for your first action'}</p>}
     <div ref={endRef}/>
@@ -438,7 +443,6 @@ function WorldMap({campaign}:{campaign:Campaign|null}) {
  </section>;
 }
 export function App() {
-  const [clarificationDraft,setClarificationDraft]=useState('');
   const [activeView, setActiveView] = useState<View>('adventure');
   const [navigationOpen,setNavigationOpen]=useState(false);
   const [selectedCharacterDraft,setSelectedCharacterDraft]=useState('');
@@ -699,6 +703,19 @@ export function App() {
       await saveMerchantShop(addExchange(next,confirmed?'I confirm the purchase.':'I cancel the purchase.',message));
       setNotice(message);
     }catch(error){setNotice('Purchase error: '+String(error));}finally{setSaving(false);}
+  }
+  async function submitClarification() {
+    if(!campaign?.pendingClarification || campaign.pendingClarification.answer || !draft.trim() || saving)return;
+    setSaving(true);
+    try{
+      const next=answerAdventureClarification(campaign,draft.trim());
+      await localCampaignStorage.save(next);
+      setCampaign(next);
+      setCampaigns(items=>items.map(item=>item.id===next.id?next:item));
+      setDraft('');
+      await sendToDM(next,undefined,true);
+    }catch(error){setNotice('Could not save your reply: '+String(error));}
+    finally{setSaving(false);}
   }
   async function submitAdventure() {
     if(pendingAdventureSpell || pendingRest || pendingTestDamage!==null || saving)return;
@@ -1759,13 +1776,12 @@ export function App() {
           </div>
           <p className="text-xs text-parchment/60">Changes are saved when you finish the rest. You may spend zero Hit Dice.</p>
         </div>}
-        {campaign?.pendingClarification && <section aria-label="Dungeon Master clarification" className="mx-4 mt-3 rounded-xl border border-gold/50 bg-panel p-4 space-y-3"><p className="text-sm font-semibold text-gold">The Dungeon Master asks</p><p>{campaign.pendingClarification.question}</p><p className="text-xs text-parchment/70">Nothing has happened yet. Your original action is saved.</p><form onSubmit={async event=>{event.preventDefault();if(!clarificationDraft.trim()||saving||campaign.pendingClarification?.answer)return;setSaving(true);try{const next=answerAdventureClarification(campaign,clarificationDraft);await localCampaignStorage.save(next);setCampaign(next);setCampaigns(items=>items.map(item=>item.id===next.id?next:item));setClarificationDraft('');await sendToDM(next,undefined,true);}catch(error){setNotice('Clarification save failed: '+String(error));}finally{setSaving(false);}}} className="flex gap-2"><input aria-label="Answer the Dungeon Master" className="min-w-0 flex-1 rounded-lg bg-black/30 p-2" value={clarificationDraft} onChange={e=>setClarificationDraft(e.target.value)} placeholder="Clarify or confirm your intent" disabled={saving||Boolean(campaign.pendingClarification.answer)}/><button type="submit" disabled={saving||!clarificationDraft.trim()||Boolean(campaign.pendingClarification.answer)} className="rounded-lg bg-gold px-3 text-ink disabled:opacity-50">Confirm and continue</button></form>{campaign.pendingClarification.answer && <p role="status">Answer saved. <button type="button" className="underline" onClick={()=>void sendToDM()}>Retry confirmed action</button></p>}</section>}
         {pendingAdventureSpell && <div className="mx-4 mt-3 rounded-xl border border-gold/50 bg-panel p-4 space-y-3" role="group" aria-label="Confirm spell cast"><p className="eyebrow">Confirm Adventure spell</p><h3 className="font-serif text-xl">{pendingAdventureSpell.spell}{pendingAdventureSpell.ritual?' · Ritual':''}</h3><p className="text-sm text-parchment/80">{pendingAdventureSpell.intent}</p><p className="text-xs text-parchment/70">{pendingAdventureSpell.ritual?'No spell slot spent.':campaign?.character?.cantrips?.includes(pendingAdventureSpell.spell)?'Cantrip · no spell slot spent.':'Consumes one Level 1 spell slot.'}</p>{pendingAdventureSpell.spell==='Find Familiar' && <label className="flex gap-2 text-xs"><input type="checkbox" checked={adventureComponentsConfirmed} onChange={e=>setAdventureComponentsConfirmed(e.target.checked)}/> I have and consume the required 10 gp material components (inventory is not yet tracked).</label>}<div className="flex gap-2"><button type="button" className="flex-1 rounded-lg border border-white/30 p-3" onClick={()=>setPendingAdventureSpell(null)}>Edit action</button><button type="button" disabled={saving || (pendingAdventureSpell.spell==='Find Familiar'&&!adventureComponentsConfirmed)} className="flex-1 rounded-lg bg-gold p-3 font-semibold text-ink disabled:opacity-40" onClick={()=>void confirmAdventureSpell()}>Cast and continue</button></div></div>}
-        {activeView !== "settings" && activeView !== "map" && !(activeView==="adventure"&&campaign?.combat) && !campaign?.pendingClarification && <form className="flex items-end gap-2 px-4 py-3" onSubmit={(event) => { event.preventDefault(); void (dmMode ? submitAdventure() : saveNote()); }}>
+        {activeView !== "settings" && activeView !== "map" && !(activeView==="adventure"&&campaign?.combat) && <form className="flex items-end gap-2 px-4 py-3" onSubmit={(event) => { event.preventDefault(); void (campaign?.pendingClarification ? submitClarification() : dmMode ? submitAdventure() : saveNote()); }}>
           <button type="button" onClick={() => window.location.reload()} aria-label="Refresh Four Keeps" title="Refresh Four Keeps" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-white/20 bg-panel text-gold"><RefreshCw size={19}/></button>
           <label htmlFor="dm-input" className="sr-only">Message the Dungeon Master</label>
-          <textarea id="dm-input" value={draft} onChange={(event) => { setDraft(event.target.value); setNotice(''); }} rows={1} placeholder={campaign ? (campaign.characterIdentity && !campaign.journal.some(entry=>entry.kind==='dm') ? 'Waiting for your opening scene…' : dmMode ? 'What does Nighthawk do?' : 'Write a journal note…') : 'Create a campaign first'} disabled={!campaign || saving || !!campaign.pendingCheck || !!pendingAdventureSpell || !!pendingRest || (!!campaign.characterIdentity && !campaign.journal.some(entry=>entry.kind==='dm'))} className="max-h-32 min-h-11 min-w-0 flex-1 resize-y rounded-xl border border-white/20 bg-panel px-3 py-3 text-base text-parchment placeholder:text-parchment/45 focus:border-gold focus:outline-none"/>
-          <button type="submit" disabled={!draft.trim() || !campaign || saving || (!!campaign.characterIdentity && !campaign.journal.some(entry=>entry.kind==='dm')) || !!campaign.pendingCheck || !!pendingAdventureSpell || !!campaign.characterIdentity && (campaign.adventureSession?.status==='encounter'||!!campaign.adventureSession?.pendingEncounter)} aria-label="Send message to Dungeon Master" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gold text-ink disabled:opacity-40"><Send size={19}/></button>
+          <textarea id="dm-input" value={draft} onChange={(event) => { setDraft(event.target.value); setNotice(''); }} rows={1} placeholder={campaign ? (campaign.characterIdentity && !campaign.journal.some(entry=>entry.kind==='dm') ? 'Waiting for your opening scene…' : campaign.pendingClarification ? 'Reply to the Dungeon Master…' : dmMode ? 'What does Nighthawk do?' : 'Write a journal note…') : 'Create a campaign first'} disabled={!campaign || saving || !!campaign.pendingCheck || !!pendingAdventureSpell || !!pendingRest || (!!campaign.characterIdentity && !campaign.journal.some(entry=>entry.kind==='dm'))} className="max-h-32 min-h-11 min-w-0 flex-1 resize-y rounded-xl border border-white/20 bg-panel px-3 py-3 text-base text-parchment placeholder:text-parchment/45 focus:border-gold focus:outline-none"/>
+          <button type="submit" disabled={!draft.trim() || !campaign || saving || !!campaign.pendingClarification?.answer || (!!campaign.characterIdentity && !campaign.journal.some(entry=>entry.kind==='dm')) || !!campaign.pendingCheck || !!pendingAdventureSpell || !!campaign.characterIdentity && (campaign.adventureSession?.status==='encounter'||!!campaign.adventureSession?.pendingEncounter)} aria-label="Send message to Dungeon Master" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gold text-ink disabled:opacity-40"><Send size={19}/></button>
         </form>}
         {notice && <p role="status" className="px-5 pb-2 text-xs text-gold">{notice}</p>}
       </div>
