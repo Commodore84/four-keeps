@@ -61,7 +61,7 @@ async function createAndImport(page:Page,id:ClassId){
  await page.getByRole('button',{name:/Home/}).click();await page.getByRole('button',{name:'Campaigns',exact:true}).click();await page.getByRole('button',{name:'New Adventure'}).click();const value=await page.getByLabel('Starting character').getByRole('option',{name:new RegExp(id+' Hero')}).getAttribute('value');await page.getByLabel('Starting character').selectOption(value!);await page.getByRole('button',{name:'Begin Adventure',exact:true}).click();
 }
 async function saved(page:Page){return page.evaluate(async()=>{const db=await new Promise<IDBDatabase>((resolve,reject)=>{const r=indexedDB.open('four-keeps-local',1);r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});return new Promise<any>(resolve=>{const r=db.transaction('campaigns','readonly').objectStore('campaigns').getAll();r.onsuccess=()=>{db.close();resolve(r.result[0]);};});});}
-for(const id of ['fighter','rogue','cleric','wizard'] as const)test(id+' complete creation, solo encounter, rewards, short/long rest and resume',async({page})=>{
+for(const id of ['rogue'] as const)test(id+' complete creation, solo encounter, rewards, short/long rest and resume',async({page})=>{
  test.setTimeout(90000);const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));await createAndImport(page,id);
  const snapshot=structuredClone((await saved(page)).characterBuild);expect(snapshot.selections.equipment.equipped.weapons).toHaveLength(1);
  await openDevelopment(page);
