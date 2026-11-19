@@ -1,0 +1,16 @@
+name: Publish verified clarification and narration lines
+on:
+  push:
+    branches: [clarification-lines-publish-staging]
+permissions:
+  contents: write
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+      - name: Verify exact source and publish
+        run: python3 .clar-transfer/publish.py
