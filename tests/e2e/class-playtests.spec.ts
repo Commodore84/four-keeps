@@ -632,7 +632,7 @@ test('new Rogue starts at Frontier Village, buys supplies, and sees persisted Pl
  await page.getByLabel('Message the Dungeon Master').fill('I ask the shopkeeper what a dagger costs');
  await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
  await expect.poll(()=>dmRequests.length).toBeGreaterThanOrEqual(2);
- expect(dmRequests.at(-1).gameState.merchant.items).toContainEqual({id:'dagger',name:'Dagger',costCp:200,remaining:9999,packQuantity:1});
+ expect(dmRequests.at(-1).gameState.merchant.items).toContainEqual({id:'dagger',name:'Dagger',costCp:200,remaining:12,packQuantity:1});
  expect(dmRequests.at(-1).gameState.merchant.purchaseRule).toContain('explicit confirmation');
  await expect.poll(async()=>Boolean((await saved(page)).pendingAdventureAction)).toBe(false);
  const before=(await saved(page)).inventoryLedger;
