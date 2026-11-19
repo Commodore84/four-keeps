@@ -1,3 +1,5 @@
+import {resolveCompanionSavingThrow} from './companionEncounter';
+import {advanceConsumableTime} from './consumables';
 import {describe,it,expect} from 'vitest';
 import {useOwnedConsumable,eligibleKitTargets} from './consumables';
 import type {Campaign} from './campaign';
@@ -34,5 +36,24 @@ describe('SRD 5.2.1 adventuring consumables',()=>{
   c={...c,healerKitUsesRemaining:1};
   const last=useOwnedConsumable(c,{...req,expectedKitUses:1});
   expect(last.healerKitUsesRemaining).toBe(10);expect(last.inventoryLedger?.gear[1].quantity).toBe(0);
+ });
+});
+
+describe('antitoxin save advantage and clock boundaries',()=>{
+ it('only applies to avoid/end Poisoned while active; requires both totals',()=>{
+  const c={...encounter(),antitoxinUntilMinute:160};
+  expect(resolveCompanionSavingThrow(c,'nighthawk','Constitution',8,13,17,{purpose:'avoid-poisoned'}).success).toBe(true);
+  expect(resolveCompanionSavingThrow(c,'nighthawk','Constitution',8,13,17,{purpose:'end-poisoned'}).effectiveTotal).toBe(17);
+  expect(resolveCompanionSavingThrow(c,'nighthawk','Constitution',8,13,17,{purpose:'other'}).success).toBe(false);
+  expect(()=>resolveCompanionSavingThrow(c,'nighthawk','Constitution',8,13,undefined,{purpose:'avoid-poisoned'})).toThrow('second total');
+  expect(resolveCompanionSavingThrow(advanceConsumableTime(c,60),'nighthawk','Constitution',8,13,17,{purpose:'avoid-poisoned'}).success).toBe(false);
+  expect(resolveCompanionSavingThrow(advanceConsumableTime(c,59),'nighthawk','Constitution',8,13,17,{purpose:'avoid-poisoned'}).success).toBe(true);
+ });
+ it('does not grant advantage to allies and cancels disadvantage',()=>{
+  const c={...encounter(),antitoxinUntilMinute:160};
+  expect(resolveCompanionSavingThrow(c,'ally','Constitution',8,13,17,{purpose:'avoid-poisoned'}).success).toBe(false);
+  const restrained={...c,companionEncounter:{...c.companionEncounter!,participants:{...c.companionEncounter!.participants,nighthawk:{...c.companionEncounter!.participants.nighthawk,conditions:['Restrained']}}}} as Campaign;
+  expect(resolveCompanionSavingThrow(restrained,'nighthawk','Dexterity',14,13,2,{purpose:'avoid-poisoned'}).effectiveTotal).toBe(14);
+  expect(()=>advanceConsumableTime(c,0)).toThrow();
  });
 });

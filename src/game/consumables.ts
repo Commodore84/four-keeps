@@ -1,5 +1,11 @@
 import type {Campaign} from './campaign';
 export type ConsumableName='Antitoxin'|"Healer's Kit";
+/** Only advance time from a verified gameplay time event; never from a UI refresh. */
+export function advanceConsumableTime(c:Campaign,minutes:number):Campaign{
+ if(!Number.isSafeInteger(minutes)||minutes<=0||minutes>1440)throw Error('Invalid elapsed game time');
+ return {...c,elapsedMinutes:(c.elapsedMinutes??0)+minutes};
+}
+
 export interface ConsumableRequest {
  name:ConsumableName;requestId:string;confirmed:boolean;expectedQuantity:number;
  expectedElapsedMinutes:number;expectedKitUses?:number;targetId?:string;expectedTargetHP?:number;

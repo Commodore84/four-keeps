@@ -362,15 +362,16 @@ function requireDazeChoice(actor:CompanionEncounter['participants'][string],choi
  * Restrained imposes disadvantage on Dexterity saves; incapacitating conditions
  * can automatically fail Strength and Dexterity saves.
  */
-export function resolveCompanionSavingThrow(campaign:Campaign,actorId:string,ability:'Strength'|'Dexterity'|'Constitution'|'Intelligence'|'Wisdom'|'Charisma',rollTotal:number,dc:number,secondTotal?:number):{campaign:Campaign;success:boolean;effectiveTotal:number|null}{
+export function resolveCompanionSavingThrow(campaign:Campaign,actorId:string,ability:'Strength'|'Dexterity'|'Constitution'|'Intelligence'|'Wisdom'|'Charisma',rollTotal:number,dc:number,secondTotal?:number,context?:{purpose?:'avoid-poisoned'|'end-poisoned'|'other'}):{campaign:Campaign;success:boolean;effectiveTotal:number|null}{
  const battle=encounter(campaign),actor=battle.participants[actorId];
  if(!actor||![rollTotal,dc].every(Number.isInteger)||rollTotal<0||rollTotal>100||dc<1||dc>40||secondTotal!==undefined&&(!Number.isInteger(secondTotal)||secondTotal<0||secondTotal>100))throw Error('Invalid saving throw');
  const autoFail=(ability==='Strength'||ability==='Dexterity')&&actor.conditions.some(c=>['Paralyzed','Stunned','Unconscious'].includes(c));
  const disadvantage=ability==='Dexterity'&&actor.conditions.includes('Restrained');
- if(disadvantage&&secondTotal===undefined)throw Error('Restrained Dexterity save requires second total');
- const total=autoFail?null:disadvantage?Math.min(rollTotal,secondTotal!):rollTotal;
+ const antitoxin=actorId==='nighthawk'&&(context?.purpose==='avoid-poisoned'||context?.purpose==='end-poisoned')&&(campaign.antitoxinUntilMinute??0)>(campaign.elapsedMinutes??0);
+ if((disadvantage||antitoxin)&&secondTotal===undefined)throw Error('Advantage or disadvantage save requires second total');
+ const total=autoFail?null:antitoxin&&disadvantage?rollTotal:antitoxin?Math.max(rollTotal,secondTotal!):disadvantage?Math.min(rollTotal,secondTotal!):rollTotal;
  const success=total!==null&&total>=dc;
- return {campaign:save(campaign,{...battle,log:[...battle.log,actorId+' '+ability+' save vs DC '+dc+': '+(autoFail?'automatic failure':(success?'success':'failure')+' ('+total+')')]}),success,effectiveTotal:total};
+ return {campaign:save(campaign,{...battle,log:[...battle.log,actorId+' '+ability+(context?.purpose?' '+context.purpose:'')+' save vs DC '+dc+': '+(autoFail?'automatic failure':(success?'success':'failure')+' ('+total+')')]}),success,effectiveTotal:total};
 }
 export function companionConditionEffects(campaign:Campaign,actorId:string){
  const actor=encounter(campaign).participants[actorId];
