@@ -63,7 +63,7 @@ export default async function handler(req, res) {
   const restWaitMinutes = restRequest === 'long' && Number.isInteger(body.restWaitMinutes) && body.restWaitMinutes>=0 && body.restWaitMinutes<=1440 ? body.restWaitMinutes : 0;
   const message = typeof body.message === 'string' ? body.message.trim() : '';
   const opening = body.opening === true && !resolving && !combatAdjudication && !restRequest;
-  if ((!resolving && !message) || message.length > 1500) return res.status(400).json({ error: 'Message must be 1–1500 characters.' });
+  if ((!resolving && !opening && !message) || message.length > 1500) return res.status(400).json({ error: 'Message must be 1–1500 characters.' });
   let checkResult = null;
   if (resolving) {
     try { checkResult = adjudicate(openCheck(body.checkToken),body.dice); }
