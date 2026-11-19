@@ -1,0 +1,16 @@
+name: Publish verified equipment catalog
+on:
+  push:
+    branches: [equipment-catalog-publish-staging]
+permissions:
+  contents: write
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+      - name: Verify exact tree and publish
+        run: python3 .equipment-transfer/publish.py
