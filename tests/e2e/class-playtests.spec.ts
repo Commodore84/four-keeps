@@ -1000,3 +1000,32 @@ test('fresh iPhone campaign Journal records encounters, people, places and read-
  await expect(page.locator('details').filter({hasText:'Old Bridge'}).last()).toBeVisible();
  expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
 });
+
+
+test('DM treats custom leatherwork inquiry as dialogue without a merchant transaction',async({page})=>{
+ test.setTimeout(90000);
+ await page.setViewportSize({width:390,height:844});
+ await createAndImport(page,'rogue');
+ await page.evaluate(()=>{localStorage.setItem('four-keeps-access-code','browser-test-code');localStorage.setItem('four-keeps-dm-mode','on');});
+ const requests:any[]=[];
+ await page.route('**/api/dm',async route=>{
+  const body=route.request().postDataJSON();requests.push(body);
+  await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({
+   narration:body.opening?'Dasahi awakens around you.':'You could ask around the market for a leatherworker or an armorer. Would you like to inquire with the locals?',
+   newFacts:[],worldUpdates:{},mapActions:[]
+  })});
+ });
+ await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await expect.poll(async()=>Boolean((await saved(page))?.journal?.some((e:any)=>e.kind==='dm'))).toBe(true);
+ const before=await saved(page);
+ await page.getByLabel('Message the Dungeon Master').fill('Can I look around for where I could get a leather arm warmer made?');
+ await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
+ await expect(page.getByLabel('Adventure',{exact:true})).toContainText('ask around the market for a leatherworker');
+ const after=await saved(page);
+ expect(requests.length).toBeGreaterThanOrEqual(2);
+ expect(after.pendingMerchantPurchase).toBeUndefined();
+ expect(after.inventoryLedger).toEqual(before.inventoryLedger);
+ expect(after.merchantStockRemaining).toEqual(before.merchantStockRemaining);
+ expect(after.journal.some((e:any)=>e.kind==='player'&&e.text.includes('leather arm warmer'))).toBe(true);
+ await expect(page.getByText('The merchant cannot prepare that purchase')).toHaveCount(0);
+});

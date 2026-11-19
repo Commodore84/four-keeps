@@ -24,11 +24,25 @@ export function merchantNegotiationTarget(message:string):string|null {
  });
  return matches.length===1?matches[0].id:null;
 }
-/** Purchase intent is a commitment to acquire goods, not an exploration or shopping-location question. */
-export function isMerchantPurchaseRequest(message:string):boolean {
+/** Classify requests before any deterministic purchase workflow. */
+export type MerchantIntent = 'information'|'find-service'|'commission'|'browse'|'purchase'|'clarify'|'conversation';
+export function classifyMerchantIntent(message:string):MerchantIntent {
  const text=message.trim();
- if(/\b(?:look(?:ing)? for|find|search for|where|place|shop|store|merchant|someone|somewhere|location|go to|head to|visit)\b.{0,90}\b(?:buy|purchase)\b/i.test(text))return false;
- return /\b(?:i\s+(?:want|wish|need|intend|plan)\s+to\s+(?:buy|purchase)|i(?:'d| would)\s+like\s+to\s+(?:buy|purchase)|i(?:'ll| will| am going to)\s+(?:buy|purchase|take|have)|(?:buy|purchase)\s+(?:me\s+)?(?:a\s+|an\s+|the\s+|some\s+|\d+\s+)?\S+|i(?:'ll| will)\s+have\b)/i.test(text);
+ if(!text)return 'conversation';
+ const seeking=/\b(?:where|who|which|how|can i find|could i find|look(?:ing)? (?:around |for )|find|search|ask around|directions|recommend|know (?:of|where)|anywhere|someone|somewhere|place|shop|store|merchant|craftsperson|artisan|leatherworker|armorer|blacksmith)\b/i;
+ const service=/\b(?:made|make (?:me |a |an |some |custom )|custom|commission|crafted|craft|repair|alter|fit(?:ted)?|tailor|workshop|leatherwork)\b/i;
+ const informational=/^(?:can|could|would|should|where|who|what|how|do|does|is|are|tell|explain)\b/i;
+ const explicitBuy=/\b(?:i\s+(?:want|wish|need|intend|plan)\s+to\s+(?:buy|purchase)|i(?:'d| would)\s+like\s+to\s+(?:buy|purchase)|i(?:'ll| will| am going to)\s+(?:buy|purchase|take|have)|(?:buy|purchase)\s+(?:me\s+)?(?:a\s+|an\s+|the\s+|some\s+|\d+\s+)?\S+|i(?:'ll| will)\s+have\b)/i;
+ if(seeking.test(text)&&(!explicitBuy.test(text)||/\b(?:where|who|which|how|find|look(?:ing)?|search|ask around|directions|recommend|know (?:of|where)|anywhere|someone|somewhere|go to|head to|visit)\b/i.test(text)))return 'find-service';
+ if(service.test(text))return 'commission';
+ if(isMerchantBrowseRequest(text))return 'browse';
+ if(explicitBuy.test(text))return 'purchase';
+ if(/\b(?:want|need|looking for|interested in)\b/i.test(text)&&!informational.test(text))return 'clarify';
+ if(informational.test(text))return 'information';
+ return 'conversation';
+}
+export function isMerchantPurchaseRequest(message:string):boolean {
+ return classifyMerchantIntent(message)==='purchase';
 }
 export function isMerchantNegotiationRequest(message:string):boolean {return /\b(haggle|negotiate|discount|lower (?:the )?price|better price|persuade|bargain)\b/i.test(message);}
 export function frontierMerchantContext(campaign:Campaign){

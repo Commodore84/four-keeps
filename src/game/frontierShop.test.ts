@@ -1,7 +1,7 @@
 import {describe,it,expect} from 'vitest';
 import {newCampaign} from './campaign';
 import {beginAdventureSession} from './adventureSession';
-import {buyFrontierItem,frontierShopStock,frontierMerchantContext,formatFrontierPrice,parseFrontierPurchase,prepareMerchantPurchase,settleMerchantPurchase,walletCopper,remainingMerchantStock,merchantCatalog,isMerchantBrowseRequest,approveMerchantDiscount,isMerchantPurchaseRequest,merchantNegotiationTarget,beginMerchantNegotiation,resolveMerchantNegotiation} from './frontierShop';
+import {buyFrontierItem,frontierShopStock,frontierMerchantContext,formatFrontierPrice,parseFrontierPurchase,prepareMerchantPurchase,settleMerchantPurchase,walletCopper,remainingMerchantStock,merchantCatalog,isMerchantBrowseRequest,approveMerchantDiscount,isMerchantPurchaseRequest,classifyMerchantIntent,merchantNegotiationTarget,beginMerchantNegotiation,resolveMerchantNegotiation} from './frontierShop';
 function fixture(){const c=newCampaign('Shop','shop-test');return beginAdventureSession({...c,characterIdentity:{name:'Test',speciesId:'elf',backgroundId:'sage',classId:'rogue',draftId:'draft',pronouns:'',appearance:'',personality:'',backstory:''},inventoryLedger:{currency:{GP:10,SP:0,CP:0,EP:0,PP:0},gear:[]}})}
 describe('deterministic merchant negotiation check lifecycle',()=>{
  const pending=(token='social-1')=>({...fixture(),pendingCheck:{token,skill:'Persuasion' as const,mode:'normal' as const,reason:'Negotiate the dagger price'}});
@@ -124,5 +124,34 @@ describe('finite stock and bounded merchant prices',()=>{
   expect(walletCopper(settled.inventoryLedger?.currency)).toBe(680);
   expect(settled.merchantDiscount).toBeUndefined();
   expect(remainingMerchantStock(settled,'dagger')).toBe(6);
+ });
+});
+
+
+describe('natural DM intent does not become a transaction',()=>{
+ it.each([
+  ['Can I look around for where I could get a leather arm warmer made?', 'find-service'],
+  ['I want to find a leatherworker who could make an arm warmer.', 'find-service'],
+  ['Where can I buy leather armor?', 'find-service'],
+  ['Could I commission a custom leather sleeve?', 'commission'],
+  ['Can you repair my boots?', 'commission'],
+  ['What is an arm warmer?', 'information'],
+  ['Show me your inventory.', 'browse'],
+  ['I buy a dagger.', 'purchase'],
+  ['I buy a dagger from the merchant.', 'purchase'],
+  ['Buy me two torches.', 'purchase'],
+  ['I need some equipment.', 'clarify'],
+ ] as const)('classifies %s as %s',(message,intent)=>{
+  expect(classifyMerchantIntent(message)).toBe(intent);
+  if(intent!=='purchase'){
+   expect(isMerchantPurchaseRequest(message)).toBe(false);
+   expect(parseFrontierPurchase(message)).toBeNull();
+  }
+ });
+ it('preserves an explicit stocked purchase and deterministic confirmation',()=>{
+  expect(parseFrontierPurchase('I buy a dagger.')).toEqual({itemId:'dagger',quantity:1});
+  const pending=prepareMerchantPurchase(fixture(),'dagger',1,'safe-intent');
+  expect(pending.pendingMerchantPurchase).toBeDefined();
+  expect(settleMerchantPurchase(pending,'safe-intent',false).inventoryLedger?.currency.GP).toBe(10);
  });
 });

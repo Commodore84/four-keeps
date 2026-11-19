@@ -4,7 +4,7 @@ import {applyAnchamidaActions} from '../game/anchamidaActions';
 import {AnchamidaRegionMap} from './AnchamidaRegionMap';
 import {MerchantShop} from './MerchantShop';
 import {DMNarration,type NarrationSpeed} from './DMNarration';
-import {parseFrontierPurchase,prepareMerchantPurchase,settleMerchantPurchase,frontierShopStock,formatFrontierPrice,isMerchantBrowseRequest,isMerchantNegotiationRequest,isMerchantPurchaseRequest,merchantNegotiationTarget,beginMerchantNegotiation,resolveMerchantNegotiation} from '../game/frontierShop';
+import {parseFrontierPurchase,prepareMerchantPurchase,settleMerchantPurchase,frontierShopStock,formatFrontierPrice,isMerchantNegotiationRequest,isMerchantPurchaseRequest,classifyMerchantIntent,merchantNegotiationTarget,beginMerchantNegotiation,resolveMerchantNegotiation} from '../game/frontierShop';
 import {classSummary} from '../game/creationClasses';
 import {completePlayerRest,playerLongRestWaitMinutes} from '../game/playerRecovery';
 import {frontierMerchantContext} from '../game/frontierShop';
@@ -718,7 +718,7 @@ export function App() {
       return;
     }
     if(campaign?.characterIdentity && campaign.adventureSession?.site==='frontier' && campaign.adventureSession.status==='exploring'){
-      if(isMerchantBrowseRequest(draft)){
+      if(classifyMerchantIntent(draft)==='browse'){
         setSaving(true);
         try{
           const saved=addExchange({...campaign,merchantShopOpen:true},draft,'Mara Vell opens her ledger and shows you the goods available today. You can browse the shop catalog, choose a quantity, or ask her about anything on the shelves.');
@@ -731,7 +731,7 @@ export function App() {
       }
       const intent=parseFrontierPurchase(draft);
       if(isMerchantPurchaseRequest(draft)&&!intent&&!isMerchantNegotiationRequest(draft)){
-        setNotice('The merchant cannot prepare that purchase. Ask for the available catalog and specify one stocked item and a quantity of 1–20.');
+        setNotice('To make a purchase, choose a stocked item and quantity from the shop catalog. You can also ask the DM about other options.');
         return;
       }
       if(intent){
