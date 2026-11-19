@@ -158,6 +158,7 @@ function Adventure({ campaign, fullHistory, onToggleHistory, onAdventureChange, 
   const allTurns = campaign?.journal.filter((entry) => entry.kind === 'player' || entry.kind === 'dm') ?? [];
   const turns = fullHistory ? allTurns : allTurns.slice(-6);
   if(development)return <section className="space-y-4" aria-label="Classic adventure testing">{campaign&&<details className="rounded-xl border border-white/10 p-3" open><summary className="cursor-pointer text-sm text-gold">Classic adventure and encounter tools</summary><AdventureSessionPanel campaign={campaign} saving={saving} onChange={onAdventureChange}/></details>}</section>;
+  if(campaign?.merchantShopOpen && campaign.adventureSession?.site==='frontier' && campaign.adventureSession.status==='exploring')return <section aria-label="Adventure storefront" className="pb-24"><MerchantShop campaign={campaign} saving={saving} onClose={onShopClose} onPrepare={onShopPrepare} onSettle={onShopSettle} onDiscuss={onShopDiscuss} onSupplyChange={onAdventureChange}/></section>;
   return <section className="space-y-5" aria-label="Adventure">
     {campaign?.adventureSession && campaign.adventureSession.status==='encounter' && <AdventureSessionPanel campaign={campaign} saving={saving} onChange={onAdventureChange}/>}
     {campaign?.adventureSession?.pendingEncounter && <AdventureEncounterSetupPanel key={campaign.id+'-'+campaign.adventureSession.pendingEncounter.actionId} campaign={campaign} saving={saving} onChange={onAdventureChange}/>}
@@ -862,7 +863,8 @@ export function App() {
       if(classifyMerchantIntent(draft)==='browse'||(campaign.characterBuild&&isSupplierBrowseRequest(draft))){
         setSaving(true);
         try{
-          const saved=addExchange({...campaign,merchantShopOpen:true},draft,campaign.characterBuild?'The city merchant opens the equipment catalog. If something is sold out, the supplier-order section lets you request it. Nothing is charged until you confirm.':'Mara Vell opens her ledger and shows you the goods available today. You can browse the shop catalog, choose a quantity, or ask her about anything on the shelves.');
+          const mentionedMerchant=/\b(?:blacksmith|weaponsmith|smithy)\b/i.test(draft)?'weaponsmith':/\b(?:armorer|armourer)\b/i.test(draft)?'armorer':/\b(?:alchemist|apothecary)\b/i.test(draft)?'apothecary':/\b(?:outfitter)\b/i.test(draft)?'outfitter':/\b(?:general store|shopkeeper)\b/i.test(draft)?'general':campaign.merchantShopType??'general';
+          const saved=addExchange({...campaign,merchantShopOpen:true,merchantShopType:mentionedMerchant as import('../game/frontierShop').MerchantType},draft,campaign.characterBuild?'The city merchant opens the equipment catalog. If something is sold out, the supplier-order section lets you request it. Nothing is charged until you confirm.':'Mara Vell opens her ledger and shows you the goods available today. You can browse the shop catalog, choose a quantity, or ask her about anything on the shelves.');
           await localCampaignStorage.save(saved);setCampaign(saved);setCampaigns(items=>items.map(c=>c.id===saved.id?saved:c));setDraft('');
         }catch(error){setNotice('Shopkeeper: '+String(error));}finally{setSaving(false);}
         return;

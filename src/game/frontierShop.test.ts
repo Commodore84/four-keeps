@@ -210,14 +210,14 @@ describe('2024 equipment catalog and merchant availability',()=>{
 });
 
 describe('settlement marketplace and merchant specialties',()=>{
- it('partitions every nonmagic standard equipment entry across city specialists exactly once',()=>{
+ it('offers complete city general inventory alongside distinct specialists',()=>{
   const types=availableMerchants('city');
-  const ids=types.flatMap(type=>merchantCatalogFor('city',type).map(item=>item.id));
-  expect(ids.length).toBe(cityShopStock.length);
-  expect(new Set(ids).size).toBe(cityShopStock.length);
+  const ids=types.filter(type=>type!=='general').flatMap(type=>merchantCatalogFor('city',type).map(item=>item.id));
+  expect(new Set(ids).size).toBe(ids.length);
+  expect(merchantCatalogFor('city','general').length).toBe(cityShopStock.length);
   expect(merchantCatalogFor('city','weaponsmith').some(item=>item.id==='greatsword')).toBe(true);
   expect(merchantCatalogFor('city','armorer').some(item=>item.id==='plate-armor')).toBe(true);
-  expect(merchantCatalogFor('city','general').some(item=>item.id==='plate-armor')).toBe(false);
+  expect(merchantCatalogFor('city','general').some(item=>item.id==='plate-armor')).toBe(true);
  });
  it('limits traveling merchants to a small consumable catalog',()=>{
   const items=merchantCatalogFor('traveling','trader');
@@ -244,9 +244,9 @@ describe('merchant-specific persistent purchases',()=>{
   expect(remainingMerchantStock(paid,'dagger','weaponsmith')).toBe(merchantInitialStock('city','dagger','weaponsmith')-2);
   expect(()=>settleMerchantPurchase(paid,'city-dagger',true)).toThrow();
  });
- it('refuses a weapon purchase from the city general store',()=>{
+ it('allows a weapon purchase from the full-service city general store',()=>{
   const c={...fixture(),merchantSettlementTier:'city' as const,merchantShopType:'general' as const};
-  expect(()=>prepareMerchantCart(c,[{itemId:'dagger',quantity:1}],'wrong-merchant')).toThrow();
+  expect(prepareMerchantCart(c,[{itemId:'dagger',quantity:1}],'general-dagger').pendingMerchantPurchase?.itemId).toBe('dagger');
  });
 });
 

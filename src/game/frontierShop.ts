@@ -48,7 +48,14 @@ export function merchantItemDescription(item:import('./creationEquipment').Item)
  'signal-whistle':'A whistle for signaling over a distance.',
  'chain':'Heavy metal links for binding or securing objects.',
  'spikes-iron':'Metal spikes for anchoring ropes or securing doors.',
- 'potion-of-healing':'A consumable potion that restores hit points when used.',
+ 'potion-of-healing':'Restores 2d4 + 2 hit points when consumed as a Bonus Action.',
+ 'dungeoneer-s-pack':'A bundled collection of equipment for dungeon exploration; includes a backpack and essential travel supplies.',
+ 'explorer-s-pack':'A bundled collection of equipment for wilderness exploration; includes a backpack and essential travel supplies.',
+ 'scholar-s-pack':'A bundled collection of supplies for research, writing, and study.',
+ 'entertainer-s-pack':'A bundled collection of travel and performance supplies.',
+ 'thieves-tools':'Tools used to pick locks and disarm traps when the task permits a tool check.',
+ 'acid':'A vial of acid; its use and damage are governed by the equipment rules.',
+ 'alchemist-s-fire':'A flask of adhesive incendiary liquid; see the equipment rules for its effect.',
  'candle':'A small, short-lived light source.',
  'map':'A chart showing a mapped area.',
  'paper':'A sheet for writing or drawing.',
@@ -117,7 +124,7 @@ export function availableMerchants(tier:SettlementTier):MerchantType[] {
 export function merchantCatalogFor(tier:SettlementTier,type:MerchantType) {
  if(!availableMerchants(tier).includes(type))return [];
  const all=OFFICIAL_EQUIPMENT_2024.filter(item=>!isMagic(item));
- if(tier==='city')return all.filter(item=>merchantTypeForItem(item)===type);
+ if(tier==='city')return type==='general'?all:all.filter(item=>merchantTypeForItem(item)===type);
  if(type==='trader')return all.filter(item=>['torch','rations','waterskin','candle','oil','tinderbox','bandages','potion-of-healing'].includes(item.id));
  if(tier==='village')return all.filter(item=>FRONTIER_SHOP_IDS.includes(item.id as (typeof FRONTIER_SHOP_IDS)[number])&&merchantTypeForItem(item)===type);
  return all.filter(item=>item.costCp<=5000&&merchantTypeForItem(item)===type);
@@ -137,7 +144,7 @@ export function merchantStockKeyForCampaign(campaign:Campaign,type:MerchantType,
 
 export function merchantForItem(campaign:Campaign,itemId:string):MerchantType|null{
  const tier=settlementTier(campaign);
- return availableMerchants(tier).find(type=>merchantCatalogFor(tier,type).some(item=>item.id===itemId))??null;
+ return availableMerchants(tier).find(type=>type!=='general'&&merchantCatalogFor(tier,type).some(item=>item.id===itemId))??(merchantCatalogFor(tier,'general').some(item=>item.id===itemId)?'general':null);
 }
 export const FRONTIER_INITIAL_STOCK:Record<string,number>=Object.fromEntries(OFFICIAL_EQUIPMENT_2024.map(item=>[item.id,
  item.id==='potion-of-healing'?3:item.category==='ammunition'?60:item.category==='weapon'?5:item.category==='armor'?3:item.category==='tool'?4:item.costCp>=5000?1:item.costCp>=1000?3:12]));

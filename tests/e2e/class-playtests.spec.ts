@@ -647,22 +647,19 @@ test('new Rogue starts at Frontier Village, buys supplies, and sees persisted Pl
  await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
  const shop=page.getByLabel('Dasahi marketplace');
  await expect(shop).toBeVisible();
- // The shop must follow the conversation and be inside the visible scroll area,
- // not rendered above the latest narration where the user cannot discover it.
- await expect.poll(async()=>shop.evaluate(el=>{
-   const adventure=el.closest('[aria-label="Adventure"]');
-   const lastDM=Array.from(adventure?.querySelectorAll('article')??[]).at(-1);
-   return Boolean(lastDM && lastDM.compareDocumentPosition(el)&Node.DOCUMENT_POSITION_FOLLOWING);
- })).toBe(true);
- await shop.scrollIntoViewIfNeeded();
- await expect.poll(async()=>shop.evaluate(el=>{
-   const rect=el.getBoundingClientRect();
-   return rect.top<window.innerHeight-120 && rect.bottom>120;
- })).toBe(true);
+ // The storefront replaces the narration while shopping, so it cannot be missed.
+ await expect(page.getByLabel('Adventure storefront')).toBeVisible();
+ await expect(page.getByLabel('Adventure',{exact:true})).toHaveCount(0);
+ await expect(shop.getByLabel('Merchant specialties')).toHaveCount(0);
+ await expect(shop.getByLabel('Current merchant')).toContainText('General');
+ await expect(shop.getByLabel('Merchant inventory')).toContainText('Dagger');
+ await expect(shop.getByLabel('Adventuring packs')).toBeVisible();
+ await expect(shop.getByLabel('Kits and tools')).toBeVisible();
+ await expect(shop.getByLabel('Consumables')).toBeVisible();
+ await expect(shop.getByLabel('Dagger',{exact:true}).getByText('Item details')).toBeVisible();
  await expect(shop.getByLabel('Current wallet')).toBeVisible();
  await expect(shop.getByLabel('City supplier orders')).toBeVisible();
  expect((await saved(page)).pendingMerchantSupplyOrder).toBeUndefined();
- await shop.getByRole('button',{name:'Weaponsmith'}).click();
  await expect(shop.getByLabel('Merchant inventory')).toContainText('Dagger');
  await shop.getByRole('button',{name:'Add Dagger'}).click();
  await expect(shop.getByLabel('Dagger',{exact:true})).toContainText('in inventory');
@@ -675,7 +672,6 @@ test('new Rogue starts at Frontier Village, buys supplies, and sees persisted Pl
  await expect(page.getByLabel('Dasahi marketplace')).toBeVisible();
  expect((await saved(page)).inventoryLedger).toEqual(before);
  const shopAfterCancel=page.getByLabel('Dasahi marketplace');
- await shopAfterCancel.getByRole('button',{name:'General store'}).click();
  await shopAfterCancel.getByRole('button',{name:'Add Rope'}).click();
  await shopAfterCancel.getByRole('button',{name:'Add Rope'}).click();
  await shopAfterCancel.getByRole('button',{name:'Add Torch'}).click();
@@ -768,17 +764,17 @@ test('merchant catalog reflects finite stock and refuses unavailable quantities'
  const input=page.getByLabel('Message the Dungeon Master');
  const send=page.getByRole('button',{name:'Send message to Dungeon Master'});
  await input.fill('What do you sell?');await send.click();
- await expect(page.getByLabel('Dasahi marketplace').getByRole('button',{name:'Weaponsmith'})).toBeVisible();
- await page.getByLabel('Dasahi marketplace').getByRole('button',{name:'Weaponsmith'}).click();
+ await expect(page.getByLabel('Dasahi marketplace').getByLabel('Current merchant')).toContainText('General');
  await expect(page.getByLabel('Dasahi marketplace').getByLabel('Dagger',{exact:true})).toContainText('12 in stock');
+ await page.getByLabel('Dasahi marketplace').getByRole('button',{name:'Leave shop'}).click();
  await input.fill('I will buy 99999 daggers');await send.click();
  expect((await saved(page)).pendingMerchantPurchase).toBeUndefined();
  await input.fill('I will buy 2 daggers');await send.click();
  await expect.poll(async()=>Boolean((await saved(page)).pendingMerchantPurchase)).toBe(true);
  await input.fill('yes');await send.click();
- await expect.poll(async()=>(await saved(page)).merchantStockRemaining?.['location:dasahi:city:weaponsmith:dagger']).toBe(10);
+ await expect.poll(async()=>(await saved(page)).merchantStockRemaining?.['location:dasahi:city:general:dagger']).toBe(10);
  await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();await page.getByRole('button',{name:'Continue Adventure'}).click();
- expect((await saved(page)).merchantStockRemaining['location:dasahi:city:weaponsmith:dagger']).toBe(10);
+ expect((await saved(page)).merchantStockRemaining['location:dasahi:city:general:dagger']).toBe(10);
 });
 test('conversational sling ammunition packs use canonical price and persist 40 projectiles',async({page})=>{
  test.setTimeout(90000);
@@ -1211,7 +1207,6 @@ test('iPhone city supplier ordering confirms, persists, delivers and collects on
  await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
  const shop=page.getByLabel('Dasahi marketplace');
  await expect(shop).toBeVisible();
- await shop.getByRole('button',{name:'Weaponsmith'}).click();
  await expect(shop.getByLabel('City supplier orders')).toContainText('Dagger');
  const before=(await saved(page)).inventoryLedger;
  await shop.getByRole('button',{name:'Order',exact:true}).first().click();
@@ -1282,7 +1277,6 @@ test('iPhone merchant cart hands off an editable unsent message and preserves qu
  await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
  const shop=page.getByLabel('Dasahi marketplace');
  await expect(shop).toBeVisible();
- await shop.getByRole('button',{name:'Weaponsmith'}).click();
  await shop.getByRole('button',{name:'Add Dagger'}).click();
  await expect(shop.getByLabel('Dagger',{exact:true})).toContainText('piercing');
  const before=(await saved(page)).inventoryLedger;
@@ -1310,7 +1304,6 @@ test('iPhone merchant negotiation hides DC, rolls, and keeps confirmation explic
  await input.fill('Show me what you have for sale.');
  await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
  const shop=page.getByLabel('Dasahi marketplace');await expect(shop).toBeVisible();
- await shop.getByRole('button',{name:'Weaponsmith'}).click();
  await shop.getByRole('button',{name:'Add Dagger'}).click();
  await shop.getByRole('button',{name:'Discuss order with DM'}).click();
  await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
@@ -1350,7 +1343,6 @@ test('iPhone natural merchant chat acceptance buys a pending cart exactly once a
  await input.fill('Show me what you have for sale.');
  await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
  const shop=page.getByLabel('Dasahi marketplace');await expect(shop).toBeVisible();
- await shop.getByRole('button',{name:'Weaponsmith'}).click();
  await shop.getByRole('button',{name:'Add Dagger'}).click();
  await shop.getByRole('button',{name:'Add Club'}).click();
  await shop.getByRole('button',{name:'Discuss order with DM'}).click();
@@ -1383,7 +1375,6 @@ test('iPhone canceling an editable merchant chat draft never creates an order or
  await input.fill('Show me what you have for sale.');
  await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
  const shop=page.getByLabel('Dasahi marketplace');await expect(shop).toBeVisible();
- await shop.getByRole('button',{name:'Weaponsmith'}).click();
  await shop.getByRole('button',{name:'Add Dagger'}).click();
  const before=await saved(page);
  await shop.getByRole('button',{name:'Discuss order with DM'}).click();
@@ -1412,7 +1403,6 @@ test('iPhone abandoning an unsent merchant cart clears it without spending',asyn
  await input.fill('Show me what you have for sale.');
  await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
  const shop=page.getByLabel('Dasahi marketplace');await expect(shop).toBeVisible();
- await shop.getByRole('button',{name:'Weaponsmith'}).click();
  await shop.getByRole('button',{name:'Add Dagger'}).click();
  const before=(await saved(page)).inventoryLedger;
  await shop.getByRole('button',{name:'Discuss order with DM'}).click();
