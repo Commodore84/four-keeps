@@ -146,7 +146,15 @@ function Adventure({ campaign, fullHistory, onToggleHistory, onAdventureChange, 
   const [seen,setSeen]=useState<string[]>(()=>{try{return JSON.parse(sessionStorage.getItem('four-keeps-narration-seen')||'[]')}catch{return []}});
   const markSeen=(id:string)=>setSeen(old=>{if(old.includes(id))return old;const next=[...old,id];sessionStorage.setItem('four-keeps-narration-seen',JSON.stringify(next));return next;});
   const lastTurn = campaign?.journal.filter((entry) => entry.kind === 'player' || entry.kind === 'dm').at(-1)?.id;
-  useEffect(() => { if (lastTurn && !campaign?.merchantShopOpen) endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' }); }, [lastTurn]);
+  const previousTurnRef = useRef(lastTurn);
+  useEffect(() => {
+    const previous = previousTurnRef.current;
+    previousTurnRef.current = lastTurn;
+    // Opening a saved adventure or returning from Map/Player must not hijack the reader's scroll.
+    if (previous && lastTurn && previous !== lastTurn && !campaign?.merchantShopOpen) {
+      endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    }
+  }, [lastTurn, campaign?.merchantShopOpen]);
   const allTurns = campaign?.journal.filter((entry) => entry.kind === 'player' || entry.kind === 'dm') ?? [];
   const turns = fullHistory ? allTurns : allTurns.slice(-6);
   if(development)return <section className="space-y-4" aria-label="Classic adventure testing">{campaign&&<details className="rounded-xl border border-white/10 p-3" open><summary className="cursor-pointer text-sm text-gold">Classic adventure and encounter tools</summary><AdventureSessionPanel campaign={campaign} saving={saving} onChange={onAdventureChange}/></details>}</section>;
@@ -454,6 +462,14 @@ function WorldMap({campaign}:{campaign:Campaign|null}) {
 export function App() {
   const [activeView, setActiveView] = useState<View>('adventure');
   const [navigationOpen,setNavigationOpen]=useState(false);
+  const adventureScrollPosition=useRef<number|null>(null);
+  useEffect(()=>{
+    if(activeView!=='adventure'||adventureScrollPosition.current===null)return;
+    const position=adventureScrollPosition.current;
+    adventureScrollPosition.current=null;
+    const frame=requestAnimationFrame(()=>window.scrollTo({top:position,behavior:'instant'}));
+    return ()=>cancelAnimationFrame(frame);
+  },[activeView]);
   const [selectedCharacterDraft,setSelectedCharacterDraft]=useState('');
   const [portalScreen,setPortalScreen] = useState<'home'|'characters'|'campaigns'|'new'|'help'|'adventure'>('home');
   const [narrationSpeed,setNarrationSpeed]=useState<NarrationSpeed>(()=>{const value=localStorage.getItem('four-keeps-narration-speed');return value==='slow'||value==='fast'||value==='instant'?value:'normal';});
@@ -1520,7 +1536,7 @@ export function App() {
     <div className={activeView==='map'?"mx-auto flex h-dvh w-full max-w-3xl flex-col overflow-hidden":"mx-auto flex min-h-dvh w-full max-w-3xl flex-col"}>
       <header className="sticky top-0 z-20 border-b border-white/10 bg-ink/95 px-5 pb-4 pt-[max(1.2rem,env(safe-area-inset-top))] backdrop-blur">
         <div className="flex items-center justify-between gap-3"><div><div className="flex items-center gap-2"><button type="button" aria-label="Open navigation menu" aria-expanded={navigationOpen} aria-controls="four-keeps-navigation" onClick={()=>setNavigationOpen(open=>!open)} className="rounded-lg border border-white/20 p-2 text-gold" title="Navigate"><img src="/four-keeps-nav-icon.png" alt="" aria-hidden="true" className="h-[26px] w-[26px] object-contain" /></button><h1 className="text-xl font-semibold tracking-tight text-parchment">Four Keeps</h1></div></div></div>
-        {navigationOpen&&<nav id="four-keeps-navigation" aria-label="Primary navigation" className="absolute left-4 top-full z-30 mt-1 w-56 rounded-xl border border-gold/30 bg-panel p-2 shadow-2xl"><button type="button" onClick={()=>{void abandonUnsentMerchantCart();setNavigationOpen(false);setPortalScreen("home");setNotice('')}} className="flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left text-sm text-parchment hover:bg-white/10"><Compass size={19}/>Home</button><div className="my-1 border-t border-white/10"/>{tabs.map(({id,label,Icon})=><button key={id} type="button" onClick={()=>{if(id!=='adventure')void abandonUnsentMerchantCart();setActiveView(id);setNavigationOpen(false);setNotice('')}} aria-current={activeView===id?'page':undefined} className={`flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left text-sm ${activeView===id?'bg-gold/15 text-gold':'text-parchment hover:bg-white/10'}`}><Icon size={19}/>{label}</button>)}</nav>}
+        {navigationOpen&&<nav id="four-keeps-navigation" aria-label="Primary navigation" className="absolute left-4 top-full z-30 mt-1 w-56 rounded-xl border border-gold/30 bg-panel p-2 shadow-2xl"><button type="button" onClick={()=>{void abandonUnsentMerchantCart();setNavigationOpen(false);setPortalScreen("home");setNotice('')}} className="flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left text-sm text-parchment hover:bg-white/10"><Compass size={19}/>Home</button><div className="my-1 border-t border-white/10"/>{tabs.map(({id,label,Icon})=><button key={id} type="button" onClick={()=>{if(activeView==='adventure'&&id!=='adventure')adventureScrollPosition.current=window.scrollY;if(id!=='adventure')void abandonUnsentMerchantCart();setActiveView(id);setNavigationOpen(false);setNotice('')}} aria-current={activeView===id?'page':undefined} className={`flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left text-sm ${activeView===id?'bg-gold/15 text-gold':'text-parchment hover:bg-white/10'}`}><Icon size={19}/>{label}</button>)}</nav>}
         {campaign?.combat&&<div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-parchment/60"><span className="flex flex-wrap items-center gap-2"><UserRound size={15} className="text-emerald-300" aria-label="Player token"/>{campaign?.combat?.owl&&(campaign.character?.level??1)>=3&&campaign.familiar?.status!=='dismissed'&&campaign.familiar?.status!=='destroyed'&&<Bird size={15} className="text-sky-300" aria-label="Familiar token"/>}{campaign?.combat&&<span className="ml-2 inline-flex flex-wrap gap-1 align-middle" aria-label="Active player statuses">
           {campaign.combat.playerHidden&&<span className="rounded border border-emerald-400/60 px-2 py-0.5 text-emerald-300" title="Hidden from Hide; ends when discovered or revealed">◉ Hidden</span>}
           {campaign.combat.playerProne&&<span className="rounded border border-amber-400/60 px-2 py-0.5 text-amber-200">Prone</span>}

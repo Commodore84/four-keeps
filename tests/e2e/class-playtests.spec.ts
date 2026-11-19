@@ -1077,6 +1077,34 @@ test('iPhone opening has intentional loading, safe retry and one saved opening',
 });
 
 
+test('iPhone adventure preserves reading position and message composer across Player and Map',async({page})=>{
+ test.setTimeout(120000);
+ await page.setViewportSize({width:390,height:844});
+ await createAndImport(page,'rogue');
+ await page.evaluate(()=>{localStorage.setItem('four-keeps-access-code','browser-test-code');localStorage.setItem('four-keeps-dm-mode','on');});
+ const story=Array.from({length:14},(_,i)=>'Waterfront scene '+(i+1)+': The harbor bustles with merchants and sailors.').join('\n\n');
+ await page.route('**/api/dm',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({narration:story,newFacts:[],worldUpdates:{},mapActions:[]})}));
+ await page.reload();
+ await page.getByRole('button',{name:'Campaigns',exact:true}).click();
+ await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await navigate(page,'Adventure');
+ await expect(page.getByLabel('Message the Dungeon Master')).toBeVisible();
+ const opening=page.getByLabel('Dungeon Master narration').first();
+ await expect(opening).toBeVisible();
+ await page.evaluate(()=>window.scrollTo(0,Math.min(350,document.documentElement.scrollHeight-innerHeight)));
+ await page.waitForTimeout(180);
+ const before=await page.evaluate(()=>window.scrollY);
+ await navigate(page,'Player');
+ await navigate(page,'Map');
+ await expect(page.getByRole('img',{name:'Current player location: Dasahi'})).toBeVisible();
+ await navigate(page,'Adventure');
+ await expect(page.getByLabel('Message the Dungeon Master')).toBeVisible();
+ const after=await page.evaluate(()=>window.scrollY);
+ expect(Math.abs(after-before)).toBeLessThan(80);
+ await expect(opening).toBeVisible();
+});
+
+
 test('iPhone compact adventure header uses system wordmark and map shows saved player location',async({page})=>{
  test.setTimeout(120000);
  await page.setViewportSize({width:390,height:844});

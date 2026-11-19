@@ -101,7 +101,15 @@ export function DMNarration({id,text,speed,animate,onComplete}:{id:string;text:s
   },narrationDelay[speed]);
   return ()=>window.clearTimeout(timer);
  },[visible,speed,total,complete,onComplete,layout.width]);
- useEffect(()=>{if(!complete)end.current?.scrollIntoView({behavior:'smooth',block:'nearest'});},[visible,complete]);
+ useEffect(()=>{
+  if(complete||!end.current)return;
+  // Follow progressive narration only while its end is already near the visible reading area.
+  // Do not pull a reader away from an earlier paragraph they scrolled back to inspect.
+  const rect=end.current.getBoundingClientRect();
+  if(rect.top>=0 && rect.top<=window.innerHeight+80){
+   end.current.scrollIntoView({behavior:'smooth',block:'nearest'});
+  }
+ },[visible,complete]);
  let consumed=0;
  return <div ref={container} aria-label="Dungeon Master narration" className="mt-2 space-y-5 leading-7 text-parchment/90" onClick={()=>{if(!complete){setVisible(Number.POSITIVE_INFINITY);onComplete();}}} role={!complete?'button':undefined} tabIndex={!complete?0:undefined} onKeyDown={e=>{if(!complete&&(e.key==='Enter'||e.key===' ')){e.preventDefault();setVisible(Number.POSITIVE_INFINITY);onComplete();}}} title={!complete?'Tap to reveal all narration':undefined}>
   {blocks.map((block,index)=>{
