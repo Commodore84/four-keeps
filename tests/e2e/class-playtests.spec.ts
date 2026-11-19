@@ -1111,3 +1111,51 @@ test('iPhone narration uses paragraphs, speaker dialogue and survives reload',as
  await expect(page.getByLabel('Dungeon Master narration').first().locator('blockquote')).toHaveCount(2);
  expect(calls).toBe(1);
 });
+
+test('iPhone city supplier ordering confirms, persists, delivers and collects once',async({page})=>{
+ test.setTimeout(120000);
+ await createAndImport(page,'rogue');await navigate(page,'Adventure');
+ await page.evaluate(()=>{localStorage.setItem('four-keeps-access-code','browser-test-code');localStorage.setItem('four-keeps-dm-mode','on');});
+ await page.route('**/api/dm',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({narration:'The weaponsmith checks the supplier ledger.',worldUpdates:{},newFacts:[]})}));
+ await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await expect.poll(async()=> (await saved(page))?.journal?.some((entry:any)=>entry.id?.endsWith('-dm-opening'))).toBe(true);
+ await page.evaluate(async()=>{
+  const db=await new Promise<IDBDatabase>((resolve,reject)=>{const req=indexedDB.open('four-keeps-local',1);req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error)});
+  const tx=db.transaction('campaigns','readwrite');const store=tx.objectStore('campaigns');
+  const all=await new Promise<any[]>((resolve,reject)=>{const req=store.getAll();req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error)});
+  const c=all[0];c.merchantStockRemaining={...c.merchantStockRemaining,'location:dasahi:city:weaponsmith:dagger':0};store.put(c);
+  await new Promise<void>((resolve,reject)=>{tx.oncomplete=()=>resolve();tx.onerror=()=>reject(tx.error)});db.close();
+ });
+ await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();await page.getByRole('button',{name:'Continue Adventure'}).click();
+ const input=page.getByLabel('Message the Dungeon Master');
+ await input.fill('Can the blacksmith special-order a dagger that is out of stock?');
+ await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
+ const shop=page.getByLabel('Dasahi marketplace');
+ await expect(shop).toBeVisible();
+ await shop.getByRole('button',{name:'Weaponsmith'}).click();
+ await expect(shop.getByLabel('City supplier orders')).toContainText('Dagger');
+ const before=(await saved(page)).inventoryLedger;
+ await shop.getByRole('button',{name:'Order',exact:true}).first().click();
+ await expect(shop.getByLabel('Confirm supplier order')).toBeVisible();
+ expect((await saved(page)).inventoryLedger).toEqual(before);
+ await shop.getByLabel('Confirm supplier order').getByRole('button',{name:'Confirm order'}).click();
+ await expect.poll(async()=> (await saved(page)).merchantSupplyOrders?.length).toBe(1);
+ expect((await saved(page)).inventoryLedger.gear).toEqual(before.gear);
+ const paid=(await saved(page)).inventoryLedger.currency;
+ await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await expect(page.getByLabel('City supplier orders')).toContainText('Ready at minute');
+ await page.evaluate(async()=>{
+  const db=await new Promise<IDBDatabase>((resolve,reject)=>{const req=indexedDB.open('four-keeps-local',1);req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error)});
+  const tx=db.transaction('campaigns','readwrite');const store=tx.objectStore('campaigns');
+  const all=await new Promise<any[]>((resolve,reject)=>{const req=store.getAll();req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error)});
+  const c=all[0];c.elapsedMinutes=c.merchantSupplyOrders[0].readyAtMinutes;store.put(c);
+  await new Promise<void>((resolve,reject)=>{tx.oncomplete=()=>resolve();tx.onerror=()=>reject(tx.error)});db.close();
+ });
+ await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await page.getByLabel('City supplier orders').getByRole('button',{name:'Collect'}).click();
+ await expect.poll(async()=> (await saved(page)).merchantSupplyOrders?.[0]?.status).toBe('collected');
+ expect((await saved(page)).inventoryLedger.currency).toEqual(paid);
+ await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await expect(page.getByLabel('City supplier orders').getByRole('button',{name:'Collect'})).toHaveCount(0);
+ expect((await saved(page)).merchantSupplyOrders[0].status).toBe('collected');
+});
