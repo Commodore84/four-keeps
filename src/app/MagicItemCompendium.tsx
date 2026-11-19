@@ -18,7 +18,7 @@ export function MagicItemCompendium({campaignId}:{campaignId:string|null}){
  }
  return <section aria-label="Magic Item Compendium" className="space-y-4">
   <h2 className="font-serif text-2xl text-gold">Magic Items</h2>
-  <p className="text-sm text-parchment/75">Browse the 2024 SRD magic-item catalog and mark items you'd like to find. Your choices may inform future DM rewards; they never guarantee an item.</p>
+  <p className="text-sm text-parchment/75">Browse 2024 magic items and mark items you'd like to find. Your choices may inform future DM rewards; they never guarantee an item.</p>
   {!campaignId&&<p className="rounded-lg border border-gold/30 p-3 text-sm">Open a campaign to save a wish list.</p>}
   <div className="flex gap-2"><button type="button" onClick={()=>setTab('all')} aria-pressed={tab==='all'} className={`rounded-lg border px-3 py-2 text-sm ${tab==='all'?'border-gold text-gold':'border-white/20'}`}>Browse All</button><button type="button" onClick={()=>setTab('wishlist')} aria-pressed={tab==='wishlist'} className={`rounded-lg border px-3 py-2 text-sm ${tab==='wishlist'?'border-gold text-gold':'border-white/20'}`}>Wish List ({wanted.length})</button></div>
   <input aria-label="Search magic items" value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search magic items" className="w-full rounded-lg border border-white/20 bg-panel p-3 text-base"/>
@@ -26,6 +26,7 @@ export function MagicItemCompendium({campaignId}:{campaignId:string|null}){
   <p className="text-xs text-parchment/60">{filtered.length} items</p>
   {filtered.map(item=><article key={item.id} className="rounded-xl border border-white/15 bg-panel p-3"><div className="flex items-start gap-3"><button type="button" disabled={!campaignId} aria-label={wanted.includes(item.id)?`Remove ${item.name} from Wish List`:`Add ${item.name} to Wish List`} aria-pressed={wanted.includes(item.id)} onClick={()=>toggle(item.id)} className="rounded-lg border border-white/20 px-3 py-2 text-xl text-gold disabled:opacity-40">{wanted.includes(item.id)?'♥':'♡'}</button><div className="min-w-0 flex-1"><button type="button" aria-expanded={expanded===item.id} onClick={()=>setExpanded(expanded===item.id?null:item.id)} className="text-left font-semibold text-parchment underline decoration-white/20 underline-offset-4">{item.name}</button><p className="mt-1 text-xs text-parchment/65">{item.rarity} · {item.category}{item.attunement?' · Attunement':''}</p>{expanded===item.id&&<p className="mt-3 whitespace-pre-wrap text-sm text-parchment/85">{item.description}</p>}</div></div></article>)}
   {filtered.length===0&&<p className="py-8 text-center text-sm text-parchment/70">No matching items.</p>}
-  <p className="text-xs text-parchment/50">Includes material from the SRD 5.2.1 by Wizards of the Coast LLC, licensed under CC BY 4.0. Catalog data from 5e-bits/5e-database. Non-SRD DMG items are not included.</p>
+  <p className="text-xs text-parchment/50">Includes SRD 5.2.1 material by Wizards of the Coast LLC (CC BY 4.0), plus original brief summaries of additional 2024 DMG items. Non-SRD summaries are for discovery, not complete rules. For authoritative item mechanics, consult the 2024 DMG on D&D Beyond.</p>
+ <a className="text-sm underline text-gold" href="https://www.dndbeyond.com/sources/dnd/dmg-2024" target="_blank" rel="noopener noreferrer">Official 2024 Dungeon Master’s Guide</a>
  </section>;
 }
