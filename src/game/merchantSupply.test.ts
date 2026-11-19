@@ -2,7 +2,7 @@ import {describe,it,expect} from 'vitest';
 import {newCampaign} from './campaign';
 import {beginAdventureSession} from './adventureSession';
 import {prepareCitySupplyOrder,confirmCitySupplyOrder,collectCitySupplyOrder,resupplyTravelingMerchant} from './merchantSupply';
-import {remainingMerchantStock,merchantStockKeyForCampaign} from './frontierShop';
+import {remainingMerchantStock,merchantStockKeyForCampaign,walletCopper} from './frontierShop';
 const fixture=()=>beginAdventureSession({...newCampaign('Supplier','supplier-test'),location:'Dasahi',merchantSettlementTier:'city' as const,characterIdentity:{name:'Tester',speciesId:'elf',backgroundId:'sage',classId:'rogue',draftId:'draft',pronouns:'',appearance:'',personality:'',backstory:''},inventoryLedger:{currency:{GP:100,SP:0,CP:0,EP:0,PP:0},gear:[]}});
 describe('city supplier order lifecycle',()=>{
  it('requires confirmation, charges once, and grants only at collection',()=>{
@@ -10,7 +10,7 @@ describe('city supplier order lifecycle',()=>{
   const quote=prepareCitySupplyOrder(c,'dagger',2,'order-1');
   expect(quote.inventoryLedger?.currency.GP).toBe(100);
   const paid=confirmCitySupplyOrder(JSON.parse(JSON.stringify(quote)),'order-1',true);
-  expect(paid.inventoryLedger?.currency.GP).toBe(96);
+  expect(walletCopper(paid.inventoryLedger?.currency)).toBe(9600);
   expect(paid.inventoryLedger?.gear).toEqual([]);
   expect(()=>confirmCitySupplyOrder(paid,'order-1',true)).toThrow();
   expect(()=>collectCitySupplyOrder(paid,'order-1')).toThrow();
