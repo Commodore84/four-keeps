@@ -1159,3 +1159,33 @@ test('iPhone city supplier ordering confirms, persists, delivers and collects on
  await expect(page.getByLabel('City supplier orders').getByRole('button',{name:'Collect'})).toHaveCount(0);
  expect((await saved(page)).merchantSupplyOrders[0].status).toBe('collected');
 });
+
+test('iPhone traveling merchant registers a route and resupplies only after validated arrival',async({page})=>{
+ test.setTimeout(120000);
+ await createAndImport(page,'rogue');await navigate(page,'Adventure');
+ await page.evaluate(()=>{localStorage.setItem('four-keeps-access-code','browser-test-code');localStorage.setItem('four-keeps-dm-mode','on');});
+ await page.route('**/api/dm',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({narration:'The trader follows the road.',worldUpdates:{},newFacts:[],travelDestination:'crossroads'})}));
+ await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await expect.poll(async()=> (await saved(page))?.journal?.some((entry:any)=>entry.id?.endsWith('-dm-opening'))).toBe(true);
+ await page.evaluate(async()=>{
+  const db=await new Promise<IDBDatabase>((resolve,reject)=>{const req=indexedDB.open('four-keeps-local',1);req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error)});
+  const tx=db.transaction('campaigns','readwrite');const store=tx.objectStore('campaigns');
+  const all=await new Promise<any[]>((resolve,reject)=>{const req=store.getAll();req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error)});
+  const c=all[0];c.merchantSettlementTier='traveling';c.merchantShopType='trader';c.merchantShopOpen=true;c.merchantStockRemaining={...c.merchantStockRemaining,['traveler:'+c.id+':traveling:trader:torch']:0};store.put(c);
+  await new Promise<void>((resolve,reject)=>{tx.oncomplete=()=>resolve();tx.onerror=()=>reject(tx.error)});db.close();
+ });
+ await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();await page.getByRole('button',{name:'Continue Adventure'}).click();
+ const shop=page.getByLabel('Traveling merchant',{exact:true});await expect(shop).toBeVisible();
+ await expect(shop.getByLabel('Traveling merchant supply route')).toBeVisible();
+ expect((await saved(page)).merchantTraderResupply).toBeUndefined();
+ await shop.getByRole('button',{name:'Begin verified supply route'}).click();
+ await expect.poll(async()=> (await saved(page)).merchantTraderRoute?.nextStopIndex).toBe(1);
+ expect((await saved(page)).merchantTraderResupply).toBeUndefined();
+ await page.getByLabel('Message the Dungeon Master').fill('Travel along the road to the crossroads');
+ await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
+ await expect.poll(async()=> (await saved(page)).merchantTraderRoute?.nextStopIndex).toBe(2);
+ const arrived=await saved(page);expect(Object.keys(arrived.merchantTraderResupply??{})).toHaveLength(1);
+ expect(arrived.merchantStockRemaining['traveler:'+arrived.id+':traveling:trader:torch']).toBeGreaterThan(0);
+ await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();await page.getByRole('button',{name:'Continue Adventure'}).click();
+ expect(Object.keys((await saved(page)).merchantTraderResupply??{})).toHaveLength(1);
+});
