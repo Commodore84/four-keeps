@@ -4,7 +4,7 @@ import {applyAnchamidaActions} from '../game/anchamidaActions';
 import {AnchamidaRegionMap} from './AnchamidaRegionMap';
 import {MerchantShop} from './MerchantShop';
 import {DMNarration,type NarrationSpeed} from './DMNarration';
-import {parseFrontierPurchase,prepareMerchantPurchase,settleMerchantPurchase,frontierShopStock,formatFrontierPrice,isMerchantNegotiationRequest,isMerchantPurchaseRequest,classifyMerchantIntent,merchantNegotiationTarget,beginMerchantNegotiation,resolveMerchantNegotiation} from '../game/frontierShop';
+import {parseFrontierPurchase,prepareMerchantPurchase,prepareMerchantCart,settleMerchantPurchase,frontierShopStock,formatFrontierPrice,isMerchantNegotiationRequest,isMerchantPurchaseRequest,classifyMerchantIntent,merchantNegotiationTarget,beginMerchantNegotiation,resolveMerchantNegotiation} from '../game/frontierShop';
 import {classSummary} from '../game/creationClasses';
 import {completePlayerRest,playerLongRestWaitMinutes} from '../game/playerRecovery';
 import {frontierMerchantContext} from '../game/frontierShop';
@@ -137,7 +137,7 @@ const tabs = [
   { id: 'development', label: 'Developer', Icon: Blocks },
 ] as const;
 
-function Adventure({ campaign, fullHistory, onToggleHistory, onAdventureChange, onStartOpening, onRetryAction, onShopClose, onShopPrepare, onShopSettle, saving, openingError, narrationSpeed, development = false }: { campaign: Campaign | null; fullHistory: boolean; onToggleHistory: () => void; onAdventureChange:(next:Campaign,message:string)=>Promise<boolean>|boolean|void; onStartOpening:()=>Promise<void>; onRetryAction:()=>Promise<void>; onShopClose:()=>Promise<void>; onShopPrepare:(id:string,quantity:number)=>Promise<void>; onShopSettle:(confirmed:boolean)=>Promise<void>; saving:boolean; openingError:string|null; narrationSpeed:NarrationSpeed; development?:boolean }) {
+function Adventure({ campaign, fullHistory, onToggleHistory, onAdventureChange, onStartOpening, onRetryAction, onShopClose, onShopPrepare, onShopSettle, saving, openingError, narrationSpeed, development = false }: { campaign: Campaign | null; fullHistory: boolean; onToggleHistory: () => void; onAdventureChange:(next:Campaign,message:string)=>Promise<boolean>|boolean|void; onStartOpening:()=>Promise<void>; onRetryAction:()=>Promise<void>; onShopClose:()=>Promise<void>; onShopPrepare:(items:{itemId:string;quantity:number}[])=>Promise<void>; onShopSettle:(confirmed:boolean)=>Promise<void>; saving:boolean; openingError:string|null; narrationSpeed:NarrationSpeed; development?:boolean }) {
   const endRef = useRef<HTMLDivElement>(null);
   const shopRef = useRef<HTMLDivElement>(null);
   useEffect(()=>{if(campaign?.merchantShopOpen && campaign.adventureSession?.site==='frontier' && campaign.adventureSession.status==='exploring')shopRef.current?.scrollIntoView({behavior:'instant',block:'start'});},[campaign?.merchantShopOpen,campaign?.adventureSession?.site,campaign?.adventureSession?.status]);
@@ -686,10 +686,10 @@ export function App() {
     if(!campaign||saving||campaign.pendingMerchantPurchase)return;
     setSaving(true);try{await saveMerchantShop({...campaign,merchantShopOpen:false});}catch(error){setNotice('Shop error: '+String(error));}finally{setSaving(false);}
   }
-  async function prepareShopPurchase(itemId:string,quantity:number){
+  async function prepareShopPurchase(items:{itemId:string;quantity:number}[]){
     if(!campaign||saving)return;
     setSaving(true);try{
-      const next=prepareMerchantPurchase({...campaign,merchantShopOpen:true},itemId,quantity,crypto.randomUUID());
+      const next=prepareMerchantCart({...campaign,merchantShopOpen:true},items,crypto.randomUUID());
       await saveMerchantShop(next);setNotice('Review the purchase before confirming.');
     }catch(error){setNotice('Shopkeeper: '+String(error));}finally{setSaving(false);}
   }
@@ -698,8 +698,7 @@ export function App() {
     setSaving(true);try{
       const pending=campaign.pendingMerchantPurchase;
       const next=settleMerchantPurchase(campaign,pending.id,confirmed);
-      const item=frontierShopStock.find(item=>item.id===pending.itemId);
-      const message=confirmed?`Purchased ${pending.quantity} × ${item?.name} for ${formatFrontierPrice(pending.quantity*pending.unitCostCp)}.`:'Purchase canceled; no money was spent.';
+      const message=confirmed?'Purchased '+(pending.lines??[{itemId:pending.itemId,quantity:pending.quantity,unitCostCp:pending.unitCostCp}]).map(line=>line.quantity+' × '+(frontierShopStock.find(item=>item.id===line.itemId)?.name??'item')).join(', ')+'.':'Purchase canceled; no money was spent.';
       await saveMerchantShop(addExchange(next,confirmed?'I confirm the purchase.':'I cancel the purchase.',message));
       setNotice(message);
     }catch(error){setNotice('Purchase error: '+String(error));}finally{setSaving(false);}

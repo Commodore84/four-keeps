@@ -643,7 +643,7 @@ test('new Rogue starts at Frontier Village, buys supplies, and sees persisted Pl
  await expect.poll(async()=>Boolean((await saved(page)).pendingAdventureAction)).toBe(false);
  expect((await saved(page)).inventoryLedger).toEqual(before);
  await expect(page.getByText('The merchant cannot prepare that purchase')).toHaveCount(0);
- await page.getByLabel('Message the Dungeon Master').fill('Show me your inventory');
+ await page.getByLabel('Message the Dungeon Master').fill("I'd like to browse");
  await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
  const shop=page.getByLabel('Dasahi general store');
  await expect(shop).toBeVisible();
@@ -659,9 +659,9 @@ test('new Rogue starts at Frontier Village, buys supplies, and sees persisted Pl
    return rect.top<window.innerHeight-120 && rect.bottom>120;
  })).toBe(true);
  await expect(shop.getByLabel('Current wallet')).toBeVisible();
- await expect(shop.getByRole('table',{name:'Merchant inventory'})).toContainText('Dagger');
- await shop.getByRole('button',{name:/Dagger/}).click();
- await shop.getByLabel('Purchase quantity').fill('1');
+ await expect(shop.getByLabel('Merchant inventory')).toContainText('Dagger');
+ await shop.getByRole('button',{name:'Add Dagger'}).click();
+ await expect(shop.getByLabel('Dagger',{exact:true})).toContainText('in inventory');
  await shop.getByRole('button',{name:'Review purchase'}).click();
  await expect(shop.getByLabel('Confirm merchant purchase')).toBeVisible();
  expect((await saved(page)).inventoryLedger).toEqual(before);
@@ -671,8 +671,9 @@ test('new Rogue starts at Frontier Village, buys supplies, and sees persisted Pl
  await expect(page.getByLabel('Dasahi general store')).toBeVisible();
  expect((await saved(page)).inventoryLedger).toEqual(before);
  const shopAfterCancel=page.getByLabel('Dasahi general store');
- await shopAfterCancel.getByRole('button',{name:/Rope/}).click();
- await shopAfterCancel.getByLabel('Purchase quantity').fill('2');
+ await shopAfterCancel.getByRole('button',{name:'Add Rope'}).click();
+ await shopAfterCancel.getByRole('button',{name:'Add Rope'}).click();
+ await shopAfterCancel.getByRole('button',{name:'Add Torch'}).click();
  await shopAfterCancel.getByRole('button',{name:'Review purchase'}).click();
  await expect(shopAfterCancel.getByLabel('Confirm merchant purchase')).toContainText('2 × Rope');
  await shopAfterCancel.getByLabel('Confirm merchant purchase').getByRole('button',{name:'Confirm purchase'}).click();
@@ -762,7 +763,7 @@ test('merchant catalog reflects finite stock and refuses unavailable quantities'
  const input=page.getByLabel('Message the Dungeon Master');
  const send=page.getByRole('button',{name:'Send message to Dungeon Master'});
  await input.fill('What do you sell?');await send.click();
- await expect(page.getByLabel('Dasahi general store').getByRole('button',{name:/Dagger/})).toContainText('8 in stock');
+ await expect(page.getByLabel('Dasahi general store').getByLabel('Dagger',{exact:true})).toContainText('8 in stock');
  await input.fill('I will buy 9 daggers');await send.click();
  await expect(page.getByText(/not have enough stock/)).toBeVisible();
  expect((await saved(page)).pendingMerchantPurchase).toBeUndefined();

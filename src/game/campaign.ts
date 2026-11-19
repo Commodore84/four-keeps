@@ -21,7 +21,7 @@ export interface Campaign {
   companionEncounter?:CompanionEncounter;
   adventureSession?:AdventureSession;
   merchantShopOpen?:boolean;
-  pendingMerchantPurchase?:{id:string;itemId:string;quantity:number;unitCostCp:number};
+  pendingMerchantPurchase?:{id:string;itemId:string;quantity:number;unitCostCp:number;lines?:{itemId:string;quantity:number;unitCostCp:number}[]};
   merchantStockRemaining?:Record<string,number>;
   merchantDiscount?:{itemId:string;percent:number;approvalId:string};
   pendingMerchantNegotiation?:{itemId:string;checkToken:string};

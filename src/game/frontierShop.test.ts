@@ -1,7 +1,7 @@
 import {describe,it,expect} from 'vitest';
 import {newCampaign} from './campaign';
 import {beginAdventureSession} from './adventureSession';
-import {buyFrontierItem,frontierShopStock,frontierMerchantContext,formatFrontierPrice,parseFrontierPurchase,prepareMerchantPurchase,settleMerchantPurchase,walletCopper,remainingMerchantStock,merchantCatalog,isMerchantBrowseRequest,approveMerchantDiscount,isMerchantPurchaseRequest,classifyMerchantIntent,merchantNegotiationTarget,beginMerchantNegotiation,resolveMerchantNegotiation} from './frontierShop';
+import {buyFrontierItem,frontierShopStock,frontierMerchantContext,formatFrontierPrice,parseFrontierPurchase,prepareMerchantPurchase,prepareMerchantCart,settleMerchantPurchase,walletCopper,remainingMerchantStock,merchantCatalog,isMerchantBrowseRequest,approveMerchantDiscount,isMerchantPurchaseRequest,classifyMerchantIntent,merchantNegotiationTarget,beginMerchantNegotiation,resolveMerchantNegotiation} from './frontierShop';
 function fixture(){const c=newCampaign('Shop','shop-test');return beginAdventureSession({...c,characterIdentity:{name:'Test',speciesId:'elf',backgroundId:'sage',classId:'rogue',draftId:'draft',pronouns:'',appearance:'',personality:'',backstory:''},inventoryLedger:{currency:{GP:10,SP:0,CP:0,EP:0,PP:0},gear:[]}})}
 describe('deterministic merchant negotiation check lifecycle',()=>{
  const pending=(token='social-1')=>({...fixture(),pendingCheck:{token,skill:'Persuasion' as const,mode:'normal' as const,reason:'Negotiate the dagger price'}});
@@ -69,7 +69,7 @@ describe('2024 merchant catalog compatibility and ammunition',()=>{
  });
 });
 describe('first visit shop',()=>{
- it('shows standard prices in gold, silver and copper',()=>{expect(formatFrontierPrice(200)).toBe('2 GP');expect(formatFrontierPrice(125)).toBe('1.25 GP');expect(formatFrontierPrice(5)).toBe('0.05 GP');expect(formatFrontierPrice(0)).toBe('0 GP')});
+ it('shows standard prices in gold, silver and copper',()=>{expect(formatFrontierPrice(200)).toBe('2 GP');expect(formatFrontierPrice(125)).toBe('1.25 GP');expect(formatFrontierPrice(5)).toBe('5 CP');expect(formatFrontierPrice(0)).toBe('0 CP')});
  it('uses the canonical item catalog and deducts exact copper pieces',()=>{const item=frontierShopStock.find(i=>i.id==='dagger')!;expect(item.costCp).toBe(200);const c=buyFrontierItem(fixture(),'dagger',2);expect(c.inventoryLedger?.currency.GP).toBe(6);expect(c.inventoryLedger?.gear).toContainEqual({name:'Dagger',quantity:2});expect(JSON.parse(JSON.stringify(c)).inventoryLedger.gear[0].quantity).toBe(2)});
  it('does not mutate a campaign on invalid, unavailable or unaffordable purchases',()=>{const c=fixture();for(const [id,q] of [['dagger',21],['greatsword',1],['dagger',6]] as const)expect(()=>buyFrontierItem(c,id,q)).toThrow();expect(c.inventoryLedger?.currency.GP).toBe(10)});
  it('exposes authoritative shop prices and wallet to merchant conversation without transactions',()=>{const c=fixture();const ctx=frontierMerchantContext(c)!;expect(ctx.items).toContainEqual({id:'potion-of-healing',name:'Potion of Healing',costCp:5000,packQuantity:1,remaining:3});expect(ctx.walletCp).toBe(1000);expect(ctx.purchaseRule).toContain('explicit confirmation');expect(c.inventoryLedger?.gear).toEqual([])});
@@ -153,5 +153,39 @@ describe('natural DM intent does not become a transaction',()=>{
   const pending=prepareMerchantPurchase(fixture(),'dagger',1,'safe-intent');
   expect(pending.pendingMerchantPurchase).toBeDefined();
   expect(settleMerchantPurchase(pending,'safe-intent',false).inventoryLedger?.currency.GP).toBe(10);
+ });
+});
+
+describe('multi-item merchant cart',()=>{
+ it('opens browsing directly but does not misclassify finding a craftsperson',()=>{
+  expect(classifyMerchantIntent("I'd like to browse")).toBe('browse');
+  expect(classifyMerchantIntent('Can I see the merchandise?')).toBe('information');
+  expect(classifyMerchantIntent('Where can I find a leatherworker?')).toBe('find-service');
+ });
+ it('quotes multiple items, persists, confirms once and updates exact inventory and currency',()=>{
+  const c=fixture();
+  const quoted=prepareMerchantCart(c,[{itemId:'dagger',quantity:1},{itemId:'torch',quantity:3}],'cart-1');
+  expect(quoted.inventoryLedger).toEqual(c.inventoryLedger);
+  expect(quoted.pendingMerchantPurchase?.lines).toHaveLength(2);
+  const restored=JSON.parse(JSON.stringify(quoted));
+  const paid=settleMerchantPurchase(restored,'cart-1',true);
+  expect(paid.inventoryLedger?.gear.find(item=>item.name==='Dagger')?.quantity).toBe(1);
+  expect(paid.inventoryLedger?.gear.find(item=>item.name==='Torch')?.quantity).toBe(3);
+  expect(walletCopper(paid.inventoryLedger?.currency)).toBe(walletCopper(c.inventoryLedger?.currency)-203);
+  expect(()=>settleMerchantPurchase(paid,'cart-1',true)).toThrow();
+ });
+ it('rejects duplicate items, insufficient total funds, and cancellation without changing stock',()=>{
+  const c=fixture();
+  expect(()=>prepareMerchantCart(c,[{itemId:'dagger',quantity:1},{itemId:'dagger',quantity:1}],'dup')).toThrow();
+  expect(()=>prepareMerchantCart(c,[{itemId:'dagger',quantity:8},{itemId:'rope',quantity:12}],'expensive')).toThrow();
+  const pending=prepareMerchantCart(c,[{itemId:'dagger',quantity:1},{itemId:'torch',quantity:1}],'cancel');
+  const canceled=settleMerchantPurchase(pending,'cancel',false);
+  expect(canceled.inventoryLedger).toEqual(c.inventoryLedger);
+  expect(canceled.merchantStockRemaining).toEqual(c.merchantStockRemaining);
+ });
+ it('formats copper and silver naturally',()=>{
+  expect(formatFrontierPrice(1)).toBe('1 CP');
+  expect(formatFrontierPrice(50)).toBe('5 SP');
+  expect(formatFrontierPrice(200)).toBe('2 GP');
  });
 });

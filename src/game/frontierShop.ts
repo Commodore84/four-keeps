@@ -4,7 +4,7 @@ import {OFFICIAL_EQUIPMENT_2024} from './officialEquipment2024';
 
 export function formatFrontierPrice(copper:number):string {
  if(!Number.isSafeInteger(copper)||copper<0)throw Error('Invalid copper amount.');
- return `${(copper/100).toFixed(2).replace(/\.00$/,'').replace(/(\.\d)0$/,'$1')} GP`;
+ return copper>=100 ? (copper/100).toFixed(2).replace(/\.00$/,'').replace(/(\.\d)0$/,'$1')+' GP' : copper>=10 ? (copper/10).toFixed(1).replace(/\.0$/,'')+' SP' : copper+' CP';
 }
 export function walletCopper(currency:Partial<Record<'CP'|'SP'|'EP'|'GP'|'PP',number>> = {}):number {
  return (currency.CP??0)+10*(currency.SP??0)+50*(currency.EP??0)+100*(currency.GP??0)+1000*(currency.PP??0);
@@ -15,7 +15,7 @@ export const FRONTIER_INITIAL_STOCK:Record<string,number>={dagger:8,rope:12,torc
 export const frontierShopStock=FRONTIER_SHOP_IDS.map(id=>ITEM_BY_ID[id]).filter((item):item is NonNullable<typeof item>=>Boolean(item)&&OFFICIAL_EQUIPMENT_2024.some(canonical=>canonical===item));
 export function remainingMerchantStock(campaign:Campaign,itemId:string):number {return campaign.merchantStockRemaining?.[itemId]??FRONTIER_INITIAL_STOCK[itemId]??0;}
 export function merchantCatalog(campaign:Campaign):string {return frontierShopStock.map(item=>item.name+": "+formatFrontierPrice(item.costCp)+(item.packQuantity?" per pack of "+item.packQuantity:" each")+" ("+remainingMerchantStock(campaign,item.id)+" available)").join("; ");}
-export function isMerchantBrowseRequest(message:string):boolean {return /\b(what (?:do you|have you|are you) (?:sell|stock|carry|have)|show (?:me )?(?:your )?(?:wares|inventory|stock)|(?:list|catalog|inventory|price list|prices|wares|for sale))\b/i.test(message);}
+export function isMerchantBrowseRequest(message:string):boolean {return /\b(what (?:do you|have you|are you) (?:sell|stock|carry|have)|show (?:me )?(?:your )?(?:wares|inventory|stock)|(?:list|catalog|inventory|price list|prices|wares|for sale)|brows(?:e|ing)|look (?:at|through) (?:your |the )?(?:goods|wares|stock|merchandise))\b/i.test(message);}
 export function merchantNegotiationTarget(message:string):string|null {
  if(!isMerchantNegotiationRequest(message))return null;
  const matches=frontierShopStock.filter(item=>{
@@ -99,6 +99,19 @@ export function prepareMerchantPurchase(campaign:Campaign,itemId:string,quantity
  if(walletCopper(campaign.inventoryLedger?.currency)<unitCost*quantity)throw Error('Insufficient gold.');
  return {...campaign,pendingMerchantPurchase:{id,itemId,quantity,unitCostCp:unitCost}};
 }
+export type MerchantCartLine={itemId:string;quantity:number;unitCostCp:number};
+export function prepareMerchantCart(campaign:Campaign,items:{itemId:string;quantity:number}[],id:string):Campaign {
+ if(campaign.pendingMerchantPurchase)throw Error('Finish the existing purchase first.');
+ if(!items.length||items.length>frontierShopStock.length||new Set(items.map(x=>x.itemId)).size!==items.length)throw Error('Invalid cart.');
+ const lines:MerchantCartLine[]=[];
+ for(const {itemId,quantity} of items){
+  const prepared=prepareMerchantPurchase(campaign,itemId,quantity,id);
+  const pending=prepared.pendingMerchantPurchase!;
+  lines.push({itemId,quantity,unitCostCp:pending.unitCostCp});
+ }
+ if(lines.reduce((sum,line)=>sum+line.unitCostCp*line.quantity,0)>walletCopper(campaign.inventoryLedger?.currency))throw Error('Insufficient money.');
+ return {...campaign,pendingMerchantPurchase:{id,itemId:lines[0].itemId,quantity:lines[0].quantity,unitCostCp:lines[0].unitCostCp,lines}};
+}
 export function settleMerchantPurchase(campaign:Campaign,id:string,confirmed:boolean):Campaign {
  const pending=campaign.pendingMerchantPurchase;
  if(!pending||pending.id!==id)throw Error('No matching pending purchase.');
@@ -107,7 +120,14 @@ export function settleMerchantPurchase(campaign:Campaign,id:string,confirmed:boo
  const item=frontierShopStock.find(i=>i.id===pending.itemId);
  const discount=campaign.merchantDiscount?.itemId===pending.itemId?campaign.merchantDiscount.percent:0;
  if(!item||item.costCp-Math.floor(item.costCp*discount/100)!==pending.unitCostCp)throw Error('Merchant price changed; request a new quote.');
- const bought=buyFrontierItem(campaign,pending.itemId,pending.quantity);
+ const lines=pending.lines??[{itemId:pending.itemId,quantity:pending.quantity,unitCostCp:pending.unitCostCp}];
+ let bought=campaign;
+ for(const line of lines){
+  const item=frontierShopStock.find(i=>i.id===line.itemId);
+  const discount=bought.merchantDiscount?.itemId===line.itemId?bought.merchantDiscount.percent:0;
+  if(!item||item.costCp-Math.floor(item.costCp*discount/100)!==line.unitCostCp)throw Error('Merchant price changed; request a new quote.');
+  bought=buyFrontierItem(bought,line.itemId,line.quantity);
+ }
  return {...bought,pendingMerchantPurchase:undefined,completedMerchantPurchaseIds:[...(campaign.completedMerchantPurchaseIds??[]),id]};
 }
 

@@ -91,7 +91,7 @@ export function DMNarration({id,text,speed,animate,onComplete}:{id:string;text:s
    const start=consumed;consumed+=lines[index].length;
    if(visible<=start)return null;
    const shown=lines[index].slice(0,Math.min(lines[index].length,visible-start));
-   const content=shown.map((line,lineIndex)=><span key={lineIndex} className="dm-narration-line block">{line}</span>);
+   const content=shown.map((line,lineIndex)=><span key={lineIndex} className="dm-narration-line block">{line}{' '} </span>);
    return block.kind==='dialogue'
     ?<blockquote key={id+'-'+index} className="border-l-2 border-gold/70 pl-4">
       {block.speaker&&<div className="mb-1 text-sm font-semibold text-gold">{block.speaker}</div>}
