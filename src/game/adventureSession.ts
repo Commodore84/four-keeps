@@ -1,5 +1,7 @@
 import type {Campaign} from './campaign';
 import {startUnifiedEncounter,addCompanionEnemy} from './companionEncounter';
+import {resupplyTravelingMerchant} from './merchantSupply';
+import {settlementTier} from './frontierShop';
 export type AdventureSite='frontier'|'crossroads'|'watchtower';
 export interface AdventureSession {
  status:'exploring'|'encounter';site:AdventureSite;characterSource:'campaign-character';
@@ -35,11 +37,28 @@ export function beginAdventureSession(campaign:Campaign,now=new Date().toISOStri
  const session:AdventureSession={status:'exploring',site:'frontier',characterSource:'campaign-character',visited:['frontier'],interactions:[]};
  return {...campaign,adventureSession:session,location:campaign.characterBuild?'Dasahi':ADVENTURE_SITES.frontier.name,updatedAt:now,journal:[...campaign.journal,{id:campaign.id+'-adventure-start',kind:'system',text:'Adventure session started with the saved campaign character.',createdAt:now}]};
 }
+/** Register an explicit route before travel. A DM narration cannot create or complete a leg. */
+export function beginTravelingMerchantRoute(campaign:Campaign,routeId:string,stops:AdventureSite[]):Campaign{
+ const session=campaign.adventureSession;
+ if(settlementTier(campaign)!=='traveling'||!session||session.status!=='exploring')throw Error('A traveling merchant must be exploring to begin a route.');
+ if(!/^[a-z0-9][a-z0-9-]{2,63}$/i.test(routeId)||stops.length<2||stops.length>12||stops[0]!==session.site)throw Error('Invalid merchant route manifest.');
+ if(stops.some((site,i)=>i>0&&!ADVENTURE_SITES[stops[i-1]]?.neighbors.includes(site)))throw Error('Merchant route must follow adjacent verified sites.');
+ if(campaign.merchantTraderRoute&&campaign.merchantTraderRoute.nextStopIndex<campaign.merchantTraderRoute.stops.length)throw Error('Complete the current merchant route first.');
+ if((campaign.merchantTraderResupply&&Object.keys(campaign.merchantTraderResupply).some(k=>k.startsWith(routeId+':')))||campaign.merchantTraderRoute?.id===routeId)throw Error('Route ID already used.');
+ return {...campaign,merchantTraderRoute:{id:routeId,stops:[...stops],nextStopIndex:1,completedArrivalIds:[]}};
+}
 export function travelAdventure(campaign:Campaign,destination:AdventureSite,now=new Date().toISOString()):Campaign{
  const session=campaign.adventureSession;
  if(!session||session.status!=='exploring')throw Error('Adventure exploration is not active');
  if(!ADVENTURE_SITES[session.site].neighbors.includes(destination))throw Error('Destination is not adjacent');
- return {...campaign,adventureSession:{...session,site:destination,visited:session.visited.includes(destination)?session.visited:[...session.visited,destination]},location:adventureSiteForCampaign(campaign,destination).name,updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:'Travelled to '+adventureSiteForCampaign(campaign,destination).name+'. '+adventureSiteForCampaign(campaign,destination).description,createdAt:now}]};
+ const route=campaign.merchantTraderRoute;
+ if(route&&route.nextStopIndex<route.stops.length&&(settlementTier(campaign)!=='traveling'||route.stops[route.nextStopIndex]!==destination||route.stops[route.nextStopIndex-1]!==session.site))throw Error('Travel must follow the verified merchant route.');
+ const traveled={...campaign,adventureSession:{...session,site:destination,visited:session.visited.includes(destination)?session.visited:[...session.visited,destination]},location:adventureSiteForCampaign(campaign,destination).name,updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system' as const,text:'Travelled to '+adventureSiteForCampaign(campaign,destination).name+'. '+adventureSiteForCampaign(campaign,destination).description,createdAt:now}]};
+ if(!route||route.nextStopIndex>=route.stops.length)return traveled;
+ const arrivalId='leg-'+route.nextStopIndex+'-'+destination;
+ if(route.completedArrivalIds.includes(arrivalId))throw Error('Merchant route arrival already processed.');
+ const arrived={...traveled,merchantTraderRoute:{...route,nextStopIndex:route.nextStopIndex+1,completedArrivalIds:[...route.completedArrivalIds,arrivalId]}};
+ return resupplyTravelingMerchant(arrived,route.id,arrivalId);
 }
 export function interactAdventure(campaign:Campaign,choiceId:string,now=new Date().toISOString()):Campaign{
  const session=campaign.adventureSession;
