@@ -239,7 +239,7 @@ describe('merchant-specific persistent purchases',()=>{
   const paid=settleMerchantPurchase(restored,'city-dagger',true);
   expect(paid.merchantStockRemaining?.['city:weaponsmith:dagger']).toBe(merchantInitialStock('city','dagger','weaponsmith')-2);
   expect(walletCopper(paid.inventoryLedger?.currency)).toBe(600);
-  expect(remainingMerchantStock(paid,'dagger','weaponsmith')).toBe(9997);
+  expect(remainingMerchantStock(paid,'dagger','weaponsmith')).toBe(merchantInitialStock('city','dagger','weaponsmith')-2);
   expect(()=>settleMerchantPurchase(paid,'city-dagger',true)).toThrow();
  });
  it('refuses a weapon purchase from the city general store',()=>{
