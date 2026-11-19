@@ -7,8 +7,28 @@ import dmg5 from './dmg2024MagicItems5.json';
 import dmg6 from './dmg2024MagicItems6.json';
 import dmg7 from './dmg2024MagicItems7.json';
 import dmg8 from './dmg2024MagicItems8.json';
-export type MagicItem = (typeof catalog)[number];
-export const MAGIC_ITEMS: MagicItem[] = [...catalog,...dmg1,...dmg2,...dmg3,...dmg4,...dmg5,...dmg6,...dmg7,...dmg8];
+// Rights metadata is descriptive, not a runtime access control or a legal clearance.
+export type ContentRights = 'srd-5.2.1' | 'non-srd' | 'original';
+export type ContentProvenance = {
+  source: string;
+  rights: ContentRights;
+  license: string | null;
+};
+export type MagicItem = (typeof catalog)[number] & ContentProvenance;
+const srdProvenance: ContentProvenance = {
+  source: 'SRD 5.2.1',
+  rights: 'srd-5.2.1',
+  license: 'CC BY 4.0',
+};
+const dmgProvenance: ContentProvenance = {
+  source: '2024 Dungeon Master’s Guide',
+  rights: 'non-srd',
+  license: null,
+};
+export const MAGIC_ITEMS: MagicItem[] = [
+  ...catalog.map(item => ({...item,...srdProvenance})),
+  ...[...dmg1,...dmg2,...dmg3,...dmg4,...dmg5,...dmg6,...dmg7,...dmg8].map(item => ({...item,...dmgProvenance})),
+];
 const prefix = 'four-keeps-magic-wishlist:';
 export function readMagicWishlist(campaignId:string):string[] {
   if (!campaignId) return [];
