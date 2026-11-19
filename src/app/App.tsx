@@ -137,7 +137,7 @@ const tabs = [
   { id: 'development', label: 'Developer', Icon: Blocks },
 ] as const;
 
-function Adventure({ campaign, fullHistory, onToggleHistory, onAdventureChange, onStartOpening, onRetryAction, onShopClose, onShopPrepare, onShopSettle, saving, openingError, narrationSpeed, development = false }: { campaign: Campaign | null; fullHistory: boolean; onToggleHistory: () => void; onAdventureChange:(next:Campaign,message:string)=>Promise<boolean>|boolean|void; onStartOpening:()=>Promise<void>; onRetryAction:()=>Promise<void>; onShopClose:()=>Promise<void>; onShopPrepare:(items:{itemId:string;quantity:number}[])=>Promise<void>; onShopSettle:(confirmed:boolean)=>Promise<void>; saving:boolean; openingError:string|null; narrationSpeed:NarrationSpeed; development?:boolean }) {
+function Adventure({ campaign, fullHistory, onToggleHistory, onAdventureChange, onStartOpening, onRetryAction, onShopClose, onShopPrepare, onShopSettle, saving, openingError, narrationSpeed, development = false }: { campaign: Campaign | null; fullHistory: boolean; onToggleHistory: () => void; onAdventureChange:(next:Campaign,message:string)=>Promise<boolean>|boolean|void; onStartOpening:()=>Promise<void>; onRetryAction:()=>Promise<void>; onShopClose:()=>Promise<void>; onShopPrepare:(items:{itemId:string;quantity:number}[],merchant:import('../game/frontierShop').MerchantType)=>Promise<void>; onShopSettle:(confirmed:boolean)=>Promise<void>; saving:boolean; openingError:string|null; narrationSpeed:NarrationSpeed; development?:boolean }) {
   const endRef = useRef<HTMLDivElement>(null);
   const shopRef = useRef<HTMLDivElement>(null);
   useEffect(()=>{if(campaign?.merchantShopOpen && campaign.adventureSession?.site==='frontier' && campaign.adventureSession.status==='exploring')shopRef.current?.scrollIntoView({behavior:'instant',block:'start'});},[campaign?.merchantShopOpen,campaign?.adventureSession?.site,campaign?.adventureSession?.status]);
@@ -686,10 +686,10 @@ export function App() {
     if(!campaign||saving||campaign.pendingMerchantPurchase)return;
     setSaving(true);try{await saveMerchantShop({...campaign,merchantShopOpen:false});}catch(error){setNotice('Shop error: '+String(error));}finally{setSaving(false);}
   }
-  async function prepareShopPurchase(items:{itemId:string;quantity:number}[]){
+  async function prepareShopPurchase(items:{itemId:string;quantity:number}[],merchant:import('../game/frontierShop').MerchantType){
     if(!campaign||saving)return;
     setSaving(true);try{
-      const next=prepareMerchantCart({...campaign,merchantShopOpen:true},items,crypto.randomUUID());
+      const next=prepareMerchantCart({...campaign,merchantShopOpen:true,merchantShopType:merchant},items,crypto.randomUUID());
       await saveMerchantShop(next);setNotice('Review the purchase before confirming.');
     }catch(error){setNotice('Shopkeeper: '+String(error));}finally{setSaving(false);}
   }

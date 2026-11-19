@@ -1,8 +1,8 @@
 import {describe,it,expect} from 'vitest';
 import {newCampaign} from './campaign';
 import {beginAdventureSession} from './adventureSession';
-import {buyFrontierItem,frontierShopStock,frontierMerchantContext,formatFrontierPrice,parseFrontierPurchase,prepareMerchantPurchase,prepareMerchantCart,settleMerchantPurchase,cityShopStock,walletCopper,remainingMerchantStock,merchantCatalog,isMerchantBrowseRequest,approveMerchantDiscount,isMerchantPurchaseRequest,classifyMerchantIntent,merchantNegotiationTarget,beginMerchantNegotiation,resolveMerchantNegotiation} from './frontierShop';
-function fixture(){const c=newCampaign('Shop','shop-test');return beginAdventureSession({...c,characterIdentity:{name:'Test',speciesId:'elf',backgroundId:'sage',classId:'rogue',draftId:'draft',pronouns:'',appearance:'',personality:'',backstory:''},inventoryLedger:{currency:{GP:10,SP:0,CP:0,EP:0,PP:0},gear:[]}})}
+import {buyFrontierItem,frontierShopStock,frontierMerchantContext,formatFrontierPrice,parseFrontierPurchase,prepareMerchantPurchase,prepareMerchantCart,settleMerchantPurchase,cityShopStock,merchantCatalogFor,availableMerchants,merchantStockKey,walletCopper,remainingMerchantStock,merchantCatalog,isMerchantBrowseRequest,approveMerchantDiscount,isMerchantPurchaseRequest,classifyMerchantIntent,merchantNegotiationTarget,beginMerchantNegotiation,resolveMerchantNegotiation} from './frontierShop';
+function fixture(){const c=newCampaign('Shop','shop-test');return beginAdventureSession({...c,merchantSettlementTier:'town',characterIdentity:{name:'Test',speciesId:'elf',backgroundId:'sage',classId:'rogue',draftId:'draft',pronouns:'',appearance:'',personality:'',backstory:''},inventoryLedger:{currency:{GP:10,SP:0,CP:0,EP:0,PP:0},gear:[]}})}
 describe('deterministic merchant negotiation check lifecycle',()=>{
  const pending=(token='social-1')=>({...fixture(),pendingCheck:{token,skill:'Persuasion' as const,mode:'normal' as const,reason:'Negotiate the dagger price'}});
  it('requires an authoritative matching social check before any discount',()=>{
@@ -204,5 +204,46 @@ describe('2024 equipment catalog and merchant availability',()=>{
   const c=fixture();
   expect(()=>prepareMerchantCart(c,[{itemId:'plate-armor',quantity:1}],'no-plate')).toThrow();
   expect(c.pendingMerchantPurchase).toBeUndefined();
+ });
+});
+
+describe('settlement marketplace and merchant specialties',()=>{
+ it('partitions every nonmagic standard equipment entry across city specialists exactly once',()=>{
+  const types=availableMerchants('city');
+  const ids=types.flatMap(type=>merchantCatalogFor('city',type).map(item=>item.id));
+  expect(ids.length).toBe(cityShopStock.length);
+  expect(new Set(ids).size).toBe(cityShopStock.length);
+  expect(merchantCatalogFor('city','weaponsmith').some(item=>item.id==='greatsword')).toBe(true);
+  expect(merchantCatalogFor('city','armorer').some(item=>item.id==='plate-armor')).toBe(true);
+  expect(merchantCatalogFor('city','general').some(item=>item.id==='plate-armor')).toBe(false);
+ });
+ it('limits traveling merchants to a small consumable catalog',()=>{
+  const items=merchantCatalogFor('traveling','trader');
+  expect(items.length).toBeGreaterThan(2);
+  expect(items.length).toBeLessThan(12);
+  expect(items.some(item=>item.id==='greatsword')).toBe(false);
+  expect(items.some(item=>item.id==='rations')).toBe(true);
+  expect(availableMerchants('traveling')).toEqual(['trader']);
+ });
+ it('uses separate persistent merchant stock keys',()=>{
+  expect(merchantStockKey('city','weaponsmith','dagger')).not.toBe(merchantStockKey('village','trader','dagger'));
+ });
+});
+
+describe('merchant-specific persistent purchases',()=>{
+ it('sells a city weapon at official price, persists the selected weaponsmith, and does not affect other merchants',()=>{
+  const c={...fixture(),merchantSettlementTier:'city' as const,merchantShopType:'weaponsmith' as const};
+  const quoted=prepareMerchantCart(c,[{itemId:'dagger',quantity:2}],'city-dagger');
+  expect(quoted.pendingMerchantPurchase?.lines?.[0].unitCostCp).toBe(200);
+  const restored=JSON.parse(JSON.stringify(quoted));
+  const paid=settleMerchantPurchase(restored,'city-dagger',true);
+  expect(paid.merchantStockRemaining?.['city:weaponsmith:dagger']).toBe(9997);
+  expect(walletCopper(paid.inventoryLedger?.currency)).toBe(600);
+  expect(remainingMerchantStock(paid,'dagger','weaponsmith')).toBe(9997);
+  expect(()=>settleMerchantPurchase(paid,'city-dagger',true)).toThrow();
+ });
+ it('refuses a weapon purchase from the city general store',()=>{
+  const c={...fixture(),merchantSettlementTier:'city' as const,merchantShopType:'general' as const};
+  expect(()=>prepareMerchantCart(c,[{itemId:'dagger',quantity:1}],'wrong-merchant')).toThrow();
  });
 });

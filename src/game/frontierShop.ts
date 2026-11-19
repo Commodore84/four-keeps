@@ -22,21 +22,67 @@ export const FRONTIER_SHOP_IDS=[
  'tent','tinderbox','vial','ball-bearings','caltrops','chest','bell',
  'clothes-travelers','explorer-s-pack','dungeoneer-s-pack','case-crossbow-bolt'
 ] as const;
-const CITY_EXTRA_CATEGORIES=new Set(['weapon','armor','shield','tool','ammunition']);
-const CITY_EXTRA_IDS=new Set([
- 'acid','alchemists-fire','antitoxin','arcane-focus-crystal','arcane-focus-orb',
- 'arcane-focus-rod','arcane-focus-staff','arcane-focus-wand','block-and-tackle',
- 'book','bottle-glass','climber-s-kit','clothes-fine','component-pouch','costume',
- 'holy-water','ink','ink-pen','lantern-bullseye','magnifying-glass',
- 'net','perfume','ram-portable','spyglass','scholars-pack','burglar-s-pack'
-]);
-export const frontierShopStock=FRONTIER_SHOP_IDS.map(id=>ITEM_BY_ID[id]).filter((item):item is NonNullable<typeof item>=>Boolean(item)&&OFFICIAL_EQUIPMENT_2024.some(canonical=>canonical===item));
-export const cityShopStock=OFFICIAL_EQUIPMENT_2024.filter(item=>frontierShopStock.includes(item)||CITY_EXTRA_CATEGORIES.has(item.category)||CITY_EXTRA_IDS.has(item.id));
-export function merchantStock(campaign:Campaign){return campaign.characterBuild?cityShopStock:frontierShopStock;}
+export type MerchantType='general'|'weaponsmith'|'armorer'|'apothecary'|'arcanist'|'outfitter'|'stable'|'trader';
+export const MERCHANT_LABELS:Record<MerchantType,string>={
+ general:'General store',weaponsmith:'Weaponsmith',armorer:'Armorer',apothecary:'Apothecary',
+ arcanist:'Arcane supplier',outfitter:'Outfitter',stable:'Stables',trader:'Traveling trader'
+};
+export type SettlementTier='city'|'town'|'village'|'traveling';
+const merchantTypes:MerchantType[]=['general','weaponsmith','armorer','apothecary','arcanist','outfitter','stable','trader'];
+export function settlementTier(campaign:Campaign):SettlementTier {
+ if(campaign.merchantSettlementTier)return campaign.merchantSettlementTier;
+ if(/\b(?:Dasahi|Chasha.r|Miwillia|Ancolo)\b/i.test(campaign.location))return 'city';
+ if(/\b(?:Frontier Village|village)\b/i.test(campaign.location))return 'village';
+ return campaign.characterBuild?'city':'village';
+}
+const isMagic=(item:(typeof OFFICIAL_EQUIPMENT_2024)[number])=>/magic item|spell scroll/i.test(item.category);
+export function merchantTypeForItem(item:(typeof OFFICIAL_EQUIPMENT_2024)[number]):MerchantType {
+ const n=item.name.toLowerCase(),c=item.category.toLowerCase();
+ if(c==='weapon'||c==='ammunition'||/sling bullets|crossbow bolt/.test(n))return 'weaponsmith';
+ if(c==='armor'||c==='shield')return 'armorer';
+ if(/potion|antitoxin|healer|herbal|acid|alchemist|holy water/.test(n))return 'apothecary';
+ if(/arcane|component|focus|spellbook|holy symbol|druidic/.test(n))return 'arcanist';
+ if(/mount|horse|pony|mule|donkey|saddle|bit and bridle|feed|wagon|cart|vehicle/.test(n))return 'stable';
+ if(c==='tool'||/clothes|tent|bedroll|climber|hunting trap/.test(n))return 'outfitter';
+ return 'general';
+}
+export function availableMerchants(tier:SettlementTier):MerchantType[] {
+ return tier==='city'?merchantTypes.filter(x=>x!=='trader'):
+ tier==='town'?['general','weaponsmith','armorer','apothecary','outfitter']:
+ tier==='village'?['general','trader']:['trader'];
+}
+export function merchantCatalogFor(tier:SettlementTier,type:MerchantType) {
+ if(!availableMerchants(tier).includes(type))return [];
+ const all=OFFICIAL_EQUIPMENT_2024.filter(item=>!isMagic(item));
+ if(tier==='city')return all.filter(item=>merchantTypeForItem(item)===type);
+ if(type==='trader')return all.filter(item=>['torch','rations','waterskin','candle','oil','tinderbox','bandages','potion-of-healing'].includes(item.id));
+ if(tier==='village')return all.filter(item=>FRONTIER_SHOP_IDS.includes(item.id as (typeof FRONTIER_SHOP_IDS)[number])&&merchantTypeForItem(item)===type);
+ return all.filter(item=>item.costCp<=5000&&merchantTypeForItem(item)===type);
+}
+export const frontierShopStock=FRONTIER_SHOP_IDS.map(id=>ITEM_BY_ID[id]).filter((item):item is NonNullable<typeof item>=>Boolean(item)&&OFFICIAL_EQUIPMENT_2024.includes(item));
+export const cityShopStock=OFFICIAL_EQUIPMENT_2024.filter(item=>!isMagic(item));
+export function merchantStock(campaign:Campaign,type?:MerchantType){
+ const tier=settlementTier(campaign);
+ return type?merchantCatalogFor(tier,type):campaign.merchantShopType?merchantCatalogFor(tier,campaign.merchantShopType):tier==='city'?cityShopStock:availableMerchants(tier).flatMap(merchant=>merchantCatalogFor(tier,merchant));
+}
+export function merchantStockKey(tier:SettlementTier,type:MerchantType,itemId:string){return tier+':'+type+':'+itemId;}
+export function merchantForItem(campaign:Campaign,itemId:string):MerchantType|null{
+ const tier=settlementTier(campaign);
+ return availableMerchants(tier).find(type=>merchantCatalogFor(tier,type).some(item=>item.id===itemId))??null;
+}
 export const FRONTIER_INITIAL_STOCK:Record<string,number>=Object.fromEntries(OFFICIAL_EQUIPMENT_2024.map(item=>[item.id,
  item.id==='potion-of-healing'?3:item.category==='ammunition'?60:item.category==='weapon'?5:item.category==='armor'?3:item.category==='tool'?4:item.costCp>=5000?1:item.costCp>=1000?3:12]));
 Object.assign(FRONTIER_INITIAL_STOCK,{dagger:8,rope:12,torch:30,rations:25,waterskin:10,arrows:100,bolts:60,'bullets-sling':5});
-export function remainingMerchantStock(campaign:Campaign,itemId:string):number {return campaign.merchantStockRemaining?.[itemId]??FRONTIER_INITIAL_STOCK[itemId]??0;}
+export function remainingMerchantStock(campaign:Campaign,itemId:string,type?:MerchantType):number {
+ const tier=settlementTier(campaign),merchant=type??campaign.merchantShopType??merchantForItem(campaign,itemId);
+ if(!merchant)return 0;
+ const key=merchantStockKey(tier,merchant,itemId);
+ const stored=campaign.merchantStockRemaining?.[key];
+ if(stored!==undefined)return stored;
+ if(tier==='city')return 9999;
+ if(tier==='traveling'||merchant==='trader')return itemId==='potion-of-healing'?1:Math.min(5,FRONTIER_INITIAL_STOCK[itemId]??0);
+ return campaign.merchantStockRemaining?.[itemId]??(tier==='village'?Math.min(8,FRONTIER_INITIAL_STOCK[itemId]??0):FRONTIER_INITIAL_STOCK[itemId]??0);
+}
 export function merchantCatalog(campaign:Campaign):string {return merchantStock(campaign).map(item=>item.name+": "+formatFrontierPrice(item.costCp)+(item.packQuantity?" per pack of "+item.packQuantity:" each")+" ("+remainingMerchantStock(campaign,item.id)+" available)").join("; ");}
 export function isMerchantBrowseRequest(message:string):boolean {return /\b(what (?:do you|have you|are you) (?:sell|stock|carry|have)|show (?:me )?(?:your )?(?:wares|inventory|stock)|(?:list|catalog|inventory|price list|prices|wares|for sale)|brows(?:e|ing)|look (?:at|through) (?:your |the )?(?:goods|wares|stock|merchandise))\b/i.test(message);}
 export function merchantNegotiationTarget(message:string):string|null {
@@ -70,10 +116,10 @@ export function isMerchantPurchaseRequest(message:string):boolean {
 export function isMerchantNegotiationRequest(message:string):boolean {return /\b(haggle|negotiate|discount|lower (?:the )?price|better price|persuade|bargain)\b/i.test(message);}
 export function frontierMerchantContext(campaign:Campaign){
  if(campaign.adventureSession?.site!=='frontier'||campaign.adventureSession.status!=='exploring'||!campaign.characterIdentity)return null;
- return {location:'Frontier Village',shop:'General store',keeper:{name:'Mara Vell',temperament:'Practical and friendly but firm on stock and fair prices; threats damage trust.'},items:merchantStock(campaign).map(item=>({id:item.id,name:item.name,costCp:item.costCp,packQuantity:item.packQuantity??1,remaining:remainingMerchantStock(campaign,item.id)})),walletCp:walletCopper(campaign.inventoryLedger?.currency),purchaseRule:'Offer an itemized list with exact prices on request. Player purchase requests require explicit confirmation; narration never grants items or spends money. Discounts require a resolved, successful social skill check for one stocked item; the rules engine caps the discount at 20 percent.'};
+ return {location:campaign.location,shop:campaign.merchantShopType?MERCHANT_LABELS[campaign.merchantShopType]:settlementTier(campaign)==='city'?'City marketplace':'General store',merchants:availableMerchants(settlementTier(campaign)).map(type=>({type,name:MERCHANT_LABELS[type]})),keeper:{name:settlementTier(campaign)==='city'?'City merchant':'Mara Vell',temperament:'Practical and friendly but firm on stock and fair prices; threats damage trust.'},items:merchantStock(campaign).map(item=>({id:item.id,name:item.name,costCp:item.costCp,packQuantity:item.packQuantity??1,remaining:remainingMerchantStock(campaign,item.id)})),walletCp:walletCopper(campaign.inventoryLedger?.currency),purchaseRule:'Refer players to the correct specialist for each item; a general store does not sell weapons or armor. Offer an itemized list with exact prices on request. Player purchase requests require explicit confirmation; narration never grants items or spends money. Discounts require a resolved, successful social skill check for one stocked item; the rules engine caps the discount at 20 percent.'};
 }
 export function buyFrontierItem(campaign:Campaign,itemId:string,quantity=1,now=new Date().toISOString()):Campaign{
- if(!campaign.characterIdentity||campaign.adventureSession?.site!=='frontier'||campaign.adventureSession.status!=='exploring')throw Error('The Frontier Village shop is not available here.');
+ if(!campaign.characterIdentity||campaign.adventureSession?.site!=='frontier'||campaign.adventureSession.status!=='exploring')throw Error('The merchant is not available here.');
  if(!Number.isSafeInteger(quantity)||quantity<1||quantity>20)throw Error('Purchase quantity must be 1–20.');
  const item=merchantStock(campaign).find(i=>i.id===itemId);if(!item)throw Error('Item is not sold at this shop.');
  if(quantity>remainingMerchantStock(campaign,itemId))throw Error('The merchant does not have enough stock.');
@@ -89,7 +135,7 @@ export function buyFrontierItem(campaign:Campaign,itemId:string,quantity=1,now=n
  const gear=ledger.gear.map(i=>({...i}));const owned=gear.find(i=>i.name===item.name);
  const granted=quantity*(item.packQuantity??1);
  if(owned)owned.quantity+=granted;else gear.push({name:item.name,quantity:granted});
- return {...campaign,merchantStockRemaining:{...campaign.merchantStockRemaining,[itemId]:remainingMerchantStock(campaign,itemId)-quantity},merchantDiscount:undefined,inventoryLedger:{currency,gear},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:`Purchased ${quantity} × ${item.name} at the Frontier Village shop for ${formatFrontierPrice(cost)}.`,createdAt:now}]};
+ return {...campaign,merchantStockRemaining:{...campaign.merchantStockRemaining,[merchantStockKey(settlementTier(campaign),campaign.merchantShopType??merchantForItem(campaign,itemId)??'general',itemId)]:remainingMerchantStock(campaign,itemId)-quantity},merchantDiscount:undefined,inventoryLedger:{currency,gear},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:`Purchased ${quantity} × ${item.name} at the Frontier Village shop for ${formatFrontierPrice(cost)}.`,createdAt:now}]};
 }
 
 /** Conservative local purchase-intent extraction; never infer an item from free-form DM prose. */
@@ -140,7 +186,7 @@ export function settleMerchantPurchase(campaign:Campaign,id:string,confirmed:boo
  if(!pending||pending.id!==id)throw Error('No matching pending purchase.');
  if((campaign.completedMerchantPurchaseIds??[]).includes(id))throw Error('Purchase already completed.');
  if(!confirmed)return {...campaign,pendingMerchantPurchase:undefined};
- const item=frontierShopStock.find(i=>i.id===pending.itemId);
+ const item=merchantStock(campaign).find(i=>i.id===pending.itemId);
  const discount=campaign.merchantDiscount?.itemId===pending.itemId?campaign.merchantDiscount.percent:0;
  if(!item||item.costCp-Math.floor(item.costCp*discount/100)!==pending.unitCostCp)throw Error('Merchant price changed; request a new quote.');
  const lines=pending.lines??[{itemId:pending.itemId,quantity:pending.quantity,unitCostCp:pending.unitCostCp}];
