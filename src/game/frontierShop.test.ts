@@ -237,7 +237,7 @@ describe('merchant-specific persistent purchases',()=>{
   expect(quoted.pendingMerchantPurchase?.lines?.[0].unitCostCp).toBe(200);
   const restored=JSON.parse(JSON.stringify(quoted));
   const paid=settleMerchantPurchase(restored,'city-dagger',true);
-  expect(paid.merchantStockRemaining?.['city:weaponsmith:dagger']).toBe(merchantInitialStock('city','dagger','weaponsmith')-2);
+  expect(paid.merchantStockRemaining?.[merchantStockKeyForCampaign(paid,'weaponsmith','dagger')]).toBe(merchantInitialStock('city','dagger','weaponsmith')-2);
   expect(walletCopper(paid.inventoryLedger?.currency)).toBe(600);
   expect(remainingMerchantStock(paid,'dagger','weaponsmith')).toBe(merchantInitialStock('city','dagger','weaponsmith')-2);
   expect(()=>settleMerchantPurchase(paid,'city-dagger',true)).toThrow();
