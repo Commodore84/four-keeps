@@ -253,7 +253,7 @@ describe('atomic cart settlement preflight',()=>{
  it('rejects a stale second line without changing the original campaign',()=>{
   const c=fixture();
   const quoted=prepareMerchantCart(c,[{itemId:'dagger',quantity:1},{itemId:'torch',quantity:2}],'atomic-stale');
-  const stale={...quoted,merchantStockRemaining:{...quoted.merchantStockRemaining,[merchantStockKey('town','weaponsmith','torch')]:0}};
+  const stale={...quoted,merchantStockRemaining:{...quoted.merchantStockRemaining,[merchantStockKey('town','general','torch')]:0}};
   const before=JSON.stringify(stale);
   expect(()=>settleMerchantPurchase(stale,'atomic-stale',true)).toThrow('stock');
   expect(JSON.stringify(stale)).toBe(before);
