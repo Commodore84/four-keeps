@@ -1029,3 +1029,77 @@ test('DM treats custom leatherwork inquiry as dialogue without a merchant transa
  expect(after.journal.some((e:any)=>e.kind==='player'&&e.text.includes('leather arm warmer'))).toBe(true);
  await expect(page.getByText('The merchant cannot prepare that purchase')).toHaveCount(0);
 });
+
+
+test('iPhone opening has intentional loading, safe retry and one saved opening',async({page})=>{
+ test.setTimeout(90000);
+ await page.setViewportSize({width:390,height:844});
+ await createAndImport(page,'rogue');
+ await page.evaluate(()=>{localStorage.setItem('four-keeps-access-code','browser-test-code');localStorage.setItem('four-keeps-dm-mode','on');});
+ let count=0;let fail=true;
+ await page.route('**/api/dm',async route=>{
+  const body=route.request().postDataJSON();
+  if(!body.opening)throw Error('Unexpected non-opening DM call');
+  count++;
+  await new Promise(resolve=>setTimeout(resolve,250));
+  if(fail){await route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({error:'Temporary provider issue'})});return;}
+  await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({narration:'The harbor bells welcome you to Dasahi.',newFacts:[],worldUpdates:{},mapActions:[]})});
+ });
+ await page.reload();
+ await page.getByRole('button',{name:'Campaigns',exact:true}).click();
+ await page.getByRole('button',{name:'Continue Adventure'}).click();
+ const opening=page.getByRole('region',{name:'Adventure opening'});
+ await expect(opening).toContainText('Your adventure begins');
+ await expect(opening).toContainText('preparing your opening scene');
+ await expect(page.getByLabel('Message the Dungeon Master')).toBeDisabled();
+ await expect(page.getByRole('button',{name:'Send message to Dungeon Master'})).toBeDisabled();
+ await expect(opening.getByRole('button',{name:'Try opening again'})).toBeVisible();
+ expect(count).toBe(1);
+ fail=false;
+ await opening.getByRole('button',{name:'Try opening again'}).click();
+ await expect(page.getByRole('region',{name:'Adventure opening'})).toHaveCount(0);
+ await expect(page.getByLabel('Adventure',{exact:true})).toContainText('harbor bells welcome you');
+ expect(count).toBe(2);
+ await page.reload();
+ await page.getByRole('button',{name:'Campaigns',exact:true}).click();
+ await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await expect(page.getByLabel('Adventure',{exact:true})).toContainText('harbor bells welcome you');
+ expect(count).toBe(2);
+ expect((await saved(page)).journal.filter((entry:any)=>entry.id.endsWith('-dm-opening'))).toHaveLength(1);
+});
+
+
+test('iPhone narration uses paragraphs, speaker dialogue and survives reload',async({page})=>{
+ test.setTimeout(90000);
+ await page.setViewportSize({width:390,height:844});
+ await createAndImport(page,'rogue');
+ await page.evaluate(()=>{localStorage.setItem('four-keeps-access-code','browser-test-code');localStorage.setItem('four-keeps-dm-mode','on');});
+ const story='Morning settles over\nDasahi.\n\nMara: "Fresh figs!"\n\nThe cart moves on.\n\nGuard: "Keep moving."';
+ let calls=0;
+ await page.route('**/api/dm',async route=>{
+  calls++;
+  await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({narration:story,newFacts:[],worldUpdates:{},mapActions:[]})});
+ });
+ await page.reload();
+ await page.getByRole('button',{name:'Campaigns',exact:true}).click();
+ await page.getByRole('button',{name:'Continue Adventure'}).click();
+ const narration=page.getByLabel('Dungeon Master narration').first();
+ await expect(narration).toBeVisible();
+ await expect(narration.locator('p').first()).toContainText('Morning');
+ // Progressive text must appear within paragraphs, never as block-level line spans.
+ expect(await narration.locator('span.dm-narration-line').count()).toBe(0);
+ await narration.click();
+ await expect(narration.locator('p')).toHaveCount(4);
+ await expect(narration.locator('blockquote')).toHaveCount(2);
+ await expect(narration.locator('blockquote').first()).toContainText('Mara');
+ await expect(narration.locator('blockquote').last()).toContainText('Guard');
+ await expect(narration.locator('p').first()).toHaveText('Morning settles over Dasahi.');
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+ const original=(await saved(page)).journal.find((entry:any)=>entry.id.endsWith('-dm-opening')).text;
+ expect(original).toBe(story);
+ await page.reload();
+ await page.getByRole('button',{name:'Campaigns',exact:true}).click();
+ await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await expect(page.getByLabel('Dungeon Master narration').first().locator('blockquote')).toHaveCount(2);
+ expect(calls).toBe(1);
+});

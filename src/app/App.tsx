@@ -137,7 +137,7 @@ const tabs = [
   { id: 'development', label: 'Developer', Icon: Blocks },
 ] as const;
 
-function Adventure({ campaign, fullHistory, onToggleHistory, onAdventureChange, onStartOpening, onRetryAction, onShopClose, onShopPrepare, onShopSettle, saving, narrationSpeed, development = false }: { campaign: Campaign | null; fullHistory: boolean; onToggleHistory: () => void; onAdventureChange:(next:Campaign,message:string)=>Promise<boolean>|boolean|void; onStartOpening:()=>Promise<void>; onRetryAction:()=>Promise<void>; onShopClose:()=>Promise<void>; onShopPrepare:(id:string,quantity:number)=>Promise<void>; onShopSettle:(confirmed:boolean)=>Promise<void>; saving:boolean; narrationSpeed:NarrationSpeed; development?:boolean }) {
+function Adventure({ campaign, fullHistory, onToggleHistory, onAdventureChange, onStartOpening, onRetryAction, onShopClose, onShopPrepare, onShopSettle, saving, openingError, narrationSpeed, development = false }: { campaign: Campaign | null; fullHistory: boolean; onToggleHistory: () => void; onAdventureChange:(next:Campaign,message:string)=>Promise<boolean>|boolean|void; onStartOpening:()=>Promise<void>; onRetryAction:()=>Promise<void>; onShopClose:()=>Promise<void>; onShopPrepare:(id:string,quantity:number)=>Promise<void>; onShopSettle:(confirmed:boolean)=>Promise<void>; saving:boolean; openingError:string|null; narrationSpeed:NarrationSpeed; development?:boolean }) {
   const endRef = useRef<HTMLDivElement>(null);
   const shopRef = useRef<HTMLDivElement>(null);
   useEffect(()=>{if(campaign?.merchantShopOpen && campaign.adventureSession?.site==='frontier' && campaign.adventureSession.status==='exploring')shopRef.current?.scrollIntoView({behavior:'instant',block:'start'});},[campaign?.merchantShopOpen,campaign?.adventureSession?.site,campaign?.adventureSession?.status]);
@@ -151,7 +151,12 @@ function Adventure({ campaign, fullHistory, onToggleHistory, onAdventureChange, 
   return <section className="space-y-5" aria-label="Adventure">
     {campaign?.adventureSession && campaign.adventureSession.status==='encounter' && <AdventureSessionPanel campaign={campaign} saving={saving} onChange={onAdventureChange}/>}
     {campaign?.adventureSession?.pendingEncounter && <AdventureEncounterSetupPanel key={campaign.id+'-'+campaign.adventureSession.pendingEncounter.actionId} campaign={campaign} saving={saving} onChange={onAdventureChange}/>}
-    {campaign?.characterIdentity && allTurns.length===0 && <p role="status" className="text-sm text-gold">{saving ? 'The Dungeon Master is setting the scene…' : 'The opening scene begins automatically when your DM connection is configured. Check Settings if it does not appear.'} <button type="button" disabled={saving} onClick={()=>void onStartOpening()} className="underline">Retry opening</button></p>}
+    {campaign?.characterIdentity && allTurns.length===0 && <section aria-label="Adventure opening" className="mx-auto max-w-xl rounded-2xl border border-gold/20 bg-panel/70 px-6 py-12 text-center shadow-lg">
+      <BookOpen aria-hidden="true" className="mx-auto mb-5 text-gold" size={30}/>
+      <h2 className="font-serif text-2xl text-parchment">Your adventure begins</h2>
+      <p className="mt-2 text-sm text-gold/80">{campaign.location||'Anchamida'} · {campaign.characterIdentity.name||'Your character'}</p>
+      {openingError ? <div role="alert" className="mt-8 space-y-4"><p className="text-sm text-parchment/85">The opening scene couldn't be loaded. Your campaign is saved.</p><button type="button" disabled={saving} onClick={()=>void onStartOpening()} className="rounded-lg border border-gold/40 px-5 py-3 text-gold disabled:opacity-50">Try opening again</button></div> : <div role="status" className="mt-8 space-y-3"><p className="text-sm text-parchment/85">The Dungeon Master is preparing your opening scene…</p><p className="text-xs text-parchment/55">Your story will appear here when it's ready.</p></div>}
+    </section>}
     {campaign?.pendingAdventureAction && !campaign.pendingClarification && <p role="status" className="text-sm text-gold">Unfinished action saved: {campaign.pendingAdventureAction.message}. <button type="button" disabled={saving} onClick={()=>void onRetryAction()} className="underline text-gold">Retry saved action</button></p>}
     {allTurns.length > 6 && <button type="button" onClick={onToggleHistory} className="w-full rounded-lg border border-gold/30 px-4 py-3 text-sm text-gold">{fullHistory ? "Show recent conversation" : "View full conversation history ("+allTurns.length+" messages)"}</button>}
     
@@ -160,7 +165,7 @@ function Adventure({ campaign, fullHistory, onToggleHistory, onAdventureChange, 
       {entry.kind==='dm'?<DMNarration key={entry.id} id={entry.id} text={entry.text} speed={narrationSpeed} animate={!seen.includes(entry.id)} onComplete={()=>markSeen(entry.id)}/>:<p className="mt-2 whitespace-pre-wrap leading-7 text-parchment/90">{entry.text}</p>}
     </article>)}
     {campaign?.merchantShopOpen && campaign.adventureSession?.site==='frontier' && campaign.adventureSession.status==='exploring' && <div ref={shopRef}><MerchantShop campaign={campaign} saving={saving} onClose={onShopClose} onPrepare={onShopPrepare} onSettle={onShopSettle}/></div>}
-    {campaign && <p className="text-xs text-gold/80">Campaign saved on this device · {turns.length ? 'AI Dungeon Master connected' : 'Ready for your first action'}</p>}
+    {campaign && <p className="text-xs text-gold/80">Campaign saved on this device · {turns.length ? 'AI Dungeon Master connected' : campaign.characterIdentity ? 'Opening scene pending' : 'Ready for your first action'}</p>}
     <div ref={endRef}/>
   </section>;
 }
@@ -828,11 +833,15 @@ export function App() {
     } catch {setDmConnection('Connection check failed. Check network access and try again.');}
     finally {setDmConnectionChecking(false);}
   }
+  const [openingError,setOpeningError]=useState<string|null>(null);
+  const openingInFlightRef=useRef(false);
   async function startAiAdventure() {
-    if (!campaign || saving || !campaign.characterIdentity) return;
-    if (!accessCode) { setNotice('Enter your game access code first.'); return; }
+    if (!campaign || saving || openingInFlightRef.current || !campaign.characterIdentity || campaign.journal.some(entry=>entry.kind==='dm')) return;
+    if (!accessCode) { setOpeningError('Connection unavailable'); return; }
+    openingInFlightRef.current=true;
+    setOpeningError(null);
     setSaving(true);
-    setNotice('Preparing your adventure…');
+    setNotice('');
     try {
       const started=prepareAdventureOpening(campaign);
       if (started!==campaign) {
@@ -859,9 +868,9 @@ export function App() {
       const next={...mapped,world:mergeWorld(mapped.world,result.worldUpdates),worldFacts:[...new Set([...(mapped.worldFacts??[]),...(result.newFacts??[])])]};
       await localCampaignStorage.save(next);
       setCampaign(next);setCampaigns(items=>items.map(item=>item.id===next.id?next:item));
-      setNotice('Your adventure has begun.');
-    }catch(error){setNotice('Opening error: '+String(error)+'. You can retry without losing your campaign.');}
-    finally{setSaving(false);}
+      setOpeningError(null);setNotice('');
+    }catch(error){console.warn('Opening request failed',error);setOpeningError('The opening scene could not be loaded.');setNotice('');}
+    finally{openingInFlightRef.current=false;setSaving(false);}
   }
 
   const openingAttemptRef=useRef<string | null>(null);
@@ -1345,7 +1354,7 @@ export function App() {
     catch(error){setNotice('Campaign save failed: '+String(error));return false;}
     finally{setSaving(false)}
   }
-  const content = { adventure: campaign?.combat && campaign.combat.status!=='completed' ? null : <Adventure campaign={campaign} fullHistory={fullHistory} onToggleHistory={() => setFullHistory(value => !value)} onAdventureChange={saveSubclassActor} onStartOpening={startAiAdventure} onRetryAction={()=>sendToDM()} onShopClose={closeMerchantShop} onShopPrepare={prepareShopPurchase} onShopSettle={settleShopPurchase} saving={saving} narrationSpeed={narrationSpeed}/>, party: <Party campaign={campaign} saving={saving} onRoll={(skill,mode) => void saveSkillRoll(skill,mode)} onSaveRoll={(ability,mode) => void saveSavingThrow(ability,mode)} onAwardXP={(amount,reason) => void updateProgress('award',amount,reason)} onLevelUp={hp => void updateProgress('level',hp)} onLevelThree={(hp,cantrips,spells) => void updateProgress('level3',hp,'',cantrips,spells)} onReconcile={() => void updateProgress('reconcile')} onUndoReconcile={() => void updateProgress('undoReconcile')} onRestore={() => void updateProgress('restore')} onCastSpell={(spell,ritual,components,target)=>void castSpell(spell,ritual,components,target)} onEndConcentration={()=>void endConcentration()} onAdjustEquipment={(item,delta)=>void changeEquipment(item,delta)} onUpdateInventory={ledger=>void updateInventoryLedger(ledger)} onSubclassChange={saveSubclassActor}/> , journal: <Journal campaign={campaign}/>, map: campaign?.characterBuild ? <AnchamidaRegionMap campaign={campaign}/> : <WorldMap campaign={campaign}/>, settings: <section className="space-y-4"><h2 className="font-serif text-2xl">Settings</h2><p className="text-sm text-parchment/60">Manage campaigns, backups, and Dungeon Master access below.</p></section>, development: campaign?.characterIdentity?<ImportedCharacterSheet campaign={campaign} saving={saving} onChange={saveSubclassActor} development/>:<section aria-label="Developer tools"><h2 className="font-serif text-2xl">Developer tools</h2><p>Legacy testing remains available through the existing development controls.</p></section> };
+  const content = { adventure: campaign?.combat && campaign.combat.status!=='completed' ? null : <Adventure campaign={campaign} fullHistory={fullHistory} onToggleHistory={() => setFullHistory(value => !value)} onAdventureChange={saveSubclassActor} onStartOpening={startAiAdventure} onRetryAction={()=>sendToDM()} onShopClose={closeMerchantShop} onShopPrepare={prepareShopPurchase} onShopSettle={settleShopPurchase} saving={saving} openingError={openingError} narrationSpeed={narrationSpeed}/>, party: <Party campaign={campaign} saving={saving} onRoll={(skill,mode) => void saveSkillRoll(skill,mode)} onSaveRoll={(ability,mode) => void saveSavingThrow(ability,mode)} onAwardXP={(amount,reason) => void updateProgress('award',amount,reason)} onLevelUp={hp => void updateProgress('level',hp)} onLevelThree={(hp,cantrips,spells) => void updateProgress('level3',hp,'',cantrips,spells)} onReconcile={() => void updateProgress('reconcile')} onUndoReconcile={() => void updateProgress('undoReconcile')} onRestore={() => void updateProgress('restore')} onCastSpell={(spell,ritual,components,target)=>void castSpell(spell,ritual,components,target)} onEndConcentration={()=>void endConcentration()} onAdjustEquipment={(item,delta)=>void changeEquipment(item,delta)} onUpdateInventory={ledger=>void updateInventoryLedger(ledger)} onSubclassChange={saveSubclassActor}/> , journal: <Journal campaign={campaign}/>, map: campaign?.characterBuild ? <AnchamidaRegionMap campaign={campaign}/> : <WorldMap campaign={campaign}/>, settings: <section className="space-y-4"><h2 className="font-serif text-2xl">Settings</h2><p className="text-sm text-parchment/60">Manage campaigns, backups, and Dungeon Master access below.</p></section>, development: campaign?.characterIdentity?<ImportedCharacterSheet campaign={campaign} saving={saving} onChange={saveSubclassActor} development/>:<section aria-label="Developer tools"><h2 className="font-serif text-2xl">Developer tools</h2><p>Legacy testing remains available through the existing development controls.</p></section> };
   if(portalScreen!=='adventure')return <div className="min-h-dvh bg-ink text-parchment">
     <div className="mx-auto min-h-dvh w-full max-w-3xl space-y-5 px-5 pb-12 pt-[max(2rem,env(safe-area-inset-top))]">
       <header className="flex flex-col items-center gap-2 border-b border-gold/20 pb-6">
@@ -1755,8 +1764,8 @@ export function App() {
         {activeView !== "settings" && activeView !== "map" && !(activeView==="adventure"&&campaign?.combat) && !campaign?.pendingClarification && <form className="flex items-end gap-2 px-4 py-3" onSubmit={(event) => { event.preventDefault(); void (dmMode ? submitAdventure() : saveNote()); }}>
           <button type="button" onClick={() => window.location.reload()} aria-label="Refresh Four Keeps" title="Refresh Four Keeps" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-white/20 bg-panel text-gold"><RefreshCw size={19}/></button>
           <label htmlFor="dm-input" className="sr-only">Message the Dungeon Master</label>
-          <textarea id="dm-input" value={draft} onChange={(event) => { setDraft(event.target.value); setNotice(''); }} rows={1} placeholder={campaign ? (dmMode ? 'What does Nighthawk do?' : 'Write a journal note…') : 'Create a campaign first'} disabled={!campaign || saving || !!campaign.pendingCheck || !!pendingAdventureSpell || !!pendingRest} className="max-h-32 min-h-11 min-w-0 flex-1 resize-y rounded-xl border border-white/20 bg-panel px-3 py-3 text-base text-parchment placeholder:text-parchment/45 focus:border-gold focus:outline-none"/>
-          <button type="submit" disabled={!draft.trim() || !campaign || saving || !!campaign.pendingCheck || !!pendingAdventureSpell || !!campaign.characterIdentity && (campaign.adventureSession?.status==='encounter'||!!campaign.adventureSession?.pendingEncounter)} aria-label="Send message to Dungeon Master" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gold text-ink disabled:opacity-40"><Send size={19}/></button>
+          <textarea id="dm-input" value={draft} onChange={(event) => { setDraft(event.target.value); setNotice(''); }} rows={1} placeholder={campaign ? (campaign.characterIdentity && !campaign.journal.some(entry=>entry.kind==='dm') ? 'Waiting for your opening scene…' : dmMode ? 'What does Nighthawk do?' : 'Write a journal note…') : 'Create a campaign first'} disabled={!campaign || saving || !!campaign.pendingCheck || !!pendingAdventureSpell || !!pendingRest || (!!campaign.characterIdentity && !campaign.journal.some(entry=>entry.kind==='dm'))} className="max-h-32 min-h-11 min-w-0 flex-1 resize-y rounded-xl border border-white/20 bg-panel px-3 py-3 text-base text-parchment placeholder:text-parchment/45 focus:border-gold focus:outline-none"/>
+          <button type="submit" disabled={!draft.trim() || !campaign || saving || (!!campaign.characterIdentity && !campaign.journal.some(entry=>entry.kind==='dm')) || !!campaign.pendingCheck || !!pendingAdventureSpell || !!campaign.characterIdentity && (campaign.adventureSession?.status==='encounter'||!!campaign.adventureSession?.pendingEncounter)} aria-label="Send message to Dungeon Master" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gold text-ink disabled:opacity-40"><Send size={19}/></button>
         </form>}
         {notice && <p role="status" className="px-5 pb-2 text-xs text-gold">{notice}</p>}
       </div>
