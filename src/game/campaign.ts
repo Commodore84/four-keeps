@@ -25,6 +25,7 @@ export interface Campaign {
   merchantShopType?:'general'|'weaponsmith'|'armorer'|'apothecary'|'arcanist'|'outfitter'|'stable'|'trader';
   pendingMerchantPurchase?:{id:string;itemId:string;quantity:number;unitCostCp:number;lines?:{itemId:string;quantity:number;unitCostCp:number}[]};
   merchantStockRemaining?:Record<string,number>;
+  merchantStockRestockedAt?:Record<string,number>;
   merchantDiscount?:{itemId:string;percent:number;approvalId:string};
   pendingMerchantNegotiation?:{itemId:string;checkToken:string};
   completedMerchantPurchaseIds?:string[];
