@@ -96,5 +96,8 @@ describe('authoritative traveling merchant route arrivals',()=>{
   expect(Object.keys(second.merchantTraderResupply??{})).toHaveLength(2);
   expect(()=>resupplyTravelingMerchant({...second,merchantTraderResupply:{}},'north-road','leg-1-crossroads')).toThrow('route arrival');
   expect(()=>beginTravelingMerchantRoute(second,'north-road',['watchtower','crossroads'])).toThrow('already used');
+  const back=travelAdventure(second,'crossroads');
+  expect(merchantStockKeyForCampaign(back,'trader','torch')).toBe(merchantStockKeyForCampaign(second,'trader','torch'));
+  expect(remainingMerchantStock(back,'torch')).toBe(remainingMerchantStock(second,'torch'));
  });
 });
