@@ -1,3 +1,4 @@
+import {ADDITIONAL_MAGIC_ITEM_DEFINITIONS} from './magicItemDefinitionsAdditional';
 import {MAGIC_ITEM_DEFINITIONS,type MagicItemMechanics} from './magicItemDefinitions';
 import catalog from './magicItemCatalog.json';
 import dmg1 from './dmg2024MagicItems1.json';
@@ -26,13 +27,15 @@ const dmgProvenance: ContentProvenance = {
   rights: 'non-srd',
   license: null,
 };
+// Some items in the DMG import are also explicitly present in SRD 5.2.1.
+const srdOverlap = new Set(['Gloves of Thievery','Hat of Many Spells']);
 const withDefinition = <T extends {id:string;description:string}>(item:T) => {
-  const mechanics=MAGIC_ITEM_DEFINITIONS[item.id];
+  const mechanics=ADDITIONAL_MAGIC_ITEM_DEFINITIONS[item.id] ?? MAGIC_ITEM_DEFINITIONS[item.id];
   return mechanics?{...item,description:mechanics.summary,mechanics}:item;
 };
 export const MAGIC_ITEMS: MagicItem[] = [
   ...catalog.map(item => ({...withDefinition(item),...srdProvenance})),
-  ...[...dmg1,...dmg2,...dmg3,...dmg4,...dmg5,...dmg6,...dmg7,...dmg8].map(item => ({...withDefinition(item),...dmgProvenance})),
+  ...[...dmg1,...dmg2,...dmg3,...dmg4,...dmg5,...dmg6,...dmg7,...dmg8].map(item => ({...withDefinition(item),...(srdOverlap.has(item.name)?srdProvenance:dmgProvenance)})),
 ];
 const prefix = 'four-keeps-magic-wishlist:';
 export function readMagicWishlist(campaignId:string):string[] {

@@ -2,6 +2,7 @@
 // Non-SRD descriptions are independently written summaries, not book excerpts.
 export interface MagicItemMechanics {
   summary: string;
+  verification?: 'verified-srd' | 'needs-official-review';
   bonuses?: { target: string; amount: number; condition?: string }[];
   activation?: string;
   charges?: { maximum: number; maximumPerUse?: number; cost?: string };
@@ -11,6 +12,7 @@ export interface MagicItemMechanics {
 }
 export const MAGIC_ITEM_DEFINITIONS: Record<string, MagicItemMechanics> = {
   'bag-of-holding': {
+    verification: 'verified-srd',
     summary: 'A five-pound extradimensional bag stores up to 500 pounds or 64 cubic feet of contents. Taking something out requires a Utilize action.',
     activation: 'Utilize action to retrieve an item',
     limitations: ['Overloading or damaging the bag destroys it and sends its contents to the Astral Plane.', 'Living creatures have only a limited shared air supply.', 'Nesting extradimensional storage can open a dangerous Astral Plane gate.'],
@@ -52,24 +54,28 @@ export const MAGIC_ITEM_DEFINITIONS: Record<string, MagicItemMechanics> = {
     limitations: ['Does not increase Strength already at 19 or above.'],
   },
   'dmg24-1-wand-of-the-war-mage': {
+    verification: 'needs-official-review',
     summary: 'While holding and attuned to this wand, gain a +1 bonus to spell attack rolls. It also helps spell attacks bypass half cover.',
     bonuses: [{target:'spell-attack-rolls',amount:1}],
     limitations: ['Applies to spell attack rolls, not spell save DCs.'],
     attunementRequirement: 'Spellcaster',
   },
   'dmg24-2-wand-of-the-war-mage': {
+    verification: 'needs-official-review',
     summary: 'While holding and attuned to this wand, gain a +2 bonus to spell attack rolls. It also helps spell attacks bypass half cover.',
     bonuses: [{target:'spell-attack-rolls',amount:2}],
     limitations: ['Applies to spell attack rolls, not spell save DCs.'],
     attunementRequirement: 'Spellcaster',
   },
   'dmg24-3-wand-of-the-war-mage': {
+    verification: 'needs-official-review',
     summary: 'While holding and attuned to this wand, gain a +3 bonus to spell attack rolls. It also helps spell attacks bypass half cover.',
     bonuses: [{target:'spell-attack-rolls',amount:3}],
     limitations: ['Applies to spell attack rolls, not spell save DCs.'],
     attunementRequirement: 'Spellcaster',
   },
   'dmg24-1-rod-of-the-pact-keeper': {
+    verification: 'needs-official-review',
     summary: 'An attuned warlock gains +1 to spell attack rolls and spell save DCs for warlock spells while holding the rod, and can recover a Pact Magic slot once per long rest.',
     bonuses: [{target:'warlock-spell-attacks',amount:1},{target:'warlock-spell-save-dc',amount:1}],
     activation: 'Magic action to recover one expended Pact Magic slot',
@@ -77,6 +83,7 @@ export const MAGIC_ITEM_DEFINITIONS: Record<string, MagicItemMechanics> = {
     attunementRequirement: 'Warlock',
   },
   'dmg24-2-rod-of-the-pact-keeper': {
+    verification: 'needs-official-review',
     summary: 'An attuned warlock gains +2 to spell attack rolls and spell save DCs for warlock spells while holding the rod, and can recover a Pact Magic slot once per long rest.',
     bonuses: [{target:'warlock-spell-attacks',amount:2},{target:'warlock-spell-save-dc',amount:2}],
     activation: 'Magic action to recover one expended Pact Magic slot',
@@ -84,6 +91,7 @@ export const MAGIC_ITEM_DEFINITIONS: Record<string, MagicItemMechanics> = {
     attunementRequirement: 'Warlock',
   },
   'dmg24-3-rod-of-the-pact-keeper': {
+    verification: 'needs-official-review',
     summary: 'An attuned warlock gains +3 to spell attack rolls and spell save DCs for warlock spells while holding the rod, and can recover a Pact Magic slot once per long rest.',
     bonuses: [{target:'warlock-spell-attacks',amount:3},{target:'warlock-spell-save-dc',amount:3}],
     activation: 'Magic action to recover one expended Pact Magic slot',
@@ -91,6 +99,7 @@ export const MAGIC_ITEM_DEFINITIONS: Record<string, MagicItemMechanics> = {
     attunementRequirement: 'Warlock',
   },
   'dmg24-gloves-of-thievery': {
+    verification: 'verified-srd',
     summary: 'These invisible gloves improve Sleight of Hand checks and Dexterity checks made to open locks by 5 while worn.',
     bonuses: [{target:'dexterity-sleight-of-hand',amount:5},{target:'dexterity-lock-picking',amount:5}],
     limitations: ['The bonus applies to the specified checks, not all Dexterity checks.'],
