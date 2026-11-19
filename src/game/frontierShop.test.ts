@@ -1,7 +1,7 @@
 import {describe,it,expect} from 'vitest';
 import {newCampaign} from './campaign';
 import {beginAdventureSession} from './adventureSession';
-import {buyFrontierItem,frontierShopStock,frontierMerchantContext,formatFrontierPrice,parseFrontierPurchase,prepareMerchantPurchase,prepareMerchantCart,settleMerchantPurchase,cityShopStock,merchantCatalogFor,availableMerchants,merchantStockKey,walletCopper,remainingMerchantStock,merchantCatalog,isMerchantBrowseRequest,approveMerchantDiscount,isMerchantPurchaseRequest,classifyMerchantIntent,merchantNegotiationTarget,beginMerchantNegotiation,resolveMerchantNegotiation} from './frontierShop';
+import {buyFrontierItem,frontierShopStock,frontierMerchantContext,formatFrontierPrice,parseFrontierPurchase,prepareMerchantPurchase,prepareMerchantCart,settleMerchantPurchase,cityShopStock,merchantCatalogFor,availableMerchants,merchantStockKey,merchantInitialStock,merchantRestockIntervalMinutes,walletCopper,remainingMerchantStock,merchantCatalog,isMerchantBrowseRequest,approveMerchantDiscount,isMerchantPurchaseRequest,classifyMerchantIntent,merchantNegotiationTarget,beginMerchantNegotiation,resolveMerchantNegotiation} from './frontierShop';
 function fixture(){const c=newCampaign('Shop','shop-test');return beginAdventureSession({...c,merchantSettlementTier:'town',characterIdentity:{name:'Test',speciesId:'elf',backgroundId:'sage',classId:'rogue',draftId:'draft',pronouns:'',appearance:'',personality:'',backstory:''},inventoryLedger:{currency:{GP:10,SP:0,CP:0,EP:0,PP:0},gear:[]}})}
 describe('deterministic merchant negotiation check lifecycle',()=>{
  const pending=(token='social-1')=>({...fixture(),pendingCheck:{token,skill:'Persuasion' as const,mode:'normal' as const,reason:'Negotiate the dagger price'}});
@@ -237,7 +237,7 @@ describe('merchant-specific persistent purchases',()=>{
   expect(quoted.pendingMerchantPurchase?.lines?.[0].unitCostCp).toBe(200);
   const restored=JSON.parse(JSON.stringify(quoted));
   const paid=settleMerchantPurchase(restored,'city-dagger',true);
-  expect(paid.merchantStockRemaining?.['city:weaponsmith:dagger']).toBe(9997);
+  expect(paid.merchantStockRemaining?.['city:weaponsmith:dagger']).toBe(merchantInitialStock('city','dagger','weaponsmith')-2);
   expect(walletCopper(paid.inventoryLedger?.currency)).toBe(600);
   expect(remainingMerchantStock(paid,'dagger','weaponsmith')).toBe(9997);
   expect(()=>settleMerchantPurchase(paid,'city-dagger',true)).toThrow();
@@ -265,5 +265,24 @@ describe('atomic cart settlement preflight',()=>{
   const stale={...quoted,inventoryLedger:{...quoted.inventoryLedger!,currency:{GP:0,SP:0,CP:0,EP:0,PP:0}}};
   expect(()=>settleMerchantPurchase(stale,'atomic-wallet',true)).toThrow('Insufficient money');
   expect(stale.inventoryLedger.gear).toEqual([]);
+ });
+});
+
+describe('finite inventory and game-time replenishment',()=>{
+ it('provides realistic city stock and restores common goods daily',()=>{
+  const c={...fixture(),merchantSettlementTier:'city' as const,merchantShopType:'general' as const};
+  const initial=merchantInitialStock('city','torch','general');
+  expect(initial).toBeGreaterThan(10);
+  expect(initial).toBeLessThan(100);
+  const bought=buyFrontierItem(c,'torch',2);
+  expect(remainingMerchantStock(bought,'torch')).toBe(initial-2);
+  expect(remainingMerchantStock({...bought,elapsedMinutes:1439},'torch')).toBe(initial-2);
+  expect(remainingMerchantStock({...bought,elapsedMinutes:1440},'torch')).toBe(initial);
+  expect(remainingMerchantStock(JSON.parse(JSON.stringify({...bought,elapsedMinutes:1440})),'torch')).toBe(initial);
+ });
+ it('keeps villages and traveling merchants on weekly schedules',()=>{
+  expect(merchantRestockIntervalMinutes('village','torch')).toBe(10080);
+  expect(merchantRestockIntervalMinutes('traveling','torch')).toBe(10080);
+  expect(merchantInitialStock('traveling','torch','trader')).toBeLessThanOrEqual(5);
  });
 });
