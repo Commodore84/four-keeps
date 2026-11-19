@@ -75,7 +75,7 @@ export const FRONTIER_INITIAL_STOCK:Record<string,number>=Object.fromEntries(OFF
 Object.assign(FRONTIER_INITIAL_STOCK,{dagger:8,rope:12,torch:30,rations:25,waterskin:10,arrows:100,bolts:60,'bullets-sling':5});
 export function remainingMerchantStock(campaign:Campaign,itemId:string,type?:MerchantType):number {
  const tier=settlementTier(campaign),merchant=type??campaign.merchantShopType??merchantForItem(campaign,itemId);
- if(!merchant)return 0;
+ if(!merchant||!merchantCatalogFor(tier,merchant).some(item=>item.id===itemId))return 0;
  const key=merchantStockKey(tier,merchant,itemId);
  const stored=campaign.merchantStockRemaining?.[key];
  if(stored!==undefined)return stored;
@@ -190,6 +190,20 @@ export function settleMerchantPurchase(campaign:Campaign,id:string,confirmed:boo
  const discount=campaign.merchantDiscount?.itemId===pending.itemId?campaign.merchantDiscount.percent:0;
  if(!item||item.costCp-Math.floor(item.costCp*discount/100)!==pending.unitCostCp)throw Error('Merchant price changed; request a new quote.');
  const lines=pending.lines??[{itemId:pending.itemId,quantity:pending.quantity,unitCostCp:pending.unitCostCp}];
+ // Validate the complete cart against the same authoritative snapshot before any mutation.
+ // A failed line must not partially debit funds, stock, or inventory.
+ if(!lines.length||new Set(lines.map(line=>line.itemId)).size!==lines.length)throw Error('Invalid pending cart.');
+ let total=0;
+ for(const line of lines){
+  if(!Number.isSafeInteger(line.quantity)||line.quantity<1||line.quantity>20)throw Error('Invalid purchase quantity.');
+  const listed=merchantStock(campaign).find(item=>item.id===line.itemId);
+  const discount=campaign.merchantDiscount?.itemId===line.itemId?campaign.merchantDiscount.percent:0;
+  if(!listed||listed.costCp-Math.floor(listed.costCp*discount/100)!==line.unitCostCp)throw Error('Merchant price changed; request a new quote.');
+  if(line.quantity>remainingMerchantStock(campaign,line.itemId))throw Error('The merchant does not have enough stock.');
+  total+=line.quantity*line.unitCostCp;
+  if(!Number.isSafeInteger(total))throw Error('Invalid purchase total.');
+ }
+ if(total>walletCopper(campaign.inventoryLedger?.currency))throw Error('Insufficient money.');
  let bought=campaign;
  for(const line of lines){
   const item=merchantStock(campaign).find(i=>i.id===line.itemId);
