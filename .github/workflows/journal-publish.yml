@@ -1,0 +1,19 @@
+name: Publish verified Four Keeps Journal
+on:
+  push:
+    branches: [journal-publish-staging]
+permissions:
+  contents: write
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+      - name: Verify source blobs and publish exact tree
+        run: |
+          mkdir -p /tmp/journal-transfer
+          cp .journal-transfer/* /tmp/journal-transfer/
+          python3 /tmp/journal-transfer/publish.py
