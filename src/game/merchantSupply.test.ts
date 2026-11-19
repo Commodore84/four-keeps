@@ -1,6 +1,6 @@
 import {describe,it,expect} from 'vitest';
 import {newCampaign} from './campaign';
-import {beginAdventureSession} from './adventureSession';
+import {beginAdventureSession,beginTravelingMerchantRoute,travelAdventure} from './adventureSession';
 import {prepareCitySupplyOrder,confirmCitySupplyOrder,collectCitySupplyOrder,resupplyTravelingMerchant,isSupplierBrowseRequest} from './merchantSupply';
 import {remainingMerchantStock,merchantStockKeyForCampaign,walletCopper} from './frontierShop';
 const fixture=()=>beginAdventureSession({...newCampaign('Supplier','supplier-test'),location:'Dasahi',merchantSettlementTier:'city' as const,characterIdentity:{name:'Tester',speciesId:'elf',backgroundId:'sage',classId:'rogue',draftId:'draft',pronouns:'',appearance:'',personality:'',backstory:''},inventoryLedger:{currency:{GP:100,SP:0,CP:0,EP:0,PP:0},gear:[]}});
@@ -63,5 +63,35 @@ describe('supplier persistence and quote expiration',()=>{
   const later={...quote,elapsedMinutes:quote.pendingMerchantSupplyOrder!.readyAtMinutes+1};
   expect(()=>confirmCitySupplyOrder(later,'expired-quote',true)).toThrow('expired');
   expect(walletCopper(later.inventoryLedger?.currency)).toBe(10000);
+ });
+});
+
+describe('authoritative traveling merchant route arrivals',()=>{
+ const traveler=()=>({...fixture(),location:'Frontier Village',merchantSettlementTier:'traveling' as const,merchantShopType:'trader' as const});
+ it('requires adjacent verified stops and a distinct persistent route ID',()=>{
+  expect(()=>beginTravelingMerchantRoute(traveler(),'north-road',['frontier','watchtower'])).toThrow('adjacent');
+  expect(()=>beginTravelingMerchantRoute(traveler(),'bad',['crossroads','frontier'])).toThrow('manifest');
+  const started=beginTravelingMerchantRoute(traveler(),'north-road',['frontier','crossroads','watchtower']);
+  expect(()=>beginTravelingMerchantRoute(started,'north-road',['frontier','crossroads'])).toThrow('current');
+  expect(()=>travelAdventure(started,'watchtower')).toThrow('adjacent');
+ });
+ it('replenishes only after an actual arrival, once per leg, across reloads',()=>{
+  const c=traveler();
+  const key=merchantStockKeyForCampaign(c,'trader','torch');
+  const exhausted={...c,merchantStockRemaining:{[key]:0},elapsedMinutes:30000};
+  const route=beginTravelingMerchantRoute(exhausted,'north-road',['frontier','crossroads','watchtower']);
+  expect(remainingMerchantStock(route,'torch')).toBe(0);
+  const first=travelAdventure(route,'crossroads');
+  const arrivalId='north-road:leg-1-crossroads';
+  expect(first.merchantTraderResupply?.[arrivalId]).toBe(30000);
+  expect(first.merchantTraderRoute?.nextStopIndex).toBe(2);
+  expect(remainingMerchantStock({...first,elapsedMinutes:90000},'torch')).toBeGreaterThan(0);
+  const reloaded=JSON.parse(JSON.stringify(first));
+  expect(resupplyTravelingMerchant(reloaded,'north-road','leg-1-crossroads')).toEqual(reloaded);
+  expect(()=>travelAdventure(reloaded,'frontier')).toThrow('verified merchant route');
+  const second=travelAdventure(reloaded,'watchtower');
+  expect(second.merchantTraderRoute?.nextStopIndex).toBe(3);
+  expect(Object.keys(second.merchantTraderResupply??{})).toHaveLength(2);
+  expect(()=>beginTravelingMerchantRoute(second,'north-road',['watchtower','crossroads'])).toThrow('already used');
  });
 });
