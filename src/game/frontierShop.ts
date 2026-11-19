@@ -75,7 +75,7 @@ export const FRONTIER_INITIAL_STOCK:Record<string,number>=Object.fromEntries(OFF
 Object.assign(FRONTIER_INITIAL_STOCK,{dagger:8,rope:12,torch:30,rations:25,waterskin:10,arrows:100,bolts:60,'bullets-sling':5});
 export function remainingMerchantStock(campaign:Campaign,itemId:string,type?:MerchantType):number {
  const tier=settlementTier(campaign),merchant=type??campaign.merchantShopType??merchantForItem(campaign,itemId);
- if(!merchant||!merchantCatalogFor(tier,merchant).some(item=>item.id===itemId))return 0;
+ if(!merchant)return 0;
  const key=merchantStockKey(tier,merchant,itemId);
  const stored=campaign.merchantStockRemaining?.[key];
  if(stored!==undefined)return stored;
