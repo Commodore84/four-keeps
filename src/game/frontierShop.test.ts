@@ -299,3 +299,22 @@ describe('settlement-isolated stock persistence',()=>{
   expect(remainingMerchantStock(legacy,'dagger')).toBe(3);
  });
 });
+
+describe('restock checkpoint migration and purchase boundaries',()=>{
+ it('does not refill purchased inventory repeatedly after crossing a daily boundary',()=>{
+  const base={...fixture(),merchantSettlementTier:'city' as const,merchantShopType:'general' as const,location:'Dasahi',elapsedMinutes:1440};
+  const first=buyFrontierItem(base,'torch',1);
+  const second=buyFrontierItem(JSON.parse(JSON.stringify(first)),'torch',1);
+  expect(remainingMerchantStock(second,'torch')).toBe(merchantInitialStock('city','torch','general')-2);
+  expect(remainingMerchantStock({...second,elapsedMinutes:2879},'torch')).toBe(merchantInitialStock('city','torch','general')-2);
+  expect(remainingMerchantStock({...second,elapsedMinutes:2880},'torch')).toBe(merchantInitialStock('city','torch','general'));
+ });
+ it('respects legacy restock timestamps when migrating a city shop key',()=>{
+  const base={...fixture(),merchantSettlementTier:'city' as const,merchantShopType:'general' as const,location:'Dasahi',elapsedMinutes:1500,merchantStockRemaining:{[merchantStockKey('city','general','torch')]:2},merchantStockRestockedAt:{[merchantStockKey('city','general','torch')]:1440}};
+  expect(remainingMerchantStock(base,'torch')).toBe(2);
+  const bought=buyFrontierItem(base,'torch',1);
+  expect(remainingMerchantStock(JSON.parse(JSON.stringify(bought)),'torch')).toBe(1);
+  expect(remainingMerchantStock({...bought,elapsedMinutes:2879},'torch')).toBe(1);
+  expect(remainingMerchantStock({...bought,elapsedMinutes:2880},'torch')).toBe(merchantInitialStock('city','torch','general'));
+ });
+});
