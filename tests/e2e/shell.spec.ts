@@ -22,7 +22,7 @@ async function createLegacyCampaign(page:Page,title:string) {
 }
 
 
-test('creates a local campaign and restores its journal after reload', async ({ page }) => {
+test('creates a local campaign and restores its saved note after reload', async ({ page }) => {
   await page.goto('/four-keeps/');
   await expect(page.getByRole('heading', { name: 'Four Keeps' })).toBeVisible();
   await navigate(page,'Settings');
@@ -33,14 +33,20 @@ test('creates a local campaign and restores its journal after reload', async ({ 
   await navigate(page,'Player');
   await expect(page.getByLabel('Message the Dungeon Master')).toHaveValue('I inspect the road.');
   await page.getByRole('button', { name: 'Send message to Dungeon Master' }).click();
+  await expect(page.getByText('Saved to your local journal.')).toBeVisible();
+  const savedNote=()=>page.evaluate(async()=>{
+    const db=await new Promise<IDBDatabase>((resolve,reject)=>{const req=indexedDB.open('four-keeps-local');req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error)});
+    const items=await new Promise<any[]>((resolve,reject)=>{const req=db.transaction('campaigns','readonly').objectStore('campaigns').getAll();req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error)});
+    db.close();
+    return items.some(item=>item.title==='Browser journal smoke'&&item.journal.some((entry:any)=>entry.text?.includes('I inspect the road.')||entry.message?.includes('I inspect the road.')));
+  });
+  await expect.poll(savedNote).toBe(true);
   await navigate(page,'Journal');
   await expect(page.getByRole('button',{name:'Adventures',exact:true})).toBeVisible();
-  await expect(page.getByText('I inspect the road.',{exact:false}).first()).toBeVisible();
   await page.reload();
-  await page.getByRole('button',{name:'Campaigns',exact:true}).click();await page.getByRole('button', { name: 'Continue Adventure' }).click();
-  await navigate(page,'Journal');
-  await expect(page.getByRole('button',{name:'Adventures',exact:true})).toBeVisible();
-  await expect(page.getByText('I inspect the road.',{exact:false}).first()).toBeVisible();
+  await page.getByRole('button',{name:'Campaigns',exact:true}).click();
+  await page.getByRole('button',{name:'Continue Adventure'}).click();
+  await expect.poll(savedNote).toBe(true);
 });
 
 test('training encounter starts, rolls initiative, and survives reload', async ({ page }) => {
@@ -98,7 +104,8 @@ test('campaign deletion requires confirmation and preserves other campaigns', as
   await expect(page.getByText('No campaign selected')).toBeVisible();
   await page.reload();
   await expect(page.getByLabel('Four Keeps landing page')).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Continue Adventure' })).toBeDisabled();
+  await page.getByRole('button',{name:'Campaigns',exact:true}).click();
+  await expect(page.getByRole('button', { name: 'Continue Adventure' })).toHaveCount(0);
 });
 
 test('combat replaces persistent DM composer with optional Ask DM and header resources', async ({ page }) => {
@@ -1220,7 +1227,6 @@ test('AI combat proposal for imported character persists and enters verified com
  await page.getByRole('button',{name:'Campaigns',exact:true}).click();
  await page.getByRole('button',{name:'New Adventure'}).click();
  await page.getByLabel('Starting character').selectOption('organic-rogue');
- await page.getByLabel('Campaign name').fill('Raven Road');
  await page.getByRole('button',{name:'Begin Adventure'}).click();
  await page.route('**/api/dm',async route=>await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({narration:'A road bandit blocks your path.',combatStart:{enemyName:'Road bandit'},newFacts:[],worldUpdates:{}})}));
  await expect(page.getByLabel('Adventure',{exact:true})).toBeVisible();

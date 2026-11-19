@@ -1478,6 +1478,7 @@ export function App() {
         <button type="button" onClick={()=>setPortalScreen('characters')} className="rounded-xl border border-white/20 bg-panel p-5 text-center font-serif text-xl"><UserRound className="mx-auto mb-3 text-gold" size={28}/>Characters</button>
         <button type="button" onClick={()=>setPortalScreen('campaigns')} className="rounded-xl border border-white/20 bg-panel p-5 text-center font-serif text-xl"><BookOpen className="mx-auto mb-3 text-gold" size={28}/>Campaigns</button>
         <button type="button" onClick={()=>{setActiveView('settings');setPortalScreen('adventure');}} className="col-span-2 mx-auto mt-5 flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-parchment/70"><Settings size={16}/>Settings</button>
+        <button type="button" onClick={()=>setPortalScreen('help')} className="col-span-2 mx-auto rounded-lg px-3 py-2 text-sm text-parchment/70">Help</button>
       </div>}
       {portalScreen==='characters'&&<div className="space-y-3"><h2 className="font-serif text-2xl">My Characters</h2><CharacterCreator onBeginAdventure={(draftId)=>{const selected=readCharacterDrafts().find(item=>item.id===draftId);if(!selected)return;setSelectedCharacterDraft(draftId);setNewTitle(`${selected.identity.name || "New Hero"}’s Adventure`);setPortalScreen('new');}}/></div>}
       {portalScreen==='new'&&<section className="space-y-4 rounded-xl border border-white/20 bg-panel p-4">
@@ -1494,6 +1495,7 @@ export function App() {
         {!loading&&campaigns.length===0&&<p className="text-sm text-parchment/65">No adventures saved on this device.</p>}
         {[...campaigns].sort((a,b)=>Date.parse(b.updatedAt)-Date.parse(a.updatedAt)).map(item=><div key={item.id} className="space-y-3 rounded-xl border border-white/20 bg-panel p-4">
           <div className="flex items-start justify-between gap-3"><h3 className="min-w-0 font-serif text-xl">{item.characterIdentity?.name||item.characterBuild?.identity.name||'Nighthawk'}</h3><span className="shrink-0 text-sm text-gold">Level {item.character?.level??1} {(item.characterIdentity?.classId||item.character?.classId||'Rogue').replace(/^./,c=>c.toUpperCase())}</span></div>
+          <p className="text-sm text-parchment/85">{item.title}</p>
           <p className="text-sm text-parchment/80">⌖ {item.location||'Location unknown'}</p>
           <p className="text-xs text-parchment/60">Started {Number.isFinite(Date.parse(item.createdAt))?new Date(item.createdAt).toLocaleString():'date unavailable'}</p>
           <button type="button" onClick={()=>{setCampaign(item);setDeleteCampaignId(null);setActiveView('adventure');setPortalScreen('adventure');}} className="w-full rounded-lg bg-gold px-4 py-3 font-semibold text-ink">Continue Adventure</button>
