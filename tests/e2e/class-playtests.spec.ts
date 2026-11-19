@@ -1077,6 +1077,35 @@ test('iPhone opening has intentional loading, safe retry and one saved opening',
 });
 
 
+test('iPhone Dasahi opening offers a voluntary waterfront store with readable dialogue and browse handoff',async({page})=>{
+ test.setTimeout(120000);
+ await page.setViewportSize({width:390,height:844});
+ await createAndImport(page,'rogue');
+ await page.evaluate(()=>{localStorage.setItem('four-keeps-access-code','browser-test-code');localStorage.setItem('four-keeps-dm-mode','on');});
+ const opening='You step off the boat onto Dasahi’s waterfront. The general store beside the dock has an open door. The harbor smells of salt and fresh bread. Fishermen are hauling crates while the morning sun climbs over the rooftops. There is plenty to see along the waterfront, and no one stops you from exploring.\n\nMara: “Welcome ashore! Come browse if you need supplies.”\n\nBeyond the store, a narrow lane leads toward the city.';
+ await page.route('**/api/dm',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({narration:opening,newFacts:[],worldUpdates:{},mapActions:[]})}));
+ await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();await page.getByRole('button',{name:'Continue Adventure'}).click();
+ const narration=page.getByLabel('Dungeon Master narration').first();
+ await expect(narration).toBeVisible();await narration.click();
+ await expect(narration.locator('blockquote')).toHaveCount(1);
+ await expect(narration.locator('blockquote')).toContainText('Mara');
+ expect(await narration.locator('p').count()).toBeGreaterThanOrEqual(3);
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+ const before=await saved(page);
+ expect(before.merchantShopOpen).not.toBe(true);
+ const input=page.getByLabel('Message the Dungeon Master');
+ await input.fill('Can I take a look at your goods?');
+ await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
+ await expect(page.getByLabel('Dasahi marketplace')).toBeVisible();
+ const after=await saved(page);
+ expect(after.pendingMerchantPurchase).toBeUndefined();
+ expect(after.completedMerchantPurchaseIds??[]).toEqual(before.completedMerchantPurchaseIds??[]);
+ await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await expect(page.getByLabel('Dasahi marketplace')).toBeVisible();
+ expect((await saved(page)).journal.filter((entry:any)=>entry.id?.endsWith('-dm-opening'))).toHaveLength(1);
+});
+
+
 test('iPhone narration uses paragraphs, speaker dialogue and survives reload',async({page})=>{
  test.setTimeout(90000);
  await page.setViewportSize({width:390,height:844});

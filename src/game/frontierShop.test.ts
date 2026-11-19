@@ -159,6 +159,8 @@ describe('natural DM intent does not become a transaction',()=>{
 describe('multi-item merchant cart',()=>{
  it('opens browsing directly but does not misclassify finding a craftsperson',()=>{
   expect(classifyMerchantIntent("I'd like to browse")).toBe('browse');
+  expect(classifyMerchantIntent('Can I take a look at your goods?')).toBe('browse');
+  expect(classifyMerchantIntent('Let me have a look at the merchandise.')).toBe('browse');
   expect(classifyMerchantIntent('Can I see the merchandise?')).toBe('information');
   expect(classifyMerchantIntent('Where can I find a leatherworker?')).toBe('find-service');
  });
