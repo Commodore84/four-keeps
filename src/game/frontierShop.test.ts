@@ -1,7 +1,7 @@
 import {describe,it,expect} from 'vitest';
 import {newCampaign} from './campaign';
 import {beginAdventureSession} from './adventureSession';
-import {buyFrontierItem,frontierShopStock,frontierMerchantContext,formatFrontierPrice,parseFrontierPurchase,prepareMerchantPurchase,prepareMerchantCart,settleMerchantPurchase,walletCopper,remainingMerchantStock,merchantCatalog,isMerchantBrowseRequest,approveMerchantDiscount,isMerchantPurchaseRequest,classifyMerchantIntent,merchantNegotiationTarget,beginMerchantNegotiation,resolveMerchantNegotiation} from './frontierShop';
+import {buyFrontierItem,frontierShopStock,frontierMerchantContext,formatFrontierPrice,parseFrontierPurchase,prepareMerchantPurchase,prepareMerchantCart,settleMerchantPurchase,cityShopStock,walletCopper,remainingMerchantStock,merchantCatalog,isMerchantBrowseRequest,approveMerchantDiscount,isMerchantPurchaseRequest,classifyMerchantIntent,merchantNegotiationTarget,beginMerchantNegotiation,resolveMerchantNegotiation} from './frontierShop';
 function fixture(){const c=newCampaign('Shop','shop-test');return beginAdventureSession({...c,characterIdentity:{name:'Test',speciesId:'elf',backgroundId:'sage',classId:'rogue',draftId:'draft',pronouns:'',appearance:'',personality:'',backstory:''},inventoryLedger:{currency:{GP:10,SP:0,CP:0,EP:0,PP:0},gear:[]}})}
 describe('deterministic merchant negotiation check lifecycle',()=>{
  const pending=(token='social-1')=>({...fixture(),pendingCheck:{token,skill:'Persuasion' as const,mode:'normal' as const,reason:'Negotiate the dagger price'}});
@@ -187,5 +187,22 @@ describe('multi-item merchant cart',()=>{
   expect(formatFrontierPrice(1)).toBe('1 CP');
   expect(formatFrontierPrice(50)).toBe('5 SP');
   expect(formatFrontierPrice(200)).toBe('2 GP');
+ });
+});
+
+describe('2024 equipment catalog and merchant availability',()=>{
+ it('offers a broad SRD-priced village general store and wider city assortment',()=>{
+  expect(frontierShopStock.length).toBeGreaterThan(35);
+  expect(cityShopStock.length).toBeGreaterThan(frontierShopStock.length+30);
+  expect(frontierShopStock.find(item=>item.id==='backpack')?.costCp).toBe(200);
+  expect(frontierShopStock.find(item=>item.id==='healer-s-kit')?.costCp).toBe(500);
+  expect(frontierShopStock.find(item=>item.id==='waterskin')?.costCp).toBe(20);
+  expect(frontierShopStock.some(item=>item.id==='plate-armor')).toBe(false);
+  expect(cityShopStock.some(item=>item.id==='plate-armor')).toBe(true);
+ });
+ it('rejects a specialist item in a village without changing money or inventory',()=>{
+  const c=fixture();
+  expect(()=>prepareMerchantCart(c,[{itemId:'plate-armor',quantity:1}],'no-plate')).toThrow();
+  expect(c.pendingMerchantPurchase).toBeUndefined();
  });
 });

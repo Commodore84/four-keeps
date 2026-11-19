@@ -1,12 +1,14 @@
 import {useState} from 'react';
 import type {Campaign} from '../game/campaign';
-import {frontierShopStock,remainingMerchantStock,formatFrontierPrice,walletCopper} from '../game/frontierShop';
+import {merchantStock,remainingMerchantStock,formatFrontierPrice,walletCopper} from '../game/frontierShop';
 
 export function MerchantShop({campaign,saving,onClose,onPrepare,onSettle}:{campaign:Campaign;saving:boolean;onClose:()=>void;onPrepare:(items:{itemId:string;quantity:number}[])=>Promise<void>;onSettle:(confirmed:boolean)=>Promise<void>}){
  const [cart,setCart]=useState<Record<string,number>>({});
+ const [search,setSearch]=useState('');
+ const [category,setCategory]=useState('all');
  const pending=campaign.pendingMerchantPurchase;
  const funds=walletCopper(campaign.inventoryLedger?.currency);
- const lines=frontierShopStock.map(item=>{
+ const lines=merchantStock(campaign).map(item=>{
   const quantity=cart[item.id]??0;
   const discount=campaign.merchantDiscount?.itemId===item.id?campaign.merchantDiscount.percent:0;
   const unit=item.costCp-Math.floor(item.costCp*discount/100);
@@ -15,6 +17,7 @@ export function MerchantShop({campaign,saving,onClose,onPrepare,onSettle}:{campa
   return {item,quantity,unit,stock,owned};
  });
  const selected=lines.filter(line=>line.quantity>0);
+ const visible=lines.filter(line=>(category==='all'||line.item.category===category)&&line.item.name.toLowerCase().includes(search.toLowerCase()));
  const total=selected.reduce((sum,line)=>sum+line.unit*line.quantity,0);
  const eligible=selected.length>0&&total<=funds&&selected.every(line=>line.quantity<=line.stock&&line.quantity<=20);
  const pendingLines=pending?.lines??(pending?[{itemId:pending.itemId,quantity:pending.quantity,unitCostCp:pending.unitCostCp}]:[]);
@@ -22,12 +25,13 @@ export function MerchantShop({campaign,saving,onClose,onPrepare,onSettle}:{campa
  return <section aria-label={campaign.characterBuild?'Dasahi general store':'Frontier Village general store'} className="rounded-2xl border border-gold/40 bg-panel p-4 space-y-4">
   <div className="flex items-start justify-between gap-3"><div><p className="eyebrow">{campaign.characterBuild?'Dasahi':'Frontier Village'}</p><h2 className="font-serif text-xl">{campaign.characterBuild?'Dasahi General Store':"Mara Vell's General Store"}</h2><p className="text-xs text-parchment/65">Equipment and provisions · Prices from the rules engine</p></div><button type="button" onClick={onClose} disabled={saving||!!pending} className="rounded-lg border border-white/20 px-3 py-2 text-xs">Leave shop</button></div>
   <div className="rounded-lg border border-gold/25 bg-ink/50 p-3 text-sm" aria-label="Current wallet"><span className="text-parchment/70">Your money</span><strong className="float-right text-gold">{formatFrontierPrice(funds)}</strong></div>
-  <div className="space-y-2"><h3 className="font-semibold">Available equipment</h3><div className="max-h-96 overflow-y-auto rounded-lg border border-white/15 divide-y divide-white/10" aria-label="Merchant inventory">
-   {lines.map(({item,quantity,unit,stock,owned})=><div key={item.id} className="p-3 space-y-2" aria-label={item.name}>
+  <div className="space-y-2"><h3 className="font-semibold">Available equipment</h3>
+  <div className="grid grid-cols-2 gap-2"><input aria-label="Search merchandise" placeholder="Search items" value={search} onChange={e=>setSearch(e.target.value)} className="min-w-0 rounded-lg border border-white/25 bg-ink p-2 text-sm"/><select aria-label="Equipment category" value={category} onChange={e=>setCategory(e.target.value)} className="min-w-0 rounded-lg border border-white/25 bg-ink p-2 text-sm"><option value="all">All categories</option>{['gear','weapon','armor','shield','tool','ammunition'].map(cat=><option key={cat} value={cat}>{cat[0].toUpperCase()+cat.slice(1)}</option>)}</select></div><div className="max-h-96 overflow-y-auto rounded-lg border border-white/15 divide-y divide-white/10" aria-label="Merchant inventory">
+   {visible.map(({item,quantity,unit,stock,owned})=><div key={item.id} className="p-3 space-y-2" aria-label={item.name}>
     <div className="flex justify-between gap-2 text-sm"><div><strong className="block">{item.name}</strong><span className="text-xs text-parchment/60">{stock} in stock · {owned} in inventory{item.packQuantity?' · pack of '+item.packQuantity:''}</span></div><span className="shrink-0 tabular-nums text-gold">{formatFrontierPrice(unit)}</span></div>
     <div className="flex items-center justify-between gap-2"><div className="flex items-center gap-3"><button type="button" aria-label={'Remove '+item.name} disabled={saving||!!pending||quantity===0} onClick={()=>setCart(old=>({...old,[item.id]:Math.max(0,quantity-1)}))} className="rounded-lg border border-white/30 px-3 py-1 text-lg">−</button><span className="w-5 text-center tabular-nums">{quantity}</span><button type="button" aria-label={'Add '+item.name} disabled={saving||!!pending||quantity>=Math.min(stock,20)} onClick={()=>setCart(old=>({...old,[item.id]:quantity+1}))} className="rounded-lg border border-white/30 px-3 py-1 text-lg">+</button></div><span className="text-xs text-parchment/70">{quantity?formatFrontierPrice(unit*quantity):'—'}</span></div>
    </div>)}
-  </div></div>
-  {pending?<div aria-label="Confirm merchant purchase" className="space-y-3 rounded-lg border border-gold/40 p-3"><h3 className="font-semibold">Confirm purchase</h3>{pendingLines.map(line=><p key={line.itemId} className="text-sm">{line.quantity} × {frontierShopStock.find(item=>item.id===line.itemId)?.name} — {formatFrontierPrice(line.quantity*line.unitCostCp)}</p>)}<p className="font-semibold">Total: {formatFrontierPrice(pendingTotal)}</p><p className="text-xs text-parchment/70">Nothing is charged until you confirm.</p><div className="grid grid-cols-2 gap-2"><button type="button" disabled={saving} onClick={()=>void onSettle(false)} className="rounded-lg border border-white/30 p-3">Cancel</button><button type="button" disabled={saving} onClick={()=>void onSettle(true)} className="rounded-lg bg-gold p-3 font-semibold text-ink">Confirm purchase</button></div></div>:<div className="space-y-2 rounded-lg border border-white/15 p-3"><div className="flex justify-between"><strong>Cart total</strong><strong>{formatFrontierPrice(total)}</strong></div>{total>funds&&<p className="text-xs text-red-300">Not enough money for this cart.</p>}<button type="button" disabled={saving||!eligible} onClick={()=>void onPrepare(selected.map(line=>({itemId:line.item.id,quantity:line.quantity})))} className="w-full rounded-lg bg-gold p-3 font-semibold text-ink disabled:opacity-40">Review purchase</button></div>}
+  </div>{visible.length===0&&<p className="text-sm text-parchment/60">No merchandise matches those filters.</p>}</div>
+  {pending?<div aria-label="Confirm merchant purchase" className="space-y-3 rounded-lg border border-gold/40 p-3"><h3 className="font-semibold">Confirm purchase</h3>{pendingLines.map(line=><p key={line.itemId} className="text-sm">{line.quantity} × {merchantStock(campaign).find(item=>item.id===line.itemId)?.name} — {formatFrontierPrice(line.quantity*line.unitCostCp)}</p>)}<p className="font-semibold">Total: {formatFrontierPrice(pendingTotal)}</p><p className="text-xs text-parchment/70">Nothing is charged until you confirm.</p><div className="grid grid-cols-2 gap-2"><button type="button" disabled={saving} onClick={()=>void onSettle(false)} className="rounded-lg border border-white/30 p-3">Cancel</button><button type="button" disabled={saving} onClick={()=>void onSettle(true)} className="rounded-lg bg-gold p-3 font-semibold text-ink">Confirm purchase</button></div></div>:<div className="space-y-2 rounded-lg border border-white/15 p-3"><div className="flex justify-between"><strong>Cart total</strong><strong>{formatFrontierPrice(total)}</strong></div>{total>funds&&<p className="text-xs text-red-300">Not enough money for this cart.</p>}<button type="button" disabled={saving||!eligible} onClick={()=>void onPrepare(selected.map(line=>({itemId:line.item.id,quantity:line.quantity})))} className="w-full rounded-lg bg-gold p-3 font-semibold text-ink disabled:opacity-40">Review purchase</button></div>}
  </section>;
 }

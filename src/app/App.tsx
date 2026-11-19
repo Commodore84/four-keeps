@@ -4,7 +4,7 @@ import {applyAnchamidaActions} from '../game/anchamidaActions';
 import {AnchamidaRegionMap} from './AnchamidaRegionMap';
 import {MerchantShop} from './MerchantShop';
 import {DMNarration,type NarrationSpeed} from './DMNarration';
-import {parseFrontierPurchase,prepareMerchantPurchase,prepareMerchantCart,settleMerchantPurchase,frontierShopStock,formatFrontierPrice,isMerchantNegotiationRequest,isMerchantPurchaseRequest,classifyMerchantIntent,merchantNegotiationTarget,beginMerchantNegotiation,resolveMerchantNegotiation} from '../game/frontierShop';
+import {parseFrontierPurchase,prepareMerchantPurchase,prepareMerchantCart,settleMerchantPurchase,frontierShopStock,merchantStock,formatFrontierPrice,isMerchantNegotiationRequest,isMerchantPurchaseRequest,classifyMerchantIntent,merchantNegotiationTarget,beginMerchantNegotiation,resolveMerchantNegotiation} from '../game/frontierShop';
 import {classSummary} from '../game/creationClasses';
 import {completePlayerRest,playerLongRestWaitMinutes} from '../game/playerRecovery';
 import {frontierMerchantContext} from '../game/frontierShop';
@@ -698,7 +698,7 @@ export function App() {
     setSaving(true);try{
       const pending=campaign.pendingMerchantPurchase;
       const next=settleMerchantPurchase(campaign,pending.id,confirmed);
-      const message=confirmed?'Purchased '+(pending.lines??[{itemId:pending.itemId,quantity:pending.quantity,unitCostCp:pending.unitCostCp}]).map(line=>line.quantity+' × '+(frontierShopStock.find(item=>item.id===line.itemId)?.name??'item')).join(', ')+'.':'Purchase canceled; no money was spent.';
+      const message=confirmed?'Purchased '+(pending.lines??[{itemId:pending.itemId,quantity:pending.quantity,unitCostCp:pending.unitCostCp}]).map(line=>line.quantity+' × '+(merchantStock(campaign).find(item=>item.id===line.itemId)?.name??'item')).join(', ')+'.':'Purchase canceled; no money was spent.';
       await saveMerchantShop(addExchange(next,confirmed?'I confirm the purchase.':'I cancel the purchase.',message));
       setNotice(message);
     }catch(error){setNotice('Purchase error: '+String(error));}finally{setSaving(false);}
