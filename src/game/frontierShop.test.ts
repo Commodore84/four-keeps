@@ -1,7 +1,7 @@
 import {describe,it,expect} from 'vitest';
 import {newCampaign} from './campaign';
 import {beginAdventureSession} from './adventureSession';
-import {buyFrontierItem,frontierShopStock,frontierMerchantContext,formatFrontierPrice,parseFrontierPurchase,prepareMerchantPurchase,prepareMerchantCart,settleMerchantPurchase,cityShopStock,merchantCatalogFor,availableMerchants,merchantStockKey,merchantStockKeyForCampaign,merchantInitialStock,merchantRestockIntervalMinutes,walletCopper,remainingMerchantStock,merchantCatalog,isMerchantBrowseRequest,approveMerchantDiscount,isMerchantPurchaseRequest,classifyMerchantIntent,merchantNegotiationTarget,beginMerchantNegotiation,resolveMerchantNegotiation} from './frontierShop';
+import {buyFrontierItem,frontierShopStock,frontierMerchantContext,formatFrontierPrice,parseFrontierPurchase,prepareMerchantPurchase,prepareMerchantCart,settleMerchantPurchase,cityShopStock,merchantCatalogFor,availableMerchants,merchantStockKey,merchantStockKeyForCampaign,merchantInitialStock,merchantRestockIntervalMinutes,walletCopper,remainingMerchantStock,merchantCatalog,isMerchantBrowseRequest,approveMerchantDiscount,isMerchantPurchaseRequest,classifyMerchantIntent,merchantNegotiationTarget,beginMerchantNegotiation,resolveMerchantNegotiation,merchantDiscountDC,beginCartNegotiation,resolveCartNegotiation} from './frontierShop';
 function fixture(){const c=newCampaign('Shop','shop-test');return beginAdventureSession({...c,merchantSettlementTier:'town',characterIdentity:{name:'Test',speciesId:'elf',backgroundId:'sage',classId:'rogue',draftId:'draft',pronouns:'',appearance:'',personality:'',backstory:''},inventoryLedger:{currency:{GP:10,SP:0,CP:0,EP:0,PP:0},gear:[]}})}
 describe('deterministic merchant negotiation check lifecycle',()=>{
  const pending=(token='social-1')=>({...fixture(),pendingCheck:{token,skill:'Persuasion' as const,mode:'normal' as const,reason:'Negotiate the dagger price'}});
@@ -69,7 +69,7 @@ describe('2024 merchant catalog compatibility and ammunition',()=>{
  });
 });
 describe('first visit shop',()=>{
- it('shows standard prices in gold, silver and copper',()=>{expect(formatFrontierPrice(200)).toBe('2 GP');expect(formatFrontierPrice(125)).toBe('1.25 GP');expect(formatFrontierPrice(5)).toBe('5 CP');expect(formatFrontierPrice(0)).toBe('0 CP')});
+ it('shows standard prices in gold, silver and copper',()=>{expect(formatFrontierPrice(200)).toBe('2 GP');expect(formatFrontierPrice(125)).toBe('1 GP 2 SP 5 CP');expect(formatFrontierPrice(5)).toBe('5 CP');expect(formatFrontierPrice(0)).toBe('0 CP')});
  it('uses the canonical item catalog and deducts exact copper pieces',()=>{const item=frontierShopStock.find(i=>i.id==='dagger')!;expect(item.costCp).toBe(200);const c=buyFrontierItem(fixture(),'dagger',2);expect(c.inventoryLedger?.currency.GP).toBe(6);expect(c.inventoryLedger?.gear).toContainEqual({name:'Dagger',quantity:2});expect(JSON.parse(JSON.stringify(c)).inventoryLedger.gear[0].quantity).toBe(2)});
  it('does not mutate a campaign on invalid, unavailable or unaffordable purchases',()=>{const c=fixture();for(const [id,q] of [['dagger',21],['greatsword',1],['dagger',6]] as const)expect(()=>buyFrontierItem(c,id,q)).toThrow();expect(c.inventoryLedger?.currency.GP).toBe(10)});
  it('exposes authoritative shop prices and wallet to merchant conversation without transactions',()=>{const c=fixture();const ctx=frontierMerchantContext(c)!;expect(ctx.items).toContainEqual({id:'potion-of-healing',name:'Potion of Healing',costCp:5000,packQuantity:1,remaining:3});expect(ctx.walletCp).toBe(1000);expect(ctx.purchaseRule).toContain('explicit confirmation');expect(c.inventoryLedger?.gear).toEqual([])});
@@ -316,5 +316,43 @@ describe('restock checkpoint migration and purchase boundaries',()=>{
   expect(remainingMerchantStock(JSON.parse(JSON.stringify(bought)),'torch')).toBe(1);
   expect(remainingMerchantStock({...bought,elapsedMinutes:2879},'torch')).toBe(1);
   expect(remainingMerchantStock({...bought,elapsedMinutes:2880},'torch')).toBe(merchantInitialStock('city','torch','general'));
+ });
+});
+
+
+describe('authoritative multi-item negotiated cart',()=>{
+ const cart=()=>{
+  const c=fixture();
+  return prepareMerchantCart({...c,merchantShopType:'weaponsmith',inventoryLedger:{currency:{GP:100,SP:0,CP:0,EP:0,PP:0},gear:[]}},[{itemId:'dagger',quantity:1},{itemId:'club',quantity:2}],'negotiated-1');
+ };
+ it('keeps DC private and validates tier boundaries',()=>{
+  expect(merchantDiscountDC(5)).toBe(10);
+  expect(merchantDiscountDC(10)).toBe(15);
+  expect(merchantDiscountDC(15)).toBe(20);
+  expect(merchantDiscountDC(20)).toBe(25);
+  expect(merchantDiscountDC(10,-5)).toBe(10);
+  expect(()=>merchantDiscountDC(21)).toThrow();
+  expect(()=>merchantDiscountDC(10,-6)).toThrow();
+ });
+ it('requires a roll, refuses retries and preserves listed price on failure',()=>{
+  const original=cart();
+  const offered=beginCartNegotiation(original,10,'roll-1');
+  expect(()=>beginCartNegotiation(offered,5,'roll-2')).toThrow();
+  expect(()=>resolveCartNegotiation(offered,'wrong',30)).toThrow();
+  const failed=resolveCartNegotiation(JSON.parse(JSON.stringify(offered)),'roll-1',14);
+  expect(failed.merchantCartNegotiation?.success).toBe(false);
+  expect(failed.pendingMerchantPurchase?.lines).toEqual(original.pendingMerchantPurchase?.lines);
+  expect(()=>resolveCartNegotiation(failed,'roll-1',30)).toThrow();
+ });
+ it('updates every line only on success, persists, debits once and prevents replay',()=>{
+  const offered=beginCartNegotiation(cart(),10,'roll-1');
+  const won=resolveCartNegotiation(JSON.parse(JSON.stringify(offered)),'roll-1',15);
+  expect(won.merchantCartNegotiation?.success).toBe(true);
+  expect(won.pendingMerchantPurchase?.lines?.every((line,i)=>line.unitCostCp<=offered.pendingMerchantPurchase!.lines![i].unitCostCp)).toBe(true);
+  const reloaded=JSON.parse(JSON.stringify(won));
+  const bought=settleMerchantPurchase(reloaded,'negotiated-1',true);
+  expect(bought.pendingMerchantPurchase).toBeUndefined();
+  expect(bought.completedMerchantPurchaseIds).toContain('negotiated-1');
+  expect(()=>settleMerchantPurchase(bought,'negotiated-1',true)).toThrow();
  });
 });

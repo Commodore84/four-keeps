@@ -23,6 +23,8 @@ export interface Campaign {
   merchantShopOpen?:boolean;
   merchantSettlementTier?:'city'|'town'|'village'|'traveling';
   merchantShopType?:'general'|'weaponsmith'|'armorer'|'apothecary'|'arcanist'|'outfitter'|'stable'|'trader';
+  merchantCartNegotiation?:{purchaseId:string;percent:number;dc:number;attempted:boolean;checkToken?:string;resolved?:boolean;success?:boolean};
+  merchantCartDraft?:{merchant:NonNullable<Campaign['merchantShopType']>;items:{itemId:string;quantity:number}[];message:string};
   pendingMerchantPurchase?:{id:string;itemId:string;quantity:number;unitCostCp:number;lines?:{itemId:string;quantity:number;unitCostCp:number}[]};
   merchantStockRemaining?:Record<string,number>;
   merchantStockRestockedAt?:Record<string,number>;

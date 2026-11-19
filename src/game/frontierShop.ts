@@ -4,8 +4,71 @@ import {OFFICIAL_EQUIPMENT_2024} from './officialEquipment2024';
 
 export function formatFrontierPrice(copper:number):string {
  if(!Number.isSafeInteger(copper)||copper<0)throw Error('Invalid copper amount.');
- return copper>=100 ? (copper/100).toFixed(2).replace(/\.00$/,'').replace(/(\.\d)0$/,'$1')+' GP' : copper>=10 ? (copper/10).toFixed(1).replace(/\.0$/,'')+' SP' : copper+' CP';
+ const gp=Math.floor(copper/100),sp=Math.floor(copper%100/10),cp=copper%10;
+ return [gp?gp+' GP':'',sp?sp+' SP':'',cp?cp+' CP':''].filter(Boolean).join(' ')||'0 CP';
 }
+export function merchantItemDescription(item:import('./creationEquipment').Item):string {
+ const facts:string[]=[];
+ if(item.damage)facts.push(item.damage+' damage');
+ if(item.properties?.length)facts.push(item.properties.join(', '));
+ if(item.mastery)facts.push(item.mastery+' mastery');
+ if(item.baseAC!==undefined)facts.push('AC '+item.baseAC);
+ if(item.strength)facts.push('Strength '+item.strength+' requirement');
+ if(item.stealthDisadvantage)facts.push('Stealth disadvantage');
+ if(item.packQuantity)facts.push('Pack of '+item.packQuantity);
+ if(item.weight)facts.push(item.weight+' lb.');
+ if(facts.length)return facts.join(' · ')+'.';
+ const uses:Record<string,string>={
+ 'rope':'A length of rope for climbing, tying, or securing loads.',
+ 'torch':'A handheld source of light that burns while lit.',
+ 'rations':'Preserved food for a day of travel.',
+ 'waterskin':'A portable container for drinking water.',
+ 'backpack':'A pack for carrying travel supplies.',
+ 'bedroll':'A portable sleeping roll.',
+ 'blanket':'A warm covering for sleeping or shelter.',
+ 'healer-s-kit':'A kit used to stabilize a creature without a Medicine check.',
+ 'tinderbox':'Tools for starting a fire.',
+ 'grappling-hook':'A metal hook for anchoring a climbing rope.',
+ 'crowbar':'A lever for prying open or lifting objects.',
+ 'lantern-hooded':'A lantern with a hood that can conceal its light.',
+ 'lantern-bullseye':'A lantern that projects light in a cone.',
+ 'oil':'Lamp fuel that can also be spilled or thrown.',
+ 'caltrops':'Sharp obstacles that impede movement through an area.',
+ 'ball-bearings':'Small metal balls used to create a slippery hazard.',
+ 'manacles':'Metal restraints with a lock.',
+ 'lock':'A mechanical lock used to secure an object.',
+ 'mirror':'A reflective surface for inspecting hard-to-see places.',
+ 'tent':'Portable shelter for camping.',
+ 'quiver':'A container for carrying arrows.',
+ 'pouch':'A small container worn on a belt.',
+ 'sack':'A flexible bag for carrying supplies.',
+ 'shovel':'A tool for digging.',
+ 'ladder':'A climbing aid for reaching elevated places.',
+ 'hunting-trap':'A mechanical trap used to catch creatures.',
+ 'signal-whistle':'A whistle for signaling over a distance.',
+ 'chain':'Heavy metal links for binding or securing objects.',
+ 'spikes-iron':'Metal spikes for anchoring ropes or securing doors.',
+ 'potion-of-healing':'A consumable potion that restores hit points when used.',
+ 'candle':'A small, short-lived light source.',
+ 'map':'A chart showing a mapped area.',
+ 'paper':'A sheet for writing or drawing.',
+ 'parchment':'A writing sheet made from prepared animal skin.',
+ 'ink':'Ink for writing with a pen.',
+ 'ink-pen':'A pen used with ink.',
+ 'flask':'A small bottle for carrying liquids.',
+ 'vial':'A small container for liquids.',
+ 'bucket':'A handled container for carrying liquids or materials.',
+ 'basket':'A woven container for carrying goods.',
+ 'chest':'A rigid container for storing valuables and supplies.',
+ 'bell':'A small metal bell used to make an audible signal.'
+ };
+ if(uses[item.id])return uses[item.id];
+ if(item.category==='tool')return 'A specialized tool for the activities associated with its proficiency.';
+ if(item.category==='ammunition')return 'Ammunition for a compatible ranged weapon.';
+ if(item.category==='shield')return 'A shield carried for defensive protection.';
+ return item.name+' is standard adventuring equipment; consult its rules entry for any specific action or effect.';
+}
+
 export function walletCopper(currency:Partial<Record<'CP'|'SP'|'EP'|'GP'|'PP',number>> = {}):number {
  return (currency.CP??0)+10*(currency.SP??0)+50*(currency.EP??0)+100*(currency.GP??0)+1000*(currency.PP??0);
 }
@@ -235,13 +298,37 @@ export function prepareMerchantCart(campaign:Campaign,items:{itemId:string;quant
  if(lines.reduce((sum,line)=>sum+line.unitCostCp*line.quantity,0)>walletCopper(campaign.inventoryLedger?.currency))throw Error('Insufficient money.');
  return {...campaign,pendingMerchantPurchase:{id,itemId:lines[0].itemId,quantity:lines[0].quantity,unitCostCp:lines[0].unitCostCp,lines}};
 }
+/** Four Keeps house-rule negotiation: DCs are authoritative and never narrated. */
+export function merchantDiscountDC(percent:number,adjustment=0):number {
+ if(!Number.isFinite(percent)||percent<=0||percent>20||!Number.isInteger(adjustment)||Math.abs(adjustment)>5)throw Error('Discount outside negotiable limits.');
+ return (percent<=5?10:percent<=10?15:percent<=15?20:25)+adjustment;
+}
+export function beginCartNegotiation(campaign:Campaign,percent:number,token:string,adjustment=0):Campaign {
+ const pending=campaign.pendingMerchantPurchase;
+ if(!pending||!token||campaign.merchantCartNegotiation?.attempted)throw Error('This order cannot be renegotiated.');
+ const dc=merchantDiscountDC(percent,adjustment);
+ return {...campaign,merchantCartNegotiation:{purchaseId:pending.id,percent,dc,attempted:true,checkToken:token}};
+}
+export function resolveCartNegotiation(campaign:Campaign,token:string,total:number):Campaign {
+ const offer=campaign.merchantCartNegotiation,pending=campaign.pendingMerchantPurchase;
+ if(!offer||!pending||offer.purchaseId!==pending.id||offer.checkToken!==token||offer.resolved||!Number.isFinite(total))throw Error('No matching unresolved merchant negotiation.');
+ const success=total>=offer.dc;
+ if(!success)return {...campaign,merchantCartNegotiation:{...offer,resolved:true,success:false}};
+ const original=pending.lines??[{itemId:pending.itemId,quantity:pending.quantity,unitCostCp:pending.unitCostCp}];
+ const lines=original.map(line=>{
+  const item=merchantStock(campaign).find(x=>x.id===line.itemId);
+  if(!item)throw Error('Merchant item unavailable.');
+  return {...line,unitCostCp:item.costCp-Math.floor(item.costCp*offer.percent/100)};
+ });
+ return {...campaign,pendingMerchantPurchase:{...pending,itemId:lines[0].itemId,quantity:lines[0].quantity,unitCostCp:lines[0].unitCostCp,lines},merchantCartNegotiation:{...offer,resolved:true,success:true}};
+}
 export function settleMerchantPurchase(campaign:Campaign,id:string,confirmed:boolean):Campaign {
  const pending=campaign.pendingMerchantPurchase;
  if(!pending||pending.id!==id)throw Error('No matching pending purchase.');
  if((campaign.completedMerchantPurchaseIds??[]).includes(id))throw Error('Purchase already completed.');
- if(!confirmed)return {...campaign,pendingMerchantPurchase:undefined};
+ if(!confirmed)return {...campaign,pendingMerchantPurchase:undefined,merchantCartNegotiation:undefined};
  const item=merchantStock(campaign).find(i=>i.id===pending.itemId);
- const discount=campaign.merchantDiscount?.itemId===pending.itemId?campaign.merchantDiscount.percent:0;
+ const discount=campaign.merchantCartNegotiation?.purchaseId===pending.id&&campaign.merchantCartNegotiation.success?campaign.merchantCartNegotiation.percent:campaign.merchantDiscount?.itemId===pending.itemId?campaign.merchantDiscount.percent:0;
  if(!item||item.costCp-Math.floor(item.costCp*discount/100)!==pending.unitCostCp)throw Error('Merchant price changed; request a new quote.');
  const lines=pending.lines??[{itemId:pending.itemId,quantity:pending.quantity,unitCostCp:pending.unitCostCp}];
  // Validate the complete cart against the same authoritative snapshot before any mutation.
@@ -251,7 +338,7 @@ export function settleMerchantPurchase(campaign:Campaign,id:string,confirmed:boo
  for(const line of lines){
   if(!Number.isSafeInteger(line.quantity)||line.quantity<1||line.quantity>20)throw Error('Invalid purchase quantity.');
   const listed=merchantStock(campaign).find(item=>item.id===line.itemId);
-  const discount=campaign.merchantDiscount?.itemId===line.itemId?campaign.merchantDiscount.percent:0;
+  const discount=campaign.merchantCartNegotiation?.purchaseId===pending.id&&campaign.merchantCartNegotiation.success?campaign.merchantCartNegotiation.percent:campaign.merchantDiscount?.itemId===line.itemId?campaign.merchantDiscount.percent:0;
   if(!listed||listed.costCp-Math.floor(listed.costCp*discount/100)!==line.unitCostCp)throw Error('Merchant price changed; request a new quote.');
   if(line.quantity>remainingMerchantStock(campaign,line.itemId))throw Error('The merchant does not have enough stock.');
   total+=line.quantity*line.unitCostCp;
@@ -261,11 +348,11 @@ export function settleMerchantPurchase(campaign:Campaign,id:string,confirmed:boo
  let bought=campaign;
  for(const line of lines){
   const item=merchantStock(campaign).find(i=>i.id===line.itemId);
-  const discount=bought.merchantDiscount?.itemId===line.itemId?bought.merchantDiscount.percent:0;
+  const discount=campaign.merchantCartNegotiation?.purchaseId===pending.id&&campaign.merchantCartNegotiation.success?campaign.merchantCartNegotiation.percent:bought.merchantDiscount?.itemId===line.itemId?bought.merchantDiscount.percent:0;
   if(!item||item.costCp-Math.floor(item.costCp*discount/100)!==line.unitCostCp)throw Error('Merchant price changed; request a new quote.');
-  bought=buyFrontierItem(bought,line.itemId,line.quantity);
+  bought=buyFrontierItem({...bought,merchantDiscount:discount?{itemId:line.itemId,percent:discount,approvalId:pending.id}:undefined},line.itemId,line.quantity);
  }
- return {...bought,pendingMerchantPurchase:undefined,completedMerchantPurchaseIds:[...(campaign.completedMerchantPurchaseIds??[]),id]};
+ return {...bought,pendingMerchantPurchase:undefined,merchantCartNegotiation:undefined,completedMerchantPurchaseIds:[...(campaign.completedMerchantPurchaseIds??[]),id]};
 }
 
 export function beginMerchantNegotiation(campaign:Campaign,itemId:string,checkToken:string,skill:string):Campaign {

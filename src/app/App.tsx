@@ -5,7 +5,7 @@ import {AnchamidaRegionMap} from './AnchamidaRegionMap';
 import {MerchantShop} from './MerchantShop';
 import {confirmCitySupplyOrder,isSupplierBrowseRequest} from '../game/merchantSupply';
 import {DMNarration,type NarrationSpeed} from './DMNarration';
-import {parseFrontierPurchase,prepareMerchantPurchase,prepareMerchantCart,settleMerchantPurchase,frontierShopStock,merchantStock,formatFrontierPrice,isMerchantNegotiationRequest,isMerchantPurchaseRequest,classifyMerchantIntent,merchantNegotiationTarget,beginMerchantNegotiation,resolveMerchantNegotiation} from '../game/frontierShop';
+import {parseFrontierPurchase,prepareMerchantPurchase,prepareMerchantCart,settleMerchantPurchase,frontierShopStock,merchantStock,merchantCatalogFor,settlementTier,remainingMerchantStock,formatFrontierPrice,isMerchantNegotiationRequest,isMerchantPurchaseRequest,classifyMerchantIntent,merchantNegotiationTarget,beginMerchantNegotiation,resolveMerchantNegotiation,beginCartNegotiation,resolveCartNegotiation} from '../game/frontierShop';
 import {classSummary} from '../game/creationClasses';
 import {completePlayerRest,playerLongRestWaitMinutes} from '../game/playerRecovery';
 import {frontierMerchantContext} from '../game/frontierShop';
@@ -138,7 +138,7 @@ const tabs = [
   { id: 'development', label: 'Developer', Icon: Blocks },
 ] as const;
 
-function Adventure({ campaign, fullHistory, onToggleHistory, onAdventureChange, onStartOpening, onRetryAction, onShopClose, onShopPrepare, onShopSettle, saving, openingError, narrationSpeed, development = false }: { campaign: Campaign | null; fullHistory: boolean; onToggleHistory: () => void; onAdventureChange:(next:Campaign,message:string)=>Promise<boolean>|boolean|void; onStartOpening:()=>Promise<void>; onRetryAction:()=>Promise<void>; onShopClose:()=>Promise<void>; onShopPrepare:(items:{itemId:string;quantity:number}[],merchant:import('../game/frontierShop').MerchantType)=>Promise<void>; onShopSettle:(confirmed:boolean)=>Promise<void>; saving:boolean; openingError:string|null; narrationSpeed:NarrationSpeed; development?:boolean }) {
+function Adventure({ campaign, fullHistory, onToggleHistory, onAdventureChange, onStartOpening, onRetryAction, onShopClose, onShopPrepare, onShopSettle, onShopDiscuss, saving, openingError, narrationSpeed, development = false }: { campaign: Campaign | null; fullHistory: boolean; onToggleHistory: () => void; onAdventureChange:(next:Campaign,message:string)=>Promise<boolean>|boolean|void; onStartOpening:()=>Promise<void>; onRetryAction:()=>Promise<void>; onShopClose:()=>Promise<void>; onShopPrepare:(items:{itemId:string;quantity:number}[],merchant:import('../game/frontierShop').MerchantType)=>Promise<void>; onShopSettle:(confirmed:boolean)=>Promise<void>; onShopDiscuss:(items:{itemId:string;quantity:number}[],merchant:import('../game/frontierShop').MerchantType)=>Promise<void>; saving:boolean; openingError:string|null; narrationSpeed:NarrationSpeed; development?:boolean }) {
   const endRef = useRef<HTMLDivElement>(null);
   const shopRef = useRef<HTMLDivElement>(null);
   useEffect(()=>{if(campaign?.merchantShopOpen && campaign.adventureSession?.site==='frontier' && campaign.adventureSession.status==='exploring')shopRef.current?.scrollIntoView({behavior:'instant',block:'start'});},[campaign?.merchantShopOpen,campaign?.adventureSession?.site,campaign?.adventureSession?.status]);
@@ -170,7 +170,14 @@ function Adventure({ campaign, fullHistory, onToggleHistory, onAdventureChange, 
       <p className="text-parchment/90">{campaign.pendingClarification.question}</p>
       {campaign.pendingClarification.answer ? <><p className="ml-6 rounded-xl border border-gold/30 bg-gold/10 p-3">{campaign.pendingClarification.answer}</p><button type="button" disabled={saving} className="text-sm text-gold underline" onClick={()=>void onRetryAction()}>Retry confirmed action</button></> : <p className="text-xs text-parchment/60">Reply using the message field below. Your original action is saved.</p>}
     </section>}
-    {campaign?.merchantShopOpen && campaign.adventureSession?.site==='frontier' && campaign.adventureSession.status==='exploring' && <div ref={shopRef}><MerchantShop campaign={campaign} saving={saving} onClose={onShopClose} onPrepare={onShopPrepare} onSettle={onShopSettle} onSupplyChange={onAdventureChange}/></div>}
+    {campaign?.pendingMerchantPurchase && <section aria-label="Pending merchant order" className="rounded-xl border border-gold/40 bg-panel p-4 space-y-3">
+      <h3 className="font-semibold">Pending merchant order</h3>
+      <p className="text-sm">{(campaign.pendingMerchantPurchase.lines??[{itemId:campaign.pendingMerchantPurchase.itemId,quantity:campaign.pendingMerchantPurchase.quantity,unitCostCp:campaign.pendingMerchantPurchase.unitCostCp}]).map(line=>line.quantity+' × '+(frontierShopStock.find(item=>item.id===line.itemId)?.name??line.itemId)).join(', ')}</p>
+      <p className="text-gold">{formatFrontierPrice((campaign.pendingMerchantPurchase.lines??[{itemId:campaign.pendingMerchantPurchase.itemId,quantity:campaign.pendingMerchantPurchase.quantity,unitCostCp:campaign.pendingMerchantPurchase.unitCostCp}]).reduce((sum,line)=>sum+line.quantity*line.unitCostCp,0))}</p>
+      {campaign.merchantCartNegotiation&&!campaign.merchantCartNegotiation.resolved&&<p className="text-xs">Complete your ability check before purchasing.</p>}
+      <div className="flex gap-2"><button type="button" disabled={saving||!!campaign.pendingCheck} onClick={()=>void onShopSettle(true)} className="rounded-lg bg-gold text-ink px-3 py-2">Confirm Purchase</button><button type="button" disabled={saving||!!campaign.pendingCheck} onClick={()=>void onShopSettle(false)} className="rounded-lg border px-3 py-2">Cancel Order</button></div>
+    </section>}
+    {campaign?.merchantShopOpen && campaign.adventureSession?.site==='frontier' && campaign.adventureSession.status==='exploring' && <div ref={shopRef}><MerchantShop campaign={campaign} saving={saving} onClose={onShopClose} onPrepare={onShopPrepare} onSettle={onShopSettle} onDiscuss={onShopDiscuss} onSupplyChange={onAdventureChange}/></div>}
     {campaign && <p className="text-xs text-gold/80">Campaign saved on this device · {turns.length ? 'AI Dungeon Master connected' : campaign.characterIdentity ? 'Opening scene pending' : 'Ready for your first action'}</p>}
     <div ref={endRef}/>
   </section>;
@@ -651,6 +658,17 @@ export function App() {
       setCampaigns(items => items.map(item => item.id === locked.id ? locked : item));
       setNotice('Dice rolled. DM is resolving the check…');
       await localCampaignStorage.save(locked);
+      if(locked.merchantCartNegotiation?.checkToken===pending.token){
+        const used=dice.length===1?dice[0]:pending.mode==='advantage'?Math.max(...dice):Math.min(...dice);
+        const modifier=skillModifier(locked.character??prototypeNighthawk,pending.skill as Parameters<typeof skillModifier>[1]);
+        const total=used+modifier;
+        const next=resolveCartNegotiation({...locked,pendingCheck:undefined},pending.token,total);
+        const success=next.merchantCartNegotiation?.success;
+        const narration=success?'The merchant agrees to your proposed discount. Confirm the updated order to purchase.':'The merchant declines your offer. You may still buy at the listed price.';
+        const recorded=addExchange(next,pending.skill+': '+used+' '+(modifier<0?'−':'+')+Math.abs(modifier)+' = '+total+'.',narration);
+        await localCampaignStorage.save(recorded);setCampaign(recorded);setCampaigns(items=>items.map(item=>item.id===recorded.id?recorded:item));setNotice(narration);
+        return;
+      }
       const history = locked.journal.filter(entry => entry.kind === 'player' || entry.kind === 'dm').slice(-12)
         .map(entry => ({ role: entry.kind === 'player' ? 'user' : 'assistant', content: entry.text }));
       const response = await fetch('/api/dm', { method:'POST', headers:{ 'Content-Type':'application/json','x-four-keeps-access':accessCode },
@@ -693,6 +711,24 @@ export function App() {
       const next=prepareMerchantCart({...campaign,merchantShopOpen:true,merchantShopType:merchant},items,crypto.randomUUID());
       await saveMerchantShop(next);setNotice('Review the purchase before confirming.');
     }catch(error){setNotice('Shopkeeper: '+String(error));}finally{setSaving(false);}
+  }
+  async function discussShopCart(items:{itemId:string;quantity:number}[],merchant:import('../game/frontierShop').MerchantType){
+    if(!campaign||saving||!items.length||campaign.pendingMerchantPurchase)return;
+    const catalog=merchantCatalogFor(settlementTier(campaign),merchant);
+    const descriptions=items.map(line=>{
+      const item=catalog.find(entry=>entry.id===line.itemId);
+      if(!item||!Number.isInteger(line.quantity)||line.quantity<1||line.quantity>20||line.quantity>remainingMerchantStock(campaign,line.itemId,merchant))throw Error('Cart inventory changed. Review the shop again.');
+      return {item,quantity:line.quantity};
+    });
+    const cost=descriptions.reduce((sum,line)=>sum+line.quantity*line.item.costCp,0);
+    const message='I would like to buy '+descriptions.map(line=>line.quantity+' × '+line.item.name).join(', ')+'. The listed total is '+formatFrontierPrice(cost)+'.';
+    setSaving(true);
+    try{
+      await saveMerchantShop({...campaign,merchantShopOpen:false,merchantShopType:merchant,merchantCartDraft:{merchant,items,message}});
+      setDraft(message);
+      setNotice('Order placed in your chat draft. Edit it or send it when ready; nothing has been purchased.');
+    }catch(error){setNotice('Shop error: '+String(error));}
+    finally{setSaving(false);}
   }
   async function settleShopPurchase(confirmed:boolean){
     if(!campaign?.pendingMerchantPurchase||saving)return;
@@ -738,12 +774,52 @@ export function App() {
       }catch(error){setNotice('Supplier order: '+String(error));}finally{setSaving(false);}
       return;
     }
+    if(campaign?.merchantCartDraft && !campaign.pendingMerchantPurchase){
+      const selected=campaign.merchantCartDraft;
+      if(!draft.trim()){setNotice('Enter a message to discuss your order.');return;}
+      setSaving(true);
+      try{
+        const quoted=prepareMerchantCart({...campaign,merchantShopType:selected.merchant,merchantCartDraft:undefined},selected.items,crypto.randomUUID());
+        const lines=quoted.pendingMerchantPurchase!.lines!;
+        const total=lines.reduce((sum,line)=>sum+line.quantity*line.unitCostCp,0);
+        const narration='The merchant reviews your order. The listed total is '+formatFrontierPrice(total)+'. You may confirm at the listed price or cancel. No payment has been taken.';
+        const saved=addExchange(quoted,draft,narration);
+        await localCampaignStorage.save(saved);setCampaign(saved);setCampaigns(items=>items.map(c=>c.id===saved.id?saved:c));setDraft('');
+      }catch(error){setNotice('Merchant order: '+String(error));}finally{setSaving(false);}
+      return;
+    }
     if(campaign?.pendingMerchantPurchase){
+      const message=draft.trim();
+      const listedLines=campaign.pendingMerchantPurchase.lines??[{itemId:campaign.pendingMerchantPurchase.itemId,quantity:campaign.pendingMerchantPurchase.quantity,unitCostCp:campaign.pendingMerchantPurchase.unitCostCp}];
+      const listedTotal=listedLines.reduce((sum,line)=>sum+line.quantity*line.unitCostCp,0);
+      const requestedGold=message.match(/(?:take|accept|offer|for)\s+(\d+(?:\.\d{1,2})?)\s*(?:gp|gold)\b/i);
+      const pricePercent=requestedGold&&listedTotal>0?Math.ceil((1-Number(requestedGold[1])*100/listedTotal)*100):null;
+      const discountRequest=message.match(/(?:discount|off|reduce|lower|take)\D{0,30}(\d{1,2})\s*%|(?:\d{1,2})\s*%\s*(?:discount|off)/i);
+      if(discountRequest||pricePercent!==null){
+        const percent=discountRequest?Number(discountRequest[1]??message.match(/(\d{1,2})\s*%/)?.[1]):pricePercent!;
+        setSaving(true);
+        try{
+          const token=crypto.randomUUID();
+          const requested=beginCartNegotiation(campaign,percent,token);
+          const skill=/intimidat|threat/i.test(message)?'Intimidation':/deceiv|lie|bluff/i.test(message)?'Deception':'Persuasion';
+          const pendingCheck={skill,mode:'normal' as const,reason:'Negotiate the merchant offer.',token};
+          const next=addExchange(requested,message,'The merchant considers your offer. Make a '+skill+' check.',undefined,[],undefined,pendingCheck);
+          await localCampaignStorage.save(next);setCampaign(next);setCampaigns(items=>items.map(c=>c.id===next.id?next:c));setDraft('');
+        }catch(error){setNotice('Negotiation: '+String(error));}finally{setSaving(false);}
+        return;
+      }
+    }
+    if(campaign?.pendingMerchantPurchase){
+      if(/\b(?:haggle|negotiate|bargain|discuss (?:the )?price)\b/i.test(draft)){
+        const next=addExchange(campaign,draft,'The merchant asks what price you have in mind. State the amount or percentage you are offering.');
+        await localCampaignStorage.save(next);setCampaign(next);setCampaigns(items=>items.map(c=>c.id===next.id?next:c));setDraft('');
+        return;
+      }
       const response=draft.trim().toLowerCase();
-      if(!/^(yes|confirm|buy|purchase|no|cancel|decline|never mind|nevermind)[.! ]*$/.test(response)){
+      if(!/^(yes|confirm|buy|purchase|deal|i(?:'ll| will) take it|no|cancel|decline|never mind|nevermind)[.! ]*$/.test(response)){
         setNotice('Confirm or cancel the pending purchase before continuing.');return;
       }
-      const confirmed=/^(yes|confirm|buy|purchase)/.test(response);
+      const confirmed=/^(yes|confirm|buy|purchase|deal|i(?:'ll| will) take it)/.test(response);
       setSaving(true);
       try{
         const pending=campaign.pendingMerchantPurchase;
@@ -1387,7 +1463,7 @@ export function App() {
     catch(error){setNotice('Campaign save failed: '+String(error));return false;}
     finally{setSaving(false)}
   }
-  const content = { adventure: campaign?.combat && campaign.combat.status!=='completed' ? null : <Adventure campaign={campaign} fullHistory={fullHistory} onToggleHistory={() => setFullHistory(value => !value)} onAdventureChange={saveSubclassActor} onStartOpening={startAiAdventure} onRetryAction={()=>sendToDM()} onShopClose={closeMerchantShop} onShopPrepare={prepareShopPurchase} onShopSettle={settleShopPurchase} saving={saving} openingError={openingError} narrationSpeed={narrationSpeed}/>, party: <Party campaign={campaign} saving={saving} onRoll={(skill,mode) => void saveSkillRoll(skill,mode)} onSaveRoll={(ability,mode) => void saveSavingThrow(ability,mode)} onAwardXP={(amount,reason) => void updateProgress('award',amount,reason)} onLevelUp={hp => void updateProgress('level',hp)} onLevelThree={(hp,cantrips,spells) => void updateProgress('level3',hp,'',cantrips,spells)} onReconcile={() => void updateProgress('reconcile')} onUndoReconcile={() => void updateProgress('undoReconcile')} onRestore={() => void updateProgress('restore')} onCastSpell={(spell,ritual,components,target)=>void castSpell(spell,ritual,components,target)} onEndConcentration={()=>void endConcentration()} onAdjustEquipment={(item,delta)=>void changeEquipment(item,delta)} onUpdateInventory={ledger=>void updateInventoryLedger(ledger)} onSubclassChange={saveSubclassActor}/> , journal: <Journal campaign={campaign}/>, map: campaign?.characterBuild ? <AnchamidaRegionMap campaign={campaign}/> : <WorldMap campaign={campaign}/>, settings: <section className="space-y-4"><h2 className="font-serif text-2xl">Settings</h2><p className="text-sm text-parchment/60">Manage campaigns, backups, and Dungeon Master access below.</p></section>, development: campaign?.characterIdentity?<ImportedCharacterSheet campaign={campaign} saving={saving} onChange={saveSubclassActor} development/>:<section aria-label="Developer tools"><h2 className="font-serif text-2xl">Developer tools</h2><p>Legacy testing remains available through the existing development controls.</p></section> };
+  const content = { adventure: campaign?.combat && campaign.combat.status!=='completed' ? null : <Adventure campaign={campaign} fullHistory={fullHistory} onToggleHistory={() => setFullHistory(value => !value)} onAdventureChange={saveSubclassActor} onStartOpening={startAiAdventure} onRetryAction={()=>sendToDM()} onShopClose={closeMerchantShop} onShopPrepare={prepareShopPurchase} onShopSettle={settleShopPurchase} onShopDiscuss={discussShopCart} saving={saving} openingError={openingError} narrationSpeed={narrationSpeed}/>, party: <Party campaign={campaign} saving={saving} onRoll={(skill,mode) => void saveSkillRoll(skill,mode)} onSaveRoll={(ability,mode) => void saveSavingThrow(ability,mode)} onAwardXP={(amount,reason) => void updateProgress('award',amount,reason)} onLevelUp={hp => void updateProgress('level',hp)} onLevelThree={(hp,cantrips,spells) => void updateProgress('level3',hp,'',cantrips,spells)} onReconcile={() => void updateProgress('reconcile')} onUndoReconcile={() => void updateProgress('undoReconcile')} onRestore={() => void updateProgress('restore')} onCastSpell={(spell,ritual,components,target)=>void castSpell(spell,ritual,components,target)} onEndConcentration={()=>void endConcentration()} onAdjustEquipment={(item,delta)=>void changeEquipment(item,delta)} onUpdateInventory={ledger=>void updateInventoryLedger(ledger)} onSubclassChange={saveSubclassActor}/> , journal: <Journal campaign={campaign}/>, map: campaign?.characterBuild ? <AnchamidaRegionMap campaign={campaign}/> : <WorldMap campaign={campaign}/>, settings: <section className="space-y-4"><h2 className="font-serif text-2xl">Settings</h2><p className="text-sm text-parchment/60">Manage campaigns, backups, and Dungeon Master access below.</p></section>, development: campaign?.characterIdentity?<ImportedCharacterSheet campaign={campaign} saving={saving} onChange={saveSubclassActor} development/>:<section aria-label="Developer tools"><h2 className="font-serif text-2xl">Developer tools</h2><p>Legacy testing remains available through the existing development controls.</p></section> };
   if(portalScreen!=='adventure')return <div className="min-h-dvh bg-ink text-parchment">
     <div className="mx-auto min-h-dvh w-full max-w-3xl space-y-5 px-5 pb-12 pt-[max(2rem,env(safe-area-inset-top))]">
       <header className="flex flex-col items-center gap-2 border-b border-gold/20 pb-6">
