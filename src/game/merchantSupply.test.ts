@@ -1,7 +1,7 @@
 import {describe,it,expect} from 'vitest';
 import {newCampaign} from './campaign';
 import {beginAdventureSession} from './adventureSession';
-import {prepareCitySupplyOrder,confirmCitySupplyOrder,collectCitySupplyOrder,resupplyTravelingMerchant} from './merchantSupply';
+import {prepareCitySupplyOrder,confirmCitySupplyOrder,collectCitySupplyOrder,resupplyTravelingMerchant,isSupplierBrowseRequest} from './merchantSupply';
 import {remainingMerchantStock,merchantStockKeyForCampaign,walletCopper} from './frontierShop';
 const fixture=()=>beginAdventureSession({...newCampaign('Supplier','supplier-test'),location:'Dasahi',merchantSettlementTier:'city' as const,characterIdentity:{name:'Tester',speciesId:'elf',backgroundId:'sage',classId:'rogue',draftId:'draft',pronouns:'',appearance:'',personality:'',backstory:''},inventoryLedger:{currency:{GP:100,SP:0,CP:0,EP:0,PP:0},gear:[]}});
 describe('city supplier order lifecycle',()=>{
@@ -35,5 +35,14 @@ describe('trader route arrival resupply',()=>{
   const supplied=resupplyTravelingMerchant(exhausted,'north-road','arrival-1');
   expect(remainingMerchantStock(supplied,'torch')).toBeGreaterThan(0);
   expect(resupplyTravelingMerchant(supplied,'north-road','arrival-1')).toBe(supplied);
+ });
+});
+
+describe('supplier conversation intent',()=>{
+ it('opens controls for explicit merchandise ordering without triggering unrelated questions',()=>{
+  expect(isSupplierBrowseRequest('Can you special-order a sword that is out of stock?')).toBe(true);
+  expect(isSupplierBrowseRequest('Could the blacksmith procure a shield?')).toBe(true);
+  expect(isSupplierBrowseRequest('What rumors have you heard about the merchant guild?')).toBe(false);
+  expect(isSupplierBrowseRequest('Where is the blacksmith?')).toBe(false);
  });
 });
