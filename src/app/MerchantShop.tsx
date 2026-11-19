@@ -1,5 +1,6 @@
 import {prepareCitySupplyOrder,confirmCitySupplyOrder,collectCitySupplyOrder} from '../game/merchantSupply';
 import {useState} from 'react';
+import {ADVENTURE_SITES,beginTravelingMerchantRoute} from '../game/adventureSession';
 import type {Campaign} from '../game/campaign';
 import {merchantStock,remainingMerchantStock,formatFrontierPrice,walletCopper,availableMerchants,settlementTier,MERCHANT_LABELS,merchantCatalogFor} from '../game/frontierShop';
 
@@ -40,6 +41,12 @@ export function MerchantShop({campaign,saving,onClose,onPrepare,onSettle,onSuppl
    </div>)}
   </div>{visible.length===0&&<p className="text-sm text-parchment/60">No merchandise matches those filters.</p>}</div>
 
+  {tier==='traveling'&&<section aria-label="Traveling merchant supply route" className="space-y-2 rounded-lg border border-white/20 p-3">
+   <h3 className="font-semibold">Traveling merchant route</h3>
+   {campaign.merchantTraderRoute&&campaign.merchantTraderRoute.nextStopIndex<campaign.merchantTraderRoute.stops.length?
+    <p className="text-xs">Next verified stop: {ADVENTURE_SITES[campaign.merchantTraderRoute.stops[campaign.merchantTraderRoute.nextStopIndex]].name}. Stock is resupplied only on arrival.</p>:
+    <button disabled={saving||!campaign.adventureSession||campaign.adventureSession.status!=='exploring'} className="rounded border p-2 text-xs" onClick={()=>orderAction(()=>{const site=campaign.adventureSession!.site;const destination=ADVENTURE_SITES[site].neighbors[0];return beginTravelingMerchantRoute(campaign,'trader-'+crypto.randomUUID(),[site,destination]);},'Merchant supply route recorded. Travel to the next stop to resupply.')}>Begin verified supply route</button>}
+  </section>}
   {tier==='city'&&<section aria-label="City supplier orders" className="space-y-3 rounded-lg border border-white/20 p-3">
    <h3 className="font-semibold">Supplier orders</h3>
    <p className="text-xs text-parchment/70">Out-of-stock equipment can be ordered at its listed price. Payment is taken only after confirmation; collect it here once delivered.</p>
