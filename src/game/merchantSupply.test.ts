@@ -32,9 +32,11 @@ describe('trader route arrival resupply',()=>{
   const key=merchantStockKeyForCampaign(c,'trader','torch');
   const exhausted={...c,merchantStockRemaining:{[key]:0},elapsedMinutes:20000};
   expect(remainingMerchantStock(exhausted,'torch')).toBe(0);
-  const supplied=resupplyTravelingMerchant(exhausted,'north-road','arrival-1');
+  expect(()=>resupplyTravelingMerchant(exhausted,'north-road','arrival-1')).toThrow('route arrival');
+  const manifest=beginTravelingMerchantRoute(exhausted,'north-road',['frontier','crossroads']);
+  const supplied=travelAdventure(manifest,'crossroads');
   expect(remainingMerchantStock(supplied,'torch')).toBeGreaterThan(0);
-  expect(resupplyTravelingMerchant(supplied,'north-road','arrival-1')).toBe(supplied);
+  expect(resupplyTravelingMerchant(supplied,'north-road','leg-1-crossroads')).toBe(supplied);
  });
 });
 
