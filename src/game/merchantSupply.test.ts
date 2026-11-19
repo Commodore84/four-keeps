@@ -94,6 +94,7 @@ describe('authoritative traveling merchant route arrivals',()=>{
   const second=travelAdventure(reloaded,'watchtower');
   expect(second.merchantTraderRoute?.nextStopIndex).toBe(3);
   expect(Object.keys(second.merchantTraderResupply??{})).toHaveLength(2);
+  expect(()=>resupplyTravelingMerchant({...second,merchantTraderResupply:{}},'north-road','leg-1-crossroads')).toThrow('route arrival');
   expect(()=>beginTravelingMerchantRoute(second,'north-road',['watchtower','crossroads'])).toThrow('already used');
  });
 });
