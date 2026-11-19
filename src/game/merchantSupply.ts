@@ -1,5 +1,5 @@
 import type {Campaign} from './campaign';
-import {merchantCatalogFor,merchantTypeForItem,settlementTier,walletCopper,merchantStockKeyForCampaign,merchantInitialStock,remainingMerchantStock} from './frontierShop';
+import {merchantCatalogFor,merchantTypeForItem,settlementTier,walletCopper,merchantStockKeyForCampaign,merchantInitialStock} from './frontierShop';
 import {OFFICIAL_EQUIPMENT_2024} from './officialEquipment2024';
 
 const nowMinutes=(c:Campaign)=>Math.max(0,c.elapsedMinutes??0);
@@ -23,7 +23,6 @@ export function prepareCitySupplyOrder(c:Campaign,itemId:string,quantity:number,
  if(!item||/magic item|spell scroll/i.test(item.category))throw Error('Item cannot be ordered from this supplier.');
  const merchant=merchantTypeForItem(item);
  if(!merchantCatalogFor('city',merchant).some(i=>i.id===itemId))throw Error('No city supplier carries this item.');
- if(remainingMerchantStock(c,itemId,merchant)>=quantity)throw Error('The merchant already has enough stock for this order.');
  const cost=item.costCp*quantity;
  if(!Number.isSafeInteger(cost)||walletCopper(c.inventoryLedger?.currency)<cost)throw Error('Insufficient funds for supplier order.');
  const lead=item.costCp>=5000?7*1440:item.costCp>=1000?3*1440:1440;
