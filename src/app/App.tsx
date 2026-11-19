@@ -1,6 +1,6 @@
 import {HealingPotionPanel} from './HealingPotionPanel';
 import {commitHealingPotionUse} from '../game/storage';
-import type {HealingPotionName} from '../game/healingPotions';
+import type {HealingPotionRequest} from '../game/healingPotions';
 import {parseMerchantDiscountRequest,merchantPurchaseReply} from '../game/merchantDialogue';
 import {legacyEncounters,answerRecall,refineEncounterAtDowntime,type RecallTurn} from '../game/encounterJournal';
 import {anchamidaLocations} from '../game/anchamida';
@@ -145,7 +145,7 @@ const tabs = [
   { id: 'development', label: 'Developer', Icon: Blocks },
 ] as const;
 
-function Adventure({ campaign, fullHistory, onToggleHistory, onAdventureChange, onStartOpening, onRetryAction, onShopClose, onShopPrepare, onShopSettle, onShopDiscuss, onUsePotion, saving, openingError, narrationSpeed, development = false }: { campaign: Campaign | null; fullHistory: boolean; onToggleHistory: () => void; onAdventureChange:(next:Campaign,message:string)=>Promise<boolean>|boolean|void; onStartOpening:()=>Promise<void>; onRetryAction:()=>Promise<void>; onShopClose:()=>Promise<void>; onShopPrepare:(items:{itemId:string;quantity:number}[],merchant:import('../game/frontierShop').MerchantType)=>Promise<void>; onShopSettle:(confirmed:boolean)=>Promise<void>; onShopDiscuss:(items:{itemId:string;quantity:number}[],merchant:import('../game/frontierShop').MerchantType)=>Promise<void>; onUsePotion:(request:{name:HealingPotionName;confirmed:boolean;expectedQuantity:number;expectedHP:number;requestId:string})=>Promise<boolean>; saving:boolean; openingError:string|null; narrationSpeed:NarrationSpeed; development?:boolean }) {
+function Adventure({ campaign, fullHistory, onToggleHistory, onAdventureChange, onStartOpening, onRetryAction, onShopClose, onShopPrepare, onShopSettle, onShopDiscuss, onUsePotion, saving, openingError, narrationSpeed, development = false }: { campaign: Campaign | null; fullHistory: boolean; onToggleHistory: () => void; onAdventureChange:(next:Campaign,message:string)=>Promise<boolean>|boolean|void; onStartOpening:()=>Promise<void>; onRetryAction:()=>Promise<void>; onShopClose:()=>Promise<void>; onShopPrepare:(items:{itemId:string;quantity:number}[],merchant:import('../game/frontierShop').MerchantType)=>Promise<void>; onShopSettle:(confirmed:boolean)=>Promise<void>; onShopDiscuss:(items:{itemId:string;quantity:number}[],merchant:import('../game/frontierShop').MerchantType)=>Promise<void>; onUsePotion:(request:Omit<HealingPotionRequest,'rollDie'>)=>Promise<boolean>; saving:boolean; openingError:string|null; narrationSpeed:NarrationSpeed; development?:boolean }) {
   const endRef = useRef<HTMLDivElement>(null);
   const shopRef = useRef<HTMLDivElement>(null);
   useEffect(()=>{if(campaign?.merchantShopOpen && campaign.adventureSession?.site==='frontier' && campaign.adventureSession.status==='exploring')shopRef.current?.scrollIntoView({behavior:'instant',block:'start'});},[campaign?.merchantShopOpen,campaign?.adventureSession?.site,campaign?.adventureSession?.status]);
@@ -1499,7 +1499,7 @@ export function App() {
     catch(error){setNotice('Campaign save failed: '+String(error));return false;}
     finally{setSaving(false)}
   }
-  async function usePotion(request:{name:HealingPotionName;confirmed:boolean;expectedQuantity:number;expectedHP:number;requestId:string}){
+  async function usePotion(request:Omit<HealingPotionRequest,'rollDie'>){
     if(saving||!campaign)return false;
     setSaving(true);
     try{

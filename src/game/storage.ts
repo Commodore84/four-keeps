@@ -1,4 +1,4 @@
-import {useOwnedHealingPotion,type HealingPotionName} from './healingPotions';
+import {useOwnedHealingPotion,type HealingPotionRequest} from './healingPotions';
 import {hydratePlayerState} from './playerState';
 import { isCampaign, type Campaign } from './campaign';
 
@@ -74,9 +74,7 @@ export const localCampaignStorage: CampaignStorage = {
 };
 
 /** Atomic read/validate/update: retries with the same request ID return the saved result. */
-export async function commitHealingPotionUse(id:string,request:{
- name:HealingPotionName;confirmed:boolean;expectedQuantity:number;expectedHP:number;requestId:string;rollDie:()=>number;
-}):Promise<Campaign>{
+export async function commitHealingPotionUse(id:string,request:HealingPotionRequest):Promise<Campaign>{
  return transact<Campaign>('readwrite',(store,resolve,reject)=>{
   const read=store.get(id);
   read.onerror=()=>reject(read.error??new Error('Campaign lookup failed'));

@@ -27,7 +27,7 @@ describe('SRD 5.2.1 healing potions',()=>{
   expect(used.inventoryLedger?.gear[0].quantity).toBe(0);
   expect(campaign.inventoryLedger?.gear[0].quantity).toBe(1);
   expect(useOwnedHealingPotion(used,req)).toBe(used);
-  expect(()=>useOwnedHealingPotion({...campaign,companionEncounter:{status:'active'} as Campaign['companionEncounter']},req)).toThrow('Bonus Action');
+  expect(()=>useOwnedHealingPotion({...campaign,companionEncounter:{status:'active'} as Campaign['companionEncounter']},req)).toThrow('Unsupported encounter');
  });
  it('enforces unified encounter turn, Bonus Action, and synchronized HP',()=>{
   const campaign={character:{currentHitPoints:5,maxHitPoints:20},inventoryLedger:{currency:{CP:0,SP:0,EP:0,GP:0,PP:0},gear:[{name:'Potion of Healing',quantity:1}]},companionEncounter:{status:'active',mode:'unified',log:[],turnIndex:0,order:['nighthawk'],participants:{nighthawk:{hp:5,maxHp:20,bonusActionUsed:false}}}} as unknown as Campaign;
@@ -37,7 +37,7 @@ describe('SRD 5.2.1 healing potions',()=>{
   expect(next.companionEncounter?.participants.nighthawk.hp).toBe(15);
   expect(next.character?.currentHitPoints).toBe(15);
   expect(()=>useOwnedHealingPotion(next,{...req,requestId:'another',expectedQuantity:0,expectedHP:15})).toThrow('Bonus Action');
-  expect(()=>useOwnedHealingPotion({...campaign,companionEncounter:{...campaign.companionEncounter!,order:['enemy']}},req)).toThrow('Bonus Action');
+  expect(()=>useOwnedHealingPotion({...campaign,companionEncounter:{...campaign.companionEncounter!,order:['enemy']}},req)).toThrow('Unsupported encounter');
   expect(()=>useOwnedHealingPotion({...campaign,companionEncounter:{...campaign.companionEncounter!,participants:{nighthawk:{...campaign.companionEncounter!.participants.nighthawk,hp:4}}}},req)).toThrow('snapshot');
  });
  it('rejects stale inventory and stale HP, never healing or consuming on a failed attempt',()=>{
@@ -47,5 +47,26 @@ describe('SRD 5.2.1 healing potions',()=>{
   expect(()=>useOwnedHealingPotion(campaign,{...req,expectedHP:6})).toThrow('Stale');
   expect(()=>useOwnedHealingPotion({...campaign,character:{...campaign.character!,currentHitPoints:20}}, {...req,expectedHP:20})).toThrow('cannot heal');
   expect(campaign.inventoryLedger?.gear[0].quantity).toBe(2);
+ });
+ it('administers to an adjacent companion with an Action, preserving player HP and Bonus Action',()=>{
+  const actor={x:2,y:3,hp:8,maxHp:20,conditions:[],actionUsed:false,bonusActionUsed:false};
+  const ally={...actor,x:3,y:3,hp:0,maxHp:18,actorKind:'party',conditions:['Unconscious'],deathSaves:{successes:1,failures:1,stable:false,dead:false}};
+  const campaign={character:{currentHitPoints:8,maxHitPoints:20},inventoryLedger:{gear:[{name:'Potion of Healing (greater)',quantity:2}]},companionEncounter:{status:'active',mode:'unified',round:2,turnIndex:0,order:['nighthawk','ally'],log:[],participants:{nighthawk:actor,ally},nighthawkSheetHpSnapshot:8}} as unknown as Campaign;
+  const req={name:'Potion of Healing (greater)' as const,confirmed:true,expectedQuantity:2,expectedHP:8,rollDie:()=>1,requestId:'ally-1',targetId:'ally',expectedTargetHP:0,expectedTargetPosition:{x:3,y:3},expectedActorPosition:{x:2,y:3},expectedTurnIndex:0,expectedRound:2};
+  const used=useOwnedHealingPotion(campaign,req);
+  expect(used.character?.currentHitPoints).toBe(8);
+  expect(used.companionEncounter?.participants.ally.hp).toBe(8);
+  expect(used.companionEncounter?.participants.ally.conditions).not.toContain('Unconscious');
+  expect(used.companionEncounter?.participants.ally.deathSaves?.failures).toBe(0);
+  expect(used.companionEncounter?.participants.nighthawk.actionUsed).toBe(true);
+  expect(used.companionEncounter?.participants.nighthawk.bonusActionUsed).toBe(false);
+  expect(used.inventoryLedger?.gear[0].quantity).toBe(1);
+  expect(useOwnedHealingPotion(used,req)).toBe(used);
+  expect(()=>useOwnedHealingPotion(used,{...req,requestId:'ally-2',expectedQuantity:1,expectedTargetHP:8})).toThrow('Action already spent');
+  expect(()=>useOwnedHealingPotion(campaign,{...req,expectedTargetHP:2})).toThrow('Stale target');
+  expect(()=>useOwnedHealingPotion(campaign,{...req,expectedRound:1})).toThrow('Stale encounter');
+  expect(()=>useOwnedHealingPotion({...campaign,companionEncounter:{...campaign.companionEncounter!,participants:{...campaign.companionEncounter!.participants,ally:{...campaign.companionEncounter!.participants.ally,x:8}}}},req)).toThrow('adjacent');
+  expect(()=>useOwnedHealingPotion({...campaign,companionEncounter:{...campaign.companionEncounter!,order:['ally','nighthawk']}},req)).toThrow('Unsupported encounter');
+  expect(()=>useOwnedHealingPotion({...campaign,companionEncounter:{...campaign.companionEncounter!,participants:{...campaign.companionEncounter!.participants,ally:{...campaign.companionEncounter!.participants.ally,actorKind:'enemy'}}}},req)).toThrow('eligible adjacent ally');
  });
 });
