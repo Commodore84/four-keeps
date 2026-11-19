@@ -165,7 +165,7 @@ function Adventure({ campaign, fullHistory, onToggleHistory, onAdventureChange, 
       <BookOpen aria-hidden="true" className="mx-auto mb-5 text-gold" size={30}/>
       <h2 className="font-serif text-2xl text-parchment">Your adventure begins</h2>
       <p className="mt-2 text-sm text-gold/80">{campaign.location||'Anchamida'} · {campaign.characterIdentity.name||'Your character'}</p>
-      {openingError ? <div role="alert" className="mt-8 space-y-4"><p className="text-sm text-parchment/85">The opening scene couldn't be loaded. Your campaign is saved.</p><button type="button" disabled={saving} onClick={()=>void onStartOpening()} className="rounded-lg border border-gold/40 px-5 py-3 text-gold disabled:opacity-50">Try opening again</button></div> : <div role="status" className="mt-8 space-y-3"><p className="text-sm text-parchment/85">The Dungeon Master is preparing your opening scene…</p><p className="text-xs text-parchment/55">Your story will appear here when it's ready.</p></div>}
+      {openingError ? <div role="alert" className="mt-8 space-y-4"><p className="text-sm text-parchment/85">{openingError} Your campaign is saved.</p><button type="button" disabled={saving} onClick={()=>void onStartOpening()} className="rounded-lg border border-gold/40 px-5 py-3 text-gold disabled:opacity-50">Try opening again</button></div> : <div role="status" className="mt-8 space-y-3"><p className="text-sm text-parchment/85">The Dungeon Master is preparing your opening scene…</p><p className="text-xs text-parchment/55">Your story will appear here when it's ready.</p></div>}
     </section>}
     {campaign?.pendingAdventureAction && !campaign.pendingClarification && <p role="status" className="text-sm text-gold">Unfinished action saved: {campaign.pendingAdventureAction.message}. <button type="button" disabled={saving} onClick={()=>void onRetryAction()} className="underline text-gold">Retry saved action</button></p>}
     {allTurns.length > 6 && <button type="button" onClick={onToggleHistory} className="w-full rounded-lg border border-gold/30 px-4 py-3 text-sm text-gold">{fullHistory ? "Show recent conversation" : "View full conversation history ("+allTurns.length+" messages)"}</button>}
@@ -993,8 +993,8 @@ export function App() {
         gameState:{...campaignPlayerContext(started),adventureSession:started.adventureSession,characterIdentity:started.characterIdentity,location:started.location},
         history,worldFacts:memory.establishedFacts,world:started.world??emptyWorld(),adventureMemory:memory
       })});
-      const result:{narration?:string;newFacts?:string[];worldUpdates?:unknown;mapActions?:unknown;error?:string}=await response.json();
-      if(!response.ok||!result.narration)throw Error(result.error||'The DM could not create the opening.');
+      const result:{narration?:string;newFacts?:string[];worldUpdates?:unknown;mapActions?:unknown;error?:string;code?:string;requestId?:string}=await response.json();
+      if(!response.ok||!result.narration)throw Error((result.error||'The DM could not create the opening.')+(result.requestId?' (Reference '+result.requestId+')':''));
       const opening=commitAdventureOpening(started,result.narration);
       let mapped=opening;
       if(started.characterBuild) {
@@ -1005,7 +1005,7 @@ export function App() {
       await localCampaignStorage.save(next);
       setCampaign(next);setCampaigns(items=>items.map(item=>item.id===next.id?next:item));
       setOpeningError(null);setNotice('');
-    }catch(error){console.warn('Opening request failed',error);setOpeningError('The opening scene could not be loaded.');setNotice('');}
+    }catch(error){console.warn('Opening request failed',error);setOpeningError(error instanceof Error?error.message:'The opening scene could not be loaded. Please retry.');setNotice('');}
     finally{openingInFlightRef.current=false;setSaving(false);}
   }
 

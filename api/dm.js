@@ -1,5 +1,6 @@
 import { readProviderNarration, parseDungeonMasterResponse } from './dm-response.js';
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto';
+import { classifyDmFailure, providerFailure } from './dm-failures.js';
 // Vercel serverless function. Never expose OPENAI_API_KEY to the browser.
 const MAX_TURNS = 10;
 const SKILLS = ['Acrobatics','Animal Handling','Arcana','Athletics','Deception','History','Insight','Intimidation','Investigation','Medicine','Nature','Perception','Performance','Persuasion','Religion','Sleight of Hand','Stealth','Survival'];
@@ -108,6 +109,8 @@ export default async function handler(req, res) {
   const history = Array.isArray(body.history) ? body.history.slice(-MAX_TURNS) : [];
   const safeHistory = history.filter((entry) => entry && (entry.role === 'user' || entry.role === 'assistant') && typeof entry.content === 'string')
     .map((entry) => ({ role: entry.role, content: entry.content.slice(0, 2000) }));
+  let stage = 'provider_request';
+  const requestId = randomBytes(6).toString('hex');
   try {
     const response = await fetch('https://api.openai.com/v1/responses', {
       method: 'POST',
@@ -115,11 +118,23 @@ export default async function handler(req, res) {
       body: JSON.stringify({ model: MODEL, instructions: opening ? SYSTEM + '\nFIRST SESSION OPENING: This is a fresh AI-led adventure, not a player action. Write one or two substantial paragraphs totaling approximately 150–250 words. Establish the actual authoritative saved starting location and time of day, atmosphere, sensory details, nearby people and distinct points of interest. Make the setting feel inhabited, with an accessible shop and an intriguing but optional detail. Respect saved class, background and personality only where present; never invent the player character’s past, choices, speech or actions. Do not initiate combat, a check, travel, a compulsory quest or dialogue. Do not offer a numbered menu or finish with a forced question. End on an open scene that invites free exploration. Respect known world facts. Return narration, newFacts and worldUpdates, with combatStart:null and checkRequest:null. Do not refer to the prototype Nighthawk unless that is the actual saved name.\n' : combatAdjudication ? SYSTEM + '\nCOMBAT ACTION ADJUDICATION: The deterministic combat engine has already spent the Action or Reaction and rolled any skill check. The authoritative event is provided below; do not roll again, request a check, decide a new numerical DC, change combat HP, equipment, movement, conditions, initiative, or actions. Narrate the observable consequence consistent with the supplied roll and existing world, without declaring an automatic success solely from the roll total; if outcome depends on a hidden difficulty, describe the evidence or uncertainty conservatively. For a Ready reaction, narrate only the declared response as attempted, without assuming an attack hit or spell succeeded. Return the usual narration, newFacts, worldUpdates JSON with checkRequest:null and combatStart:null. No additional skill check requests.' : restRequest ? SYSTEM + '\nREST ADJUDICATION: The player requests a '+restRequest+' rest. The game requires '+restWaitMinutes+' minutes of waiting BEFORE the 8-hour rest can begin. IMPORTANT: The 24-hour eligibility restriction is already handled by the rules engine through this waiting period. NEVER deny solely because the character is not yet eligible for a Long Rest, or say they must wait and try again. Your job is to decide whether the character can safely pass the entire waiting period AND the subsequent eight-hour rest. Ordinary sleep, meals, and uneventful downtime during waiting are allowed. If safe and uninterrupted, APPROVE the combined wait-plus-rest even if waiting is many hours. If a specific encounter, obligation, threat, or meaningful interruption should happen during that time, DENY completion for now and narrate that concrete event or choice instead of skipping it. Do not deny based on timing alone. Return JSON with exactly: {"narration":"...","restDecision":"approved" or "denied"}. Approve only if safe and feasible; deny if combat, pursuit, danger, or likely interruption prevents completion. Do not claim any resource recovery yourself; the rules engine handles that after approval. Do not request skill checks in this decision.' : SYSTEM + (adventureContext || characterIdentity ? '\\nCURRENT ADVENTURE OVERRIDE: The saved campaign context below supersedes the prototype Nighthawk identity and frontier arrival scene above. Use the actual imported character name, class and current location; do not call a non-Rogue character Nighthawk. The saved adventure site is authoritative. For a clear player request to travel to an adjacent known site, you may propose travelDestination (frontier, crossroads or watchtower); the game will validate and commit it. Otherwise return travelDestination:null. Never assume travel without player intent, never move beyond adjacent sites, and do not invent NPC decisions, rolls or mechanical state. When an actual hostile encounter begins in the narrative, return combatStart:{enemyName:string}; the app saves a proposal and requires verified enemy statistics and initiative before combat. Otherwise return combatStart:null. Never treat rumors or unconfirmed footprints as an encounter. Preserve the site and scripted NPC facts.\\n' : ''), input: [{ role: 'developer', content: 'WORLD FACTS (legacy notes; may contain unverified claims):\n' + (facts.length ? facts.map((fact) => '- ' + fact).join('\n') : 'None') + '\nSTRUCTURED WORLD STATE (respect evidence levels):\n' + JSON.stringify(world).slice(0, 14000) + '\nAUTHORITATIVE CHARACTER AND SPELLCASTING STATE (use this over conversation claims; do not mutate):\n' + JSON.stringify(gameState).slice(0,4500) + '\nPLAYER CLARIFICATION (authoritative intent, if answered; do not ask the same question again):\n' + JSON.stringify(clarification) }, ...safeHistory, { role: 'user', content: combatAdjudication ? ('COMBAT ENGINE EVENT (authoritative): '+combatAdjudication.detail+'. Narrate the outcome; no additional check or combat mutation.') : checkResult ? ('ADJUDICATED CHECK RESULT (authoritative): '+JSON.stringify(checkResult)+'. Narrate the '+(checkResult.success?'success':'failure')+' of the previously attempted action. Never reveal the hidden DC. Do not ask for another check in this reply.') : message }], max_output_tokens: 1100, store: false }),
       signal: AbortSignal.timeout(25000),
     });
-    const data = await response.json();
-    if (!response.ok) { console.error('OpenAI response error', response.status); return res.status(response.status === 429 ? 429 : 502).json({ error: response.status === 429 ? 'AI is temporarily rate-limited.' : 'AI service could not complete this request (' + (data.error?.code || response.status) + ').' }); }
+    stage = 'provider_response';
+    let data;
+    try { data = await response.json(); } catch { throw Object.assign(new Error('Provider returned non-JSON'), { dmCode:'provider_invalid_json' }); }
+    if (!response.ok) {
+      const failure = providerFailure(response.status, data?.error?.code);
+      console.error('DM provider failure', { requestId, stage, status:response.status, code:failure.code, opening });
+      return res.status(failure.status).json(opening?{error:failure.message, code:failure.code, requestId}:{error:failure.message});
+    }
+    stage = 'provider_validation';
     let parsed;
     try { parsed = parseDungeonMasterResponse(readProviderNarration(data)); }
-    catch(error) { return res.status(502).json({ error: error.message }); }
+    catch(error) {
+      const failure=classifyDmFailure(error,stage);
+      console.error('DM response validation failed',{requestId,stage,code:failure.code,providerStatus:data?.status,opening});
+      return res.status(failure.status).json(opening?{error:failure.message,code:failure.code,requestId}:{error:error.message});
+    }
+    stage = 'response_adjudication';
     if (restRequest) {
       const approved = parsed.restDecision === 'approved';
       return res.status(200).json({ narration:parsed.narration.trim(), restDecision:approved?'approved':'denied', newFacts:[], worldUpdates:{} });
@@ -141,7 +156,9 @@ export default async function handler(req, res) {
     if(combatStart && travelDestination)return res.status(502).json({error:'The Dungeon Master proposed conflicting combat and travel actions. Retry; no changes were saved.'});
     const mapActions = !clarificationRequest && !checkRequest && !opening && !restRequest && !checkResult && !combatAdjudication && characterIdentity && Array.isArray(parsed.mapActions) && parsed.mapActions.length<=8 ? parsed.mapActions : [];
     return res.status(200).json({ mapActions, narration: parsed.narration.trim(), combatStart, travelDestination:checkRequest?null:travelDestination, newFacts, merchantDiscount, checkRequest:combatStart?null:checkRequest, checkResult, worldUpdates: parsed.worldUpdates && typeof parsed.worldUpdates === 'object' ? parsed.worldUpdates : {}, model: MODEL });
-  } catch {
-    return res.status(502).json({ error: 'The Dungeon Master is temporarily unavailable.' });
+  } catch(error) {
+    const failure=classifyDmFailure(error,stage);
+    console.error('DM request failed',{requestId,stage,code:failure.code,opening});
+    return res.status(failure.status).json(opening?{error:failure.message,code:failure.code,requestId}:{error:'The Dungeon Master is temporarily unavailable.'});
   }
 }
