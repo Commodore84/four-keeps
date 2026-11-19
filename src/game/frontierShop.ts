@@ -69,7 +69,7 @@ export function merchantStockKey(tier:SettlementTier,type:MerchantType,itemId:st
 /** The settlement identity is separate from its tier; old saves retain legacy keys. */
 export function merchantStockKeyForCampaign(campaign:Campaign,type:MerchantType,itemId:string):string {
  const location=(campaign.location||'unknown').trim().toLowerCase().replace(/\s+/g,'-').replace(/[^a-z0-9-]/g,'');
- return 'location:'+location+':'+merchantStockKey(settlementTier(campaign),type,itemId);
+ return settlementTier(campaign)==='traveling'?'traveler:'+campaign.id+':'+merchantStockKey('traveling',type,itemId):'location:'+location+':'+merchantStockKey(settlementTier(campaign),type,itemId);
 }
 
 export function merchantForItem(campaign:Campaign,itemId:string):MerchantType|null{
@@ -106,9 +106,11 @@ export function remainingMerchantStock(campaign:Campaign,itemId:string,type?:Mer
  const legacyKey=merchantStockKey(tier,merchant,itemId);
  const initial=merchantInitialStock(tier,itemId,merchant);
  if(!initial)return 0;
- const stored=campaign.merchantStockRemaining?.[key]??campaign.merchantStockRemaining?.[legacyKey]??campaign.merchantStockRemaining?.[itemId];
+ const oldLocation=(campaign.location||'unknown').trim().toLowerCase().replace(/\s+/g,'-').replace(/[^a-z0-9-]/g,'');
+ const legacyLocationKey='location:'+oldLocation+':'+legacyKey;
+ const stored=campaign.merchantStockRemaining?.[key]??campaign.merchantStockRemaining?.[legacyLocationKey]??campaign.merchantStockRemaining?.[legacyKey]??campaign.merchantStockRemaining?.[itemId];
  if(stored===undefined)return initial;
- const last=campaign.merchantStockRestockedAt?.[key]??campaign.merchantStockRestockedAt?.[legacyKey]??0;
+ const last=campaign.merchantStockRestockedAt?.[key]??campaign.merchantStockRestockedAt?.[legacyLocationKey]??campaign.merchantStockRestockedAt?.[legacyKey]??0;
  const now=Math.max(0,campaign.elapsedMinutes??0);
  const interval=merchantRestockIntervalMinutes(tier,itemId);
  if(tier!=='traveling'&&now>=last+interval)return initial;
