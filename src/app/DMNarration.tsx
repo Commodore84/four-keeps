@@ -6,8 +6,25 @@ export type NarrationBlock={kind:'narration'|'dialogue';text:string;speaker?:str
 
 /** A single newline is a soft wrap; blank lines establish paragraph boundaries.
  * Only explicit speaker attributions are presented as named dialogue. */
+/** Keep lengthy DM paragraphs readable on narrow phones without changing their wording. */
+export function readableNarrationParagraphs(text:string,maxWords=65):string[]{
+ const result:string[]=[];
+ for(const paragraph of text.replace(/\r\n?/g,'\n').trim().split(/\n\s*\n+/).filter(Boolean)){
+  const normalized=paragraph.replace(/\s*\n\s*/g,' ').replace(/[ \t]+/g,' ').trim();
+  const sentences=normalized.match(/[^.!?]+(?:[.!?]+[”"']?|$)/g)?.map(s=>s.trim()).filter(Boolean)??[normalized];
+  let current='';let count=0;
+  for(const sentence of sentences){
+   const words=sentence.split(/\s+/).length;
+   if(current&&count+words>maxWords){result.push(current);current='';count=0;}
+   current+=(current?' ':'')+sentence;count+=words;
+  }
+  if(current)result.push(current);
+ }
+ return result;
+}
+
 export function narrationBlocks(text:string):NarrationBlock[]{
- const paragraphs=text.replace(/\r\n?/g,'\n').trim().split(/\n\s*\n+/).filter(Boolean);
+ const paragraphs=readableNarrationParagraphs(text);
  return paragraphs.flatMap(paragraph=>{
   const normalized=paragraph.replace(/\s*\n\s*/g,' ').replace(/[ \t]+/g,' ').trim();
   const named=normalized.match(/^([A-Z][\p{L}'’-]*(?:\s+[A-Z][\p{L}'’-]*){0,3}):\s*([“"].+[”"])$/u);

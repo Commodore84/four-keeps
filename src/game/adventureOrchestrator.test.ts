@@ -8,6 +8,7 @@ describe('AI adventure opening orchestration',()=>{
   const opening=openingIntentForCampaign(imported);
   expect(opening).toContain('Dasahi');
   expect(opening).toContain('Anchamida');
+  expect(opening).toContain('just disembarking from a boat');
   expect(opening).toContain('structured mapAction');
   expect(opening).not.toContain('Frontier Village');
   const legacy={...newCampaign('legacy'),location:'Frontier Village'};
@@ -15,15 +16,15 @@ describe('AI adventure opening orchestration',()=>{
   expect(openingIntentForCampaign(legacy)).not.toContain('Dasahi');
  });
 
- it('offers a shop without forcing an action or a scripted opening',()=>{expect(OPENING_INTENT).toContain('general-goods shop');expect(OPENING_INTENT).toContain('do not make the player move');expect(OPENING_INTENT).toContain('free-form exploration');});
+ it('opens near a voluntary storefront with short mobile paragraphs and clear speech',()=>{expect(OPENING_INTENT).toContain('general-goods shop');expect(OPENING_INTENT).toContain('general-goods shop');expect(OPENING_INTENT).toContain('three to five short paragraphs');expect(OPENING_INTENT).toContain('Speaker: “words”');expect(OPENING_INTENT).toContain('never automatically enter a shop');expect(OPENING_INTENT).toContain('player intent');});
   const make=()=>({...newCampaign('Journey','opening-test','2026-01-01T00:00:00Z'),characterIdentity:{name:'Aster',speciesId:'human',backgroundId:'sage',classId:'wizard',draftId:'draft',pronouns:'',appearance:'',personality:'',backstory:''}});
   it('specifies an immersive grounded opening without commanding the player',()=>{
-    expect(OPENING_INTENT).toContain('150–250 words');
-    expect(OPENING_INTENT).toContain('sensory impressions');
+    expect(OPENING_INTENT).toContain('110–170 words');
+    expect(OPENING_INTENT).toContain('sensory details');
     expect(OPENING_INTENT).toContain('authoritative saved starting location');
-    expect(OPENING_INTENT).toContain('do not make the player move');
-    expect(OPENING_INTENT).toContain('do not invent personal history');
-    expect(OPENING_INTENT).toContain('Do not demand a choice');
+    expect(OPENING_INTENT).toContain('do not speak or act for the player');
+    expect(OPENING_INTENT).toContain('avoid inventing personal history');
+    expect(OPENING_INTENT).toContain('no mandatory question');
   });
   it('starts a compatible authored session without modifying the player character',()=>{
     const c=make(),next=prepareAdventureOpening(c);

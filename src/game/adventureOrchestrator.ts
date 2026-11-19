@@ -3,7 +3,7 @@ import type {Campaign} from './campaign';
 import {beginAdventureSession} from './adventureSession';
 import {mergeWorld} from './world';
 
-export const OPENING_INTENT = 'Open the campaign at the character’s authoritative saved starting location (Frontier Village for the current starter campaign). Establish the setting in one or two substantial paragraphs of about 150–250 words. Describe the time of day, atmosphere, nearby landmarks, ordinary activity, and concrete sensory impressions such as sounds, smells, and weather. Naturally introduce a few nearby people and places, including the accessible general-goods shop, without inventing purchases or prices. Weave in the saved character’s class, background, or personality only when supported by their actual sheet; do not invent personal history. Include one subtle mystery or interesting detail as an invitation to investigate, not a compulsory quest. Preserve full player agency: do not make the player move, speak, accept a quest, enter combat, or take any other action. Do not demand a choice, list action options, or end with a mandatory question. Leave the scene open for free-form exploration.';
+export const OPENING_INTENT = 'Open at the character’s authoritative saved starting location. Keep the opening concise (roughly 110–170 words), in three to five short paragraphs of one to three sentences each, suitable for a phone. Establish a vivid place with a few specific sensory details, then immediately give the player a nearby, approachable general-goods shop and a merchant who can offer supplies. A brief, clearly attributed line of merchant dialogue may invite browsing, but do not speak or act for the player. Format spoken dialogue as its own paragraph using Speaker: “words” so it is visually distinct. Preserve the saved character’s actual identity and the established world; avoid inventing personal history, purchases, prices, or quests. Leave room for a subtle optional curiosity, but no mandatory question or menu of actions. The character can browse, leave, explore, or do anything else; never automatically enter a shop, initiate a transaction, or advance the scene without player intent.';
 
 /** Use the campaign's saved location, not a legacy starter-village assumption. */
 export function openingIntentForCampaign(campaign:Campaign):string {
@@ -11,7 +11,7 @@ export function openingIntentForCampaign(campaign:Campaign):string {
  const geographicRule=campaign.characterBuild
   ? 'This campaign takes place in Anchamida. Dasahi is the established starting city for new imported characters. Respect the approved Anchamida geography and discovered map sites; do not relocate named cities, rivers, mountains or landmarks. A new map discovery requires an explicit structured mapAction, never narration alone.'
   : 'Preserve the established geography and locations of this legacy campaign.';
- return OPENING_INTENT.replace(' (Frontier Village for the current starter campaign)','')+' The authoritative current location is '+JSON.stringify(location)+'. '+geographicRule;
+ return OPENING_INTENT+' The authoritative current location is '+JSON.stringify(location)+'. '+(campaign.characterBuild&&location.toLowerCase()==='dasahi'?'Dasahi is a coastal city: begin with the character just disembarking from a boat onto the waterfront, where a general store is clearly visible near the docks. ':'')+geographicRule;
 }
 
 export function prepareAdventureOpening(campaign:Campaign, now=new Date().toISOString()):Campaign {

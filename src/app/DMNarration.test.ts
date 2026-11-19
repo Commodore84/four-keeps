@@ -1,5 +1,5 @@
 import {describe,it,expect} from 'vitest';
-import {narrationLines,narrationDelay,narrationBlocks,visualNarrationLines} from './DMNarration';
+import {narrationLines,narrationDelay,narrationBlocks,visualNarrationLines,readableNarrationParagraphs} from './DMNarration';
 describe('DM narration line segmentation',()=>{
  it('preserves paragraph pauses and all words',()=>{
   const text='The market wakes as bells ring. A cart rattles down the lane.\n\nA watchman raises one eyebrow.';
@@ -50,5 +50,18 @@ describe('visual line layout',()=>{
  it('reflows lines when viewport width changes',()=>{
   const text='Morning settles over the harbor';
   expect(visualNarrationLines(text,12,value=>value.length).length).toBeGreaterThan(visualNarrationLines(text,40,value=>value.length).length);
+ });
+});
+
+describe('phone-readable DM narration',()=>{
+ it('splits an unbroken long paragraph at sentence boundaries without losing text',()=>{
+  const original=Array.from({length:10},(_,i)=>'The waterfront has a busy stall number '+i+'.').join(' ');
+  const paragraphs=readableNarrationParagraphs(original,18);
+  expect(paragraphs.length).toBeGreaterThan(2);
+  expect(paragraphs.join(' ')).toBe(original);
+ });
+ it('preserves separate named merchant speech',()=>{
+  const blocks=narrationBlocks('You step off the boat.\n\nMara: “Welcome to my general store.”');
+  expect(blocks).toEqual([{kind:'narration',text:'You step off the boat.'},{kind:'dialogue',speaker:'Mara',text:'“Welcome to my general store.”'}]);
  });
 });
