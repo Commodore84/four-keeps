@@ -715,6 +715,7 @@ export function App() {
   }
   async function discussShopCart(items:{itemId:string;quantity:number}[],merchant:import('../game/frontierShop').MerchantType){
     if(!campaign||saving||!items.length||campaign.pendingMerchantPurchase)return;
+    try {
     const catalog=merchantCatalogFor(settlementTier(campaign),merchant);
     const descriptions=items.map(line=>{
       const item=catalog.find(entry=>entry.id===line.itemId);
@@ -724,7 +725,6 @@ export function App() {
     const cost=descriptions.reduce((sum,line)=>sum+line.quantity*line.item.costCp,0);
     const message='I would like to buy '+descriptions.map(line=>line.quantity+' × '+line.item.name).join(', ')+'. The listed total is '+formatFrontierPrice(cost)+'.';
     setSaving(true);
-    try{
       await saveMerchantShop({...campaign,merchantShopOpen:false,merchantShopType:merchant,merchantCartDraft:{merchant,items,message}});
       setDraft(message);
       setNotice('Order placed in your chat draft. Edit it or send it when ready; nothing has been purchased.');
@@ -784,6 +784,14 @@ export function App() {
     if(campaign?.merchantCartDraft && !campaign.pendingMerchantPurchase){
       const selected=campaign.merchantCartDraft;
       if(!draft.trim()){setNotice('Enter a message to discuss your order.');return;}
+      if(/^(?:cancel|never\s?mind|no thanks|forget (?:the |my )?order|i (?:do not|don't) want (?:the |this )?order)[.! ]*$/i.test(draft.trim())){
+        setSaving(true);
+        try{
+          const next=addExchange({...campaign,merchantCartDraft:undefined},draft,'The merchant sets aside the unsubmitted order. Nothing was purchased.');
+          await saveMerchantShop(next);setDraft('');setNotice('Unsubmitted order canceled. No money was spent.');
+        }catch(error){setNotice('Merchant order: '+String(error));}finally{setSaving(false);}
+        return;
+      }
       setSaving(true);
       try{
         const quoted=prepareMerchantCart({...campaign,merchantShopType:selected.merchant,merchantCartDraft:undefined},selected.items,crypto.randomUUID());

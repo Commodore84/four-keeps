@@ -1293,6 +1293,35 @@ test('iPhone natural merchant chat acceptance buys a pending cart exactly once a
 });
 
 
+test('iPhone canceling an editable merchant chat draft never creates an order or spends money',async({page})=>{
+ test.setTimeout(120000);
+ await createAndImport(page,'rogue');await navigate(page,'Adventure');
+ await page.evaluate(()=>{localStorage.setItem('four-keeps-access-code','browser-test-code');localStorage.setItem('four-keeps-dm-mode','on');});
+ await page.route('**/api/dm',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({narration:'The smith shows the equipment.',worldUpdates:{},newFacts:[]})}));
+ await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await expect.poll(async()=> (await saved(page))?.journal?.some((entry:any)=>entry.id?.endsWith('-dm-opening'))).toBe(true);
+ const input=page.getByLabel('Message the Dungeon Master');
+ await input.fill('Show me what you have for sale.');
+ await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
+ const shop=page.getByLabel('Dasahi marketplace');await expect(shop).toBeVisible();
+ await shop.getByRole('button',{name:'Weaponsmith'}).click();
+ await shop.getByRole('button',{name:'Add Dagger'}).click();
+ const before=await saved(page);
+ await shop.getByRole('button',{name:'Discuss order with DM'}).click();
+ await expect(input).toHaveValue(/1 × Dagger/);
+ await input.fill('Never mind.');
+ await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
+ await expect(page.getByText('Unsubmitted order canceled. No money was spent.')).toBeVisible();
+ const after=await saved(page);
+ expect(after.pendingMerchantPurchase).toBeUndefined();
+ expect(after.merchantCartDraft).toBeUndefined();
+ expect(after.inventoryLedger).toEqual(before.inventoryLedger);
+ await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();await page.getByRole('button',{name:'Continue Adventure'}).click();
+ expect((await saved(page)).pendingMerchantPurchase).toBeUndefined();
+ expect((await saved(page)).merchantCartDraft).toBeUndefined();
+});
+
+
 test('iPhone abandoning an unsent merchant cart clears it without spending',async({page})=>{
  test.setTimeout(120000);
  await createAndImport(page,'rogue');await navigate(page,'Adventure');
