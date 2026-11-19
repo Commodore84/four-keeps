@@ -797,12 +797,12 @@ test('conversational sling ammunition packs use canonical price and persist 40 p
  await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();await page.getByRole('button',{name:'Continue Adventure'}).click();
  await page.getByLabel('Message the Dungeon Master').fill('yes');
  await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
- await expect.poll(async()=>(await saved(page)).merchantStockRemaining?.['bullets-sling']).toBe(3);
+ await expect.poll(async()=>(await saved(page)).merchantStockRemaining?.['location:dasahi:city:weaponsmith:bullets-sling']).toBe(58);
  const after=await saved(page);
  expect(after.inventoryLedger.gear).toContainEqual({name:'Bullets, Sling (20)',quantity:40});
  expect(after.completedMerchantPurchaseIds).toContain(pending.pendingMerchantPurchase.id);
  await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();await page.getByRole('button',{name:'Continue Adventure'}).click();
- expect((await saved(page)).merchantStockRemaining['bullets-sling']).toBe(3);
+ expect((await saved(page)).merchantStockRemaining['location:dasahi:city:weaponsmith:bullets-sling']).toBe(58);
 });
 test('merchant negotiation requires a persisted social check and never spends without purchase confirmation',async({page})=>{
  test.setTimeout(90000);
