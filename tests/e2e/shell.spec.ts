@@ -1275,7 +1275,7 @@ test('development utilities are isolated from the normal Adventure and Player ta
  await expect(page.getByText('Development: XP and level-up testing')).toBeVisible();
 });
 
-test('mobile hamburger navigation preserves five destinations and separate developer tools',async({page})=>{
+test('mobile hamburger navigation includes magic items and separate developer tools',async({page})=>{
  await page.setViewportSize({width:375,height:812});
  await page.goto('/four-keeps/');
  await navigate(page,'Settings');
@@ -1284,7 +1284,8 @@ test('mobile hamburger navigation preserves five destinations and separate devel
  await expect(page.getByRole('navigation',{name:'Primary navigation'})).toHaveCount(0);
  await menu.click();
  const nav=page.getByRole('navigation',{name:'Primary navigation'});
- await expect(nav.getByRole('button')).toHaveCount(7);
+ await expect(nav.getByRole('button')).toHaveCount(8);
+ await expect(nav.getByRole('button',{name:'Magic Items',exact:true})).toBeVisible();
  await expect(nav.getByRole('button',{name:'Home',exact:true})).toBeVisible();
  await expect(page.locator('header > div').first().getByRole('button',{name:'Home',exact:true})).toHaveCount(0);
  await expect(nav.getByRole('button').last()).toContainText('Developer');
