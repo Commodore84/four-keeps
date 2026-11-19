@@ -124,7 +124,8 @@ export function refreshMerchantStock(campaign:Campaign):Campaign {
   for(const item of merchantCatalogFor(settlementTier(campaign),type)){
    const key=merchantStockKeyForCampaign(campaign,type,item.id);
    const interval=merchantRestockIntervalMinutes(settlementTier(campaign),item.id);
-   const last=restocked[key]??0;
+   const legacyKey=merchantStockKey(settlementTier(campaign),type,item.id);
+   const last=restocked[key]??restocked[legacyKey]??0;
    if(now<last+interval)continue;
    const cycles=Math.floor((now-last)/interval);
    restocked[key]=last+cycles*interval;
@@ -186,7 +187,7 @@ export function buyFrontierItem(campaign:Campaign,itemId:string,quantity=1,now=n
  const gear=ledger.gear.map(i=>({...i}));const owned=gear.find(i=>i.name===item.name);
  const granted=quantity*(item.packQuantity??1);
  if(owned)owned.quantity+=granted;else gear.push({name:item.name,quantity:granted});
- return {...campaign,merchantStockRemaining:{...campaign.merchantStockRemaining,[merchantStockKeyForCampaign(campaign,campaign.merchantShopType??merchantForItem(campaign,itemId)??'general',itemId)]:remainingMerchantStock(campaign,itemId)-quantity},merchantStockRestockedAt:{...campaign.merchantStockRestockedAt,[merchantStockKeyForCampaign(campaign,campaign.merchantShopType??merchantForItem(campaign,itemId)??'general',itemId)]:campaign.merchantStockRestockedAt?.[merchantStockKeyForCampaign(campaign,campaign.merchantShopType??merchantForItem(campaign,itemId)??'general',itemId)]??(Math.floor(Math.max(0,campaign.elapsedMinutes??0)/merchantRestockIntervalMinutes(settlementTier(campaign),itemId))*merchantRestockIntervalMinutes(settlementTier(campaign),itemId))},merchantDiscount:undefined,inventoryLedger:{currency,gear},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:`Purchased ${quantity} × ${item.name} at the Frontier Village shop for ${formatFrontierPrice(cost)}.`,createdAt:now}]};
+ return {...campaign,merchantStockRemaining:{...campaign.merchantStockRemaining,[merchantStockKeyForCampaign(campaign,campaign.merchantShopType??merchantForItem(campaign,itemId)??'general',itemId)]:remainingMerchantStock(campaign,itemId)-quantity},merchantStockRestockedAt:{...campaign.merchantStockRestockedAt,[merchantStockKeyForCampaign(campaign,campaign.merchantShopType??merchantForItem(campaign,itemId)??'general',itemId)]:(()=>{const key=merchantStockKeyForCampaign(campaign,campaign.merchantShopType??merchantForItem(campaign,itemId)??'general',itemId);const legacy=merchantStockKey(settlementTier(campaign),campaign.merchantShopType??merchantForItem(campaign,itemId)??'general',itemId);const interval=merchantRestockIntervalMinutes(settlementTier(campaign),itemId);const last=campaign.merchantStockRestockedAt?.[key]??campaign.merchantStockRestockedAt?.[legacy]??0;const elapsed=Math.max(0,campaign.elapsedMinutes??0);return settlementTier(campaign)==='traveling'||elapsed<last+interval?last:last+Math.floor((elapsed-last)/interval)*interval;})()},merchantDiscount:undefined,inventoryLedger:{currency,gear},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:`Purchased ${quantity} × ${item.name} at the Frontier Village shop for ${formatFrontierPrice(cost)}.`,createdAt:now}]};
 }
 
 /** Conservative local purchase-intent extraction; never infer an item from free-form DM prose. */
