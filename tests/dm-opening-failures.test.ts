@@ -5,6 +5,14 @@ const request=()=>({method:'POST',headers:{'x-four-keeps-access':'test-access-co
 function res(){return {statusCode:0,body:null as any,setHeader:vi.fn(),status(n:number){this.statusCode=n;return this;},json(v:any){this.body=v;return this;}};}
 function setup(fetch:unknown){vi.stubEnv('FOUR_KEEPS_ACCESS_CODE','test-access-code-at-least-sixteen');vi.stubEnv('OPENAI_API_KEY','fake-key');vi.stubGlobal('fetch',fetch);}
 describe('opening request safe diagnostics',()=>{
+ it('accepts a long internal opening prompt but rejects oversized player chat',async()=>{
+  const fetchMock=vi.fn(async()=>({ok:false,status:429,json:async()=>({error:{code:'rate_limit'}})}));setup(fetchMock);
+  const opening=request();opening.body.message='A'.repeat(1800);const first=res();await handler(opening,first);
+  expect(fetchMock).toHaveBeenCalledTimes(1);expect(first.body.code).toBe('provider_rate_limit');
+  const normal=request();normal.body.opening=false;normal.body.message='A'.repeat(1800);const second=res();await handler(normal,second);
+  expect(second.statusCode).toBe(400);expect(fetchMock).toHaveBeenCalledTimes(1);
+ });
+
  it('accepts empty opening message while preserving normal message validation',async()=>{
   const fetchMock=vi.fn(async()=>({ok:false,status:429,json:async()=>({error:{code:'rate_limit'}})}));setup(fetchMock);
   const opening=request();opening.body.message='';const first=res();await handler(opening,first);
