@@ -680,11 +680,11 @@ test('new Rogue starts at Frontier Village, buys supplies, and sees persisted Pl
  await shopAfterCancel.getByRole('button',{name:'Review purchase'}).click();
  await expect(shopAfterCancel.getByLabel('Confirm merchant purchase')).toContainText('2 × Rope');
  await shopAfterCancel.getByLabel('Confirm merchant purchase').getByRole('button',{name:'Confirm purchase'}).click();
- await expect.poll(async()=> (await saved(page)).merchantStockRemaining?.['city:general:rope']).toBe(9997);
+ await expect.poll(async()=> (await saved(page)).merchantStockRemaining?.['location:dasahi:city:general:rope']).toBe(38);
  await expect.poll(async()=> (await saved(page)).inventoryLedger.gear.find((item:any)=>item.name==='Rope')?.quantity).toBeGreaterThan(0);
  await expect(page.getByLabel('Dasahi marketplace')).toBeVisible();
  await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();await page.getByRole('button',{name:'Continue Adventure'}).click();
- await expect(page.getByLabel('Dasahi marketplace')).toContainText('9997 in stock');
+ await expect(page.getByLabel('Dasahi marketplace')).toContainText('38 in stock');
  const beforeDagger=(await saved(page)).inventoryLedger;
  await page.getByLabel('Message the Dungeon Master').fill('I buy one rope');
  await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
