@@ -768,15 +768,15 @@ test('merchant catalog reflects finite stock and refuses unavailable quantities'
  await input.fill('What do you sell?');await send.click();
  await expect(page.getByLabel('Dasahi marketplace').getByRole('button',{name:'Weaponsmith'})).toBeVisible();
  await page.getByLabel('Dasahi marketplace').getByRole('button',{name:'Weaponsmith'}).click();
- await expect(page.getByLabel('Dasahi marketplace').getByLabel('Dagger',{exact:true})).toContainText('9999 in stock');
+ await expect(page.getByLabel('Dasahi marketplace').getByLabel('Dagger',{exact:true})).toContainText('12 in stock');
  await input.fill('I will buy 99999 daggers');await send.click();
  expect((await saved(page)).pendingMerchantPurchase).toBeUndefined();
  await input.fill('I will buy 2 daggers');await send.click();
  await expect.poll(async()=>Boolean((await saved(page)).pendingMerchantPurchase)).toBe(true);
  await input.fill('yes');await send.click();
- await expect.poll(async()=>(await saved(page)).merchantStockRemaining?.['city:weaponsmith:dagger']).toBe(9997);
+ await expect.poll(async()=>(await saved(page)).merchantStockRemaining?.['location:dasahi:city:weaponsmith:dagger']).toBe(10);
  await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();await page.getByRole('button',{name:'Continue Adventure'}).click();
- expect((await saved(page)).merchantStockRemaining['city:weaponsmith:dagger']).toBe(9997);
+ expect((await saved(page)).merchantStockRemaining['location:dasahi:city:weaponsmith:dagger']).toBe(10);
 });
 test('conversational sling ammunition packs use canonical price and persist 40 projectiles',async({page})=>{
  test.setTimeout(90000);
