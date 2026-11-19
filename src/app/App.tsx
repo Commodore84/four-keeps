@@ -3,6 +3,7 @@ import {anchamidaLocations} from '../game/anchamida';
 import {applyAnchamidaActions} from '../game/anchamidaActions';
 import {AnchamidaRegionMap} from './AnchamidaRegionMap';
 import {MerchantShop} from './MerchantShop';
+import {confirmCitySupplyOrder,isSupplierBrowseRequest} from '../game/merchantSupply';
 import {DMNarration,type NarrationSpeed} from './DMNarration';
 import {parseFrontierPurchase,prepareMerchantPurchase,prepareMerchantCart,settleMerchantPurchase,frontierShopStock,merchantStock,formatFrontierPrice,isMerchantNegotiationRequest,isMerchantPurchaseRequest,classifyMerchantIntent,merchantNegotiationTarget,beginMerchantNegotiation,resolveMerchantNegotiation} from '../game/frontierShop';
 import {classSummary} from '../game/creationClasses';
@@ -721,6 +722,22 @@ export function App() {
     if(campaign?.characterIdentity && (campaign.adventureSession?.status==='encounter'||campaign.adventureSession?.pendingEncounter)){setNotice('Resolve the current encounter before continuing the Dungeon Master conversation.');return;}
     if(campaign?.combat?.status==='awaiting-initiative'){setNotice('Roll initiative using the highlighted button before taking your turn.');return;}
     if(campaign?.combat?.status==='initiative-set'){setNotice('Use the inline combat action buttons to take your turn.');return;}
+    if(campaign?.pendingMerchantSupplyOrder){
+      const response=draft.trim().toLowerCase();
+      if(!/^(yes|confirm|order|place order|no|cancel|decline|never mind|nevermind)[.! ]*$/.test(response)){
+        setNotice('Confirm or cancel the pending supplier order before continuing.');return;
+      }
+      const confirmed=/^(yes|confirm|order|place order)/.test(response);
+      setSaving(true);
+      try{
+        const pending=campaign.pendingMerchantSupplyOrder;
+        const next=confirmCitySupplyOrder(campaign,pending.id,confirmed);
+        const message=confirmed?'Supplier order placed and paid. Return after game minute '+pending.readyAtMinutes+' to collect your equipment.':'Supplier order canceled. No money was spent.';
+        const saved=addExchange(next,draft,message);
+        await saveMerchantShop(saved);setDraft('');setNotice(message);
+      }catch(error){setNotice('Supplier order: '+String(error));}finally{setSaving(false);}
+      return;
+    }
     if(campaign?.pendingMerchantPurchase){
       const response=draft.trim().toLowerCase();
       if(!/^(yes|confirm|buy|purchase|no|cancel|decline|never mind|nevermind)[.! ]*$/.test(response)){
@@ -739,10 +756,10 @@ export function App() {
       return;
     }
     if(campaign?.characterIdentity && campaign.adventureSession?.site==='frontier' && campaign.adventureSession.status==='exploring'){
-      if(classifyMerchantIntent(draft)==='browse'){
+      if(classifyMerchantIntent(draft)==='browse'||(campaign.characterBuild&&isSupplierBrowseRequest(draft))){
         setSaving(true);
         try{
-          const saved=addExchange({...campaign,merchantShopOpen:true},draft,'Mara Vell opens her ledger and shows you the goods available today. You can browse the shop catalog, choose a quantity, or ask her about anything on the shelves.');
+          const saved=addExchange({...campaign,merchantShopOpen:true},draft,campaign.characterBuild?'The city merchant opens the equipment catalog. If something is sold out, the supplier-order section lets you request it. Nothing is charged until you confirm.':'Mara Vell opens her ledger and shows you the goods available today. You can browse the shop catalog, choose a quantity, or ask her about anything on the shelves.');
           await localCampaignStorage.save(saved);setCampaign(saved);setCampaigns(items=>items.map(c=>c.id===saved.id?saved:c));setDraft('');
         }catch(error){setNotice('Shopkeeper: '+String(error));}finally{setSaving(false);}
         return;
