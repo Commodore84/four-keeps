@@ -1,3 +1,4 @@
+import {parseMerchantDiscountRequest,merchantPurchaseReply} from '../game/merchantDialogue';
 import {legacyEncounters,answerRecall,refineEncounterAtDowntime,type RecallTurn} from '../game/encounterJournal';
 import {anchamidaLocations} from '../game/anchamida';
 import {applyAnchamidaActions} from '../game/anchamidaActions';
@@ -730,8 +731,14 @@ export function App() {
     }catch(error){setNotice('Shop error: '+String(error));}
     finally{setSaving(false);}
   }
+  async function abandonUnsentMerchantCart(){
+    if(!campaign?.merchantCartDraft||campaign.pendingMerchantPurchase)return;
+    const next={...campaign,merchantCartDraft:undefined};
+    setCampaign(next);setCampaigns(items=>items.map(item=>item.id===next.id?next:item));
+    setDraft('');await localCampaignStorage.save(next);
+  }
   async function settleShopPurchase(confirmed:boolean){
-    if(!campaign?.pendingMerchantPurchase||saving)return;
+    if(!campaign?.pendingMerchantPurchase||saving||campaign.pendingCheck||campaign.merchantCartNegotiation&&!campaign.merchantCartNegotiation.resolved)return;
     setSaving(true);try{
       const pending=campaign.pendingMerchantPurchase;
       const next=settleMerchantPurchase(campaign,pending.id,confirmed);
@@ -788,15 +795,14 @@ export function App() {
       }catch(error){setNotice('Merchant order: '+String(error));}finally{setSaving(false);}
       return;
     }
+    if(campaign?.pendingMerchantPurchase && campaign.pendingCheck){setNotice('Complete the negotiation roll before continuing.');return;}
     if(campaign?.pendingMerchantPurchase){
       const message=draft.trim();
       const listedLines=campaign.pendingMerchantPurchase.lines??[{itemId:campaign.pendingMerchantPurchase.itemId,quantity:campaign.pendingMerchantPurchase.quantity,unitCostCp:campaign.pendingMerchantPurchase.unitCostCp}];
       const listedTotal=listedLines.reduce((sum,line)=>sum+line.quantity*line.unitCostCp,0);
-      const requestedGold=message.match(/(?:take|accept|offer|for)\s+(\d+(?:\.\d{1,2})?)\s*(?:gp|gold)\b/i);
-      const pricePercent=requestedGold&&listedTotal>0?Math.ceil((1-Number(requestedGold[1])*100/listedTotal)*100):null;
-      const discountRequest=message.match(/(?:discount|off|reduce|lower|take)\D{0,30}(\d{1,2})\s*%|(?:\d{1,2})\s*%\s*(?:discount|off)/i);
-      if(discountRequest||pricePercent!==null){
-        const percent=discountRequest?Number(discountRequest[1]??message.match(/(\d{1,2})\s*%/)?.[1]):pricePercent!;
+      const proposedDiscount=parseMerchantDiscountRequest(message,listedTotal);
+      if(proposedDiscount!==null){
+        const percent=proposedDiscount;
         setSaving(true);
         try{
           const token=crypto.randomUUID();
@@ -815,17 +821,14 @@ export function App() {
         await localCampaignStorage.save(next);setCampaign(next);setCampaigns(items=>items.map(c=>c.id===next.id?next:c));setDraft('');
         return;
       }
-      const response=draft.trim().toLowerCase();
-      if(!/^(yes|confirm|buy|purchase|deal|i(?:'ll| will) take it|no|cancel|decline|never mind|nevermind)[.! ]*$/.test(response)){
-        setNotice('Confirm or cancel the pending purchase before continuing.');return;
-      }
-      const confirmed=/^(yes|confirm|buy|purchase|deal|i(?:'ll| will) take it)/.test(response);
+      const response=merchantPurchaseReply(draft);
+      if(!response){setNotice('Confirm or cancel the pending purchase before continuing.');return;}
+      const confirmed=response==='accept';
       setSaving(true);
       try{
         const pending=campaign.pendingMerchantPurchase;
         const next=settleMerchantPurchase(campaign,pending.id,confirmed);
-        const item=frontierShopStock.find(i=>i.id===pending.itemId);
-        const narration=confirmed?`Purchased ${pending.quantity} × ${item?.name} for ${formatFrontierPrice(pending.quantity*pending.unitCostCp)}. Your inventory and balance are updated.`:'The merchant puts the goods back. No money was spent.';
+        const narration=confirmed?`Purchased ${(pending.lines??[{itemId:pending.itemId,quantity:pending.quantity,unitCostCp:pending.unitCostCp}]).map(line=>line.quantity+' × '+(frontierShopStock.find(x=>x.id===line.itemId)?.name??line.itemId)).join(', ')} for ${formatFrontierPrice((pending.lines??[{itemId:pending.itemId,quantity:pending.quantity,unitCostCp:pending.unitCostCp}]).reduce((sum,line)=>sum+line.quantity*line.unitCostCp,0))}. Your inventory and balance are updated.`:'The merchant puts the goods back. No money was spent.';
         const saved=addExchange(next,draft,narration);
         await localCampaignStorage.save(saved);setCampaign(saved);setCampaigns(items=>items.map(c=>c.id===saved.id?saved:c));setDraft('');setNotice(confirmed?'Purchase completed and saved.':'Purchase canceled.');
       }catch(error){setNotice('Purchase error: '+String(error));}finally{setSaving(false);}
@@ -1507,7 +1510,7 @@ export function App() {
     <div className={activeView==='map'?"mx-auto flex h-dvh w-full max-w-3xl flex-col overflow-hidden":"mx-auto flex min-h-dvh w-full max-w-3xl flex-col"}>
       <header className="sticky top-0 z-20 border-b border-white/10 bg-ink/95 px-5 pb-4 pt-[max(1.2rem,env(safe-area-inset-top))] backdrop-blur">
         <div className="flex items-center justify-between gap-3"><div><div className="flex items-center gap-2"><button type="button" aria-label="Open navigation menu" aria-expanded={navigationOpen} aria-controls="four-keeps-navigation" onClick={()=>setNavigationOpen(open=>!open)} className="rounded-lg border border-white/20 p-2 text-gold" title="Navigate"><img src="/four-keeps-nav-icon.png" alt="" aria-hidden="true" className="h-[26px] w-[26px] object-contain" /></button><h1><svg width="0" height="0" aria-hidden="true" className="absolute"><defs><filter id="four-keeps-transparent-key" colorInterpolationFilters="sRGB"><feColorMatrix type="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  2 2 2 0 -0.5"/></filter></defs></svg><img src="/four-keeps-approved.webp" alt="Four Keeps" className="h-auto w-full max-w-[min(70vw,340px)] object-contain object-left" style={{filter:"url(#four-keeps-transparent-key)"}} /></h1></div></div><span className="rounded-full border border-gold/30 px-3 py-1 text-xs text-gold">{campaign?.characterIdentity?"Adventure":"Prototype"}</span></div>
-        {navigationOpen&&<nav id="four-keeps-navigation" aria-label="Primary navigation" className="absolute left-4 top-full z-30 mt-1 w-56 rounded-xl border border-gold/30 bg-panel p-2 shadow-2xl"><button type="button" onClick={()=>{setNavigationOpen(false);setPortalScreen("home");setNotice('')}} className="flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left text-sm text-parchment hover:bg-white/10"><Compass size={19}/>Home</button><div className="my-1 border-t border-white/10"/>{tabs.map(({id,label,Icon})=><button key={id} type="button" onClick={()=>{setActiveView(id);setNavigationOpen(false);setNotice('')}} aria-current={activeView===id?'page':undefined} className={`flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left text-sm ${activeView===id?'bg-gold/15 text-gold':'text-parchment hover:bg-white/10'}`}><Icon size={19}/>{label}</button>)}</nav>}
+        {navigationOpen&&<nav id="four-keeps-navigation" aria-label="Primary navigation" className="absolute left-4 top-full z-30 mt-1 w-56 rounded-xl border border-gold/30 bg-panel p-2 shadow-2xl"><button type="button" onClick={()=>{void abandonUnsentMerchantCart();setNavigationOpen(false);setPortalScreen("home");setNotice('')}} className="flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left text-sm text-parchment hover:bg-white/10"><Compass size={19}/>Home</button><div className="my-1 border-t border-white/10"/>{tabs.map(({id,label,Icon})=><button key={id} type="button" onClick={()=>{if(id!=='adventure')void abandonUnsentMerchantCart();setActiveView(id);setNavigationOpen(false);setNotice('')}} aria-current={activeView===id?'page':undefined} className={`flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left text-sm ${activeView===id?'bg-gold/15 text-gold':'text-parchment hover:bg-white/10'}`}><Icon size={19}/>{label}</button>)}</nav>}
         <div className="mt-3 flex items-center justify-between text-xs text-parchment/60"><span className="flex flex-wrap items-center gap-2">{campaign?.combat&&<UserRound size={15} className="text-emerald-300" aria-label="Player token"/>}{campaign?.title ?? 'No campaign selected'}{campaign?.combat?.owl&&(campaign.character?.level??1)>=3&&campaign.familiar?.status!=='dismissed'&&campaign.familiar?.status!=='destroyed'&&<Bird size={15} className="text-sky-300" aria-label="Familiar token"/>}{campaign?.combat&&<span className="ml-2 inline-flex flex-wrap gap-1 align-middle" aria-label="Active player statuses">
           {campaign.combat.playerHidden&&<span className="rounded border border-emerald-400/60 px-2 py-0.5 text-emerald-300" title="Hidden from Hide; ends when discovered or revealed">◉ Hidden</span>}
           {campaign.combat.playerProne&&<span className="rounded border border-amber-400/60 px-2 py-0.5 text-amber-200">Prone</span>}

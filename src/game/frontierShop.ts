@@ -326,6 +326,7 @@ export function settleMerchantPurchase(campaign:Campaign,id:string,confirmed:boo
  const pending=campaign.pendingMerchantPurchase;
  if(!pending||pending.id!==id)throw Error('No matching pending purchase.');
  if((campaign.completedMerchantPurchaseIds??[]).includes(id))throw Error('Purchase already completed.');
+ if(campaign.merchantCartNegotiation?.purchaseId===id&&!campaign.merchantCartNegotiation.resolved)throw Error('Complete the negotiation roll before checkout.');
  if(!confirmed)return {...campaign,pendingMerchantPurchase:undefined,merchantCartNegotiation:undefined};
  const item=merchantStock(campaign).find(i=>i.id===pending.itemId);
  const discount=campaign.merchantCartNegotiation?.purchaseId===pending.id&&campaign.merchantCartNegotiation.success?campaign.merchantCartNegotiation.percent:campaign.merchantDiscount?.itemId===pending.itemId?campaign.merchantDiscount.percent:0;

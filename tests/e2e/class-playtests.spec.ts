@@ -1258,3 +1258,61 @@ test('iPhone merchant negotiation hides DC, rolls, and keeps confirmation explic
  await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();await page.getByRole('button',{name:'Continue Adventure'}).click();
  expect((await saved(page)).completedMerchantPurchaseIds).toEqual(transactionIds);
 });
+
+
+test('iPhone natural merchant chat acceptance buys a pending cart exactly once after reload',async({page})=>{
+ test.setTimeout(120000);
+ await createAndImport(page,'rogue');await navigate(page,'Adventure');
+ await page.evaluate(()=>{localStorage.setItem('four-keeps-access-code','browser-test-code');localStorage.setItem('four-keeps-dm-mode','on');});
+ await page.route('**/api/dm',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({narration:'The smith lays out the merchandise.',worldUpdates:{},newFacts:[]})}));
+ await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await expect.poll(async()=> (await saved(page))?.journal?.some((entry:any)=>entry.id?.endsWith('-dm-opening'))).toBe(true);
+ const input=page.getByLabel('Message the Dungeon Master');
+ await input.fill('Show me what you have for sale.');
+ await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
+ const shop=page.getByLabel('Dasahi marketplace');await expect(shop).toBeVisible();
+ await shop.getByRole('button',{name:'Weaponsmith'}).click();
+ await shop.getByRole('button',{name:'Add Dagger'}).click();
+ await shop.getByRole('button',{name:'Add Club'}).click();
+ await shop.getByRole('button',{name:'Discuss order with DM'}).click();
+ await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
+ await expect(page.getByLabel('Pending merchant order')).toBeVisible();
+ const pending=(await saved(page)).pendingMerchantPurchase;
+ expect(pending.lines).toHaveLength(2);
+ const before=(await saved(page)).inventoryLedger;
+ await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await input.fill('You have a deal.');
+ await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
+ await expect.poll(async()=> (await saved(page)).completedMerchantPurchaseIds?.includes(pending.id)).toBe(true);
+ const paid=await saved(page);
+ expect(paid.inventoryLedger).not.toEqual(before);
+ expect(paid.journal.at(-1)?.text??'').not.toContain('DC ');
+ await input.fill('You have a deal.');
+ await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
+ expect((await saved(page)).completedMerchantPurchaseIds.filter((id:string)=>id===pending.id)).toHaveLength(1);
+});
+
+
+test('iPhone abandoning an unsent merchant cart clears it without spending',async({page})=>{
+ test.setTimeout(120000);
+ await createAndImport(page,'rogue');await navigate(page,'Adventure');
+ await page.evaluate(()=>{localStorage.setItem('four-keeps-access-code','browser-test-code');localStorage.setItem('four-keeps-dm-mode','on');});
+ await page.route('**/api/dm',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({narration:'The merchant offers to show you the goods.',worldUpdates:{},newFacts:[]})}));
+ await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await expect.poll(async()=> (await saved(page))?.journal?.some((entry:any)=>entry.id?.endsWith('-dm-opening'))).toBe(true);
+ const input=page.getByLabel('Message the Dungeon Master');
+ await input.fill('Show me what you have for sale.');
+ await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
+ const shop=page.getByLabel('Dasahi marketplace');await expect(shop).toBeVisible();
+ await shop.getByRole('button',{name:'Weaponsmith'}).click();
+ await shop.getByRole('button',{name:'Add Dagger'}).click();
+ const before=(await saved(page)).inventoryLedger;
+ await shop.getByRole('button',{name:'Discuss order with DM'}).click();
+ expect((await saved(page)).merchantCartDraft).toBeTruthy();
+ await navigate(page,'Player');
+ await expect.poll(async()=> (await saved(page)).merchantCartDraft).toBeFalsy();
+ expect((await saved(page)).pendingMerchantPurchase).toBeUndefined();
+ expect((await saved(page)).inventoryLedger).toEqual(before);
+ await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();await page.getByRole('button',{name:'Continue Adventure'}).click();
+ expect((await saved(page)).merchantCartDraft).toBeUndefined();
+});

@@ -356,3 +356,29 @@ describe('authoritative multi-item negotiated cart',()=>{
   expect(()=>settleMerchantPurchase(bought,'negotiated-1',true)).toThrow();
  });
 });
+
+
+describe('merchant negotiation interruption and transaction guards',()=>{
+ const quote=()=>prepareMerchantCart({...fixture(),merchantShopType:'weaponsmith'},[{itemId:'dagger',quantity:1},{itemId:'club',quantity:1}],'cart-guard');
+ it('blocks purchase and cancellation while a required roll is unresolved',()=>{
+  const rolling=beginCartNegotiation(quote(),10,'check-guard');
+  expect(()=>settleMerchantPurchase(rolling,'cart-guard',true)).toThrow('roll');
+  expect(()=>settleMerchantPurchase(rolling,'cart-guard',false)).toThrow('roll');
+  const reloaded=JSON.parse(JSON.stringify(rolling));
+  expect(()=>beginCartNegotiation(reloaded,5,'reroll')).toThrow();
+  expect(reloaded.pendingMerchantPurchase?.lines).toHaveLength(2);
+ });
+ it('rejects stock depletion after a successful roll without partial spending',()=>{
+  const resolved=resolveCartNegotiation(beginCartNegotiation(quote(),10,'check-guard'),'check-guard',20);
+  const stale={...resolved,merchantStockRemaining:{...resolved.merchantStockRemaining,[merchantStockKey('town','weaponsmith','club')]:0}};
+  const snapshot=JSON.stringify(stale);
+  expect(()=>settleMerchantPurchase(stale,'cart-guard',true)).toThrow('stock');
+  expect(JSON.stringify(stale)).toBe(snapshot);
+ });
+ it('rejects a depleted wallet after discount and preserves the offer',()=>{
+  const resolved=resolveCartNegotiation(beginCartNegotiation(quote(),10,'check-guard'),'check-guard',20);
+  const stale={...resolved,inventoryLedger:{...resolved.inventoryLedger!,currency:{GP:0,SP:0,CP:0,EP:0,PP:0}}};
+  expect(()=>settleMerchantPurchase(stale,'cart-guard',true)).toThrow('money');
+  expect(stale.pendingMerchantPurchase).toBeTruthy();
+ });
+});
