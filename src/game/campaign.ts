@@ -26,6 +26,9 @@ export interface Campaign {
   pendingMerchantPurchase?:{id:string;itemId:string;quantity:number;unitCostCp:number;lines?:{itemId:string;quantity:number;unitCostCp:number}[]};
   merchantStockRemaining?:Record<string,number>;
   merchantStockRestockedAt?:Record<string,number>;
+  merchantSupplyOrders?:{id:string;settlement:string;merchant:string;itemId:string;quantity:number;unitCostCp:number;placedAtMinutes:number;readyAtMinutes:number;status:'ordered'|'collected'}[];
+  pendingMerchantSupplyOrder?:{id:string;settlement:string;merchant:string;itemId:string;quantity:number;unitCostCp:number;readyAtMinutes:number};
+  merchantTraderResupply?:Record<string,number>;
   merchantDiscount?:{itemId:string;percent:number;approvalId:string};
   pendingMerchantNegotiation?:{itemId:string;checkToken:string};
   completedMerchantPurchaseIds?:string[];
