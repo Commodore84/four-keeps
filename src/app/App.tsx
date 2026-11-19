@@ -1,3 +1,4 @@
+import {legacyEncounters,answerRecall,refineEncounterAtDowntime,type RecallTurn} from '../game/encounterJournal';
 import {anchamidaLocations} from '../game/anchamida';
 import {applyAnchamidaActions} from '../game/anchamidaActions';
 import {AnchamidaRegionMap} from './AnchamidaRegionMap';
@@ -20,7 +21,7 @@ import { CharacterCreator,readCharacterDrafts } from './CharacterCreator';
 import {campaignFromCharacterDraft,characterDraftImportOptions} from '../game/characterImport';
 import { cloneElement, useEffect, useRef, useState } from 'react';
 import { createBackup, parseBackup } from '../game/backup';
-import { BookOpen, Bird, Blocks, Compass, Droplet, Map, RefreshCw, Send, Settings, Shield, Swords, UserRound, Users } from 'lucide-react';
+import { BookOpen, Bird, Blocks, Compass, Droplet, Map, RefreshCw, Send, Settings, Shield, Swords, UserRound, Users, Search, ChevronDown, MessageCircle, MapPin, GitBranch, Sparkles } from 'lucide-react';
 import { addExchange, addNote, addRoll, beginDuel, adjustEquipment, rollDuelInitiative, takeDuelTurnAction, utilizeCombatItem, takeCombatSkillAction, readyCombatAction, readyCombatMindSliver, resolveReadiedSpellReaction, resolveReadiedCombatReaction, resolveReadiedWeaponAttack, moveDuelToken, moveOwl, owlHelp, owlTurnAction, tacticalRoute, tacticalOpportunityEnemies, publicCombatText, resolveEnemyOpportunity, moveTrainingDummy, resolveTrainingReaction, rollTrainingReaction, advanceDuelTestEnemyTurn, resolveDuelEnemyTurn, beginEnemyShove, beginEnemyGrapple, rollPlayerGrappleSave, beginPlayerGrappleEscape, rollPlayerGrappleEscape, rollPlayerShoveSave, standNighthawk, rollDuelAttack, shoveTrainingEnemy, hideNighthawk, searchForNighthawk, trainingMapSize, isTrainingPillar, trainingTerrain, trainingRouteCost, trainingCoverBlocksSight, canNighthawkHide, addSecondTrainingEnemy, selectTrainingTarget, grappleTrainingEnemy, escapeTrainingGrapple, concludeDuel, quitTrainingEncounter, newCampaign, awardExperience, levelUpRogue, levelUpArcaneTrickster, tricksterCantrips, tricksterSpells, isRitualSpell, castNighthawkSpell, castCombatMagicAction, resolveCombatSpellSave, resolveLaughterRepeatSave, availableCombatSpells, takeNighthawkRest, applyNighthawkDamage, minutesUntilLongRestEligible, advanceToLongRestEligibility, endNighthawkConcentration, spellRequiresConcentration, reconcileNighthawkScores, undoNighthawkScoreReconciliation, xpThresholds, type Campaign } from '../game/campaign';
 import { localCampaignStorage } from '../game/storage';
 import { availableCombatMovement, combatHideStatus, combatAttackRollPreview } from '../game/combat-ui';
@@ -317,14 +318,50 @@ function Party({ campaign, onRoll, onSaveRoll, onAwardXP, onLevelUp, onLevelThre
 </section>;
 }
 function Journal({ campaign }: { campaign: Campaign | null }) {
-  return <section className="space-y-4"><div className="flex items-center gap-3"><BookOpen className="text-gold"/><h2 className="font-serif text-2xl">Campaign Journal</h2></div>
-    {!!campaign?.world?.npcs?.length && <section className="rounded-xl border border-gold/25 bg-panel p-4"><h3 className="font-serif text-lg">People encountered</h3>{campaign.world.npcs.map(n=><p key={n.id} className="mt-2 text-sm">{n.name} · {n.role} · {n.location}</p>)}</section>}
-    {!!campaign?.world?.clues?.length && <section className="rounded-xl border border-gold/25 bg-panel p-4"><h3 className="font-serif text-lg">Clues</h3>{campaign.world.clues.map(c=><p key={c.id} className="mt-2 text-sm">{c.text} <span className="text-parchment/60">({c.evidence})</span></p>)}</section>}
-    {!!campaign?.world?.places?.length && <div className="rounded-xl border border-gold/25 bg-panel p-4 space-y-3"><h3 className="font-serif text-lg">Discovered places</h3>{campaign.world.places.map(place=><div key={place.id} className="border-t border-white/10 pt-2"><p className="font-semibold text-gold">{place.name}</p><p className="text-sm text-parchment/75">{place.description}</p>{place.notes.map((note,i)=><p key={i} className="text-xs text-parchment/60">{note}</p>)}</div>)}</div>}
-    {campaign ? campaign.journal.filter(entry => entry.kind === 'note' || entry.kind === 'system').map((entry) => <div key={entry.id} className="rounded-xl border border-white/10 bg-panel p-4">
-      <p className="text-xs text-gold">{entry.kind === 'note' ? 'Your note' : entry.kind === 'player' ? 'Nighthawk' : entry.kind === 'dm' ? 'Dungeon Master' : 'Campaign event'} · {new Date(entry.createdAt).toLocaleString()}</p>
-      <p className="mt-2 text-sm leading-6">{entry.kind==='system'?publicCombatText(entry.text):entry.text}</p>
-    </div>) : <p className="text-parchment/60">Create a campaign to start your journal.</p>}
+  const [section,setSection] = useState<'Adventures'|'People'|'Places'>('Adventures');
+  const [searchOpen,setSearchOpen] = useState(false);
+  const [query,setQuery] = useState('');
+  const [kind,setKind] = useState('All');
+  const [expanded,setExpanded] = useState<string[]>([]);
+  const events = campaign ? legacyEncounters(campaign) : [];
+  const [recallQuestion,setRecallQuestion]=useState('');
+  const [recallAnswer,setRecallAnswer]=useState('');
+  const [recallTurns,setRecallTurns]=useState<RecallTurn[]>([]);
+  const icons = {Combat:Swords,Exploration:Compass,Decision:GitBranch,Conversation:MessageCircle,Event:Sparkles};
+  const matches = (text:string) => text.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase());
+  const npcs = (campaign?.world?.npcs ?? []).filter(n=>matches([n.name,n.role,n.location,n.relationship,...n.notes].join(' ')));
+  const places = (campaign?.world?.places ?? []).filter(p=>matches([p.name,p.description,...p.notes].join(' ')));
+  const visible = events.filter(e=>(kind==='All'||e.kind===kind)&&matches([e.summary,e.recount,...e.tags].join(' ')));
+  const levels=[...new Set(visible.map(e=>e.level))].sort((a,b)=>a-b);
+  const tabs = [{name:'Adventures',Icon:BookOpen},{name:'People',Icon:Users},{name:'Places',Icon:MapPin}] as const;
+  return <section className="flex min-h-0 flex-col gap-3">
+    <div className="sticky top-0 z-20 space-y-2 bg-ink pb-2">
+      <div className="flex items-center justify-between"><h2 className="flex items-center gap-2 font-serif text-xl"><BookOpen className="text-gold"/>Journal</h2>
+        <button type="button" aria-label="Search and filter journal" aria-expanded={searchOpen} onClick={()=>setSearchOpen(v=>!v)} className="rounded-lg border border-white/15 p-2"><Search size={19}/></button></div>
+      <nav aria-label="Journal sections" className="grid grid-cols-3 gap-1.5">
+        {tabs.map(({name,Icon})=><button key={name} type="button" aria-current={section===name?'page':undefined} onClick={()=>{setSection(name);setExpanded([]);setKind('All')}} className={`flex min-w-0 flex-col items-center justify-center gap-1 rounded-lg border px-1 py-2 text-xs ${section===name?'border-gold/60 bg-gold/15 text-gold':'border-white/15 bg-panel text-parchment'}`}><Icon size={19}/><span>{name}</span></button>)}
+      </nav>
+      {searchOpen && <div className="space-y-2 rounded-lg border border-white/15 bg-panel p-2">
+        <input aria-label="Search journal" value={query} onChange={e=>setQuery(e.target.value)} placeholder={`Search ${section.toLowerCase()}…`} className="w-full rounded-md border border-white/20 bg-ink p-2 text-sm"/>
+        {section==='Adventures' && <select aria-label="Encounter type" value={kind} onChange={e=>setKind(e.target.value)} className="w-full rounded-md border border-white/20 bg-ink p-2 text-sm">{['All','Conversation','Combat','Exploration','Decision','Event'].map(v=><option key={v}>{v}</option>)}</select>}
+        <button type="button" onClick={()=>{setQuery('');setKind('All');setSearchOpen(false)}} className="text-xs text-gold">Clear and close</button>
+      </div>}
+    </div>
+    {!campaign ? <p className="text-sm text-parchment/60">Create a campaign to begin your journal.</p> : section==='Adventures' ? <div className="space-y-2">
+      {visible.length===0 && <p className="text-sm text-parchment/60">No matching recorded encounters yet.</p>}
+      {levels.map(level=><div key={level} className="space-y-2"><h3 className="sticky top-32 z-10 bg-ink py-1 text-sm font-semibold text-gold">{level===0?'Earlier adventures':`Level ${level}`}</h3>{visible.filter(e=>e.level===level).map(e=>{const category=e.kind;const Icon=icons[category];const open=expanded.includes(e.id);const detail=e.recount;return <article key={e.id} className="overflow-hidden rounded-xl border border-white/15 bg-panel">
+        <button type="button" aria-expanded={open} onClick={()=>setExpanded(old=>open?old.filter(id=>id!==e.id):[...old,e.id])} className="flex w-full items-start gap-3 p-3 text-left">
+          <Icon className="mt-0.5 shrink-0 text-gold" size={21}/><span className="min-w-0 flex-1"><span className="block text-xs text-parchment/55">{category} · Level {e.level} · {new Date(e.createdAt).toLocaleDateString()}</span><span className="mt-1 block text-sm leading-5">{e.summary.length>135?e.summary.slice(0,132)+'…':e.summary}</span></span><ChevronDown className={`shrink-0 transition-transform ${open?'rotate-180':''}`} size={17}/></button>
+        {open && <div className="border-t border-white/10 px-3 py-3 text-sm leading-6 whitespace-pre-wrap">{detail}</div>}
+      </article>})}</div>)}
+    </div> : section==='People' ? <div className="space-y-2">
+      {npcs.length===0 && <p className="text-sm text-parchment/60">No matching people recorded yet.</p>}
+      {[...npcs].sort((a,b)=>a.name.localeCompare(b.name)).map(n=><details key={n.id} className="rounded-xl border border-white/15 bg-panel p-3"><summary className="cursor-pointer text-sm font-semibold">{n.name}<span className="block text-xs font-normal text-parchment/60">{[n.role,n.location].filter(Boolean).join(' · ')}</span></summary><div className="mt-2 space-y-1 text-sm text-parchment/80">{n.relationship && <p>{n.relationship}</p>}{n.notes.map((note,i)=><p key={i}>{note}</p>)}</div></details>)}
+    </div> : <div className="space-y-2">
+      {places.length===0 && <p className="text-sm text-parchment/60">No matching places recorded yet.</p>}
+      {[...places].sort((a,b)=>a.name.localeCompare(b.name)).map(p=><details key={p.id} className="rounded-xl border border-white/15 bg-panel p-3"><summary className="cursor-pointer text-sm font-semibold">{p.name}<span className="block text-xs font-normal text-parchment/60">{p.description}</span></summary><div className="mt-2 space-y-1 text-sm text-parchment/80">{p.notes.map((note,i)=><p key={i}>{note}</p>)}</div></details>)}
+    </div>}
+    {campaign && <form aria-label="Ask the DM about campaign history" onSubmit={event=>{event.preventDefault();const turn=answerRecall(campaign,recallQuestion,recallTurns.at(-1));setRecallAnswer(turn.answer);setRecallTurns(old=>[...old.slice(-9),turn]);setRecallQuestion('')}} className="sticky bottom-0 z-10 space-y-2 border-t border-white/10 bg-ink py-2"><div className="flex gap-2"><input aria-label="Ask the DM what you remember" value={recallQuestion} onChange={e=>setRecallQuestion(e.target.value)} placeholder="Ask the DM what you remember…" className="min-w-0 flex-1 rounded-lg border border-white/20 bg-panel px-3 py-2 text-base"/><button type="submit" disabled={!recallQuestion.trim()} className="rounded-lg border border-gold px-3 text-sm text-gold disabled:opacity-40">Ask</button></div>{recallAnswer && <p role="status" className="max-h-36 overflow-auto whitespace-pre-wrap text-sm text-parchment/80">{recallAnswer}</p>}</form>}
   </section>;
 }
 const atlasSites = [
@@ -756,7 +793,7 @@ export function App() {
     try {
       const eligible=!campaign.characterIdentity&&pendingRest==='long'?advanceToLongRestEligibility(campaign,restWaitMinutes):campaign;
       const base=campaign.characterIdentity?completePlayerRest(eligible,pendingRest,{confirmedSafe:true,hitDieRolls:pendingRest==='short'?restRolls:[],waitMinutes:restWaitMinutes,useTrance:pendingRest==='long'&&restTrance,portentRolls:pendingRest==='long'&&campaign.importedSubclassId==='wizard-diviner'?restPortent.map(Number):undefined}):takeNighthawkRest(eligible,pendingRest,pendingRest==='short'?restRolls.length:0,restRolls);
-      const next=addExchange(base,draft,restNarration,new Date().toISOString());
+      const next=refineEncounterAtDowntime(addExchange(base,draft,restNarration,new Date().toISOString()),new Date().toISOString());
       await localCampaignStorage.save(next);setCampaign(next);setCampaigns(items=>items.map(item=>item.id===next.id?next:item));
       setPendingRest(null);setRestApproved(false);setRestRolls([]);setRestNarration('');setRestWaitMinutes(0);setRestTrance(false);setDraft('');
       setNotice('Rest completed and saved.');

@@ -1,3 +1,4 @@
+import {recordEncounter} from './encounterJournal';
 import type {Campaign} from './campaign';
 import {beginAdventureSession} from './adventureSession';
 import {mergeWorld} from './world';
@@ -67,10 +68,10 @@ export function commitAdventureAction(campaign:Campaign,actionId:string,narratio
     const fact=item.trim().slice(0,220);
     if(fact&&!facts.some(x=>x.toLowerCase()===fact.toLowerCase()))facts.push(fact);
   }
-  return {...rest,worldFacts:facts.slice(-60),world:mergeWorld(campaign.world,worldUpdates),updatedAt:now,journal:[...campaign.journal,
+  return recordEncounter({...rest,worldFacts:facts.slice(-60),world:mergeWorld(campaign.world,worldUpdates),updatedAt:now,journal:[...campaign.journal,
     {id:actionId+'-player',kind:'player' as const,text:pending.message,createdAt:pending.createdAt},
     {id:actionId+'-dm',kind:'dm' as const,text:narration.trim(),createdAt:now}
-  ]};
+  ]},actionId,pending.message,narration,now);
 }
 
 

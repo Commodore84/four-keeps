@@ -32,7 +32,7 @@ const config={
  wizard:{skills:['Arcana','History'],choices:[],scores:{Str:8,Dex:14,Con:13,Int:15,Wis:12,Cha:10},hp:8,weapon:'Quarterstaff'}
 };
 async function createAndImport(page:Page,id:ClassId){
- const cfg=config[id];await page.goto('/four-keeps/');await page.getByRole('button',{name:'My Characters'}).click();await page.getByRole('button',{name:'Create character',exact:true}).click();
+ const cfg=config[id];await page.goto('/four-keeps/');await page.getByRole('button',{name:'Characters',exact:true}).click();await page.getByRole('button',{name:'Create character',exact:true}).click();
  const creator=page.getByLabel('Character creator',{exact:true});await creator.getByRole('button',{name:word(id[0].toUpperCase()+id.slice(1))}).click();
  for(const skill of cfg.skills)await creator.getByRole('group',{name:/^Class skills/}).getByRole('checkbox',{name:word(skill)}).check();
  for(const [label,choices] of cfg.choices as [string,string[]][])for(const choice of choices)await creator.getByRole('group',{name:new RegExp('^'+label)}).getByRole('checkbox',{name:word(choice)}).check();
@@ -58,7 +58,7 @@ async function createAndImport(page:Page,id:ClassId){
   for(const name of ['Alarm','Burning Hands','Charm Person','Magic Missile'])await creator.getByRole('checkbox',{name:word(name)}).last().check();
  }
  await creator.getByRole('button',{name:'Continue to identity'}).click();await creator.getByLabel('name *',{exact:true}).fill(id+' Hero');await creator.getByRole('button',{name:'Continue to future levels'}).click();await creator.getByRole('button',{name:'Continue to review'}).click();await expect(creator.getByLabel('Character review')).toBeVisible();
- await page.getByRole('button',{name:/Home/}).click();await page.getByRole('button',{name:'New Adventure'}).click();const value=await page.getByLabel('Starting character').getByRole('option',{name:new RegExp(id+' Hero')}).getAttribute('value');await page.getByLabel('Starting character').selectOption(value!);await page.getByLabel('Campaign name',{exact:true}).fill(id+' Full Journey');await page.getByRole('button',{name:'Create campaign',exact:true}).click();
+ await page.getByRole('button',{name:/Home/}).click();await page.getByRole('button',{name:'Campaigns',exact:true}).click();await page.getByRole('button',{name:'New Adventure'}).click();const value=await page.getByLabel('Starting character').getByRole('option',{name:new RegExp(id+' Hero')}).getAttribute('value');await page.getByLabel('Starting character').selectOption(value!);await page.getByRole('button',{name:'Begin Adventure',exact:true}).click();
 }
 async function saved(page:Page){return page.evaluate(async()=>{const db=await new Promise<IDBDatabase>((resolve,reject)=>{const r=indexedDB.open('four-keeps-local',1);r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});return new Promise<any>(resolve=>{const r=db.transaction('campaigns','readonly').objectStore('campaigns').getAll();r.onsuccess=()=>{db.close();resolve(r.result[0]);};});});}
 for(const id of ['fighter','rogue','cleric','wizard'] as const)test(id+' complete creation, solo encounter, rewards, short/long rest and resume',async({page})=>{
@@ -67,7 +67,7 @@ for(const id of ['fighter','rogue','cleric','wizard'] as const)test(id+' complet
  await openDevelopment(page);
  const session=page.getByLabel('Adventure session',{exact:true});await session.getByRole('button',{name:'Start frontier adventure'}).click();await session.getByRole('button',{name:'Speak with the city watchkeeper'}).click();await session.getByRole('button',{name:'Travel to Road outside Dasahi'}).click();await session.getByRole('button',{name:'Travel to Roadside ruins'}).click();await expect(session).toContainText('Visited 3/3 locations');
  if(id==='wizard'){
-  await page.evaluate(()=>{localStorage.setItem('four-keeps-access-code','browser-only-test-code');localStorage.setItem('four-keeps-dm-mode','on');});await page.reload();await page.getByRole('button',{name:'Continue Adventure'}).click();let sent:any;
+  await page.evaluate(()=>{localStorage.setItem('four-keeps-access-code','browser-only-test-code');localStorage.setItem('four-keeps-dm-mode','on');});await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();await page.getByRole('button',{name:'Continue Adventure'}).click();let sent:any;
   await page.route('**/api/dm',async route=>{sent=route.request().postDataJSON();await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({narration:'The reported footprints remain uncertain.',newFacts:[],worldUpdates:{},combatStart:null})});});
   await page.getByLabel('Message the Dungeon Master').fill('What does the watchkeeper report mean here?');await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();await navigate(page,'Adventure');await expect(page.getByLabel('Adventure',{exact:true})).toContainText('The reported footprints remain uncertain.');await openDevelopment(page);expect(sent.gameState.playerBuild.spellbook).toContain('magic-missile');expect(sent.gameState.characterIdentity.classId).toBe('wizard');
  }
@@ -88,11 +88,11 @@ for(const id of ['fighter','rogue','cleric','wizard'] as const)test(id+' complet
   await battle.getByLabel('Companion target',{exact:true}).selectOption('tower-guard');await battle.getByLabel('Companion attack d20',{exact:true}).fill('15');await battle.getByLabel('Companion damage',{exact:true}).fill('5');await battle.getByRole('button',{name:'Attack with verified statistics'}).click();await expect(battle.getByLabel('Companion last event')).toContainText('hit');
  }
  await battle.getByLabel('Companion target',{exact:true}).selectOption('nighthawk');await battle.getByLabel('Companion damage',{exact:true}).fill('3');await battle.getByRole('button',{name:'Apply damage',exact:true}).click();await battle.getByRole('button',{name:'Finish companion encounter'}).click();
- await session.getByLabel('Encounter reward XP').fill('30');await session.getByLabel('Encounter reward gold').fill('5');await session.getByLabel('Encounter reward item',{exact:true}).fill(id+' keepsake');await session.getByRole('button',{name:'Save encounter rewards'}).click();await expect(session).toContainText('Rewards saved: 30 XP');await page.reload();await page.getByRole('button',{name:'Continue Adventure'}).click();await openDevelopment(page);await expect(session).toContainText('Rewards saved: 30 XP');
+ await session.getByLabel('Encounter reward XP').fill('30');await session.getByLabel('Encounter reward gold').fill('5');await session.getByLabel('Encounter reward item',{exact:true}).fill(id+' keepsake');await session.getByRole('button',{name:'Save encounter rewards'}).click();await expect(session).toContainText('Rewards saved: 30 XP');await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();await page.getByRole('button',{name:'Continue Adventure'}).click();await openDevelopment(page);await expect(session).toContainText('Rewards saved: 30 XP');
  let c=await saved(page);expect(c.character.currentHitPoints).toBe(config[id].hp-3);expect(c.characterBuild).toEqual(snapshot);if(id==='cleric'){expect(c.character.resources['Magic Initiate'].used).toBe(1);expect(c.character.spellSlots.usedLevel1).toBe(1);}if(id==='rogue')expect(c.inventoryLedger.gear.find((g:any)=>g.name==='Dagger').quantity).toBe(3);
  await session.getByRole('button',{name:'Resume exploration after encounter'}).click();await navigate(page,'Developer');const rest=page.getByLabel('Imported player development tools').getByLabel('Player rest recovery');await rest.getByRole('checkbox',{name:/DM confirms safe/}).check();await rest.getByLabel('Rest Hit Die result').fill('1');if(id==='wizard')await rest.getByRole('checkbox',{name:/Use Arcane Recovery/}).check();await rest.getByRole('button',{name:'Complete short rest'}).click();await expect(rest.getByRole('status')).toHaveText('Rest completed and saved.');
  c=await saved(page);expect(c.hitDiceRemaining).toBe(0);expect(c.character.currentHitPoints).toBe(config[id].hp);if(id==='fighter')expect(c.character.resources['Second Wind'].used).toBe(0);if(id==='wizard'){expect(c.character.resources['Arcane Recovery'].used).toBe(1);expect(c.character.spellSlots.usedLevel1).toBe(0);}if(id==='cleric')expect(c.character.spellSlots.usedLevel1).toBe(1);
- await rest.getByRole('checkbox',{name:/DM confirms safe/}).check();await rest.getByRole('button',{name:'Complete long rest'}).click();await expect.poll(async()=>(await saved(page)).hitDiceRemaining).toBe(1);await page.reload();await page.getByRole('button',{name:'Continue Adventure'}).click();c=await saved(page);expect(c.hitDiceRemaining).toBe(1);expect(c.character.currentHitPoints).toBe(config[id].hp);expect(c.characterBuild).toEqual(snapshot);expect(c.xp).toBe(30);if(c.character.spellSlots)expect(c.character.spellSlots.usedLevel1).toBe(0);for(const pool of Object.values(c.character.resources??{}) as any[])expect(pool.used).toBe(0);
+ await rest.getByRole('checkbox',{name:/DM confirms safe/}).check();await rest.getByRole('button',{name:'Complete long rest'}).click();await expect.poll(async()=>(await saved(page)).hitDiceRemaining).toBe(1);await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();await page.getByRole('button',{name:'Continue Adventure'}).click();c=await saved(page);expect(c.hitDiceRemaining).toBe(1);expect(c.character.currentHitPoints).toBe(config[id].hp);expect(c.characterBuild).toEqual(snapshot);expect(c.xp).toBe(30);if(c.character.spellSlots)expect(c.character.spellSlots.usedLevel1).toBe(0);for(const pool of Object.values(c.character.resources??{}) as any[])expect(pool.used).toBe(0);
  if(id==='fighter'){await navigate(page,'Developer');const again=page.getByLabel('Imported player development tools').getByLabel('Player rest recovery');await again.getByRole('checkbox',{name:/DM confirms safe/}).check();await expect(again.getByRole('button',{name:'Complete long rest'})).toBeDisabled();await again.getByRole('checkbox',{name:/Include 960 minutes/}).check();await again.getByRole('button',{name:'Complete long rest'}).click();await expect(again.getByRole('status')).toHaveText('Rest completed and saved.');expect((await saved(page)).elapsedMinutes).toBe(1980);}
  await navigate(page,'Developer');await expect(page.getByLabel('Saved character build')).toContainText('Background and character choices');expect(errors).toEqual([]);
 });
@@ -117,7 +117,7 @@ test('AI-led opening, world memory and saved pending action retry survive reload
    if(failure){await route.fulfill({status:502,contentType:'application/json',body:JSON.stringify({error:failure})});return;}
    await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({narration:body.opening?'A bell tolls from the abandoned keep. The road winds through a crowded marketplace, where a suspicious merchant argues with a particularly uncooperative mule. Beyond the village gates, the old tower waits beneath the gathering clouds.':'Mira says the bell rang at dusk.',newFacts:['A bell rang at dusk'],mapActions:body.opening?[{type:'create',site:{id:'dm-opening-bell-camp',name:'Bell Camp',description:'A quiet camp near the road',x:38,y:63,kind:'minor',createdAt:1000,discovered:true}}]:[],worldUpdates:{npcs:[{name:'Mira',role:'Watchkeeper',location:'Dasahi',relationship:'neutral',notes:['Knows the old road']}],clues:[{text:'A stranger passed at dusk',evidence:'reported',source:'Mira'}]},combatStart:null})});
  })
- await page.reload();await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();await page.getByRole('button',{name:'Continue Adventure'}).click();
  await expect.poll(async()=> (await saved(page))?.journal?.some((entry:any)=>entry.id?.endsWith('-dm-opening'))).toBe(true);
  const narration=page.getByLabel('Dungeon Master narration').first();
  await expect(narration).toContainText('A bell tolls from the abandoned keep.');
@@ -144,7 +144,7 @@ test('AI-led opening, world memory and saved pending action retry survive reload
  expect(requests[0].gameState.characterIdentity.classId).toBe('fighter');
  const firstOpening=(await saved(page)).journal.filter((entry:any)=>entry.id.endsWith('-dm-opening'));
  expect(firstOpening).toHaveLength(1);
- await page.reload();await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();await page.getByRole('button',{name:'Continue Adventure'}).click();
  expect((await saved(page)).journal.filter((entry:any)=>entry.id.endsWith('-dm-opening'))).toEqual(firstOpening);
  expect(page.getByRole('button',{name:'Generate opening scene'})).toHaveCount(0);
  expect(requests.filter(request=>request.opening)).toHaveLength(1);
@@ -153,9 +153,9 @@ test('AI-led opening, world memory and saved pending action retry survive reload
  await page.getByRole('button',{name:'Open navigation menu'}).click();
  await page.getByRole('button',{name:'Journal',exact:true}).click();
  await expect(page.getByLabel('Adventure',{exact:true})).toHaveCount(0);
- await expect(page.getByText('Mira · Watchkeeper · Dasahi')).toBeVisible();
- await expect(page.getByRole('heading',{name:'Clues'})).toBeVisible();
- await page.reload();await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await page.getByRole('navigation',{name:'Journal sections'}).getByRole('button',{name:'People'}).click();
+ await expect(page.locator('details').filter({hasText:'Mira'}).first()).toBeVisible();
+ await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();await page.getByRole('button',{name:'Continue Adventure'}).click();
  await expect(page.getByLabel('Adventure',{exact:true})).toContainText('A bell tolls from the abandoned keep.');
  await expect(page.getByRole('button',{name:'Begin AI-led adventure'})).toHaveCount(0);
  const beforeFailure=await saved(page);
@@ -168,7 +168,7 @@ test('AI-led opening, world memory and saved pending action retry survive reload
  expect(pending.journal).toEqual(beforeFailure.journal);
  expect(pending.world).toEqual(beforeFailure.world);
  expect(pending.adventureSession).toEqual(beforeFailure.adventureSession);
- await page.reload();await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();await page.getByRole('button',{name:'Continue Adventure'}).click();
  failure='The Dungeon Master proposed an incomplete encounter. Retry the action.';
  await page.getByRole('button',{name:'Retry saved action'}).click();
  await expect(page.getByText(/proposed an incomplete encounter/)).toBeVisible();
@@ -212,7 +212,7 @@ test('newly created fighter completes organic AI encounter, saves rewards and re
    worldUpdates:combat?{clues:[{text:'A robber attacked the bridge',evidence:'confirmed',source:'Fighter'}]}:{quests:[{title:'Secure the bridge',status:'completed',objective:'Defeat the robber',notes:['The bridge is safe']}]}
   })});
  });
- await page.reload();await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();await page.getByRole('button',{name:'Continue Adventure'}).click();
  await expect.poll(async()=> (await saved(page))?.journal?.some((entry:any)=>entry.id?.endsWith('-dm-opening'))).toBe(true);
  await expect(page.getByLabel('Adventure',{exact:true})).toContainText('In Dasahi');
  await page.getByLabel('Message the Dungeon Master').fill('I investigate the road and ask the watchkeeper about the lanterns.');
@@ -236,7 +236,7 @@ test('newly created fighter completes organic AI encounter, saves rewards and re
  expect(beforeClarification.adventureSession.pendingEncounter).toBeFalsy();
  expect(beforeClarification.pendingAdventureAction.message).toBe('I approach the bridge cautiously.');
  const originalActionId=beforeClarification.pendingAdventureAction.id;
- await page.reload();await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();await page.getByRole('button',{name:'Continue Adventure'}).click();
  await page.getByLabel('Answer the Dungeon Master').fill('I mean the guarded bridge. I approach cautiously.');
  await page.getByRole('button',{name:'Confirm and continue'}).click();
  await expect(page.getByText('Opponent: Highway robber',{exact:false})).toBeVisible();
@@ -245,7 +245,7 @@ test('newly created fighter completes organic AI encounter, saves rewards and re
  expect(calls.at(-1).clarification.answer).toContain('guarded bridge');
 
  await expect(page.getByRole('button',{name:'Send message to Dungeon Master'})).toBeDisabled();
- await page.reload();await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();await page.getByRole('button',{name:'Continue Adventure'}).click();
  const before=await saved(page);
  expect(before.adventureSession.pendingEncounter.enemyName).toBe('Highway robber');
  expect(before.location).toBe('Road outside Dasahi');
@@ -281,7 +281,7 @@ test('newly created fighter completes organic AI encounter, saves rewards and re
  await session.getByLabel('Encounter reward item',{exact:true}).fill('Bridge token');
  await session.getByRole('button',{name:'Save encounter rewards'}).click();
  await expect(session).toContainText('Rewards saved: 45 XP');
- await page.reload();await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();await page.getByRole('button',{name:'Continue Adventure'}).click();
  const afterBattle=await saved(page);
  expect(afterBattle.mapDynamicSites.filter((site:any)=>site.id==='dm-first-journey-camp')).toHaveLength(1);
  expect(afterBattle.character.currentHitPoints).toBe(config.fighter.hp-3);
@@ -390,7 +390,7 @@ test('DM clarification pauses dangerous action, persists answer, and resumes exa
  expect(pendingAfterError.pendingClarification.answer).toContain('Yes, I know');
  await page.getByRole('button',{name:'Open navigation menu'}).click();
  await page.getByRole('navigation',{name:'Primary navigation'}).getByRole('button',{name:'Home'}).click();
- await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await page.getByRole('button',{name:'Campaigns',exact:true}).click();await page.getByRole('button',{name:'Continue Adventure'}).click();
  await expect(page.getByRole('button',{name:'Retry confirmed action'})).toBeVisible();
  failConfirmed=false;
  await page.getByRole('button',{name:'Retry confirmed action'}).click();
@@ -446,7 +446,7 @@ test('imported Rogue unlocks Cunning Action and selects Arcane Trickster spells 
  expect(record.character.cantrips).toContain('Mage Hand');
  expect(record.character.preparedSpells).toContain('Shield');
  expect(record.character.spellSlots.level1).toBe(2);
- await page.reload();await page.getByRole('button',{name:'Continue Adventure'}).click();await navigate(page,'Player');
+ await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();await page.getByRole('button',{name:'Continue Adventure'}).click();await navigate(page,'Player');
  await expect(page.getByLabel('Imported player character')).toContainText('Level 3');
  await awardImportedTestXP(page,'1800','Verified Rogue level-four rewards');
  const advanced=page.getByLabel('Imported player character');
@@ -457,7 +457,7 @@ test('imported Rogue unlocks Cunning Action and selects Arcane Trickster spells 
  await advanced.getByRole('button',{name:'Confirm and save level 4'}).click();
  await expect(advanced.getByLabel('Rogue rules reference')).toContainText('2d6');
  expect((await saved(page)).character.level).toBe(4);
- await page.reload();await page.getByRole('button',{name:'Continue Adventure'}).click();await navigate(page,'Player');
+ await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();await page.getByRole('button',{name:'Continue Adventure'}).click();await navigate(page,'Player');
  await expect(page.getByLabel('Imported player character')).toContainText('Level 4');
  await awardImportedTestXP(page,'20300','Verified Rogue progression to level seven');
  const levelSheet=page.getByLabel('Imported player character');
@@ -470,7 +470,7 @@ test('imported Rogue unlocks Cunning Action and selects Arcane Trickster spells 
  }
  expect((await saved(page)).character.level).toBe(7);
  await expect(levelSheet).toContainText('Reliable Talent');
- await page.reload();await page.getByRole('button',{name:'Continue Adventure'}).click();await navigate(page,'Player');
+ await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();await page.getByRole('button',{name:'Continue Adventure'}).click();await navigate(page,'Player');
  await expect(page.getByLabel('Imported player character')).toContainText('Level 7');
 });
 
@@ -479,7 +479,7 @@ test('imported Warlock advances to Celestial and persists Pact Magic resources',
  await awardImportedTestXP(page,'2700','Verified rewards');
  await sheet.getByLabel('Level-up hit points').fill('5');await sheet.getByLabel('Warlock invocation 1').selectOption('Agonizing Blast');await sheet.getByLabel('Warlock invocation 2').selectOption('Armor of Shadows');await sheet.getByLabel('Warlock advancement spell').selectOption('Charm Person');await sheet.getByRole('checkbox',{name:'I confirm these level-up choices'}).check();await sheet.getByRole('button',{name:'Confirm and save level 2'}).click();
  await expect(sheet).toContainText('Level 2');await sheet.getByLabel('Level-up subclass').selectOption('warlock-celestial');await sheet.getByLabel('Warlock advancement spell').selectOption('Protection from Evil and Good');await sheet.getByRole('checkbox',{name:'I confirm these level-up choices'}).check();await sheet.getByRole('button',{name:'Confirm and save level 3'}).click();
- await expect(sheet).toContainText('Level 3');const c=await saved(page);expect(c.importedWarlockPactSlotLevel).toBe(2);expect(c.importedWarlockInvocations).toContain('Agonizing Blast');expect(c.character.resources['Healing Light'].maximum).toBe(4);await page.reload();await page.getByRole('button',{name:'Continue Adventure'}).click();await navigate(page,'Player');await expect(page.getByLabel('Imported player character')).toContainText('Level 3');
+ await expect(sheet).toContainText('Level 3');const c=await saved(page);expect(c.importedWarlockPactSlotLevel).toBe(2);expect(c.importedWarlockInvocations).toContain('Agonizing Blast');expect(c.character.resources['Healing Light'].maximum).toBe(4);await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();await page.getByRole('button',{name:'Continue Adventure'}).click();await navigate(page,'Player');await expect(page.getByLabel('Imported player character')).toContainText('Level 3');
 });
 test('imported Wizard advances to Diviner with persistent spellbook and level-two slots',async({page})=>{
  test.setTimeout(90000);await createAndImport(page,'wizard');await navigate(page,'Player');const sheet=page.getByLabel('Imported player character');
@@ -490,7 +490,7 @@ test('imported Wizard advances to Diviner with persistent spellbook and level-tw
  await sheet.getByLabel('Level-up subclass').selectOption('wizard-diviner');await sheet.getByLabel('Wizard spellbook addition 1').selectOption('Misty Step');await sheet.getByLabel('Wizard spellbook addition 2').selectOption('Web');
  for(const name of ['Alarm','Burning Hands','Charm Person','Magic Missile','Shield','Misty Step'])await sheet.getByRole('checkbox',{name:'Prepare '+name}).check();
  await sheet.getByLabel('Wizard Portent roll 1').fill('17');await sheet.getByLabel('Wizard Portent roll 2').fill('3');await sheet.getByRole('checkbox',{name:'I confirm these level-up choices'}).check();await sheet.getByRole('button',{name:'Confirm and save level 3'}).click();
- await expect(sheet).toContainText('Level 3');const c=await saved(page);expect(c.importedSubclassId).toBe('wizard-diviner');expect(c.character.spellSlots.level2).toBe(2);expect(c.importedWizardPortents).toEqual([17,3]);expect(c.importedWizardSpellbook).toContain('Misty Step');await expect(sheet.getByLabel('Earned subclass')).toContainText('Portent');await expect(sheet.getByLabel('Earned subclass')).not.toContainText('Greater Portent');await page.reload();await page.getByRole('button',{name:'Continue Adventure'}).click();await navigate(page,'Player');await expect(page.getByLabel('Imported player character')).toContainText('Level 3');
+ await expect(sheet).toContainText('Level 3');const c=await saved(page);expect(c.importedSubclassId).toBe('wizard-diviner');expect(c.character.spellSlots.level2).toBe(2);expect(c.importedWizardPortents).toEqual([17,3]);expect(c.importedWizardSpellbook).toContain('Misty Step');await expect(sheet.getByLabel('Earned subclass')).toContainText('Portent');await expect(sheet.getByLabel('Earned subclass')).not.toContainText('Greater Portent');await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();await page.getByRole('button',{name:'Continue Adventure'}).click();await navigate(page,'Player');await expect(page.getByLabel('Imported player character')).toContainText('Level 3');
 });
 
 test('imported Arcane Trickster advances through levels nine and ten with persisted spell and ASI choices',async({page})=>{
@@ -507,7 +507,7 @@ test('imported Arcane Trickster advances through levels nine and ten with persis
   await new Promise<void>((resolve,reject)=>{tx.oncomplete=()=>resolve();tx.onerror=()=>reject(tx.error);});
   db.close();
  });
- await page.reload();await page.getByRole('button',{name:'Continue Adventure'}).click();await navigate(page,'Player');
+ await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();await page.getByRole('button',{name:'Continue Adventure'}).click();await navigate(page,'Player');
  const sheet=page.getByLabel('Imported player character');
  await expect(sheet).toContainText('Level 8');
  await sheet.getByLabel('Arcane Trickster new spell 1').selectOption('Hold Person');
@@ -526,7 +526,7 @@ test('imported Arcane Trickster advances through levels nine and ten with persis
  expect(record.character.preparedSpells).toContain('Hold Person');
  expect(record.character.preparedSpells).toContain('Detect Magic');
  expect(record.character.spellSlots.level2).toBe(3);
- await page.reload();await page.getByRole('button',{name:'Continue Adventure'}).click();await navigate(page,'Player');
+ await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();await page.getByRole('button',{name:'Continue Adventure'}).click();await navigate(page,'Player');
  await expect(page.getByLabel('Imported player character')).toContainText('Level 10');
 });
 
@@ -545,7 +545,7 @@ test('imported character summary and section navigation survive reload',async({p
  await expect(sheet.getByLabel('Player ability scores')).toBeInViewport();
  await sheet.getByLabel('Jump to character section').selectOption('equipment');
  await expect(sheet.getByLabel('Equipment and inventory')).toBeInViewport();
- await page.reload();await page.getByRole('button',{name:'Continue Adventure'}).click();await navigate(page,'Player');
+ await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();await page.getByRole('button',{name:'Continue Adventure'}).click();await navigate(page,'Player');
  await expect(page.getByLabel('Persistent character summary')).toContainText(campaign.characterIdentity.name);
  await expect(page.getByLabel('Imported player character')).toContainText('Level 1');
 });
@@ -625,7 +625,7 @@ test('new Rogue starts at Frontier Village, buys supplies, and sees persisted Pl
  await page.evaluate(()=>{localStorage.setItem('four-keeps-access-code','browser-test-code');localStorage.setItem('four-keeps-dm-mode','on');});
  const dmRequests:any[]=[];
  await page.route('**/api/dm',route=>{dmRequests.push(route.request().postDataJSON());return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({narration:'The village shop is open; the watchkeeper watches the road.',worldUpdates:{},newFacts:[]})});});
- await page.reload();await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();await page.getByRole('button',{name:'Continue Adventure'}).click();
  await expect.poll(async()=> (await saved(page))?.journal?.some((entry:any)=>entry.id?.endsWith('-dm-opening'))).toBe(true);
  await expect(page.getByLabel('Dasahi general store')).toHaveCount(0);
  await page.getByLabel('Message the Dungeon Master').fill('I ask the shopkeeper what a dagger costs');
@@ -664,7 +664,7 @@ test('new Rogue starts at Frontier Village, buys supplies, and sees persisted Pl
  await shop.getByRole('button',{name:'Review purchase'}).click();
  await expect(shop.getByLabel('Confirm merchant purchase')).toBeVisible();
  expect((await saved(page)).inventoryLedger).toEqual(before);
- await page.reload();await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();await page.getByRole('button',{name:'Continue Adventure'}).click();
  await expect(page.getByLabel('Confirm merchant purchase')).toBeVisible();
  await page.getByLabel('Confirm merchant purchase').getByRole('button',{name:'Cancel'}).click();
  await expect(page.getByLabel('Dasahi general store')).toBeVisible();
@@ -678,7 +678,7 @@ test('new Rogue starts at Frontier Village, buys supplies, and sees persisted Pl
  await expect.poll(async()=> (await saved(page)).merchantStockRemaining?.rope).toBe(10);
  await expect.poll(async()=> (await saved(page)).inventoryLedger.gear.find((item:any)=>item.name==='Rope')?.quantity).toBeGreaterThan(0);
  await expect(page.getByLabel('Dasahi general store')).toBeVisible();
- await page.reload();await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();await page.getByRole('button',{name:'Continue Adventure'}).click();
  await expect(page.getByLabel('Dasahi general store')).toContainText('10 in stock');
  const beforeDagger=(await saved(page)).inventoryLedger;
  await page.getByLabel('Message the Dungeon Master').fill('I buy one dagger');
@@ -688,7 +688,7 @@ test('new Rogue starts at Frontier Village, buys supplies, and sees persisted Pl
  await page.getByLabel('Message the Dungeon Master').fill('yes');
  await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
  await expect.poll(async()=>{const c=await saved(page);return c.inventoryLedger.gear.find((i:any)=>i.name==='Dagger')?.quantity??0}).toBeGreaterThan(before.gear.find((i:any)=>i.name==='Dagger')?.quantity??0);
- await page.reload();await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();await page.getByRole('button',{name:'Continue Adventure'}).click();
  await navigate(page,'Player');
  await expect(page.getByLabel('Equipment and inventory')).toContainText('Dagger');
 });
@@ -699,7 +699,7 @@ test('conversational purchase confirms once and persists gold and gear after rel
  await navigate(page,'Adventure');
  await page.evaluate(()=>{localStorage.setItem('four-keeps-access-code','browser-test-code');localStorage.setItem('four-keeps-dm-mode','on');});
  await page.route('**/api/dm',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({narration:'The general store is open.',worldUpdates:{},newFacts:[]})}));
- await page.reload();await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();await page.getByRole('button',{name:'Continue Adventure'}).click();
  await expect.poll(async()=> (await saved(page))?.journal?.some((entry:any)=>entry.id?.endsWith('-dm-opening'))).toBe(true);
  const before=await saved(page);
  const input=page.getByLabel('Message the Dungeon Master');
@@ -708,7 +708,7 @@ test('conversational purchase confirms once and persists gold and gear after rel
  await expect.poll(async()=>Boolean((await saved(page)).pendingMerchantPurchase)).toBe(true);
  const pending=await saved(page);
  expect(pending.inventoryLedger).toEqual(before.inventoryLedger);
- await page.reload();await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();await page.getByRole('button',{name:'Continue Adventure'}).click();
  await page.getByLabel('Message the Dungeon Master').fill('yes');
  await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
  await expect.poll(async()=>Boolean((await saved(page)).completedMerchantPurchaseIds?.length)).toBe(true);
@@ -719,7 +719,7 @@ test('conversational purchase confirms once and persists gold and gear after rel
  await navigate(page,'Player');
  await expect(page.getByLabel('Equipment and inventory')).toContainText('GP');
  await expect(page.getByLabel('Equipment and inventory')).toContainText('Dagger');
- await page.reload();await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();await page.getByRole('button',{name:'Continue Adventure'}).click();
  expect((await saved(page)).inventoryLedger).toEqual(after.inventoryLedger);
 });
 
@@ -729,7 +729,7 @@ test('conversational purchase cancellation and duplicate confirmation cannot spe
  await navigate(page,'Adventure');
  await page.evaluate(()=>{localStorage.setItem('four-keeps-access-code','browser-test-code');localStorage.setItem('four-keeps-dm-mode','on');});
  await page.route('**/api/dm',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({narration:'The store is open.',worldUpdates:{},newFacts:[]})}));
- await page.reload();await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();await page.getByRole('button',{name:'Continue Adventure'}).click();
  await expect.poll(async()=> (await saved(page))?.journal?.some((entry:any)=>entry.id?.endsWith('-dm-opening'))).toBe(true);
  const input=page.getByLabel('Message the Dungeon Master');
  const send=page.getByRole('button',{name:'Send message to Dungeon Master'});
@@ -756,7 +756,7 @@ test('merchant catalog reflects finite stock and refuses unavailable quantities'
  await navigate(page,'Adventure');
  await page.evaluate(()=>{localStorage.setItem('four-keeps-access-code','browser-test-code');localStorage.setItem('four-keeps-dm-mode','on');});
  await page.route('**/api/dm',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({narration:'The general store is open.',worldUpdates:{},newFacts:[]})}));
- await page.reload();await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();await page.getByRole('button',{name:'Continue Adventure'}).click();
  await expect.poll(async()=> (await saved(page))?.journal?.some((entry:any)=>entry.id?.endsWith('-dm-opening'))).toBe(true);
  const input=page.getByLabel('Message the Dungeon Master');
  const send=page.getByRole('button',{name:'Send message to Dungeon Master'});
@@ -769,7 +769,7 @@ test('merchant catalog reflects finite stock and refuses unavailable quantities'
  await expect.poll(async()=>Boolean((await saved(page)).pendingMerchantPurchase)).toBe(true);
  await input.fill('yes');await send.click();
  await expect.poll(async()=>(await saved(page)).merchantStockRemaining?.dagger).toBe(6);
- await page.reload();await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();await page.getByRole('button',{name:'Continue Adventure'}).click();
  expect((await saved(page)).merchantStockRemaining.dagger).toBe(6);
 });
 test('conversational sling ammunition packs use canonical price and persist 40 projectiles',async({page})=>{
@@ -777,7 +777,7 @@ test('conversational sling ammunition packs use canonical price and persist 40 p
  await createAndImport(page,'rogue');await navigate(page,'Adventure');
  await page.evaluate(()=>{localStorage.setItem('four-keeps-access-code','browser-test-code');localStorage.setItem('four-keeps-dm-mode','on');});
  await page.route('**/api/dm',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({narration:'The general store is open.',worldUpdates:{},newFacts:[]})}));
- await page.reload();await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();await page.getByRole('button',{name:'Continue Adventure'}).click();
  await expect.poll(async()=> (await saved(page))?.journal?.some((entry:any)=>entry.id?.endsWith('-dm-opening'))).toBe(true);
  const input=page.getByLabel('Message the Dungeon Master');
  const send=page.getByRole('button',{name:'Send message to Dungeon Master'});
@@ -786,14 +786,14 @@ test('conversational sling ammunition packs use canonical price and persist 40 p
  await expect.poll(async()=>(await saved(page)).pendingMerchantPurchase?.unitCostCp).toBe(4);
  const pending=await saved(page);
  expect(pending.inventoryLedger).toEqual(before.inventoryLedger);
- await page.reload();await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();await page.getByRole('button',{name:'Continue Adventure'}).click();
  await page.getByLabel('Message the Dungeon Master').fill('yes');
  await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
  await expect.poll(async()=>(await saved(page)).merchantStockRemaining?.['bullets-sling']).toBe(3);
  const after=await saved(page);
  expect(after.inventoryLedger.gear).toContainEqual({name:'Bullets, Sling (20)',quantity:40});
  expect(after.completedMerchantPurchaseIds).toContain(pending.pendingMerchantPurchase.id);
- await page.reload();await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();await page.getByRole('button',{name:'Continue Adventure'}).click();
  expect((await saved(page)).merchantStockRemaining['bullets-sling']).toBe(3);
 });
 test('merchant negotiation requires a persisted social check and never spends without purchase confirmation',async({page})=>{
@@ -809,21 +809,21 @@ test('merchant negotiation requires a persisted social check and never spends wi
       : {narration:'The shopkeeper is ready.',newFacts:[],worldUpdates:{}};
   await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(result)});
  });
- await page.reload();await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();await page.getByRole('button',{name:'Continue Adventure'}).click();
  await expect.poll(async()=> (await saved(page))?.journal?.some((entry:any)=>entry.id?.endsWith('-dm-opening'))).toBe(true);
  const input=page.getByLabel('Message the Dungeon Master');
  const send=page.getByRole('button',{name:'Send message to Dungeon Master'});
  await input.fill('Can you negotiate a discount on a dagger?');await send.click();
  await expect.poll(async()=>(await saved(page)).pendingMerchantNegotiation?.itemId).toBe('dagger');
  expect((await saved(page)).merchantDiscount).toBeUndefined();
- await page.reload();await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();await page.getByRole('button',{name:'Continue Adventure'}).click();
  await page.getByRole('button',{name:'Roll Persuasion'}).click();
  await expect.poll(async()=>(await saved(page)).merchantDiscount?.percent).toBe(20);
  expect((await saved(page)).pendingMerchantNegotiation).toBeUndefined();
  await page.getByLabel('Message the Dungeon Master').fill('I will buy a dagger');await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
  await expect.poll(async()=>(await saved(page)).pendingMerchantPurchase?.unitCostCp).toBe(160);
  const before=await saved(page);
- await page.reload();await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();await page.getByRole('button',{name:'Continue Adventure'}).click();
  expect((await saved(page)).inventoryLedger).toEqual(before.inventoryLedger);
  await page.getByLabel('Message the Dungeon Master').fill('yes');await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
  await expect.poll(async()=>!(await saved(page)).pendingMerchantPurchase).toBe(true);
@@ -857,7 +857,7 @@ test('imported Rogue requests DM rest, confirms exactly once, and reloads',async
  await page.evaluate(()=>{localStorage.setItem('four-keeps-access-code','browser-test-code');localStorage.setItem('four-keeps-dm-mode','on')});
  const requests:any[]=[];
  await page.route('**/api/dm',route=>{const body=route.request().postDataJSON();requests.push(body);return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(body.restRequest?{narration:'The watchkeeper confirms the inn is safe and uninterrupted.',restDecision:'approved'}:{narration:'The village is quiet.',worldUpdates:{},newFacts:[]})})});
- await page.reload();await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();await page.getByRole('button',{name:'Continue Adventure'}).click();
  await expect.poll(async()=> (await saved(page))?.journal?.some((entry:any)=>entry.id?.endsWith('-dm-opening'))).toBe(true);
  await page.getByLabel('Message the Dungeon Master').fill('I want to take a short rest');
  await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
@@ -882,7 +882,7 @@ test('DM denial never grants imported rest recovery',async({page})=>{
  await expect.poll(async()=>Boolean((await saved(page))?.characterIdentity),{timeout:15000}).toBe(true);
  await page.evaluate(()=>{localStorage.setItem('four-keeps-access-code','browser-test-code');localStorage.setItem('four-keeps-dm-mode','on')});
  await page.route('**/api/dm',route=>{const body=route.request().postDataJSON();return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(body.restRequest?{narration:'Bandits interrupt the attempted rest.',restDecision:'denied'}:{narration:'The village is quiet.',newFacts:[],worldUpdates:{}})})});
- await page.reload();await expect(page.getByRole('button',{name:'Continue Adventure'})).toBeEnabled({timeout:15000});await page.getByRole('button',{name:'Continue Adventure'}).click();await expect.poll(async()=> (await saved(page))?.journal?.some((entry:any)=>entry.id?.endsWith('-dm-opening')),{timeout:30000}).toBe(true);
+ await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();await expect(page.getByRole('button',{name:'Continue Adventure'})).toBeEnabled({timeout:15000});await page.getByRole('button',{name:'Continue Adventure'}).click();await expect.poll(async()=> (await saved(page))?.journal?.some((entry:any)=>entry.id?.endsWith('-dm-opening')),{timeout:30000}).toBe(true);
  const before=await saved(page);
  await page.getByLabel('Message the Dungeon Master').fill('I want to take a long rest');
  await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
@@ -906,7 +906,7 @@ test('invalid DM map batch is rejected without partial locations and later valid
   const actions=body.opening?[]:turns===1?[{type:'create',site},{type:'update',id:'dm-recovery-lanterns',archived:'false'}]:[{type:'create',site}];
   await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({narration:body.opening?'The watchkeeper stands near the Dasahi gate.':'The watchkeeper describes lanterns beside the road.',newFacts:[],worldUpdates:{},mapActions:actions,combatStart:null})});
  });
- await page.reload();await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();await page.getByRole('button',{name:'Continue Adventure'}).click();
  await expect.poll(async()=> (await saved(page))?.journal?.some((entry:any)=>entry.id?.endsWith('-dm-opening'))).toBe(true);
  await page.getByLabel('Message the Dungeon Master').fill('I investigate the lanterns outside Dasahi.');
  await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
@@ -915,7 +915,7 @@ test('invalid DM map batch is rejected without partial locations and later valid
  await page.getByLabel('Message the Dungeon Master').fill('I ask again where the lanterns are.');
  await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
  await expect.poll(async()=> (await saved(page)).mapDynamicSites?.filter((s:any)=>s.id==='dm-recovery-lanterns').length).toBe(1);
- await page.reload();await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();await page.getByRole('button',{name:'Continue Adventure'}).click();
  expect((await saved(page)).mapDynamicSites?.filter((s:any)=>s.id==='dm-recovery-lanterns')).toHaveLength(1);
 });
 
@@ -930,7 +930,7 @@ test('conflicting provider transitions are rejected before narration and retry p
   const result=body.opening?{narration:'The Dasahi watchkeeper greets you at the gate.'}:{narration:conflicting?'You travel and fight simultaneously.':'The watchkeeper explains the road is safe.',combatStart:conflicting?{enemyName:'Bandit'}:null,travelDestination:conflicting?'crossroads':null};
   await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({...result,newFacts:[],worldUpdates:{},mapActions:[]})});
  });
- await page.reload();await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();await page.getByRole('button',{name:'Continue Adventure'}).click();
  await expect.poll(async()=> (await saved(page))?.journal?.some((e:any)=>e.id?.endsWith('-dm-opening'))).toBe(true);
  const initial=await saved(page);
  await page.getByLabel('Message the Dungeon Master').fill('I ask about the road ahead.');
@@ -941,7 +941,7 @@ test('conflicting provider transitions are rejected before narration and retry p
  expect(pending.journal).toEqual(initial.journal);
  expect(pending.adventureSession).toEqual(initial.adventureSession);
  expect(pending.combat).toEqual(initial.combat);
- await page.reload();await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();await page.getByRole('button',{name:'Continue Adventure'}).click();
  conflicting=false;
  await page.getByRole('button',{name:'Retry saved action'}).click();
  await expect(page.getByLabel('Adventure',{exact:true})).toContainText('The watchkeeper explains the road is safe.');
@@ -950,4 +950,53 @@ test('conflicting provider transitions are rejected before narration and retry p
  expect(last.journal.filter((e:any)=>e.id===pending.pendingAdventureAction.id+'-player')).toHaveLength(1);
  expect(requests.at(-1).actionId).toBe(pending.pendingAdventureAction.id);
  expect(last.combat).toEqual(initial.combat);
+});
+
+
+test('fresh iPhone campaign Journal records encounters, people, places and read-only recall across reload',async({page})=>{
+ test.setTimeout(90000);
+ await page.setViewportSize({width:390,height:844});
+ await createAndImport(page,'rogue');
+ await page.evaluate(()=>{localStorage.setItem('four-keeps-access-code','browser-test-code');localStorage.setItem('four-keeps-dm-mode','on');});
+ let calls=0;
+ await page.route('**/api/dm',async route=>{
+  calls++;
+  const body=route.request().postDataJSON();
+  await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({
+   narration:body.opening?'The road leads toward the village. A bell rings above the gate.':'Mira points toward the old bridge and warns that a wagon broke there.',
+   newFacts:[],combatStart:null,
+   worldUpdates:{npcs:[{name:'Mira',role:'Watchkeeper',location:'Dasahi',relationship:'neutral',notes:['The bridge is damaged']}],places:[{name:'Old Bridge',description:'A damaged crossing',notes:['A wagon broke here']}]}
+  })});
+ });
+ await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await expect.poll(async()=>Boolean((await saved(page))?.journal?.some((e:any)=>e.kind==='dm'))).toBe(true);
+ await page.getByLabel('Message the Dungeon Master').fill('I ask Mira about the old bridge.');
+ await page.getByRole('button',{name:'Send message'}).click();
+ await expect.poll(async()=>Boolean((await saved(page))?.encounterJournal?.some((e:any)=>e.playerAction?.includes('Mira')))).toBe(true);
+ const before=JSON.stringify(await saved(page));
+ await navigate(page,'Journal');
+ const nav=page.getByRole('navigation',{name:'Journal sections'});
+ await expect(nav.getByRole('button')).toHaveCount(3);
+ await expect(page.getByText('Level 1',{exact:true})).toBeVisible();
+ const encounter=page.locator('article').filter({hasText:'Mira points toward the old bridge'}).first();
+ await encounter.getByRole('button').click();
+ await expect(encounter).toContainText('I ask Mira about the old bridge.');
+ await expect(encounter).toContainText('Mira points toward the old bridge');
+ await nav.getByRole('button',{name:'People'}).click();
+ await expect(page.locator('details').filter({hasText:'Mira'}).last()).toBeVisible();
+ await nav.getByRole('button',{name:'Places'}).click();
+ await expect(page.locator('details').filter({hasText:'Old Bridge'}).last()).toBeVisible();
+ await page.getByLabel('Ask the DM about campaign history').getByRole('textbox').fill('What do we know about Mira?');
+ await page.getByLabel('Ask the DM about campaign history').getByRole('button').click();
+ await expect(page.getByText('The bridge is damaged',{exact:false}).last()).toBeVisible();
+ expect(JSON.stringify(await saved(page))).toBe(before);
+ expect(calls).toBeGreaterThanOrEqual(2);
+ await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await navigate(page,'Journal');
+ await expect(page.locator('article').filter({hasText:'Mira points toward the old bridge'})).toHaveCount(1);
+ await nav.getByRole('button',{name:'People'}).click();
+ await expect(page.locator('details').filter({hasText:'Mira'}).last()).toBeVisible();
+ await nav.getByRole('button',{name:'Places'}).click();
+ await expect(page.locator('details').filter({hasText:'Old Bridge'}).last()).toBeVisible();
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
 });

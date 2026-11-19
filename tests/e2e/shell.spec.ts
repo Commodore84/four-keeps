@@ -34,11 +34,13 @@ test('creates a local campaign and restores its journal after reload', async ({ 
   await expect(page.getByLabel('Message the Dungeon Master')).toHaveValue('I inspect the road.');
   await page.getByRole('button', { name: 'Send message to Dungeon Master' }).click();
   await navigate(page,'Journal');
-  await expect(page.getByText('I inspect the road.')).toBeVisible();
+  await expect(page.getByRole('button',{name:'Adventures',exact:true})).toBeVisible();
+  await expect(page.getByText('I inspect the road.',{exact:false}).first()).toBeVisible();
   await page.reload();
-  await page.getByRole('button', { name: 'Continue Adventure' }).click();
+  await page.getByRole('button',{name:'Campaigns',exact:true}).click();await page.getByRole('button', { name: 'Continue Adventure' }).click();
   await navigate(page,'Journal');
-  await expect(page.getByText('I inspect the road.')).toBeVisible();
+  await expect(page.getByRole('button',{name:'Adventures',exact:true})).toBeVisible();
+  await expect(page.getByText('I inspect the road.',{exact:false}).first()).toBeVisible();
 });
 
 test('training encounter starts, rolls initiative, and survives reload', async ({ page }) => {
@@ -50,12 +52,12 @@ test('training encounter starts, rolls initiative, and survives reload', async (
   await page.getByRole('button', { name: 'Start encounter training' }).click();
   await expect(page.getByRole('button', { name: 'Roll initiative (d20 + DEX)' })).toBeVisible();
   await page.reload();
-  await page.getByRole('button', { name: 'Continue Adventure' }).click();
+  await page.getByRole('button',{name:'Campaigns',exact:true}).click();await page.getByRole('button', { name: 'Continue Adventure' }).click();
   await expect(page.getByRole('button', { name: 'Roll initiative (d20 + DEX)' })).toBeVisible();
   await page.getByRole('button', { name: 'Roll initiative (d20 + DEX)' }).click();
   await expect(page.locator('[aria-label="Combat turn summary"]')).toBeVisible();
   await page.reload();
-  await page.getByRole('button', { name: 'Continue Adventure' }).click();
+  await page.getByRole('button',{name:'Campaigns',exact:true}).click();await page.getByRole('button', { name: 'Continue Adventure' }).click();
   await expect(page.locator('[aria-label="Combat turn summary"]')).toBeVisible();
 });
 
@@ -69,7 +71,8 @@ test('navigation preserves unsent draft and a saved campaign after reload', asyn
   await navigate(page,'Adventure');
   await expect(page.getByLabel('Message the Dungeon Master')).toHaveValue('Draft before navigating');
   await page.reload();
-  await expect(page.getByText('Browser persistence')).toBeVisible();
+  await page.getByRole('button',{name:'Campaigns',exact:true}).click();
+  await expect(page.getByText('Browser persistence',{exact:false}).first()).toBeVisible();
 });
 
 test('campaign deletion requires confirmation and preserves other campaigns', async ({ page }) => {
@@ -136,23 +139,23 @@ test('illustrated forest map displays terrain-aligned grid without a legend', as
 test('landing page routes and character draft survive reload', async ({page})=>{
  await page.goto('/four-keeps/');
  await expect(page.getByLabel('Four Keeps landing page')).toBeVisible();
- await expect(page.getByRole('button',{name:'Continue Adventure'})).toBeDisabled();
- await page.getByRole('button',{name:'My Characters'}).click();
+ await page.getByRole('button',{name:'Campaigns',exact:true}).click();await expect(page.getByRole('button',{name:'Continue Adventure'})).toHaveCount(0);
+ await page.getByRole('button',{name:/Home/}).click();await page.getByRole('button',{name:'Characters',exact:true}).click();
  await page.getByRole('button',{name:'Create character'}).click();
  await page.evaluate(()=>{const key='four-keeps-character-drafts-v1';const drafts=JSON.parse(localStorage.getItem(key)??'[]');drafts[0].identity.name='Browser Hero';localStorage.setItem(key,JSON.stringify(drafts));});
  await page.getByRole('button',{name:'All characters'}).click();
  await page.reload();
  await expect(page.getByLabel('Four Keeps landing page')).toBeVisible();
- await page.getByRole('button',{name:'My Characters'}).click();
+ await page.getByRole('button',{name:'Characters',exact:true}).click();
  await page.getByRole('button',{name:/Browser Hero/}).click();
  await expect(page.getByText('Browser Hero',{exact:true})).toBeVisible();
  await page.getByRole('button',{name:/Home/}).click();
- await page.getByRole('button',{name:'New Adventure'}).click();
+ await page.getByRole('button',{name:'Campaigns',exact:true}).click();await page.getByRole('button',{name:'New Adventure'}).click();
  await expect(page.getByLabel('Starting character')).toHaveValue('');
- await expect(page.getByRole('button',{name:'Create campaign'})).toBeDisabled();
+ await expect(page.getByRole('button',{name:'Begin Adventure'})).toBeDisabled();
  await expect(page.getByText('Create and complete a character under My Characters first.',{exact:false})).toBeVisible();
  await page.getByRole('button',{name:/Home/}).click();
- await page.getByRole('button',{name:'My Campaigns'}).click();
+ await page.getByRole('button',{name:'Campaigns',exact:true}).click();
  await page.getByRole('button',{name:/Home/}).click();
  await page.getByRole('button',{name:'Help'}).click();
  await expect(page.getByRole('heading',{name:'Help'})).toBeVisible();
@@ -163,7 +166,7 @@ test('wizard spellbook and prepared choices persist after reload', async ({page}
  const draft={schemaVersion:1,id:'spell-browser-test',status:'draft',rules:{edition:'2024',allowCompatibleLegacy:true},step:'spells',identity:{name:'Spell Browser Hero',pronouns:'',appearance:'',personality:'',backstory:'',portrait:null},selections:{speciesId:'human',backgroundId:'sage',classId:'wizard',classChoices:{'class-skills':['Arcana','Investigation']},abilities:{method:'standard',base:{Str:8,Dex:14,Con:13,Int:15,Wis:12,Cha:10},bonusMode:'two-one',bonuses:{Int:2,Wis:1},rolls:[],rollDice:[]},equipment:{classPackage:0,backgroundPackage:0,purchases:{},equipped:{weapons:[]}}},createdAt:now,updatedAt:now};
  await page.addInitScript((value)=>{if(!localStorage.getItem('four-keeps-character-drafts-v1'))localStorage.setItem('four-keeps-character-drafts-v1',JSON.stringify([value]));},draft);
  await page.goto('/four-keeps/');
- await page.getByRole('button',{name:'My Characters'}).click();
+ await page.getByRole('button',{name:'Characters',exact:true}).click();
  await page.getByRole('button',{name:/Spell Browser Hero/}).click();
  await expect(page.getByLabel('Spells and features')).toBeVisible();
  for(const name of ['Fire Bolt','Mage Hand','Minor Illusion'])await page.getByRole('checkbox',{name:new RegExp('^'+name)}).first().check();
@@ -174,7 +177,7 @@ test('wizard spellbook and prepared choices persist after reload', async ({page}
  await page.getByRole('radio',{name:'Find Familiar'}).check();
  await expect(page.getByText('Level-one spell choices valid and saved.')).toBeVisible();
  await page.reload();
- await page.getByRole('button',{name:'My Characters'}).click();
+ await page.getByRole('button',{name:'Characters',exact:true}).click();
  await page.getByRole('button',{name:/Spell Browser Hero/}).click();
  await expect(page.getByText('Level-one spell choices valid and saved.')).toBeVisible();
 });
@@ -184,7 +187,7 @@ test('point buy begins at eight and blocks overspending',async ({page})=>{
  const draft={schemaVersion:1,id:'pointbuy-browser-test',status:'draft',rules:{edition:'2024',allowCompatibleLegacy:true},step:'abilities',identity:{name:'Point Buy Hero',pronouns:'',appearance:'',personality:'',backstory:'',portrait:null},selections:{speciesId:'human',backgroundId:'farmer',classId:'fighter',classChoices:{}},createdAt:now,updatedAt:now};
  await page.addInitScript(value=>{if(!localStorage.getItem('four-keeps-character-drafts-v1'))localStorage.setItem('four-keeps-character-drafts-v1',JSON.stringify([value]));},draft);
  await page.goto('/four-keeps/');
- await page.getByRole('button',{name:'My Characters'}).click();
+ await page.getByRole('button',{name:'Characters',exact:true}).click();
  await page.getByRole('button',{name:/Point Buy Hero/}).click();
  await page.getByRole('button',{name:'Point Buy',exact:true}).click();
  await expect(page.getByText(/Points remaining:/)).toContainText('27 / 27');
@@ -194,7 +197,7 @@ test('point buy begins at eight and blocks overspending',async ({page})=>{
  await page.getByRole('button',{name:'Decrease Str'}).click();
  await expect(page.getByText(/Points remaining:/)).toContainText('2 / 27');
  await page.reload();
- await page.getByRole('button',{name:'My Characters'}).click();
+ await page.getByRole('button',{name:'Characters',exact:true}).click();
  await page.getByRole('button',{name:/Point Buy Hero/}).click();
  await expect(page.getByText(/Points remaining:/)).toContainText('2 / 27');
 });
@@ -206,7 +209,7 @@ test('Ask DM sees current character selections and responds in creation flow',as
  let sent:unknown;
  await page.route('**/api/ask-dm',async route=>{sent=route.request().postDataJSON();await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({answer:'For your wood elf Rogue, Dexterity is central to attacks and stealth.'})});});
  await page.goto('/four-keeps/');
- await page.getByRole('button',{name:'My Characters'}).click();
+ await page.getByRole('button',{name:'Characters',exact:true}).click();
  await page.getByRole('button',{name:/Nighthawk/}).click();
  await expect(page.getByLabel('Ask DM')).toBeVisible();
  await page.getByLabel('Your question').fill('Which ability matters most?');
@@ -221,7 +224,7 @@ test('spell choices show full inline descriptions without per-spell DM buttons',
  const draft={schemaVersion:1,id:'spell-details-test',status:'draft',rules:{edition:'2024',allowCompatibleLegacy:true},step:'spells',identity:{name:'Wizard Scholar',pronouns:'',appearance:'',personality:'',backstory:'',portrait:null},selections:{speciesId:'human',backgroundId:'sage',classId:'wizard',classChoices:{}},createdAt:now,updatedAt:now};
  await page.addInitScript(value=>{if(!localStorage.getItem('four-keeps-character-drafts-v1'))localStorage.setItem('four-keeps-character-drafts-v1',JSON.stringify([value]));},draft);
  await page.goto('/four-keeps/');
- await page.getByRole('button',{name:'My Characters'}).click();
+ await page.getByRole('button',{name:'Characters',exact:true}).click();
  await page.getByRole('button',{name:/Wizard Scholar/}).click();
  await expect(page.getByText('Hurl a bubble of acid at one creature you can see.',{exact:false}).first()).toBeVisible();
  await expect(page.getByText('Sorcerer, Wizard',{exact:false}).first()).toBeVisible();
@@ -231,7 +234,7 @@ test('spell choices show full inline descriptions without per-spell DM buttons',
 
 test('character creator does not show redundant full rules with DM buttons',async({page})=>{
  await page.goto('/four-keeps/');
- await page.getByRole('button',{name:'My Characters'}).click();
+ await page.getByRole('button',{name:'Characters',exact:true}).click();
  await page.getByRole('button',{name:'Create character',exact:true}).click();
  await expect(page.getByRole('button',{name:/Full (class|background) rules with DM/i})).toHaveCount(0);
 });
@@ -241,7 +244,7 @@ test('character builder shows species, background, class, and choice rules inlin
  const base={schemaVersion:1,id:'guide-test',status:'draft',rules:{edition:'2024',allowCompatibleLegacy:true},identity:{name:'Guide Tester',pronouns:'',appearance:'',personality:'',backstory:'',portrait:null},selections:{speciesId:'elf',lineageId:'wood-elf',backgroundId:'sage',classId:'warlock',classChoices:{}},createdAt:now,updatedAt:now};
  await page.addInitScript(value=>{if(!localStorage.getItem('four-keeps-character-drafts-v1'))localStorage.setItem('four-keeps-character-drafts-v1',JSON.stringify([{...value,step:'origins'}]));},base);
  await page.goto('/four-keeps/');
- await page.getByRole('button',{name:'My Characters'}).click();
+ await page.getByRole('button',{name:'Characters',exact:true}).click();
  await page.getByRole('button',{name:/Guide Tester/}).click();
  await expect(page.getByText(/Your walking Speed increases to 35 feet/)).toBeVisible();
  await expect(page.getByText(/Choose two Wizard cantrips and one level-one Wizard spell/)).toBeVisible();
@@ -255,7 +258,7 @@ test('all Warlock subclass options are readable without selecting one at level o
  const draft={schemaVersion:1,id:'subclass-preview',status:'draft',rules:{edition:'2024',allowCompatibleLegacy:true},step:'class',identity:{name:'Warlock Preview',pronouns:'',appearance:'',personality:'',backstory:'',portrait:null},selections:{speciesId:'human',backgroundId:'sage',classId:'warlock',classChoices:{}},createdAt:now,updatedAt:now};
  await page.addInitScript(value=>{if(!localStorage.getItem('four-keeps-character-drafts-v1'))localStorage.setItem('four-keeps-character-drafts-v1',JSON.stringify([value]));},draft);
  await page.goto('/four-keeps/');
- await page.getByRole('button',{name:'My Characters'}).click();
+ await page.getByRole('button',{name:'Characters',exact:true}).click();
  await page.getByRole('button',{name:/Warlock Preview/}).click();
  const section=page.getByLabel('Subclass options preview');
  await expect(section.getByText('Archfey',{exact:true})).toBeVisible();
@@ -280,6 +283,7 @@ test('registered subclass actors persist in campaign and remain separate from Ni
   });db.close();
  });
  await page.reload();
+ await page.getByRole('button',{name:'Campaigns',exact:true}).click();
  await page.getByRole('button',{name:'Continue Adventure'}).click();
  await openDevelopment(page);
  const actors=page.getByLabel('Registered subclass combat actors');
@@ -310,6 +314,7 @@ test('player registers and manages a Fiend actor without modifying Nighthawk',as
  await actor.getByRole('button',{name:'Save resistance'}).click();
  await expect(page.getByLabel('Registered subclass combat actors')).toContainText('Fiendish Resilience: Cold');
  await page.reload();
+ await page.getByRole('button',{name:'Campaigns',exact:true}).click();
  await page.getByRole('button',{name:'Continue Adventure'}).click();
  await openDevelopment(page);
  const saved=page.getByLabel('Manage actor companion-fiend');
@@ -369,6 +374,7 @@ test('companion encounter initiative, turn, resistance and persistence stay isol
  await panel.getByRole('button',{name:'End companion turn'}).click();
  await expect(panel).toContainText('Active turn: druid');
  await page.reload();
+ await page.getByRole('button',{name:'Campaigns',exact:true}).click();
  await page.getByRole('button',{name:'Continue Adventure'}).click();
  await openDevelopment(page);
  await expect(page.getByRole('region',{name:'Companion encounter',exact:true})).toContainText('Active turn: druid');
@@ -407,6 +413,7 @@ test('companion attack consumes action and movement budget persists across reloa
  await expect(panel).toContainText('fiend: 10/20 HP');
  await expect(panel.getByRole('button',{name:'Attack with action'})).toBeDisabled();
  await page.reload();
+ await page.getByRole('button',{name:'Campaigns',exact:true}).click();
  await page.getByRole('button',{name:'Continue Adventure'}).click();
  await openDevelopment(page);
  await expect(page.getByRole('region',{name:'Companion encounter',exact:true})).toContainText('fiend: 10/20 HP');
@@ -429,6 +436,7 @@ test('companion grid Dash and attack range checks persist after reload',async({p
  await expect(panel).toContainText('movement 60/60 ft');
  await expect(panel).toContainText('action used');
  await page.reload();
+ await page.getByRole('button',{name:'Campaigns',exact:true}).click();
  await page.getByRole('button',{name:'Continue Adventure'}).click();
  await openDevelopment(page);
  await expect(page.getByRole('region',{name:'Companion encounter',exact:true})).toContainText('movement 60/60 ft');
@@ -461,6 +469,7 @@ test('companion obstacles block attacks and persist across reload',async({page})
  await expect(panel.getByRole('status')).toContainText('Line of sight blocked');
  await expect(panel).toContainText('fiend: 20/20 HP');
  await page.reload();
+ await page.getByRole('button',{name:'Campaigns',exact:true}).click();
  await page.getByRole('button',{name:'Continue Adventure'}).click();
  await openDevelopment(page);
  await expect(page.getByLabel('Companion obstacles',{exact:true})).toContainText('(1,0)');
@@ -483,6 +492,7 @@ test('companion cover annotations persist and keep Nighthawk separate',async({pa
  await expect(panel.getByLabel('Companion cover',{exact:true})).toContainText('(3,3)');
  await expect(panel.getByLabel('Unified party readiness')).toContainText('Nighthawk remains in separate prototype combat');
  await page.reload();
+ await page.getByRole('button',{name:'Campaigns',exact:true}).click();
  await page.getByRole('button',{name:'Continue Adventure'}).click();
  await openDevelopment(page);
  await expect(page.getByLabel('Companion cover',{exact:true})).toContainText('(3,3)');
@@ -525,6 +535,7 @@ test('opt-in unified Nighthawk encounter shares initiative and survives reload',
  await panel.getByRole('button',{name:'Move South'}).click();
  await expect(panel).toContainText('nighthawk: 10/10 HP · (0,3)');
  await page.reload();
+ await page.getByRole('button',{name:'Campaigns',exact:true}).click();
  await page.getByRole('button',{name:'Continue Adventure'}).click();
  await openDevelopment(page);
  await expect(page.getByRole('region',{name:'Companion encounter',exact:true})).toContainText('Active turn: nighthawk');
@@ -549,6 +560,7 @@ test('unified reaction and explicit Nighthawk HP sync persist after reload',asyn
  await panel.getByRole('button',{name:'Sync Nighthawk HP to sheet'}).click();
  await expect(panel.getByRole('status')).toContainText('Nighthawk HP synchronized');
  await page.reload();
+ await page.getByRole('button',{name:'Campaigns',exact:true}).click();
  await page.getByRole('button',{name:'Continue Adventure'}).click();
  await openDevelopment(page);
  await expect(page.getByLabel('Reaction status')).toContainText('used');
@@ -576,6 +588,7 @@ test('unified actor resources and derived statistics persist in browser',async({
  await panel.getByRole('button',{name:'Spend item'}).click();
  await expect(panel.getByLabel('Consumable status')).toContainText('Potion: 1');
  await page.reload();
+ await page.getByRole('button',{name:'Campaigns',exact:true}).click();
  await page.getByRole('button',{name:'Continue Adventure'}).click();
  await openDevelopment(page);
  await expect(page.getByLabel('Concentration status')).toContainText('Bless');
@@ -639,6 +652,7 @@ test('unified campaign ammunition spending rejects missing campaign equipment',a
  await panel.getByRole('button',{name:'Spend campaign inventory'}).click();
  await expect(panel.getByRole('status')).toContainText('Insufficient campaign equipment');
  await page.reload();
+ await page.getByRole('button',{name:'Campaigns',exact:true}).click();
  await page.getByRole('button',{name:'Continue Adventure'}).click();
  await openDevelopment(page);
  await expect(page.getByLabel('Nighthawk campaign inventory')).toContainText('unknown arrows');
@@ -663,6 +677,7 @@ test('DM condition and actor faction controls persist in encounter',async({page}
  await panel.getByRole('button',{name:'Set actor tactics'}).click();
  await expect(panel).toContainText('Configured: allies · 10 ft reach');
  await page.reload();
+ await page.getByRole('button',{name:'Campaigns',exact:true}).click();
  await page.getByRole('button',{name:'Continue Adventure'}).click();
  await openDevelopment(page);
  await expect(page.getByRole('region',{name:'Companion encounter',exact:true})).toContainText('Configured: allies · 10 ft reach');
@@ -684,6 +699,7 @@ test('enemy actor with DM-supplied combat statistics persists after reload',asyn
  await expect(panel.getByRole('status')).toContainText('Enemy added');
  await expect(panel).toContainText('goblin1');
  await page.reload();
+ await page.getByRole('button',{name:'Campaigns',exact:true}).click();
  await page.getByRole('button',{name:'Continue Adventure'}).click();
  await openDevelopment(page);
  await expect(page.getByRole('region',{name:'Companion encounter',exact:true})).toContainText('goblin1');
@@ -707,6 +723,7 @@ test('prone standing consumes movement and persists across reload',async({page})
  await expect(panel).toContainText('movement 15/30 ft');
  await expect(panel.getByRole('button',{name:'Stand from prone'})).toHaveCount(0);
  await page.reload();
+ await page.getByRole('button',{name:'Campaigns',exact:true}).click();
  await page.getByRole('button',{name:'Continue Adventure'}).click();
  await openDevelopment(page);
  await expect(page.getByRole('region',{name:'Companion encounter',exact:true})).toContainText('movement 15/30 ft');
@@ -729,6 +746,7 @@ test('enemy damage profile and healing controls persist in encounter UI',async({
  await panel.getByRole('button',{name:'Add enemy actor'}).click();
  await expect(panel.getByRole('status')).toContainText('Enemy added');
  await page.reload();
+ await page.getByRole('button',{name:'Campaigns',exact:true}).click();
  await page.getByRole('button',{name:'Continue Adventure'}).click();
  await openDevelopment(page);
  await expect(page.getByRole('region',{name:'Companion encounter',exact:true})).toContainText('goblin1');
@@ -754,6 +772,7 @@ test('enemy tactic selection persists through reload without autonomous attacks'
  await panel.getByLabel('Active enemy tactic').selectOption('nearest');
  await expect(panel.getByLabel('Enemy tactic preview')).toContainText('nearest');
  await page.reload();
+ await page.getByRole('button',{name:'Campaigns',exact:true}).click();
  await page.getByRole('button',{name:'Continue Adventure'}).click();
  await openDevelopment(page);
  await expect(page.getByLabel('Active enemy tactic')).toHaveValue('nearest');
@@ -779,6 +798,7 @@ test('DM-approved enemy movement turn persists across campaign reload',async({pa
  await expect(panel).toContainText('Active turn:');
  await expect(panel).toContainText('goblin1: 12/12 HP · (1,1)');
  await page.reload();
+ await page.getByRole('button',{name:'Campaigns',exact:true}).click();
  await page.getByRole('button',{name:'Continue Adventure'}).click();
  await openDevelopment(page);
  await expect(page.getByRole('region',{name:'Companion encounter',exact:true})).toContainText('goblin1: 12/12 HP · (1,1)');
@@ -808,6 +828,7 @@ test('DM-rolled enemy move and attack resolves and persists after reload',async(
  await expect(panel).toContainText('Active turn: paladin');
  await expect(panel).toContainText('nighthawk: 5/10 HP');
  await page.reload();
+ await page.getByRole('button',{name:'Campaigns',exact:true}).click();
  await page.getByRole('button',{name:'Continue Adventure'}).click();
  await openDevelopment(page);
  await expect(page.getByRole('region',{name:'Companion encounter',exact:true})).toContainText('nighthawk: 5/10 HP');
@@ -834,6 +855,7 @@ test('mobile tactical grid selects a square and persists movement after reload',
  await panel.getByRole('button',{name:'Confirm grid move'}).click();
  await expect(panel).toContainText('paladin: 20/20 HP · (1,0)');
  await page.reload();
+ await page.getByRole('button',{name:'Campaigns',exact:true}).click();
  await page.getByRole('button',{name:'Continue Adventure'}).click();
  await openDevelopment(page);
  await expect(page.getByRole('region',{name:'Companion encounter',exact:true})).toContainText('paladin: 20/20 HP · (1,0)');
@@ -864,6 +886,7 @@ test('DM-configured ranged enemy attack persists verified HP and range after rel
  await panel.getByRole('button',{name:'Ranged attack and end turn'}).click();
  await expect(panel).toContainText('nighthawk: 5/10 HP');
  await page.reload();
+ await page.getByRole('button',{name:'Campaigns',exact:true}).click();
  await page.getByRole('button',{name:'Continue Adventure'}).click();
  await openDevelopment(page);
  await expect(page.getByRole('region',{name:'Companion encounter',exact:true})).toContainText('nighthawk: 5/10 HP');
@@ -895,6 +918,7 @@ test('mobile tactical preview shows movement cost and selects enemy target witho
  await expect(panel.getByLabel('Companion target',{exact:true})).toHaveValue('goblin1');
  await expect(panel).toContainText('paladin: 20/20 HP · (0,0)');
  await page.reload();
+ await page.getByRole('button',{name:'Campaigns',exact:true}).click();
  await page.getByRole('button',{name:'Continue Adventure'}).click();
  await openDevelopment(page);
  await expect(page.getByRole('region',{name:'Companion encounter',exact:true})).toContainText('goblin1: 12/12 HP · (2,1)');
@@ -937,6 +961,7 @@ test('frontier adventure travels, records interactions and resumes from campaign
  await session.getByRole('button',{name:'Travel to Old Watchtower'}).click();
  await expect(session).toContainText('Visited 3/3 locations');
  await page.reload();
+ await page.getByRole('button',{name:'Campaigns',exact:true}).click();
  await page.getByRole('button',{name:'Continue Adventure'}).click();
  await openDevelopment(page);
  await expect(page.getByLabel('Adventure session',{exact:true})).toContainText('Old Watchtower');
@@ -965,6 +990,7 @@ test('frontier encounter handoff uses registered companion and resumes after com
  await expect(session.getByLabel('Adventure session status')).toContainText('encounter');
  await expect(session.getByLabel('Companion encounter')).toContainText('nighthawk: 10/10 HP');
  await page.reload();
+ await page.getByRole('button',{name:'Campaigns',exact:true}).click();
  await page.getByRole('button',{name:'Continue Adventure'}).click();
  await openDevelopment(page);
  const restored=page.getByLabel('Adventure session',{exact:true});
@@ -988,10 +1014,11 @@ test('validated character draft becomes a persistent campaign without replacing 
   localStorage.setItem('four-keeps-character-drafts-v1',JSON.stringify([draft]));
  });
  await page.reload();
+ await page.getByRole('button',{name:'Campaigns',exact:true}).click();
  await page.getByRole('button',{name:'New Adventure'}).click();
  await page.getByLabel('Starting character').selectOption('valid-rogue-draft');
- await page.getByLabel('Campaign name').fill('Raven Campaign');
- await page.getByRole('button',{name:'Create campaign'}).click();
+ 
+ await page.getByRole('button',{name:'Begin Adventure'}).click();
  await navigate(page,'Map');
  await expect(page.getByRole('heading',{name:'Anchamida'})).toBeVisible();
  await expect(page.getByRole('button',{name:'Dasahi'})).toBeVisible();
@@ -1053,6 +1080,7 @@ test('validated character draft becomes a persistent campaign without replacing 
  });
  await page.getByRole('button',{name:'Zoom in'}).click();
  await page.reload();
+ await page.getByRole('button',{name:'Campaigns',exact:true}).click();
  await page.getByRole('button',{name:'Continue Adventure'}).click();
  await navigate(page,'Map');
  await expect(page.getByRole('heading',{name:'Anchamida'})).toBeVisible();
@@ -1080,6 +1108,7 @@ test('validated character draft becomes a persistent campaign without replacing 
   });db.close();
  });
  await page.reload();
+ await page.getByRole('button',{name:'Campaigns',exact:true}).click();
  await page.getByRole('button',{name:'Continue Adventure'}).click();
  await navigate(page,'Map');
  await expect(page.getByText('30 additional mapped')).toBeVisible();
@@ -1099,6 +1128,7 @@ test('validated character draft becomes a persistent campaign without replacing 
  });
  await page.evaluate(()=>{localStorage.setItem('four-keeps-access-code','browser-test-code');localStorage.setItem('four-keeps-dm-mode','on');});
  await page.reload();
+ await page.getByRole('button',{name:'Campaigns',exact:true}).click();
  await page.getByRole('button',{name:'Continue Adventure'}).click();
  await navigate(page,'Adventure');
  await expect(page.getByLabel('Adventure',{exact:true})).toContainText('DM response 1');
@@ -1122,6 +1152,7 @@ test('validated character draft becomes a persistent campaign without replacing 
  await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
  await expect(page.getByLabel('Adventure',{exact:true})).toContainText('DM response 4');
  await page.reload();
+ await page.getByRole('button',{name:'Campaigns',exact:true}).click();
  await page.getByRole('button',{name:'Continue Adventure'}).click();
  await navigate(page,'Map');
  await expect(page.getByRole('button',{name:'Dasahi'})).toBeVisible();
@@ -1131,6 +1162,7 @@ test('validated character draft becomes a persistent campaign without replacing 
  if(await startFrontier.isVisible())await startFrontier.click();
  await expect(page.getByLabel('Adventure session status')).toContainText('Raven');
  await page.reload();
+ await page.getByRole('button',{name:'Campaigns',exact:true}).click();
  await page.getByRole('button',{name:'Continue Adventure'}).click();
  await openDevelopment(page);
  await expect(page.getByLabel('Adventure session status')).toContainText('Raven');
@@ -1166,6 +1198,7 @@ test('adventure DM request carries authoritative location and interaction contex
  expect(request?.gameState?.location).toBe('Old Crossroads');
  await expect(page.getByRole('button',{name:'Roll initiative (d20 + DEX)'})).toHaveCount(0);
  await page.reload();
+ await page.getByRole('button',{name:'Campaigns',exact:true}).click();
  await page.getByRole('button',{name:'Continue Adventure'}).click();
  await expect(page.getByLabel('Adventure',{exact:true})).toContainText('The crossroads remain quiet.');
 });
@@ -1184,16 +1217,18 @@ test('AI combat proposal for imported character persists and enters verified com
   localStorage.setItem('four-keeps-dm-mode','on');
  });
  await page.reload();
+ await page.getByRole('button',{name:'Campaigns',exact:true}).click();
  await page.getByRole('button',{name:'New Adventure'}).click();
  await page.getByLabel('Starting character').selectOption('organic-rogue');
  await page.getByLabel('Campaign name').fill('Raven Road');
- await page.getByRole('button',{name:'Create campaign'}).click();
+ await page.getByRole('button',{name:'Begin Adventure'}).click();
  await page.route('**/api/dm',async route=>await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({narration:'A road bandit blocks your path.',combatStart:{enemyName:'Road bandit'},newFacts:[],worldUpdates:{}})}));
  await expect(page.getByLabel('Adventure',{exact:true})).toBeVisible();
  await page.getByLabel('Message the Dungeon Master').fill('I approach the road cautiously.');
  await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
  await expect(page.getByText('Opponent: Road bandit',{exact:false})).toBeVisible();
  await page.reload();
+ await page.getByRole('button',{name:'Campaigns',exact:true}).click();
  await page.getByRole('button',{name:'Continue Adventure'}).click();
  await expect(page.getByText('Opponent: Road bandit',{exact:false})).toBeVisible();
  const setup=page.getByLabel('Quick adventure encounter');
@@ -1210,6 +1245,7 @@ test('AI combat proposal for imported character persists and enters verified com
  await expect(page.getByLabel('Adventure session status')).toContainText('encounter');
  await expect(page.getByLabel('Adventure session status')).toContainText('Raven');
  await page.reload();
+ await page.getByRole('button',{name:'Campaigns',exact:true}).click();
  await page.getByRole('button',{name:'Continue Adventure'}).click();
  await expect(page.getByLabel('Adventure session status')).toContainText('encounter');
  await expect(page.getByText('Road bandit',{exact:false}).first()).toBeVisible();
@@ -1271,7 +1307,7 @@ test('Home navigation is inside the hamburger menu, not beside it',async({page})
  await menu.click();
  await page.getByRole('navigation',{name:'Primary navigation'}).getByRole('button',{name:'Home',exact:true}).click();
  await expect(page.getByLabel('Four Keeps landing page')).toBeVisible();
- await expect(page.getByRole('button',{name:'Continue Adventure'})).toBeVisible();
+ await page.getByRole('button',{name:'Campaigns',exact:true}).click();await expect(page.getByRole('button',{name:'Continue Adventure'})).toBeVisible();
 });
 
 test('custom background editor prevents duplicate class skills and persists choices',async({page})=>{
@@ -1285,7 +1321,7 @@ test('custom background editor prevents duplicate class skills and persists choi
    createdAt:now,updatedAt:now
   }]));
  });
- await page.reload();await page.getByRole('button',{name:'My Characters'}).click();
+ await page.reload();await page.getByRole('button',{name:'Characters',exact:true}).click();
  await page.getByRole('button',{name:/Scout.*Resume draft/}).click();
  await page.getByRole('button',{name:'Create custom background (2024 DMG)'}).click();
  const editor=page.getByRole('group',{name:'Custom background'});
@@ -1297,7 +1333,7 @@ test('custom background editor prevents duplicate class skills and persists choi
  await editor.getByLabel('Custom background tool').selectOption('Cartographer’s Tools');
  await expect(page.getByLabel('Overlapping skill proficiency replacements')).toHaveCount(0);
  await expect(page.getByRole('button',{name:'Continue to equipment'})).toBeDisabled();
- await page.reload();await page.getByRole('button',{name:'My Characters'}).click();
+ await page.reload();await page.getByRole('button',{name:'Characters',exact:true}).click();
  await page.getByRole('button',{name:/Scout.*Resume draft/}).click();
  await expect(page.getByLabel('Custom background name')).toHaveValue('Frontier Scout');
  await expect(page.getByRole('group',{name:'Custom background'}).getByRole('checkbox',{name:/Arcana/})).toBeChecked();
@@ -1305,7 +1341,7 @@ test('custom background editor prevents duplicate class skills and persists choi
 
 test('characters can be deleted with confirmation without deleting an adventure',async({page})=>{
  await page.goto('/four-keeps/');
- await page.getByRole('button',{name:'My Characters'}).click();
+ await page.getByRole('button',{name:'Characters',exact:true}).click();
  await page.getByRole('button',{name:'Create character'}).click();
  await page.getByRole('button',{name:'All characters'}).click();
  const row=page.getByRole('button',{name:/Unnamed character.*Resume draft/});
@@ -1317,14 +1353,14 @@ test('characters can be deleted with confirmation without deleting an adventure'
  await page.getByRole('button',{name:'Delete character'}).click();
  await page.getByRole('button',{name:'Confirm delete character'}).click();
  await expect(row).toHaveCount(0);
- await page.reload();await page.getByRole('button',{name:'My Characters'}).click();
+ await page.reload();await page.getByRole('button',{name:'Characters',exact:true}).click();
  await expect(row).toHaveCount(0);
 });
 test('saved adventures can be deleted directly from My Campaigns',async({page})=>{
  await page.goto('/four-keeps/');
  await createLegacyCampaign(page,'Delete from list test');
  await page.getByRole('button',{name:'Open navigation menu'}).click();await page.getByRole('navigation',{name:'Primary navigation'}).getByRole('button',{name:'Home'}).click();
- await page.getByRole('button',{name:'My Campaigns'}).click();
+ await page.getByRole('button',{name:'Campaigns',exact:true}).click();
  await expect(page.getByRole('button',{name:'Delete adventure Delete from list test'})).toBeVisible();
  await page.getByRole('button',{name:'Delete adventure Delete from list test'}).click();
  await expect(page.getByRole('group',{name:'Confirm adventure deletion'})).toBeVisible();
@@ -1333,7 +1369,7 @@ test('saved adventures can be deleted directly from My Campaigns',async({page})=
  await page.getByRole('button',{name:'Delete adventure Delete from list test'}).click();
  await page.getByRole('button',{name:'Confirm delete adventure'}).click();
  await expect(page.getByText('Delete from list test')).toHaveCount(0);
- await page.reload();await page.getByRole('button',{name:'My Campaigns'}).click();
+ await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();
  await expect(page.getByText('Delete from list test')).toHaveCount(0);
 });
 
@@ -1348,7 +1384,7 @@ test('origin details appear immediately below selected row and navigation resets
    createdAt:now,updatedAt:now
   }]));
  });
- await page.reload();await page.getByRole('button',{name:'My Characters'}).click();
+ await page.reload();await page.getByRole('button',{name:'Characters',exact:true}).click();
  await page.getByRole('button',{name:/Inline Test.*Resume draft/}).click();
  await page.getByRole('button',{name:/Criminal.*Player.s Handbook/}).click();
  const background=page.getByRole('button',{name:/Criminal.*Player.s Handbook/});
@@ -1379,7 +1415,7 @@ test('custom background button opens its editor directly below the button',async
    createdAt:now,updatedAt:now
   }]));
  });
- await page.reload();await page.getByRole('button',{name:'My Characters'}).click();
+ await page.reload();await page.getByRole('button',{name:'Characters',exact:true}).click();
  await page.getByRole('button',{name:/Custom Test.*Resume draft/}).click();
  const button=page.getByRole('button',{name:'Create custom background (2024 DMG)'});
  await button.click();
@@ -1393,7 +1429,7 @@ test('custom background button opens its editor directly below the button',async
  expect(e!.y).toBeLessThan(a!.y);
  await page.getByRole('textbox',{name:'Custom background name'}).fill('My Custom Origin');
  await page.reload();
- await page.getByRole('button',{name:'My Characters'}).click();
+ await page.getByRole('button',{name:'Characters',exact:true}).click();
  await page.getByRole('button',{name:/Custom Test.*Resume draft/}).click();
  await expect(page.getByRole('textbox',{name:'Custom background name'})).toHaveValue('My Custom Origin');
 });
@@ -1411,7 +1447,7 @@ test('mobile text inputs stay at least 16px to prevent iPhone focus zoom',async(
   }]));
  });
  await page.reload();
- await page.getByRole('button',{name:'My Characters'}).click();
+ await page.getByRole('button',{name:'Characters',exact:true}).click();
  await page.getByRole('button',{name:/Zoom Test.*Resume draft/}).click();
  await page.getByRole('button',{name:'Create custom background (2024 DMG)'}).click();
  const name=page.getByRole('textbox',{name:'Custom background name'});
@@ -1436,7 +1472,7 @@ test('species precedes background, custom skills lock existing proficiencies and
   }]));
  });
  await page.reload();
- await page.getByRole('button',{name:'My Characters'}).click();
+ await page.getByRole('button',{name:'Characters',exact:true}).click();
  await page.getByRole('button',{name:/Species Test.*Resume draft/}).click();
  const species=page.getByRole('heading',{name:'Species',exact:true});
  const background=page.getByRole('heading',{name:'Background',exact:true});
@@ -1473,7 +1509,7 @@ test('redesigned creator shows expanded sticky live summary and groups custom sk
    createdAt:now,updatedAt:now
   }]));
  });
- await page.reload();await page.getByRole('button',{name:'My Characters'}).click();
+ await page.reload();await page.getByRole('button',{name:'Characters',exact:true}).click();
  await page.getByRole('button',{name:/Relic Hunter.*Resume draft/}).click();
  const creator=page.getByLabel('Character creator',{exact:true});
  const nav=creator.getByRole('navigation',{name:'Character creation steps'});
@@ -1496,4 +1532,39 @@ test('redesigned creator shows expanded sticky live summary and groups custom sk
  await expect(group.getByRole('checkbox',{name:/Acrobatics/})).toBeEnabled();
  await summary.getByRole('button',{name:/Relic Hunter.*Collapse/}).click();
  await expect(summary.getByRole('button',{name:/Relic Hunter.*Expand/})).toHaveAttribute('aria-expanded','false');
+});
+
+test('iPhone portrait journal keeps three equal-width section controls visible',async({page})=>{
+ await page.setViewportSize({width:390,height:844});
+ await page.goto('/four-keeps/');
+ await createLegacyCampaign(page,'Mobile journal');
+ await navigate(page,'Journal');
+ const nav=page.getByRole('navigation',{name:'Journal sections'});
+ const buttons=nav.getByRole('button');
+ await expect(buttons).toHaveCount(3);
+ const widths=await buttons.evaluateAll(items=>items.map(el=>Math.round(el.getBoundingClientRect().width)));
+ expect(Math.max(...widths)-Math.min(...widths)).toBeLessThanOrEqual(1);
+ await expect(nav.getByRole('button',{name:'Adventures'})).toHaveAttribute('aria-current','page');
+ await nav.getByRole('button',{name:'People'}).click();
+ await expect(nav.getByRole('button',{name:'People'})).toHaveAttribute('aria-current','page');
+ await nav.getByRole('button',{name:'Places'}).click();
+ await expect(nav.getByRole('button',{name:'Places'})).toHaveAttribute('aria-current','page');
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+});
+
+for(const width of [375,390,430])test('journal tabs stay equal and sticky during long scroll at '+width+'px',async({page})=>{
+ await page.setViewportSize({width,height:812});
+ await page.goto('/four-keeps/');
+ await createLegacyCampaign(page,'Long journal '+width);
+ await navigate(page,'Journal');
+ const nav=page.getByRole('navigation',{name:'Journal sections'});
+ const widths=await nav.getByRole('button').evaluateAll(nodes=>nodes.map(n=>Math.round(n.getBoundingClientRect().width)));
+ expect(Math.max(...widths)-Math.min(...widths)).toBeLessThanOrEqual(1);
+ await nav.evaluate(el=>{const parent=el.closest('section');const content=document.createElement('div');content.style.height='2200px';content.setAttribute('data-testid','journal-scroll-fixture');parent?.append(content);});
+ await page.evaluate(()=>window.scrollTo(0,700));
+ await expect(nav).toBeInViewport();
+ const y=await nav.evaluate(el=>el.getBoundingClientRect().top);
+ expect(y).toBeGreaterThanOrEqual(-1);
+ expect(y).toBeLessThan(220);
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
 });

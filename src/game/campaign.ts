@@ -1,3 +1,4 @@
+import type {EncounterRecord} from './encounterJournal';
 import type {DynamicSite} from './anchamidaDynamic';
 import type {CharacterDraft} from '../app/CharacterCreator';
 import {validPlayerState,validCampaignBuild} from './playerState';
@@ -9,6 +10,7 @@ import { emptyWorld, mergeWorld, normalizeWorld, type WorldState } from './world
 export interface JournalEntry { id: string; text: string; createdAt: string; kind: 'note' | 'system' | 'player' | 'dm' }
 export interface Campaign {
   schemaVersion: 1;
+  encounterJournal?: EncounterRecord[];
   /** Original reviewed build; independent of later draft edits and advancement plans. */
   characterBuild?:CharacterDraft;
   importedSubclassId?:string;

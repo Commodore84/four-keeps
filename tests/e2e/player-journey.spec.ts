@@ -11,7 +11,7 @@ test('fighter creation to adventure, NPC, combat, rewards, save and resume',asyn
  test.setTimeout(60000);
  const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));
  await page.goto('/four-keeps/');
- await page.getByRole('button',{name:'My Characters'}).click();await page.getByRole('button',{name:'Create character',exact:true}).click();
+ await page.getByRole('button',{name:'Characters',exact:true}).click();await page.getByRole('button',{name:'Create character',exact:true}).click();
  await page.getByRole('button',{name:/^Fighter/}).click();
  for(const name of ['Perception','Acrobatics','Defense','Greatsword','Flail','Javelin'])await page.getByRole('checkbox',{name:new RegExp('^'+name+'\\b')}).check();
  await page.getByRole('button',{name:'Continue to abilities'}).click();
@@ -21,9 +21,9 @@ test('fighter creation to adventure, NPC, combat, rewards, save and resume',asyn
  await page.getByLabel('Dex background bonus').selectOption('2');await page.getByLabel('Con background bonus').selectOption('1');await page.getByRole('button',{name:'Continue to equipment'}).click();
  await page.getByRole('group',{name:'Class equipment',exact:true}).getByRole('radio').first().check();await page.getByRole('group',{name:'Background equipment',exact:true}).getByRole('radio').first().check();
  await page.getByRole('button',{name:'Continue to spells'}).click();await page.getByRole('button',{name:'Continue to identity'}).click();await page.getByLabel('name *',{exact:true}).fill('Aster');await page.getByRole('button',{name:'Continue to future levels'}).click();await page.getByRole('button',{name:'Continue to review'}).click();
- await page.getByRole('button',{name:/Home/}).click();await page.getByRole('button',{name:'New Adventure'}).click();
+ await page.getByRole('button',{name:/Home/}).click();await page.getByRole('button',{name:'Campaigns',exact:true}).click();await page.getByRole('button',{name:'New Adventure'}).click();
  const draftId=await page.getByLabel('Starting character').getByRole('option',{name:/Aster/}).getAttribute('value');await page.getByLabel('Starting character').selectOption(draftId!);
- await page.getByLabel('Campaign name',{exact:true}).fill('Aster journey');await page.getByRole('button',{name:'Create campaign',exact:true}).click();
+ await page.getByRole('button',{name:'Begin Adventure',exact:true}).click();
  await navigate(page,'Player');
  await expect(page.getByLabel('Imported player character')).toContainText('Fighter');
  await expect(page.getByLabel('Imported character level-up')).toContainText('Requires 300 XP');
@@ -49,7 +49,7 @@ test('fighter creation to adventure, NPC, combat, rewards, save and resume',asyn
  await session.getByRole('button',{name:'Finish companion encounter'}).click();
  await session.getByLabel('Encounter reward XP').fill('75');await session.getByLabel('Encounter reward gold').fill('12');await session.getByLabel('Encounter reward item',{exact:true}).fill('Tower token');
  await session.getByRole('button',{name:'Save encounter rewards'}).click();await expect(session).toContainText('Rewards saved: 75 XP');
- await page.reload();await page.getByRole('button',{name:'Continue Adventure'}).click();await navigate(page,'Developer');
+ await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();await page.getByRole('button',{name:'Continue Adventure'}).click();await navigate(page,'Developer');
  await expect(session).toContainText('Rewards saved: 75 XP');await expect(session.getByRole('button',{name:'Save encounter rewards'})).toHaveCount(0);
  await session.getByRole('button',{name:'Resume exploration after encounter'}).click();await expect(session.getByLabel('Adventure session status')).toContainText('exploring');
  await navigate(page,'Player');await expect(page.getByLabel('Imported player character')).toContainText('75 XP');await expect(page.getByLabel('Persistent character summary')).toContainText('HP9/12');await expect(page.getByLabel('Player class resources')).toContainText('Second Wind1 / 2 remaining');await expect(page.getByLabel('Equipment and inventory')).toContainText('Tower token ×1');
@@ -59,7 +59,7 @@ test('fighter creation to adventure, NPC, combat, rewards, save and resume',asyn
 test('imported character earns XP, confirms level 2, and retains HP and level after reload',async({page})=>{
  test.setTimeout(60000);
  await page.goto('/four-keeps/');
- await page.getByRole('button',{name:'My Characters'}).click();await page.getByRole('button',{name:'Create character',exact:true}).click();
+ await page.getByRole('button',{name:'Characters',exact:true}).click();await page.getByRole('button',{name:'Create character',exact:true}).click();
  await page.getByRole('button',{name:/^Fighter/}).click();
  for(const name of ['Perception','Acrobatics','Defense','Greatsword','Flail','Javelin'])await page.getByRole('checkbox',{name:new RegExp('^'+name+'\\b')}).check();
  await page.getByRole('button',{name:'Continue to abilities'}).click();
@@ -69,9 +69,9 @@ test('imported character earns XP, confirms level 2, and retains HP and level af
  await page.getByLabel('Dex background bonus').selectOption('2');await page.getByLabel('Con background bonus').selectOption('1');await page.getByRole('button',{name:'Continue to equipment'}).click();
  await page.getByRole('group',{name:'Class equipment',exact:true}).getByRole('radio').first().check();await page.getByRole('group',{name:'Background equipment',exact:true}).getByRole('radio').first().check();
  await page.getByRole('button',{name:'Continue to spells'}).click();await page.getByRole('button',{name:'Continue to identity'}).click();await page.getByLabel('name *',{exact:true}).fill('Aster');await page.getByRole('button',{name:'Continue to future levels'}).click();await page.getByRole('button',{name:'Continue to review'}).click();
- await page.getByRole('button',{name:/Home/}).click();await page.getByRole('button',{name:'New Adventure'}).click();
+ await page.getByRole('button',{name:/Home/}).click();await page.getByRole('button',{name:'Campaigns',exact:true}).click();await page.getByRole('button',{name:'New Adventure'}).click();
  const draftId=await page.getByLabel('Starting character').getByRole('option',{name:/Aster/}).getAttribute('value');await page.getByLabel('Starting character').selectOption(draftId!);
- await page.getByLabel('Campaign name',{exact:true}).fill('Aster journey');await page.getByRole('button',{name:'Create campaign',exact:true}).click();
+ await page.getByRole('button',{name:'Begin Adventure',exact:true}).click();
  await navigate(page,'Player');
  const sheet=page.getByLabel('Imported player character');
  const initialHP=await sheet.getByLabel('Persistent character summary').textContent();
@@ -89,7 +89,7 @@ test('imported character earns XP, confirms level 2, and retains HP and level af
  await sheet.getByRole('button',{name:'Confirm and save level 2'}).click();
  await expect(sheet).toContainText('Level 2');
  await expect(sheet.getByLabel('Persistent character summary')).toContainText('HP'+(Number(match![1])+7)+'/'+(Number(match![2])+7));
- await page.reload();await page.getByRole('button',{name:'Continue Adventure'}).click();await navigate(page,'Player');
+ await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();await page.getByRole('button',{name:'Continue Adventure'}).click();await navigate(page,'Player');
  await expect(page.getByLabel('Imported player character')).toContainText('Level 2');
  await expect(page.getByLabel('Imported player character').getByLabel('Persistent character summary')).toContainText('HP'+(Number(match![1])+7)+'/'+(Number(match![2])+7));
 });
