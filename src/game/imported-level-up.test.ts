@@ -222,7 +222,7 @@ describe('Arcane Trickster high-level spell slot progression',()=>{
  });
  it('increases third-level slots at Rogue 16 without restoring already used slots',()=>{
   const c=fixture(15,xpThresholds[15]);c.importedSubclassId='rogue-arcane-trickster';c.character!.spellSlots={level1:4,usedLevel1:3,level2:3,usedLevel2:2,level3:2,usedLevel3:1};
-  const next=applyImportedLevelUp(c,{hpGain:5,confirm:true,featPlan:'Ability Score Improvement',abilityIncreases:{dex:2}});
+  const next=applyImportedLevelUp(c,{hpGain:5,confirm:true,featPlan:'Ability Score Improvement',abilityIncreases:{Dex:2}});
   expect(next.character?.spellSlots).toMatchObject({level3:3,usedLevel3:1,level2:3,usedLevel2:2});
  });
  it('retains fourth-level spell slot at Rogue 20 after reload',()=>{
