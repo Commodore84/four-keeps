@@ -15,7 +15,7 @@ describe('magic item wish list',()=>{
  });
  it('provides structured, rights-tagged mechanics for the curated batch',()=>{
   const detailed=MAGIC_ITEMS.filter(item=>item.mechanics);
-  expect(detailed).toHaveLength(31);
+  expect(detailed).toHaveLength(35);
   expect(detailed.every(item=>item.description===item.mechanics!.summary)).toBe(true);
   const wand=MAGIC_ITEMS.find(item=>item.id==='wand-of-magic-missiles')!;
   expect(wand.mechanics?.charges).toEqual({maximum:7,maximumPerUse:3,cost:'1 charge per spell level'});

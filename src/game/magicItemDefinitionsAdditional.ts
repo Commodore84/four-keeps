@@ -77,4 +77,28 @@ export const ADDITIONAL_MAGIC_ITEM_DEFINITIONS: Record<string, MagicItemMechanic
     summary: 'A cloak that can billow dramatically through magic. Confirm its precise activation wording in the official 2024 DMG before implementation.',
     limitations: ['Cosmetic effect only; no combat bonus is established here.'],
   },
+  'potions-of-healing': {
+    verification: 'verified-srd',
+    summary: 'Four healing potencies: common 2d4 + 2 HP, greater 4d4 + 4 HP, superior 8d4 + 8 HP, and supreme 10d4 + 20 HP. Drinking or administering a potion takes a Bonus Action.',
+    activation: 'Bonus Action to drink or administer to a creature within 5 feet',
+    limitations: ['Single-use consumable.', 'Healing cannot exceed the recipient’s maximum Hit Points.'],
+  },
+  'potion-of-heroism': {
+    verification: 'verified-srd',
+    summary: 'Drinking grants 10 temporary Hit Points for 1 hour and the Bless spell effect for that hour without requiring Concentration.',
+    activation: 'Bonus Action to drink or administer',
+    limitations: ['Single-use consumable.', 'Temporary Hit Points do not stack with other temporary Hit Points.'],
+  },
+  'potion-of-giant-strength': {
+    verification: 'verified-srd',
+    summary: 'For 1 hour, sets Strength according to giant type: hill 21, frost or stone 23, fire 25, cloud 27, storm 29. It does nothing if Strength is already at least that high.',
+    activation: 'Bonus Action to drink or administer',
+    limitations: ['Single-use consumable.', 'Giant subtype must be known before applying the effect.'],
+  },
+  'potion-of-gaseous-form': {
+    verification: 'verified-srd',
+    summary: 'Drinking grants the effect of Gaseous Form for 1 hour without Concentration. You can end the effect early as a Bonus Action.',
+    activation: 'Bonus Action to drink or administer',
+    limitations: ['Single-use consumable.'],
+  },
 };
