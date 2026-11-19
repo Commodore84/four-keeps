@@ -10,6 +10,9 @@ import { emptyWorld, mergeWorld, normalizeWorld, type WorldState } from './world
 export interface JournalEntry { id: string; text: string; createdAt: string; kind: 'note' | 'system' | 'player' | 'dm' }
 export interface Campaign {
   healingPotionUseIds?:string[];
+  consumableUseIds?:string[];
+  antitoxinUntilMinute?:number;
+  healerKitUsesRemaining?:number;
   schemaVersion: 1;
   encounterJournal?: EncounterRecord[];
   /** Original reviewed build; independent of later draft edits and advancement plans. */

@@ -1,3 +1,4 @@
+import {useOwnedConsumable,type ConsumableRequest} from './consumables';
 import {useOwnedHealingPotion,type HealingPotionRequest} from './healingPotions';
 import {hydratePlayerState} from './playerState';
 import { isCampaign, type Campaign } from './campaign';
@@ -86,6 +87,21 @@ export async function commitHealingPotionUse(id:string,request:HealingPotionRequ
     if(next===current){resolve(current);return}
     const put=store.put(next);
     requestResult(put,()=>resolve(next),reject);
+   }catch(error){reject(error instanceof Error?error:new Error(String(error)))}
+  };
+ });
+}
+
+export async function commitConsumableUse(id:string,request:ConsumableRequest):Promise<Campaign>{
+ return transact<Campaign>('readwrite',(store,resolve,reject)=>{
+  const read=store.get(id);
+  read.onerror=()=>reject(read.error??new Error('Campaign lookup failed'));
+  read.onsuccess=()=>{
+   try{
+    if(!isCampaign(read.result))throw Error('Campaign not found');
+    const current=hydratePlayerState(read.result),next=useOwnedConsumable(current,request);
+    if(next===current){resolve(current);return}
+    requestResult(store.put(next),()=>resolve(next),reject);
    }catch(error){reject(error instanceof Error?error:new Error(String(error)))}
   };
  });
