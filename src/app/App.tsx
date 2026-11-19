@@ -169,7 +169,7 @@ function Adventure({ campaign, fullHistory, onToggleHistory, onAdventureChange, 
       <p className="text-parchment/90">{campaign.pendingClarification.question}</p>
       {campaign.pendingClarification.answer ? <><p className="ml-6 rounded-xl border border-gold/30 bg-gold/10 p-3">{campaign.pendingClarification.answer}</p><button type="button" disabled={saving} className="text-sm text-gold underline" onClick={()=>void onRetryAction()}>Retry confirmed action</button></> : <p className="text-xs text-parchment/60">Reply using the message field below. Your original action is saved.</p>}
     </section>}
-    {campaign?.merchantShopOpen && campaign.adventureSession?.site==='frontier' && campaign.adventureSession.status==='exploring' && <div ref={shopRef}><MerchantShop campaign={campaign} saving={saving} onClose={onShopClose} onPrepare={onShopPrepare} onSettle={onShopSettle}/></div>}
+    {campaign?.merchantShopOpen && campaign.adventureSession?.site==='frontier' && campaign.adventureSession.status==='exploring' && <div ref={shopRef}><MerchantShop campaign={campaign} saving={saving} onClose={onShopClose} onPrepare={onShopPrepare} onSettle={onShopSettle} onSupplyChange={onAdventureChange}/></div>}
     {campaign && <p className="text-xs text-gold/80">Campaign saved on this device · {turns.length ? 'AI Dungeon Master connected' : campaign.characterIdentity ? 'Opening scene pending' : 'Ready for your first action'}</p>}
     <div ref={endRef}/>
   </section>;
