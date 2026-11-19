@@ -73,15 +73,58 @@ export function merchantForItem(campaign:Campaign,itemId:string):MerchantType|nu
 export const FRONTIER_INITIAL_STOCK:Record<string,number>=Object.fromEntries(OFFICIAL_EQUIPMENT_2024.map(item=>[item.id,
  item.id==='potion-of-healing'?3:item.category==='ammunition'?60:item.category==='weapon'?5:item.category==='armor'?3:item.category==='tool'?4:item.costCp>=5000?1:item.costCp>=1000?3:12]));
 Object.assign(FRONTIER_INITIAL_STOCK,{dagger:8,rope:12,torch:30,rations:25,waterskin:10,arrows:100,bolts:60,'bullets-sling':5});
+/** Stock is tied to elapsed campaign minutes, never wall-clock time. */
+export function merchantRestockIntervalMinutes(tier:SettlementTier,itemId:string):number {
+ if(tier==='traveling')return 7*1440;
+ if(tier==='village')return 7*1440;
+ if(tier==='town')return 3*1440;
+ const item=OFFICIAL_EQUIPMENT_2024.find(x=>x.id===itemId);
+ return (item?.costCp??0)>=5000?7*1440:
+  ['weapon','armor','shield','tool'].includes(item?.category.toLowerCase()??'')?3*1440:1440;
+}
+export function merchantInitialStock(tier:SettlementTier,itemId:string,type:MerchantType):number {
+ const item=merchantCatalogFor(tier,type).find(x=>x.id===itemId);
+ if(!item)return 0;
+ const cost=item.costCp;
+ if(tier==='city')return cost>=5000?2:cost>=1000?8:
+  item.category==='ammunition'?60:
+  ['weapon','armor','shield','tool'].includes(item.category.toLowerCase())?12:40;
+ if(tier==='traveling'||type==='trader')return itemId==='potion-of-healing'?1:Math.min(5,FRONTIER_INITIAL_STOCK[itemId]??0);
+ if(tier==='village')return Math.min(8,FRONTIER_INITIAL_STOCK[itemId]??0);
+ return Math.min(20,FRONTIER_INITIAL_STOCK[itemId]??0);
+}
 export function remainingMerchantStock(campaign:Campaign,itemId:string,type?:MerchantType):number {
  const tier=settlementTier(campaign),merchant=type??campaign.merchantShopType??merchantForItem(campaign,itemId);
  if(!merchant)return 0;
  const key=merchantStockKey(tier,merchant,itemId);
- const stored=campaign.merchantStockRemaining?.[key];
- if(stored!==undefined)return stored;
- if(tier==='city')return 9999;
- if(tier==='traveling'||merchant==='trader')return itemId==='potion-of-healing'?1:Math.min(5,FRONTIER_INITIAL_STOCK[itemId]??0);
- return campaign.merchantStockRemaining?.[itemId]??(tier==='village'?Math.min(8,FRONTIER_INITIAL_STOCK[itemId]??0):FRONTIER_INITIAL_STOCK[itemId]??0);
+ const initial=merchantInitialStock(tier,itemId,merchant);
+ if(!initial)return 0;
+ const stored=campaign.merchantStockRemaining?.[key]??campaign.merchantStockRemaining?.[itemId];
+ if(stored===undefined)return initial;
+ const last=campaign.merchantStockRestockedAt?.[key]??0;
+ const now=Math.max(0,campaign.elapsedMinutes??0);
+ const interval=merchantRestockIntervalMinutes(tier,itemId);
+ if(now>=last+interval)return initial;
+ return Math.max(0,Math.min(initial,stored));
+}
+export function refreshMerchantStock(campaign:Campaign):Campaign {
+ const now=Math.max(0,campaign.elapsedMinutes??0);
+ const remaining={...campaign.merchantStockRemaining};
+ const restocked={...campaign.merchantStockRestockedAt};
+ let changed=false;
+ for(const type of availableMerchants(settlementTier(campaign))){
+  for(const item of merchantCatalogFor(settlementTier(campaign),type)){
+   const key=merchantStockKey(settlementTier(campaign),type,item.id);
+   const interval=merchantRestockIntervalMinutes(settlementTier(campaign),item.id);
+   const last=restocked[key]??0;
+   if(now<last+interval)continue;
+   const cycles=Math.floor((now-last)/interval);
+   restocked[key]=last+cycles*interval;
+   remaining[key]=merchantInitialStock(settlementTier(campaign),item.id,type);
+   changed=true;
+  }
+ }
+ return changed?{...campaign,merchantStockRemaining:remaining,merchantStockRestockedAt:restocked}:campaign;
 }
 export function merchantCatalog(campaign:Campaign):string {return merchantStock(campaign).map(item=>item.name+": "+formatFrontierPrice(item.costCp)+(item.packQuantity?" per pack of "+item.packQuantity:" each")+" ("+remainingMerchantStock(campaign,item.id)+" available)").join("; ");}
 export function isMerchantBrowseRequest(message:string):boolean {return /\b(what (?:do you|have you|are you) (?:sell|stock|carry|have)|show (?:me )?(?:your )?(?:wares|inventory|stock)|(?:list|catalog|inventory|price list|prices|wares|for sale)|brows(?:e|ing)|look (?:at|through) (?:your |the )?(?:goods|wares|stock|merchandise))\b/i.test(message);}
@@ -135,7 +178,7 @@ export function buyFrontierItem(campaign:Campaign,itemId:string,quantity=1,now=n
  const gear=ledger.gear.map(i=>({...i}));const owned=gear.find(i=>i.name===item.name);
  const granted=quantity*(item.packQuantity??1);
  if(owned)owned.quantity+=granted;else gear.push({name:item.name,quantity:granted});
- return {...campaign,merchantStockRemaining:{...campaign.merchantStockRemaining,[merchantStockKey(settlementTier(campaign),campaign.merchantShopType??merchantForItem(campaign,itemId)??'general',itemId)]:remainingMerchantStock(campaign,itemId)-quantity},merchantDiscount:undefined,inventoryLedger:{currency,gear},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:`Purchased ${quantity} × ${item.name} at the Frontier Village shop for ${formatFrontierPrice(cost)}.`,createdAt:now}]};
+ return {...campaign,merchantStockRemaining:{...campaign.merchantStockRemaining,[merchantStockKey(settlementTier(campaign),campaign.merchantShopType??merchantForItem(campaign,itemId)??'general',itemId)]:remainingMerchantStock(campaign,itemId)-quantity},merchantStockRestockedAt:{...campaign.merchantStockRestockedAt,[merchantStockKey(settlementTier(campaign),campaign.merchantShopType??merchantForItem(campaign,itemId)??'general',itemId)]:campaign.merchantStockRestockedAt?.[merchantStockKey(settlementTier(campaign),campaign.merchantShopType??merchantForItem(campaign,itemId)??'general',itemId)]??0},merchantDiscount:undefined,inventoryLedger:{currency,gear},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:`Purchased ${quantity} × ${item.name} at the Frontier Village shop for ${formatFrontierPrice(cost)}.`,createdAt:now}]};
 }
 
 /** Conservative local purchase-intent extraction; never infer an item from free-form DM prose. */
