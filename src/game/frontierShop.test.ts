@@ -247,3 +247,23 @@ describe('merchant-specific persistent purchases',()=>{
   expect(()=>prepareMerchantCart(c,[{itemId:'dagger',quantity:1}],'wrong-merchant')).toThrow();
  });
 });
+
+
+describe('atomic cart settlement preflight',()=>{
+ it('rejects a stale second line without changing the original campaign',()=>{
+  const c=fixture();
+  const quoted=prepareMerchantCart(c,[{itemId:'dagger',quantity:1},{itemId:'torch',quantity:2}],'atomic-stale');
+  const stale={...quoted,merchantStockRemaining:{...quoted.merchantStockRemaining,[merchantStockKey('town','weaponsmith','torch')]:0}};
+  const before=JSON.stringify(stale);
+  expect(()=>settleMerchantPurchase(stale,'atomic-stale',true)).toThrow('stock');
+  expect(JSON.stringify(stale)).toBe(before);
+  expect(stale.completedMerchantPurchaseIds).toBeUndefined();
+ });
+ it('rejects a changed wallet before any line is purchased',()=>{
+  const c=fixture();
+  const quoted=prepareMerchantCart(c,[{itemId:'dagger',quantity:1},{itemId:'torch',quantity:1}],'atomic-wallet');
+  const stale={...quoted,inventoryLedger:{...quoted.inventoryLedger!,currency:{GP:0,SP:0,CP:0,EP:0,PP:0}}};
+  expect(()=>settleMerchantPurchase(stale,'atomic-wallet',true)).toThrow('Insufficient money');
+  expect(stale.inventoryLedger.gear).toEqual([]);
+ });
+});
