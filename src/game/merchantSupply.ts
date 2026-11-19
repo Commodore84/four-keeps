@@ -56,7 +56,7 @@ export function collectCitySupplyOrder(c:Campaign,id:string):Campaign{
 }
 /** Trader stock changes only when an authoritative route-arrival action invokes this. */
 export function resupplyTravelingMerchant(c:Campaign,routeId:string,arrivalId:string):Campaign{
- if(settlementTier(c)!=='traveling'||!routeId.trim()||!arrivalId.trim()||c.merchantTraderRoute?.id!==routeId||!c.merchantTraderRoute.completedArrivalIds.includes(arrivalId)||c.merchantTraderRoute.stops[c.merchantTraderRoute.nextStopIndex-1]!==c.adventureSession?.site)throw Error('Valid traveling merchant route arrival required.');
+ if(settlementTier(c)!=='traveling'||!routeId.trim()||!arrivalId.trim()||c.merchantTraderRoute?.id!==routeId||c.merchantTraderRoute.completedArrivalIds.at(-1)!==arrivalId||arrivalId!=='leg-'+(c.merchantTraderRoute.nextStopIndex-1)+'-'+c.adventureSession?.site||c.merchantTraderRoute.stops[c.merchantTraderRoute.nextStopIndex-1]!==c.adventureSession?.site)throw Error('Valid traveling merchant route arrival required.');
  const marker=routeId+':'+arrivalId;
  if(c.merchantTraderResupply?.[marker]!==undefined)return c;
  const stock={...c.merchantStockRemaining};
