@@ -1,0 +1,19 @@
+name: Publish verified DM intent fix
+on:
+  push:
+    branches: [dm-intent-publish-staging]
+permissions:
+  contents: write
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+      - name: Verify exact source and publish
+        run: |
+          mkdir -p /tmp/intent-transfer
+          cp .intent-transfer/* /tmp/intent-transfer/
+          python3 /tmp/intent-transfer/publish.py
