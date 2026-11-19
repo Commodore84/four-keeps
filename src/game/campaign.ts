@@ -29,6 +29,8 @@ export interface Campaign {
   merchantSupplyOrders?:{id:string;settlement:string;merchant:string;itemId:string;quantity:number;unitCostCp:number;placedAtMinutes:number;readyAtMinutes:number;status:'ordered'|'collected'}[];
   pendingMerchantSupplyOrder?:{id:string;settlement:string;merchant:string;itemId:string;quantity:number;unitCostCp:number;readyAtMinutes:number};
   merchantTraderResupply?:Record<string,number>;
+  /** Explicit starter-route manifest; arrival IDs are derived from verified leg indexes. */
+  merchantTraderRoute?:{id:string;stops:('frontier'|'crossroads'|'watchtower')[];nextStopIndex:number;completedArrivalIds:string[]};
   merchantDiscount?:{itemId:string;percent:number;approvalId:string};
   pendingMerchantNegotiation?:{itemId:string;checkToken:string};
   completedMerchantPurchaseIds?:string[];
