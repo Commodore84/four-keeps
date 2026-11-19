@@ -1,3 +1,4 @@
+import {MAGIC_ITEM_DEFINITIONS,type MagicItemMechanics} from './magicItemDefinitions';
 import catalog from './magicItemCatalog.json';
 import dmg1 from './dmg2024MagicItems1.json';
 import dmg2 from './dmg2024MagicItems2.json';
@@ -14,7 +15,7 @@ export type ContentProvenance = {
   rights: ContentRights;
   license: string | null;
 };
-export type MagicItem = (typeof catalog)[number] & ContentProvenance;
+export type MagicItem = (typeof catalog)[number] & ContentProvenance & { mechanics?: MagicItemMechanics };
 const srdProvenance: ContentProvenance = {
   source: 'SRD 5.2.1',
   rights: 'srd-5.2.1',
@@ -25,9 +26,13 @@ const dmgProvenance: ContentProvenance = {
   rights: 'non-srd',
   license: null,
 };
+const withDefinition = <T extends {id:string;description:string}>(item:T) => {
+  const mechanics=MAGIC_ITEM_DEFINITIONS[item.id];
+  return mechanics?{...item,description:mechanics.summary,mechanics}:item;
+};
 export const MAGIC_ITEMS: MagicItem[] = [
-  ...catalog.map(item => ({...item,...srdProvenance})),
-  ...[...dmg1,...dmg2,...dmg3,...dmg4,...dmg5,...dmg6,...dmg7,...dmg8].map(item => ({...item,...dmgProvenance})),
+  ...catalog.map(item => ({...withDefinition(item),...srdProvenance})),
+  ...[...dmg1,...dmg2,...dmg3,...dmg4,...dmg5,...dmg6,...dmg7,...dmg8].map(item => ({...withDefinition(item),...dmgProvenance})),
 ];
 const prefix = 'four-keeps-magic-wishlist:';
 export function readMagicWishlist(campaignId:string):string[] {

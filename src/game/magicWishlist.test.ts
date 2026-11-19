@@ -13,6 +13,18 @@ describe('magic item wish list',()=>{
   writeMagicWishlist('rights-test',[srd!.id,dmg!.id]);
   expect(readMagicWishlist('rights-test')).toEqual([srd!.id,dmg!.id]);
  });
+ it('provides structured, rights-tagged mechanics for the curated batch',()=>{
+  const detailed=MAGIC_ITEMS.filter(item=>item.mechanics);
+  expect(detailed).toHaveLength(15);
+  expect(detailed.every(item=>item.description===item.mechanics!.summary)).toBe(true);
+  const wand=MAGIC_ITEMS.find(item=>item.id==='wand-of-magic-missiles')!;
+  expect(wand.mechanics?.charges).toEqual({maximum:7,maximumPerUse:3,cost:'1 charge per spell level'});
+  const warlock=MAGIC_ITEMS.find(item=>item.id==='dmg24-2-rod-of-the-pact-keeper')!;
+  expect(warlock.rights).toBe('non-srd');
+  expect(warlock.mechanics?.bonuses).toContainEqual({target:'warlock-spell-save-dc',amount:2});
+  expect(warlock.mechanics?.attunementRequirement).toBe('Warlock');
+  expect(MAGIC_ITEMS).toHaveLength(511);
+ });
  it('saves only known item ids without duplicates',()=>{const id=MAGIC_ITEMS[0].id;writeMagicWishlist('campaign-a',[id,id,'not-an-item']);expect(readMagicWishlist('campaign-a')).toEqual([id]);expect(magicWishlistNames('campaign-a')).toEqual([MAGIC_ITEMS[0].name]);});
  it('isolates separate campaigns',()=>{writeMagicWishlist('one',[MAGIC_ITEMS[0].id]);expect(readMagicWishlist('two')).toEqual([]);});
  it('ignores corrupt storage',()=>{storage.set('four-keeps-magic-wishlist:broken','{');expect(readMagicWishlist('broken')).toEqual([]);});
