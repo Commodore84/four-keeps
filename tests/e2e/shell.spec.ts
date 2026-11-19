@@ -101,7 +101,7 @@ test('campaign deletion requires confirmation and preserves other campaigns', as
   await expect(page.getByLabel('Active campaign').locator('option')).toHaveCount(1);
   await page.getByRole('button', { name: 'Delete selected campaign' }).click();
   await page.getByRole('button', { name: 'Confirm delete' }).click();
-  await expect(page.getByText('No campaign selected')).toBeVisible();
+  await expect(page.getByLabel('Active campaign').locator('option')).toHaveCount(0);
   await page.reload();
   await expect(page.getByLabel('Four Keeps landing page')).toBeVisible();
   await page.getByRole('button',{name:'Campaigns',exact:true}).click();

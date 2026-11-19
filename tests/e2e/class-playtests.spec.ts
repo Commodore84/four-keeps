@@ -1077,6 +1077,28 @@ test('iPhone opening has intentional loading, safe retry and one saved opening',
 });
 
 
+test('iPhone compact adventure header uses system wordmark and map shows saved player location',async({page})=>{
+ test.setTimeout(120000);
+ await page.setViewportSize({width:390,height:844});
+ await createAndImport(page,'rogue');
+ await navigate(page,'Adventure');
+ const header=page.locator('header').first();
+ await expect(header.getByRole('heading',{name:'Four Keeps'})).toBeVisible();
+ await expect(header.locator('img[alt="Four Keeps"]')).toHaveCount(0);
+ await expect(header.getByText('Adventure',{exact:true})).toHaveCount(0);
+ await expect(header.getByText(/Nighthawk.*2026|Dasahi/)).toHaveCount(0);
+ const heading=header.getByRole('heading',{name:'Four Keeps'});
+ expect(await heading.evaluate(el=>getComputedStyle(el).fontFamily)).toContain('system-ui');
+ await navigate(page,'Map');
+ await expect(page.getByRole('img',{name:'Current player location: Dasahi'})).toBeVisible();
+ await page.reload();
+ await page.getByRole('button',{name:'Campaigns',exact:true}).click();
+ await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await navigate(page,'Map');
+ await expect(page.getByRole('img',{name:'Current player location: Dasahi'})).toBeVisible();
+});
+
+
 test('iPhone Dasahi opening offers a voluntary waterfront store with readable dialogue and browse handoff',async({page})=>{
  test.setTimeout(120000);
  await page.setViewportSize({width:390,height:844});

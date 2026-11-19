@@ -38,6 +38,7 @@ export function AnchamidaRegionMap({campaign}:{campaign:Campaign|null}) {
   const clusters=clusterDynamicSites(dynamic,zoom);
   const site=selected?visible.find(p=>p.id===selected):undefined;
   const dynamicSite=selected?allDynamic.find(p=>p.id===selected):undefined;
+  const currentSite=[...visible,...allDynamic].find(p=>p.name.toLowerCase()===(campaign?.location??'').trim().toLowerCase());
   const identity=site?campaign?.mapPoiIdentities?.[site.id]:undefined;
   const reset=()=>{setZoom(1);setOffset({x:0,y:0});};
   const focusSite=(id:string,x:number,y:number)=>{
@@ -94,6 +95,7 @@ export function AnchamidaRegionMap({campaign}:{campaign:Campaign|null}) {
         <div className="relative" style={{aspectRatio:'2 / 3',width:'min(100cqw, calc(100cqh * 2 / 3))'}}>
           {!imageFailed?<img src="/anchamida-region.webp" draggable={false} alt="Anchamida illustrated regional terrain" className="absolute inset-0 h-full w-full object-contain select-none" onError={()=>setImageFailed(true)}/>:<div role="img" aria-label="Regional artwork unavailable" className="absolute inset-0 flex items-center justify-center bg-[#b8b092] px-5 text-center text-sm text-[#40372a]">Regional artwork pending installation</div>}
           {clusters.map(cluster=><button key={cluster.sites.map(s=>s.id).join('-')} type="button" title={cluster.sites.map(s=>s.name).join(', ')} aria-label={cluster.sites.length>1?cluster.sites.length+' nearby locations':cluster.sites[0].name} style={{left:cluster.x+'%',top:cluster.y+'%',transform:`translate(-50%,-50%) scale(${1/zoom})`}} className="absolute z-20 flex h-6 min-w-6 items-center justify-center rounded-full border-2 border-white bg-emerald-800 px-1 text-xs text-white shadow-md" onClick={()=>{if(cluster.sites.length===1)setSelected(cluster.sites[0].id);else setZoom(v=>Math.min(v+1,6));}}>{cluster.sites.length>1?cluster.sites.length:'•'}</button>)}
+          {currentSite&&<span role="img" aria-label={'Current player location: '+currentSite.name} title={'You are here: '+currentSite.name} style={{left:currentSite.x+'%',top:currentSite.y+'%',transform:`translate(-50%,-50%) scale(${1/zoom})`}} className="pointer-events-none absolute z-30 flex h-7 w-7 items-center justify-center rounded-full border-[3px] border-white bg-sky-600 shadow-lg"><span className="h-2.5 w-2.5 rounded-full bg-white"/></span>}
           {visible.map(p=><button key={p.id} type="button" onClick={()=>setSelected(p.id)} title={identity?.name||p.name||'Uncharted location'} aria-label={identity?.name||p.name||'Discovered location'} style={{left:p.x+'%',top:p.y+'%',transform:`translate(-50%,-50%) scale(${1/zoom})`}} className="absolute z-10 flex h-6 w-6 items-center justify-center rounded-full border-2 border-[#fff4d9] bg-[#8e342d] text-xs text-white shadow-md">{p.type==='city'?'⌂':'•'}</button>)}
         </div>
       </div>
