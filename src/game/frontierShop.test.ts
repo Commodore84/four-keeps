@@ -1,7 +1,7 @@
 import {describe,it,expect} from 'vitest';
 import {newCampaign} from './campaign';
 import {beginAdventureSession} from './adventureSession';
-import {buyFrontierItem,frontierShopStock,frontierMerchantContext,formatFrontierPrice,parseFrontierPurchase,prepareMerchantPurchase,prepareMerchantCart,settleMerchantPurchase,cityShopStock,merchantCatalogFor,availableMerchants,merchantStockKey,merchantInitialStock,merchantRestockIntervalMinutes,walletCopper,remainingMerchantStock,merchantCatalog,isMerchantBrowseRequest,approveMerchantDiscount,isMerchantPurchaseRequest,classifyMerchantIntent,merchantNegotiationTarget,beginMerchantNegotiation,resolveMerchantNegotiation} from './frontierShop';
+import {buyFrontierItem,frontierShopStock,frontierMerchantContext,formatFrontierPrice,parseFrontierPurchase,prepareMerchantPurchase,prepareMerchantCart,settleMerchantPurchase,cityShopStock,merchantCatalogFor,availableMerchants,merchantStockKey,merchantStockKeyForCampaign,merchantInitialStock,merchantRestockIntervalMinutes,walletCopper,remainingMerchantStock,merchantCatalog,isMerchantBrowseRequest,approveMerchantDiscount,isMerchantPurchaseRequest,classifyMerchantIntent,merchantNegotiationTarget,beginMerchantNegotiation,resolveMerchantNegotiation} from './frontierShop';
 function fixture(){const c=newCampaign('Shop','shop-test');return beginAdventureSession({...c,merchantSettlementTier:'town',characterIdentity:{name:'Test',speciesId:'elf',backgroundId:'sage',classId:'rogue',draftId:'draft',pronouns:'',appearance:'',personality:'',backstory:''},inventoryLedger:{currency:{GP:10,SP:0,CP:0,EP:0,PP:0},gear:[]}})}
 describe('deterministic merchant negotiation check lifecycle',()=>{
  const pending=(token='social-1')=>({...fixture(),pendingCheck:{token,skill:'Persuasion' as const,mode:'normal' as const,reason:'Negotiate the dagger price'}});
@@ -284,5 +284,18 @@ describe('finite inventory and game-time replenishment',()=>{
   expect(merchantRestockIntervalMinutes('village','torch')).toBe(10080);
   expect(merchantRestockIntervalMinutes('traveling','torch')).toBe(10080);
   expect(merchantInitialStock('traveling','torch','trader')).toBeLessThanOrEqual(5);
+ });
+});
+
+describe('settlement-isolated stock persistence',()=>{
+ it('does not carry purchases between cities and keeps legacy saves readable',()=>{
+  const city={...fixture(),location:'Dasahi',merchantSettlementTier:'city' as const,merchantShopType:'weaponsmith' as const};
+  const purchased=buyFrontierItem(city,'dagger',2);
+  const other={...purchased,location:'Miwillia'};
+  expect(merchantStockKeyForCampaign(city,'weaponsmith','dagger')).not.toBe(merchantStockKeyForCampaign(other,'weaponsmith','dagger'));
+  expect(remainingMerchantStock(other,'dagger')).toBe(merchantInitialStock('city','dagger','weaponsmith'));
+  expect(remainingMerchantStock(purchased,'dagger')).toBe(merchantInitialStock('city','dagger','weaponsmith')-2);
+  const legacy={...city,merchantStockRemaining:{[merchantStockKey('city','weaponsmith','dagger')]:3}};
+  expect(remainingMerchantStock(legacy,'dagger')).toBe(3);
  });
 });
