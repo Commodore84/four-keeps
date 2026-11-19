@@ -68,3 +68,11 @@ export function resupplyTravelingMerchant(c:Campaign,routeId:string,arrivalId:st
  }
  return {...c,merchantStockRemaining:stock,merchantStockRestockedAt:checkpoints,merchantTraderResupply:{...c.merchantTraderResupply,[marker]:nowMinutes(c)}};
 }
+
+/** Only explicit requests to obtain unavailable merchandise open supplier controls. */
+export function isSupplierBrowseRequest(message:string):boolean {
+ const text=message.trim().toLowerCase();
+ return /\b(order|special[- ]order|back[- ]order|source|procure|restock|out of stock|sold out|unavailable)\b/.test(text)
+  && /\b(item|equipment|gear|weapon|armor|shield|tool|merchandise|stock|shop|merchant|blacksmith|supplier|buy|purchase|dagger|sword|bow|arrows|potion|rope|torch|plate|mail)\b/.test(text)
+  && !/\b(where|why|how long ago|history|rumor)\b/.test(text);
+}
