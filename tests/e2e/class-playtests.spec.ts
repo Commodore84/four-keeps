@@ -660,6 +660,8 @@ test('new Rogue starts at Frontier Village, buys supplies, and sees persisted Pl
    return rect.top<window.innerHeight-120 && rect.bottom>120;
  })).toBe(true);
  await expect(shop.getByLabel('Current wallet')).toBeVisible();
+ await expect(shop.getByLabel('City supplier orders')).toBeVisible();
+ expect((await saved(page)).pendingMerchantSupplyOrder).toBeUndefined();
  await shop.getByRole('button',{name:'Weaponsmith'}).click();
  await expect(shop.getByLabel('Merchant inventory')).toContainText('Dagger');
  await shop.getByRole('button',{name:'Add Dagger'}).click();
