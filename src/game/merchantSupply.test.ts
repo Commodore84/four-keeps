@@ -46,3 +46,22 @@ describe('supplier conversation intent',()=>{
   expect(isSupplierBrowseRequest('Where is the blacksmith?')).toBe(false);
  });
 });
+
+describe('supplier persistence and quote expiration',()=>{
+ it('preserves paid orders through reload and refuses a second collection',()=>{
+  const base=fixture();
+  const quote=prepareCitySupplyOrder(base,'dagger',1,'reload-order');
+  const paid=confirmCitySupplyOrder(JSON.parse(JSON.stringify(quote)),'reload-order',true);
+  const delivered=JSON.parse(JSON.stringify({...paid,elapsedMinutes:paid.merchantSupplyOrders![0].readyAtMinutes}));
+  const once=collectCitySupplyOrder(delivered,'reload-order');
+  const twice=JSON.parse(JSON.stringify(once));
+  expect(()=>collectCitySupplyOrder(twice,'reload-order')).toThrow();
+  expect(walletCopper(twice.inventoryLedger.currency)).toBe(walletCopper(paid.inventoryLedger?.currency));
+ });
+ it('rejects a quote whose delivery window has already elapsed without charging',()=>{
+  const quote=prepareCitySupplyOrder(fixture(),'dagger',1,'expired-quote');
+  const later={...quote,elapsedMinutes:quote.pendingMerchantSupplyOrder!.readyAtMinutes+1};
+  expect(()=>confirmCitySupplyOrder(later,'expired-quote',true)).toThrow('expired');
+  expect(walletCopper(later.inventoryLedger?.currency)).toBe(10000);
+ });
+});
