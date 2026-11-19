@@ -111,10 +111,11 @@ export function remainingMerchantStock(campaign:Campaign,itemId:string,type?:Mer
  const last=campaign.merchantStockRestockedAt?.[key]??campaign.merchantStockRestockedAt?.[legacyKey]??0;
  const now=Math.max(0,campaign.elapsedMinutes??0);
  const interval=merchantRestockIntervalMinutes(tier,itemId);
- if(now>=last+interval)return initial;
+ if(tier!=='traveling'&&now>=last+interval)return initial;
  return Math.max(0,Math.min(initial,stored));
 }
 export function refreshMerchantStock(campaign:Campaign):Campaign {
+ if(settlementTier(campaign)==='traveling')return campaign;
  const now=Math.max(0,campaign.elapsedMinutes??0);
  const remaining={...campaign.merchantStockRemaining};
  const restocked={...campaign.merchantStockRestockedAt};
