@@ -1151,6 +1151,12 @@ test('iPhone Dasahi opening offers a voluntary waterfront store with readable di
  await input.fill('Can I take a look at your goods?');
  await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
  await expect(page.getByLabel('Dasahi marketplace')).toBeVisible();
+ const inventory=page.getByRole('region',{name:'Merchant inventory'});
+ await expect(inventory).toHaveCSS('overflow-y','auto');
+ await expect(inventory).toHaveCSS('background-color','rgb(50, 44, 36)');
+ expect(await inventory.evaluate(list=>list.scrollHeight>list.clientHeight)).toBe(true);
+ await inventory.focus();
+ await expect(inventory).toBeFocused();
  await page.getByLabel('Search merchandise').fill('Torch');
  const torch=page.getByLabel('Torch',{exact:true});
  await expect(torch.getByLabel('Torch availability')).toContainText(/Torch.*\d+ owned · \d+ in stock/);

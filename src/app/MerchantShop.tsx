@@ -48,8 +48,8 @@ export function MerchantShop({campaign,saving,onClose,onPrepare,onSettle,onDiscu
   <div className="rounded-lg border border-gold/25 bg-ink/50 p-3 text-sm" aria-label="Current wallet"><span className="text-parchment/70">Your money</span><strong className="float-right text-gold">{formatFrontierPrice(funds)}</strong></div>
   <div className="space-y-2"><h3 className="font-semibold">Available equipment</h3>
   <input aria-label="Search merchandise" placeholder="Search items" value={search} onChange={e=>setSearch(e.target.value)} className="w-full rounded-lg border border-white/25 bg-ink p-2 text-sm"/>
-  <div className="max-h-[65vh] overflow-y-auto rounded-lg border border-white/15" aria-label="Merchant inventory">
-   {grouped.map(([group,entries])=><section key={group} aria-label={group} className="border-b border-white/20"><h4 className="sticky top-0 z-10 bg-panel px-3 py-2 font-semibold text-gold">{group} ({entries?.length??0})</h4>
+  <div className="max-h-[65vh] overflow-y-auto rounded-lg border border-gold/50 bg-[#322c24] focus-visible:outline focus-visible:outline-2 focus-visible:outline-gold" role="region" aria-label="Merchant inventory" tabIndex={0}>
+   {grouped.map(([group,entries])=><section key={group} aria-label={group} className="border-b border-white/20"><h4 className="sticky top-0 z-10 bg-[#3d3428] px-3 py-2 font-semibold text-gold">{group} ({entries?.length??0})</h4>
    {entries?.map(({item,quantity,unit,stock,owned})=><div key={item.id} className="space-y-1 border-t border-white/10 px-3 py-2" aria-label={item.name}>
     <div className="flex items-baseline justify-between gap-x-2 text-sm" aria-label={item.name+' availability'}>
      <div className="flex min-w-0 flex-wrap items-baseline gap-x-2">
