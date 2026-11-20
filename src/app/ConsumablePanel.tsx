@@ -17,7 +17,7 @@ export function ConsumablePanel({campaign,saving,onUse}:{campaign:Campaign;savin
   campaign.companionEncounter.groundSupplies??[]:[];
  const recoverable=recovery.find(supply=>supply.id===recoveryId);
  const canTrack=!!campaign.characterIdentity&&campaign.companionEncounter?.status!=='active'&&!campaign.provisionTracking;
- if(!canTrack&&!campaign.provisionTracking&&!recovery.length&&!owned.length&&!antitoxinRemaining&&!campaign.companionEncounter?.basicPoison&&!lights.length)return null;
+ if(!canTrack&&!campaign.provisionTracking&&!recovery.length&&!owned.length&&!antitoxinRemaining&&!campaign.companionEncounter?.basicPoison&&!campaign.companionEncounter?.groundOil?.length&&!lights.length)return null;
  const item=owned.find(g=>g.name===name),battle=campaign.companionEncounter,actor=battle?.participants.nighthawk,targets=eligibleKitTargets(campaign);
  const selected=targets.find(t=>t.id===target),recipient=battle?.participants[target]??battle?.objects?.[target];
  const throwing=name==='Oil'||name==='Alchemist’s Fire'||name==='Acid'||name==='Holy Water';
@@ -53,8 +53,12 @@ export function ConsumablePanel({campaign,saving,onUse}:{campaign:Campaign;savin
   const burning=campaign.equipmentLights?.[source]?.startedAt!==undefined;
   return <p key={source} role="status">{source}: {burning?`${rules.bright} ft bright, ${rules.dim} ft additional dim`:'extinguished'} · {remaining} min remaining</p>;
  })}
+ {battle?.status==='active'&&battle.mode==='unified'&&!!battle.groundOil?.length&&<details className="rounded border border-white/20 p-2"><summary>Ground Oil — DM-confirmed ignition</summary>
+ {battle.groundOil.filter(o=>o.ignitedRound===undefined&&battle.round<o.expiresRound).map(o=><div key={o.id} className="flex items-center justify-between gap-2 py-2"><span>Oil at ({o.x}, {o.y})</span><button type="button" disabled={saving||busy} className="rounded bg-amber-700 px-3 py-2" onClick={async()=>{setBusy(true);setError('');try{if(!await onUse({name:'Oil',requestId:crypto.randomUUID(),confirmed:true,expectedQuantity:0,expectedElapsedMinutes:campaign.elapsedMinutes??0,expectedEncounterId:battle.id,expectedRound:battle.round,expectedTurnIndex:battle.turnIndex,igniteOilId:o.id}))setError('Ignition rejected; refresh encounter state.')}catch(e){setError(String(e))}finally{setBusy(false)}}}>Confirm DM ignition</button></div>)}
+ </details>}
  {lightName&&<p className="text-sm">{extinguishing?'Extinguish the lamp with Utilize. Unused oil is retained.':`Light ${lightName} with an owned Tinderbox as a Bonus Action.${lightName==='Lamp'&&!lightRemaining?' A new burn uses one flask of Oil.':''}`}</p>}
  <label className="block text-sm">Supply<select aria-label="Choose consumable" className="mt-1 block w-full rounded bg-slate-900 p-2" value={name??''} onChange={e=>{setName(e.target.value as ConsumableName||null);setTarget('');setAcidSave('');setAcidDamage('');setCreatureType('');setRopeCheck('');setWaterChoice('drink');setGroundX('');setGroundY('');setLevel(false);setSpillOil(false);pending.current=null;setError('')}}><option value="">Choose a supply</option>{owned.map(g=><option key={g.name} value={g.name}>{g.name} ({g.quantity}{g.name==="Healer's Kit"?", "+(campaign.healerKitUsesRemaining??10)+" uses in current kit":''})</option>)}</select></label>
+ {name==='Oil'&&<label className="block text-sm"><input type="checkbox" checked={spillOil} onChange={e=>{setSpillOil(e.target.checked);pending.current=null}}/> Spill Oil on an adjacent 5-foot square instead of throwing at a target</label>}
  {deploying&&<fieldset className="space-y-2">
   <label>Ground X<input type="number" className="w-full bg-slate-900" value={groundX} onChange={e=>{setGroundX(e.target.value);pending.current=null}}/></label>
   <label>Ground Y<input type="number" className="w-full bg-slate-900" value={groundY} onChange={e=>{setGroundY(e.target.value);pending.current=null}}/></label>
