@@ -6,7 +6,6 @@ export function MagicItemCompendium({campaignId}:{campaignId:string|null}){
  const [search,setSearch]=useState('');
  const [category,setCategory]=useState('All');
  const [rarity,setRarity]=useState('All');
- const [expanded,setExpanded]=useState<string|null>(null);
  useEffect(()=>setWanted(campaignId?readMagicWishlist(campaignId):[]),[campaignId]);
  const categories=useMemo(()=>['All',...new Set(MAGIC_ITEMS.map(item=>item.category))],[]);
  const rarities=['All','Common','Uncommon','Rare','Very Rare','Legendary','Artifact','Varies'];
@@ -24,7 +23,16 @@ export function MagicItemCompendium({campaignId}:{campaignId:string|null}){
   <input aria-label="Search magic items" value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search magic items" className="w-full rounded-lg border border-white/20 bg-panel p-3 text-base"/>
   <div className="grid grid-cols-2 gap-2"><label className="text-xs">Category<select aria-label="Magic item category" value={category} onChange={e=>setCategory(e.target.value)} className="mt-1 w-full rounded-lg border border-white/20 bg-panel p-2 text-base">{categories.map(c=><option key={c}>{c}</option>)}</select></label><label className="text-xs">Rarity<select aria-label="Magic item rarity" value={rarity} onChange={e=>setRarity(e.target.value)} className="mt-1 w-full rounded-lg border border-white/20 bg-panel p-2 text-base">{rarities.map(r=><option key={r}>{r}</option>)}</select></label></div>
   <p className="text-xs text-parchment/60">{filtered.length} items</p>
-  {filtered.map(item=><article key={item.id} className="rounded-xl border border-white/15 bg-panel p-3"><div className="flex items-start gap-3"><button type="button" disabled={!campaignId} aria-label={wanted.includes(item.id)?`Remove ${item.name} from Wish List`:`Add ${item.name} to Wish List`} aria-pressed={wanted.includes(item.id)} onClick={()=>toggle(item.id)} className="rounded-lg border border-white/20 px-3 py-2 text-xl text-gold disabled:opacity-40">{wanted.includes(item.id)?'♥':'♡'}</button><div className="min-w-0 flex-1"><button type="button" aria-expanded={expanded===item.id} onClick={()=>setExpanded(expanded===item.id?null:item.id)} className="text-left font-semibold text-parchment underline decoration-white/20 underline-offset-4">{item.name}</button><p className="mt-1 text-xs text-parchment/65">{item.rarity} · {item.category}{item.attunement?' · Attunement':''}</p>{expanded===item.id&&<p className="mt-3 whitespace-pre-wrap text-sm text-parchment/85">{item.description}</p>}</div></div></article>)}
+  {filtered.map(item=><article key={item.id} className="rounded-xl border border-white/15 bg-panel p-3">
+   <div className="flex items-start gap-3">
+    <button type="button" disabled={!campaignId} aria-label={wanted.includes(item.id)?`Remove ${item.name} from Wish List`:`Add ${item.name} to Wish List`} aria-pressed={wanted.includes(item.id)} onClick={()=>toggle(item.id)} className="rounded-lg border border-white/20 px-3 py-2 text-xl text-gold disabled:opacity-40">{wanted.includes(item.id)?'♥':'♡'}</button>
+    <div className="min-w-0 flex-1">
+     <h3 className="font-semibold text-parchment">{item.name}</h3>
+     <p className="mt-1 text-xs text-parchment/65">{item.rarity} · {item.category}{item.attunement?' · Attunement':''}</p>
+    </div>
+   </div>
+   <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-relaxed text-parchment/85">{item.description}</p>
+  </article>)}
   {filtered.length===0&&<p className="py-8 text-center text-sm text-parchment/70">No matching items.</p>}
   <p className="text-xs text-parchment/50">Includes SRD 5.2.1 material by Wizards of the Coast LLC (CC BY 4.0), plus original brief summaries of additional 2024 DMG items. Non-SRD summaries are for discovery, not complete rules. For authoritative item mechanics, consult the 2024 DMG on D&D Beyond.</p>
  <a className="text-sm underline text-gold" href="https://www.dndbeyond.com/sources/dnd/dmg-2024" target="_blank" rel="noopener noreferrer">Official 2024 Dungeon Master’s Guide</a>
