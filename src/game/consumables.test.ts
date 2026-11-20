@@ -445,3 +445,16 @@ describe('equipment rules follow-up',()=>{
   expect(current.provisionTracking?.foodLevels).toBe(1);
  });
 });
+
+describe('persisted equipment light clock boundaries',()=>{
+ it('never increases a light duration when a saved start time is in the future',()=>{
+  const c={...base(),elapsedMinutes:100,equipmentLights:{Torch:{remainingSeconds:120,startedAt:6060}}} as unknown as Campaign;
+  expect(equipmentLightRemaining(c,'Torch')).toBe(120);
+  expect(equipmentLightRemaining(advanceConsumableTime(c,2),'Torch')).toBe(120);
+  expect(equipmentLightRemaining(advanceConsumableTime(c,3),'Torch')).toBe(60);
+ });
+ it('clamps malformed persisted duration to the SRD maximum',()=>{
+  const c={...base(),equipmentLights:{Candle:{remainingSeconds:999999}}} as unknown as Campaign;
+  expect(equipmentLightRemaining(c,'Candle')).toBe(3600);
+ });
+});
