@@ -415,6 +415,7 @@ export function standCompanionFromProne(campaign:Campaign,actorId:string):Campai
 export function resolveGroundOilHazard(campaign:Campaign,actorId:string,entered:boolean):Campaign{
  const battle=encounter(campaign),actor=battle.participants[actorId];
  if(battle.status!=='active'||battle.mode!=='unified'||!actor||actor.hp<=0)return campaign;
+ if(battle.groundOil?.some(o=>o.damagedActorsThisTurn?.includes(actorId)))return campaign;
  const slicks=(battle.groundOil??[]).filter(o=>o.ignitedRound!==undefined&&
    (battle.round<o.ignitedRound!+2||battle.round===o.ignitedRound!+2&&battle.turnIndex<=o.ignitedTurn!)&&
    actor.x===o.x&&actor.y===o.y&&!o.damagedActorsThisTurn?.includes(actorId));
@@ -442,6 +443,7 @@ export function moveCompanion(campaign:Campaign,actorId:string,x:number,y:number
  const movementCost=traversedSteps*5*(actor.conditions.includes('Prone')?2:1);
  if(movementCost>actor.speedFeet+actor.dashFeet-actor.movementSpentFeet)throw Error('Move exceeds remaining movement');
  if(Object.entries(battle.participants).some(([id,p])=>id!==actorId&&p.hp>0&&p.x===destination.x&&p.y===destination.y))throw Error('Square occupied');
+ if(traversedSteps>1&&route.slice(1,traversedSteps+1).some(cell=>battle.groundOil?.some(o=>o.ignitedRound!==undefined&&o.x===cell.x&&o.y===cell.y)))throw Error('Enter burning Oil one 5-foot step at a time');
  const supply=groundEntry(battle,actorId,route.slice(0,traversedSteps+1),groundSave);
  const moved=save(campaign,revealRogueOnVisibilityChange({...battle,participants:{...battle.participants,[actorId]:{...actor,x:destination.x,y:destination.y,movementSpentFeet:actor.movementSpentFeet+movementCost,...(actor.rogueDazeTurns!==undefined&&movementCost>0?{rogueDazeChoice:'movement' as const}:{}),rogueMovedThisTurn:actor.rogueMovedThisTurn||movementCost>0,rogueHidden:actorId==='nighthawk'&&movementCost>0&&Object.values(battle.participants).some(enemy=>enemy.actorKind==='enemy'&&enemy.hp>0&&companionLineOfSight(battle,enemy,destination))?false:actor.rogueHidden}},pendingOpportunity:candidates.length?{moverId:actorId,attackerIds:candidates,from:interrupt?{x:firstTrigger.from.x,y:firstTrigger.from.y}:{x:actor.x,y:actor.y},to:interrupt?{x:firstTrigger.to.x,y:firstTrigger.to.y}:{x,y},...(interrupt?{destination:{x,y}}:{})}:undefined,log:[...battle.log,actorId+' moved to '+destination.x+','+destination.y+(interrupt?' · interrupted before leaving reach toward '+firstTrigger.to.x+','+firstTrigger.to.y:candidates.length?' · potential opportunity attackers: '+candidates.join(', '):'')]}));
  return resolveGroundOilHazard(resolveGroundEntry(moved,actorId,supply,groundSave),actorId,true);
@@ -494,7 +496,7 @@ export function moveCompanionForced(campaign:Campaign,actorId:string,x:number,y:
  const moved=save(campaign,revealRogueOnVisibilityChange({...battle,
   participants:{...battle.participants,[actorId]:{...actor,...destination}},
   log:[...battle.log,actorId+' was forcibly moved to '+x+','+y+' (DM verified)']}));
- return resolveGroundEntry(moved,actorId,supply,groundSave);
+ return resolveGroundOilHazard(resolveGroundEntry(moved,actorId,supply,groundSave),actorId,true);
 }
 
 export function bindCompanionWithRope(campaign:Campaign,targetId:string):Campaign{
