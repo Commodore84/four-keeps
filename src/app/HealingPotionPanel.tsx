@@ -19,7 +19,7 @@ export function HealingPotionPanel({campaign,saving,onUse}:{campaign:Campaign;sa
  const canUse=target==='nighthawk'?typeof hp==='number'&&hp>0&&hp<(max??0):!!recipient&&targets.some(t=>t.id===target);
  return <section aria-label="Healing potions" className="rounded-xl border border-white/20 p-3 space-y-2">
   <h3 className="font-semibold">Healing potions</h3>
-  <p className="text-xs text-parchment/70">Current HP: {hp??'—'} / {max??'—'}. Drinking uses a Bonus Action; administering to an adjacent ally uses an Action.</p>
+  <p className="text-xs text-parchment/70">Current HP: {hp??'—'} / {max??'—'}. Drinking or administering to an adjacent ally uses a Bonus Action.</p>
   <label className="block text-sm">Potion
    <select aria-label="Choose healing potion" className="mt-1 block w-full rounded bg-slate-900 p-2" value={selected??''} onChange={e=>{setSelected(isHealingPotion(e.target.value)?e.target.value:null);pending.current=null;setError('')}}>
     <option value="">Select a potion</option>
@@ -35,7 +35,7 @@ export function HealingPotionPanel({campaign,saving,onUse}:{campaign:Campaign;sa
       const ok=await onUse({name:selected,confirmed:true,expectedQuantity:item.quantity,expectedHP:hp, targetId:target, ...(recipient?{expectedTargetHP:recipient.hp,expectedTargetPosition:{x:recipient.x,y:recipient.y}}:{}),...(battle?.status==='active'?{expectedTurnIndex:battle.turnIndex,expectedRound:battle.round,expectedActorPosition:{x:battle.participants.nighthawk.x,y:battle.participants.nighthawk.y}}:{}),requestId});
       if(ok){pending.current=null;setSelected(null);setTarget('nighthawk')}else setError('Save failed. Retry the same confirmation.');
     }catch(e){setError(String(e))}finally{setBusy(false)}
-   }}>Confirm drink potion</button>
+   }}>{target==='nighthawk'?'Confirm drink potion':'Confirm administer potion'}</button>
    <button type="button" disabled={busy} className="rounded border border-white/20 px-3 py-2" onClick={()=>{pending.current=null;setSelected(null);setTarget('nighthawk');setError('')}}>Cancel</button>
   </div>}
   {error&&<p role="alert" className="text-sm">{error}</p>}
