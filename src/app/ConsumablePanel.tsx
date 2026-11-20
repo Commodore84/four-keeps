@@ -9,10 +9,14 @@ export function ConsumablePanel({campaign,saving,onUse}:{campaign:Campaign;savin
  const [creatureType,setCreatureType]=useState<HolyWaterTargetType|''>('');
   const [ropeCheck,setRopeCheck]=useState(''),[waterChoice,setWaterChoice]=useState<'drink'|'refill'>('drink');
  const [groundX,setGroundX]=useState(''),[groundY,setGroundY]=useState(''),[level,setLevel]=useState(false);
+ const [recoveryId,setRecoveryId]=useState(''),[recoveryAccess,setRecoveryAccess]=useState(false);
  const pending=useRef<string|null>(null);
  const antitoxinRemaining=antitoxinSecondsRemaining(campaign);
  const lights=(Object.keys(equipmentLightRules) as EquipmentLight[]).filter(light=>equipmentLightRemaining(campaign,light)>0);
- if(!owned.length&&!antitoxinRemaining&&!campaign.companionEncounter?.basicPoison&&!lights.length)return null;
+ const recovery=campaign.companionEncounter?.status==='completed'?
+  campaign.companionEncounter.groundSupplies??[]:[];
+ const recoverable=recovery.find(supply=>supply.id===recoveryId);
+ if(!recovery.length&&!owned.length&&!antitoxinRemaining&&!campaign.companionEncounter?.basicPoison&&!lights.length)return null;
  const item=owned.find(g=>g.name===name),battle=campaign.companionEncounter,actor=battle?.participants.nighthawk,targets=eligibleKitTargets(campaign);
  const selected=targets.find(t=>t.id===target),recipient=battle?.participants[target]??battle?.objects?.[target];
  const throwing=name==='Oil'||name==='Alchemist’s Fire'||name==='Acid'||name==='Holy Water';
@@ -79,6 +83,25 @@ export function ConsumablePanel({campaign,saving,onUse}:{campaign:Campaign;savin
   setBusy(true);setError('');
   try{const ok=await onUse({name:item.name as ConsumableName,requestId:pending.current,confirmed:true,expectedQuantity:item.quantity,expectedElapsedMinutes:campaign.elapsedMinutes??0,expectedWeaponId:poisonWeapon?.id,expectedSupplyState:JSON.stringify(supplyState),supplyOperation:waterChoice,ropeCheck:Number(ropeCheck),...(deploying?{ground:{x:Number(groundX),y:Number(groundY),level}}:{}),...(lightName?{lightOperation:extinguishing?'extinguish' as const:'light' as const,expectedLight:JSON.stringify(light??null),expectedFuelQuantity:oil?.quantity}:{}),...(throwing?{targetId:target,expectedTargetHP:recipient?.hp,expectedTargetPosition:recipient?{x:recipient.x,y:recipient.y}:undefined,throwRolls:{saveTotal:Number(acidSave),damage:Number(acidDamage),targetType:name==='Holy Water'?creatureType||undefined:undefined}}:name==="Healer's Kit"?{expectedKitUses:campaign.healerKitUsesRemaining??10,targetId:target,expectedTargetHP:recipient?.hp,expectedTargetPosition:recipient?{x:recipient.x,y:recipient.y}:undefined}:{targetId:'nighthawk'}),...(battle?.status==='active'?{expectedEncounterId:battle.id,expectedTurnIndex:battle.turnIndex,expectedRound:battle.round,expectedActorPosition:actor?{x:actor.x,y:actor.y}:undefined}:{})});if(ok)clear();else setError('Use rejected; refresh and check the current state.')}catch(e){setError(String(e))}finally{setBusy(false)}
  }} className="rounded bg-amber-700 px-3 py-2 disabled:opacity-40">Confirm use</button><button type="button" onClick={clear}>Cancel</button></div>}
+ {recovery.length>0&&<fieldset className="space-y-2">
+  <legend>Recover deployed supplies</legend>
+  <label>Deployed supply<select className="block w-full bg-slate-900" value={recoveryId} onChange={e=>{setRecoveryId(e.target.value);setRecoveryAccess(false)}}>
+   <option value="">Choose a deployment</option>
+   {recovery.map(supply=><option value={supply.id} key={supply.id}>{supply.name} at ({supply.x}, {supply.y})</option>)}
+  </select></label>
+  {recoverable&&<><label className="block"><input type="checkbox" checked={recoveryAccess} onChange={e=>setRecoveryAccess(e.target.checked)}/> DM confirms access to the deployed supply</label>
+   <button type="button" disabled={saving||busy||!recoveryAccess} className="rounded bg-amber-700 px-3 py-2 disabled:opacity-40" onClick={async()=>{
+    setBusy(true);setError('');
+    try{
+     const ok=await onUse({name:recoverable.name,requestId:crypto.randomUUID(),confirmed:true,
+      expectedQuantity:owned.find(entry=>entry.name===recoverable.name)?.quantity??0,
+      expectedElapsedMinutes:campaign.elapsedMinutes??0,expectedEncounterId:battle?.id,
+      recoverGround:{id:recoverable.id,accessConfirmed:recoveryAccess}});
+     if(ok){setRecoveryId('');setRecoveryAccess(false)}
+     else setError('Recovery rejected; refresh and check the current state.');
+    }catch(error){setError(String(error))}finally{setBusy(false)}
+   }}>Recover (10 minutes)</button></>}
+ </fieldset>}
  {error&&<p role="alert">{error}</p>}
  </section>;
 }

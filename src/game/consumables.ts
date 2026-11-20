@@ -40,6 +40,7 @@ export interface ConsumableRequest {
  expectedEncounterId?:string;expectedTurnIndex?:number;expectedRound?:number;expectedActorPosition?:{x:number;y:number};
  throwRolls?:{saveTotal:number;damage:number;targetType?:HolyWaterTargetType};
  lightOperation?:'light'|'extinguish';expectedLight?:string;expectedFuelQuantity?:number;
+ recoverGround?:{id:string;accessConfirmed:boolean};
  ground?:{x:number;y:number;level:boolean};
  supplyOperation?:'drink'|'refill';expectedSupplyState?:string;ropeCheck?:number;
  expectedWeaponId?:string;
@@ -62,6 +63,23 @@ export function useOwnedConsumable(c:Campaign,r:ConsumableRequest):Campaign{
  if((c.elapsedMinutes??0)!==r.expectedElapsedMinutes)throw Error('Stale campaign time');
  if(c.combat?.status==='initiative-set'||c.combat?.status==='awaiting-initiative')throw Error('Legacy combat unsupported');
  const b=c.companionEncounter,active=b?.status==='active',actor=active?b.participants.nighthawk:undefined;
+ if(r.recoverGround){
+  const supply=b?.groundSupplies?.find(entry=>entry.id===r.recoverGround!.id);
+  if(!groundSupply||b?.status!=='completed'||b.mode!=='unified'||!supply||supply.name!==name||
+     b.id!==r.expectedEncounterId||!r.recoverGround.accessConfirmed)
+   throw Error('Confirm access to a deployed supply in the completed encounter');
+  const ledger=c.inventoryLedger;
+  const gear=ledger?.gear;
+  const item=gear?.find(entry=>entry.name===name);
+  if(!ledger||!gear||(item?.quantity??0)!==r.expectedQuantity)throw Error('Stale recovery inventory');
+  const timed=advanceConsumableTime(c,10);
+  return {...timed,
+   consumableUseIds:[...(c.consumableUseIds??[]),r.requestId],
+   companionEncounter:{...b,groundSupplies:b.groundSupplies!.filter(entry=>entry.id!==supply.id),
+    log:[...b.log,name+' recovered after 10 minutes']},
+   inventoryLedger:{...ledger,gear:item?gear.map(entry=>entry===item?{...entry,quantity:entry.quantity+1}:entry)
+    :[...gear,{name,quantity:1}]},updatedAt:new Date().toISOString()};
+ }
  if(active&&(b.mode!=='unified'||b.order[b.turnIndex]!=='nighthawk'||!actor))throw Error('Unsupported encounter turn');
  if((active?b.id:undefined)!==r.expectedEncounterId||!active&&(r.expectedRound!==undefined||r.expectedTurnIndex!==undefined))throw Error('Stale encounter');
  if(active&&(r.expectedRound!==b.round||r.expectedTurnIndex!==b.turnIndex))throw Error('Stale encounter turn');

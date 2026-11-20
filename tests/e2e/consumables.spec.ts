@@ -257,3 +257,34 @@ test('iPhone rations, waterskin and rope keep verified supply changes after relo
  },id);
  expect(saved).toEqual({provisions:{day:0,rations:1,waterPints:1},pints:3,knotted:true});
 });
+
+test('iPhone recovers Caltrops from a completed encounter and persists inventory and time',async({page})=>{
+ const id=await createCampaign(page,'Recover supplies');
+ await page.evaluate(async id=>{
+  const {localCampaignStorage}=await import('/src/game/storage.ts');
+  const {startUnifiedEncounter,finishCompanionEncounter}=await import('/src/game/companionEncounter.ts');
+  const current=await localCampaignStorage.get(id);
+  if(!current?.inventoryLedger)throw Error('Campaign fixture was not saved');
+  const encounter=startUnifiedEncounter({...current,inventoryLedger:{...current.inventoryLedger,gear:[]}},
+   {nighthawk:20},{nighthawk:{x:2,y:2}},{});
+  const completed=finishCompanionEncounter(encounter);
+  await localCampaignStorage.save({...completed,companionEncounter:{...completed.companionEncounter!,
+   groundSupplies:[{id:'caltrops-test',name:'Caltrops',x:2,y:1}]}});
+ },id);
+ await page.reload();
+ await page.getByRole('button',{name:'Campaigns',exact:true}).click();
+ await page.getByRole('button',{name:'Continue Adventure'}).click();
+ const panel=page.getByRole('region',{name:'Adventuring consumables'});
+ await panel.getByLabel('Deployed supply').selectOption('caltrops-test');
+ await panel.getByLabel('DM confirms access to the deployed supply').check();
+ await panel.getByRole('button',{name:'Recover (10 minutes)'}).click();
+ await expect(panel.getByLabel('Choose consumable')).toContainText('Caltrops (1)');
+ await page.reload();
+ const saved=await page.evaluate(async id=>{
+  const {localCampaignStorage}=await import('/src/game/storage.ts');
+  const current=await localCampaignStorage.get(id);
+  return {minutes:current?.elapsedMinutes,placements:current?.companionEncounter?.groundSupplies?.length,
+   quantity:current?.inventoryLedger?.gear.find(item=>item.name==='Caltrops')?.quantity};
+ },id);
+ expect(saved).toEqual({minutes:110,placements:0,quantity:1});
+});

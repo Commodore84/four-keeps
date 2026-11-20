@@ -367,3 +367,21 @@ describe('field supplies',()=>{
   }
  });
 });
+
+describe('recover deployed supplies',()=>{
+ it.each(['Ball Bearings','Caltrops'] as const)('recovers %s once and advances ten minutes',(name)=>{
+  const source=encounter(),battle=source.companionEncounter!;
+  const deployed={...source,companionEncounter:{...battle,id:'recovery-encounter',status:'completed' as const,
+   groundSupplies:[{id:'deployment',name,x:2,y:1}]}};
+  const request={name,requestId:'recovery',confirmed:true,expectedQuantity:0,expectedElapsedMinutes:100,
+   expectedEncounterId:'recovery-encounter',recoverGround:{id:'deployment',accessConfirmed:true}};
+  expect(()=>useOwnedConsumable(deployed,{...request,recoverGround:{...request.recoverGround,accessConfirmed:false}})).toThrow('Confirm access');
+  expect(()=>useOwnedConsumable({...deployed,companionEncounter:{...deployed.companionEncounter,status:'active'}},request)).toThrow('completed encounter');
+  const recovered=useOwnedConsumable(deployed,request);
+  expect(recovered.elapsedMinutes).toBe(110);
+  expect(recovered.companionEncounter?.groundSupplies).toEqual([]);
+  expect(recovered.inventoryLedger?.gear.find(item=>item.name===name)?.quantity).toBe(1);
+  expect(useOwnedConsumable(recovered,request)).toBe(recovered);
+  expect(()=>useOwnedConsumable(recovered,{...request,requestId:'replay',expectedElapsedMinutes:110})).toThrow('Confirm access');
+ });
+});
