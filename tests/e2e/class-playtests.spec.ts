@@ -664,7 +664,7 @@ test('new Rogue starts at Frontier Village, buys supplies, and sees persisted Pl
  await expect(dagger.getByLabel('Dagger availability')).toContainText(/Dagger.*\d+ owned · \d+ in stock/);
  await dagger.locator('details').getByText('Item details').click();
  await expect(dagger.getByText('Simple weapon proficiency',{exact:false})).toBeVisible();
- await expect(dagger.getByText('1d4 Piercing damage',{exact:false})).toBeVisible();
+ await expect(dagger.getByText('1d4 Piercing damage',{exact:false}).first()).toBeVisible();
  await expect(shop.getByLabel('Current wallet')).toBeVisible();
  await expect(shop.getByLabel('City supplier orders')).toBeVisible();
  expect((await saved(page)).pendingMerchantSupplyOrder).toBeUndefined();
@@ -1165,7 +1165,8 @@ test('iPhone Dasahi opening offers a voluntary waterfront store with readable di
  await page.getByLabel('Search merchandise').fill('Torch');
  const torch=page.getByLabel('Torch',{exact:true});
  await expect(torch.getByLabel('Torch availability')).toContainText(/Torch.*\d+ owned · \d+ in stock/);
- await expect(torch.locator('details')).toHaveCount(0);
+ await expect(torch.locator('details')).toHaveCount(1);
+ await torch.locator('details > summary').click();
  await expect(torch.getByText('Bright Light out to 20 feet',{exact:false})).toBeVisible();
  await expect(torch.getByText('1 lb.',{exact:true})).toBeVisible();
  await expect(torch.getByRole('button',{name:'Add Torch'})).toBeEnabled();
