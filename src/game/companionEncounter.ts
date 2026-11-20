@@ -24,6 +24,8 @@ export interface CompanionEncounter {
  objects?:Record<string,{x:number;y:number;hp:number;oilExpires?:{round:number;turnIndex:number}}>;
  basicPoison?:{weaponId:string;expiresRound:number};
  groundSupplies?:{id:string;name:'Ball Bearings'|'Caltrops';x:number;y:number}[];
+ /** Oil spilled on a five-foot square; ignition is explicitly DM-verified. */
+ groundOil?:{id:string;x:number;y:number;expiresRound:number;ignitedRound?:number;ignitedTurn?:number;lastDamageRound?:number;lastDamageTurn?:number}[];
  groundEntries?:string[];
  burningCreatures?:string[];
  wizardHoldPersonTargets?:string[];
@@ -966,6 +968,15 @@ export function throwConsumable(campaign: Campaign, name: 'Acid' | 'Holy Water' 
  const current=encounter(damaged);
  return save(damaged,{...current,burningCreatures:[...new Set([...(current.burningCreatures??[]),targetId])],
   log:[...current.log,targetId+' is Burning']});
+}
+
+/** DM-verified ignition of an existing oil slick; no implicit ignition from unrelated damage. */
+export function igniteGroundOil(campaign:Campaign,id:string):Campaign{
+ const battle=activeActor(campaign,'nighthawk');
+ if(battle.mode!=='unified')throw Error('Ground Oil requires unified combat');
+ const slick=battle.groundOil?.find(o=>o.id===id);
+ if(!slick||slick.ignitedRound!==undefined||battle.round>=slick.expiresRound)throw Error('No unignited ground Oil remains');
+ return save(campaign,{...battle,groundOil:battle.groundOil!.map(o=>o.id===id?{...o,ignitedRound:battle.round,ignitedTurn:battle.turnIndex}:o),log:[...battle.log,'DM verified ignition of ground Oil '+id]});
 }
 
 export function basicPoisonWeapon(campaign:Campaign){
