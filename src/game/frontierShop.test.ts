@@ -1,4 +1,5 @@
 import {describe,it,expect} from 'vitest';
+import {merchantItemDescription,merchantItemFacts} from './merchantItemDetails';
 import {newCampaign} from './campaign';
 import {beginAdventureSession} from './adventureSession';
 import {buyFrontierItem,frontierShopStock,frontierMerchantContext,formatFrontierPrice,parseFrontierPurchase,prepareMerchantPurchase,prepareMerchantCart,settleMerchantPurchase,cityShopStock,merchantCatalogFor,availableMerchants,merchantStockKey,merchantStockKeyForCampaign,merchantInitialStock,merchantRestockIntervalMinutes,walletCopper,remainingMerchantStock,merchantCatalog,isMerchantBrowseRequest,approveMerchantDiscount,isMerchantPurchaseRequest,classifyMerchantIntent,merchantNegotiationTarget,beginMerchantNegotiation,resolveMerchantNegotiation,merchantDiscountDC,beginCartNegotiation,resolveCartNegotiation} from './frontierShop';
@@ -382,5 +383,18 @@ describe('merchant negotiation interruption and transaction guards',()=>{
   const stale={...resolved,inventoryLedger:{...resolved.inventoryLedger!,currency:{GP:0,SP:0,CP:0,EP:0,PP:0}}};
   expect(()=>settleMerchantPurchase(stale,'cart-guard',true)).toThrow('money');
   expect(stale.pendingMerchantPurchase).toBeTruthy();
+ });
+});
+
+describe('shop item details',()=>{
+ it('provides a description and facts for each purchasable item',()=>{
+  const items=[...cityShopStock,...frontierShopStock];
+  expect(items.filter(item=>!merchantItemDescription(item)).map(item=>item.id)).toEqual([]);
+  expect(items.every(item=>merchantItemFacts(item).length>0)).toBe(true);
+ });
+ it('keeps torch rules available alongside weight',()=>{
+  const torch=cityShopStock.find(item=>item.id==='torch')!;
+  expect(merchantItemDescription(torch)).toContain('Bright Light out to 20 feet');
+  expect(merchantItemFacts(torch)).toContain('1 lb.');
  });
 });
