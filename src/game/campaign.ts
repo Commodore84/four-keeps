@@ -12,6 +12,7 @@ export interface Campaign {
   healingPotionUseIds?:string[];
   consumableUseIds?:string[];
   antitoxinUntilMinute?:number;
+  antitoxinCombatSeconds?:number;
   healerKitUsesRemaining?:number;
   schemaVersion: 1;
   encounterJournal?: EncounterRecord[];

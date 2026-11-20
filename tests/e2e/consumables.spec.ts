@@ -70,3 +70,92 @@ test('iPhone healer kit stabilizes adjacent ally and preserves nine remaining us
  const result=await page.evaluate(async id=>{const db=await new Promise<IDBDatabase>(resolve=>{const r=indexedDB.open('four-keeps-local',1);r.onsuccess=()=>resolve(r.result)});const c=await new Promise<any>(resolve=>{const r=db.transaction('campaigns').objectStore('campaigns').get(id);r.onsuccess=()=>resolve(r.result)});db.close();return {uses:c.healerKitUsesRemaining,quantity:c.inventoryLedger.gear[1].quantity,stable:c.companionEncounter.participants.ally.deathSaves.stable,hp:c.companionEncounter.participants.ally.hp,action:c.companionEncounter.participants.nighthawk.actionUsed}},id);
  expect(result).toEqual({uses:9,quantity:1,stable:true,hp:0,action:true});
 });
+
+test('iPhone encounter antitoxin affects Poisoned saves after reload',async({page})=>{
+ const id=await createCampaign(page,'Antitoxin encounter');
+ await page.evaluate(async id=>{
+  const {localCampaignStorage}=await import('/src/game/storage.ts');
+  const {startUnifiedEncounter}=await import('/src/game/companionEncounter.ts');
+  const current=await localCampaignStorage.get(id);
+  if(!current)throw Error('Campaign fixture was not saved');
+  const battle=startUnifiedEncounter(current,{nighthawk:20},{nighthawk:{x:2,y:2}},{});
+  await localCampaignStorage.save({...battle,adventureSession:{status:'encounter',site:'watchtower',
+   characterSource:'campaign-character',visited:['watchtower'],interactions:[]}});
+ },id);
+ const reopen=async()=>{
+  await page.reload();
+  await page.getByRole('button',{name:'Campaigns',exact:true}).click();
+  await page.getByRole('button',{name:'Continue Adventure'}).click();
+ };
+ await reopen();
+ const panel=page.getByRole('region',{name:'Adventuring consumables'});
+ await panel.getByLabel('Choose consumable').selectOption('Antitoxin');
+ await panel.getByRole('button',{name:'Confirm use'}).click();
+ await expect(panel).toContainText('Antitoxin (1)');
+ await reopen();
+ await page.getByLabel('Encounter save purpose').selectOption('avoid-poisoned');
+ await page.getByLabel('Encounter save ability').selectOption('Constitution');
+ await page.getByLabel('Encounter save total',{exact:true}).fill('5');
+ await page.getByLabel('Encounter second save total').fill('19');
+ await page.getByLabel('Encounter save DC').fill('15');
+ await page.getByRole('button',{name:'Resolve condition save'}).click();
+ await expect(page.getByLabel('Companion last event')).toContainText('success (19)');
+ await page.getByLabel('Encounter second save total').fill('9');
+ await page.getByRole('button',{name:'Resolve condition save'}).click();
+ await expect(page.getByLabel('Companion last event')).toContainText('gained Poisoned');
+ await page.getByLabel('Encounter save purpose').selectOption('end-poisoned');
+ await page.getByLabel('Encounter second save total').fill('19');
+ await page.getByRole('button',{name:'Resolve condition save'}).click();
+ await expect(page.getByLabel('Companion last event')).toContainText('ended Poisoned');
+});
+
+for(const [item,target] of [['Acid','Bandit'],['Holy Water','Bandit'],['Alchemist’s Fire','Bandit'],['Oil','Bandit'],['Acid','Crate'],['Oil','Crate']] as const)test(`iPhone ${item} targets ${target} and persists damage, attack use and consumption`,async({page})=>{
+ const id=await createCampaign(page,item+' throw');
+ await page.evaluate(async ({id,item})=>{
+  const {localCampaignStorage}=await import('/src/game/storage.ts');
+  const {startUnifiedEncounter,addCompanionEnemy}=await import('/src/game/companionEncounter.ts');
+  const current=await localCampaignStorage.get(id);
+  if(!current?.character||!current.inventoryLedger)throw Error('Campaign fixture was not saved');
+  const characterIdentity={name:'Acid tester',speciesId:'human',backgroundId:'criminal',classId:'rogue',
+   draftId:'acid-test',pronouns:'',appearance:'',personality:'',backstory:''};
+  const player={...current,characterIdentity,character:{...current.character,level:1},
+   inventoryLedger:{...current.inventoryLedger,gear:[{name:item,quantity:1}]}};
+  const battle=startUnifiedEncounter(player,{nighthawk:20},{nighthawk:{x:2,y:2}},{});
+  const encounter=addCompanionEnemy(battle,'Bandit',10,{x:6,y:2},12,12,2);
+  await localCampaignStorage.save({...encounter,adventureSession:{status:'encounter',site:'watchtower',
+   characterSource:'campaign-character',visited:['watchtower'],interactions:[]}});
+ },{id,item});
+ await page.reload();
+ await page.getByRole('button',{name:'Campaigns',exact:true}).click();
+ await page.getByRole('button',{name:'Continue Adventure'}).click();
+ const panel=page.getByRole('region',{name:'Adventuring consumables'});
+ if(target==='Crate'){
+  await page.getByText('DM encounter objects',{exact:true}).click();
+  await page.getByLabel('Object name').fill('Crate');
+  await page.getByLabel('Object HP').fill('12');
+  await page.getByLabel('Object X').fill('6');
+  await page.getByLabel('Object Y').fill('3');
+  await page.getByRole('button',{name:'Add encounter object'}).click();
+  await expect(page.getByText('Crate · 12 HP',{exact:true})).toBeVisible();
+ }
+ await panel.getByLabel('Choose consumable').selectOption(item);
+ await panel.getByLabel(item+' target').selectOption(target);
+ if(target==='Bandit')await panel.getByLabel('Dexterity save total').fill('1');
+ if(item==='Holy Water')await panel.getByLabel('DM-verified creature type').selectOption('Undead');
+ if(item!=='Oil')await panel.getByLabel(item==='Acid'?'Rolled acid damage':item==='Holy Water'?'Rolled 2d8 radiant damage':'Rolled 1d4 fire damage').fill(item==='Alchemist’s Fire'?'3':'7');
+ await panel.getByRole('button',{name:'Confirm use'}).click();
+ await expect(panel).toHaveCount(0);
+ await page.reload();
+ const result=await page.evaluate(async ({id,item,target})=>{
+  const {localCampaignStorage}=await import('/src/game/storage.ts');
+  const current=await localCampaignStorage.get(id);
+  const affected=target==='Crate'?current?.companionEncounter?.objects?.Crate:current?.companionEncounter?.participants.Bandit;
+  return {hp:affected?.hp,
+   used:current?.companionEncounter?.participants.nighthawk.actionUsed,
+   vials:current?.inventoryLedger?.gear.find(gear=>gear.name===item)?.quantity,
+   oiled:!!affected?.oilExpires,
+   burning:current?.companionEncounter?.burningCreatures??[]};
+ },{id,item,target});
+ expect(result).toEqual({hp:item==='Oil'?12:item==='Alchemist’s Fire'?9:5,used:true,vials:0,oiled:item==='Oil',
+  burning:item==='Alchemist’s Fire'?['Bandit']:[]});
+});

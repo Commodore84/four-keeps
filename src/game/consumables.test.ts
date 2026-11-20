@@ -1,5 +1,5 @@
-import {resolveCompanionSavingThrow} from './companionEncounter';
-import {advanceConsumableTime} from './consumables';
+import {addCompanionObject,recordCompanionObjectFire,damageCompanion,endCompanionTurn,extinguishCompanionFire,resolveCompanionSavingThrow} from './companionEncounter';
+import {advanceConsumableTime,antitoxinSecondsRemaining} from './consumables';
 import {describe,it,expect} from 'vitest';
 import {useOwnedConsumable,eligibleKitTargets} from './consumables';
 import type {Campaign} from './campaign';
@@ -43,7 +43,11 @@ describe('antitoxin save advantage and clock boundaries',()=>{
  it('only applies to avoid/end Poisoned while active; requires both totals',()=>{
   const c={...encounter(),antitoxinUntilMinute:160};
   expect(resolveCompanionSavingThrow(c,'nighthawk','Constitution',8,13,17,{purpose:'avoid-poisoned'}).success).toBe(true);
-  expect(resolveCompanionSavingThrow(c,'nighthawk','Constitution',8,13,17,{purpose:'end-poisoned'}).effectiveTotal).toBe(17);
+  const poisoned=resolveCompanionSavingThrow(c,'nighthawk','Constitution',8,13,9,{purpose:'avoid-poisoned'}).campaign;
+  expect(poisoned.companionEncounter?.participants.nighthawk.conditions).toContain('Poisoned');
+  const recovered=resolveCompanionSavingThrow(poisoned,'nighthawk','Constitution',8,13,17,{purpose:'end-poisoned'});
+  expect(recovered.effectiveTotal).toBe(17);
+  expect(recovered.campaign.companionEncounter?.participants.nighthawk.conditions).not.toContain('Poisoned');
   expect(resolveCompanionSavingThrow(c,'nighthawk','Constitution',8,13,17,{purpose:'other'}).success).toBe(false);
   expect(()=>resolveCompanionSavingThrow(c,'nighthawk','Constitution',8,13,undefined,{purpose:'avoid-poisoned'})).toThrow('second total');
   expect(resolveCompanionSavingThrow(advanceConsumableTime(c,60),'nighthawk','Constitution',8,13,17,{purpose:'avoid-poisoned'}).success).toBe(false);
@@ -53,7 +57,185 @@ describe('antitoxin save advantage and clock boundaries',()=>{
   const c={...encounter(),antitoxinUntilMinute:160};
   expect(resolveCompanionSavingThrow(c,'ally','Constitution',8,13,17,{purpose:'avoid-poisoned'}).success).toBe(false);
   const restrained={...c,companionEncounter:{...c.companionEncounter!,participants:{...c.companionEncounter!.participants,nighthawk:{...c.companionEncounter!.participants.nighthawk,conditions:['Restrained']}}}} as Campaign;
-  expect(resolveCompanionSavingThrow(restrained,'nighthawk','Dexterity',14,13,2,{purpose:'avoid-poisoned'}).effectiveTotal).toBe(14);
+  expect(resolveCompanionSavingThrow(restrained,'nighthawk','Dexterity',14,13,undefined,{purpose:'avoid-poisoned'}).effectiveTotal).toBe(14);
   expect(()=>advanceConsumableTime(c,0)).toThrow();
  });
+});
+
+describe('consumable confirmations and Poisoned saves',()=>{
+ it('rejects a confirmation after the encounter is replaced or ends',()=>{
+  const c=encounter();
+  const battle={...c.companionEncounter!,id:'second'};
+  const request={name:'Antitoxin' as const,confirmed:true,requestId:'old',expectedQuantity:2,
+   expectedElapsedMinutes:100,expectedEncounterId:'first',expectedRound:2,expectedTurnIndex:0,
+   expectedActorPosition:{x:2,y:2}};
+  expect(()=>useOwnedConsumable({...c,companionEncounter:battle},request)).toThrow('Stale encounter');
+  expect(()=>useOwnedConsumable({...c,companionEncounter:{...battle,status:'completed'}},request)).toThrow('Stale encounter');
+  expect(c.inventoryLedger?.gear[0].quantity).toBe(2);
+ });
+
+ it('prevents a Poisoned application against an immune target',()=>{
+  const c=encounter();
+  const battle=c.companionEncounter!;
+  const immune={...battle.participants.ally,conditionImmunities:['Poisoned']};
+  const saved=resolveCompanionSavingThrow({...c,companionEncounter:{
+   ...battle,participants:{...battle.participants,ally:immune},
+  }},'ally','Constitution',1,13,undefined,{purpose:'avoid-poisoned'});
+  expect(saved.effectiveTotal).toBeNull();
+  expect(saved.campaign.companionEncounter?.participants.ally.conditions).not.toContain('Poisoned');
+ });
+
+ it('refreshes the one-hour duration on a second confirmed dose',()=>{
+  const request={name:'Antitoxin' as const,confirmed:true,requestId:'first',expectedQuantity:2,expectedElapsedMinutes:100};
+  const first=useOwnedConsumable(base(),request);
+  const reloaded=JSON.parse(JSON.stringify(advanceConsumableTime(first,30))) as Campaign;
+  const second=useOwnedConsumable(reloaded,{...request,requestId:'second',expectedQuantity:1,expectedElapsedMinutes:130});
+  expect(second.antitoxinUntilMinute).toBe(190);
+  expect(second.inventoryLedger?.gear[0].quantity).toBe(0);
+  expect(useOwnedConsumable(second,request)).toBe(second);
+ });
+});
+
+it('counts completed combat rounds across reload without changing merchant time',()=>{
+ const c=encounter();
+ const battle=c.companionEncounter!;
+ const active={...c,antitoxinUntilMinute:101,antitoxinCombatSeconds:54,
+  companionEncounter:{...battle,order:['nighthawk']}};
+ const reloaded=JSON.parse(JSON.stringify(active)) as Campaign;
+ expect(antitoxinSecondsRemaining(reloaded)).toBe(6);
+ const expired=endCompanionTurn(reloaded,'nighthawk');
+ expect(antitoxinSecondsRemaining(expired)).toBe(0);
+ expect(expired.elapsedMinutes).toBe(100);
+ expect(resolveCompanionSavingThrow(expired,'nighthawk','Constitution',8,13,17,
+  {purpose:'avoid-poisoned'}).success).toBe(false);
+});
+
+describe('Acid in a single-attack unified encounter',()=>{
+ const request={
+  name:'Acid' as const,confirmed:true,requestId:'acid-1',expectedQuantity:1,
+  expectedElapsedMinutes:100,expectedRound:2,expectedTurnIndex:0,
+  expectedActorPosition:{x:2,y:2},targetId:'enemy',expectedTargetHP:12,
+  expectedTargetPosition:{x:6,y:2},throwRolls:{saveTotal:12,damage:7},
+ };
+ function fixture(){
+  const campaign=encounter(),battle=campaign.companionEncounter!;
+  return {...campaign,
+   characterIdentity:{} as NonNullable<Campaign['characterIdentity']>,
+   character:{...campaign.character!,level:1,proficiencyBonus:2,scores:{...campaign.character!.scores,dex:16}},
+   inventoryLedger:{...campaign.inventoryLedger!,gear:[{name:'Acid',quantity:1}]},
+   companionEncounter:{...battle,order:['nighthawk','enemy'],participants:{
+    nighthawk:battle.participants.nighthawk,enemy:{...battle.participants.nighthawk,x:6,actorKind:'enemy'},
+   }},
+  } as Campaign;
+ }
+ it('uses the attack and vial once and deals 2d6 damage on a failed save',()=>{
+  const current=fixture(), next=useOwnedConsumable(current,request);
+  expect(next.companionEncounter?.participants.enemy.hp).toBe(5);
+  expect(next.companionEncounter?.participants.nighthawk.actionUsed).toBe(true);
+  expect(next.inventoryLedger?.gear[0].quantity).toBe(0);
+  expect(useOwnedConsumable(next,request)).toBe(next);
+  expect(current.companionEncounter?.participants.enemy.hp).toBe(12);
+ });
+ it('consumes the vial on a successful save without dealing damage',()=>{
+  const next=useOwnedConsumable(fixture(),{...request,throwRolls:{saveTotal:13,damage:7}});
+  expect(next.companionEncounter?.participants.enemy.hp).toBe(12);
+  expect(next.inventoryLedger?.gear[0].quantity).toBe(0);
+ });
+ it('rejects stale or out-of-range targets and unverified rolls',()=>{
+  const current=fixture(),battle=current.companionEncounter!;
+  expect(()=>useOwnedConsumable(current,{...request,expectedTargetHP:11})).toThrow('Stale target');
+  expect(()=>useOwnedConsumable(current,{...request,throwRolls:{saveTotal:8,damage:13}})).toThrow('Invalid verified Acid rolls');
+  const distant={...current,companionEncounter:{...battle,participants:{
+   ...battle.participants,enemy:{...battle.participants.enemy,x:7},
+  }}};
+  expect(()=>useOwnedConsumable(distant,{...request,expectedTargetPosition:{x:7,y:2}})).toThrow('within 20 feet');
+  expect(current.inventoryLedger?.gear[0].quantity).toBe(1);
+ });
+ it.each([['Fiend',5],['Undead',5],['Other',12]] as const)('uses Holy Water against a verified %s', (targetType,hp)=>{
+  const source=fixture();
+  const campaign={...source,inventoryLedger:{...source.inventoryLedger!,gear:[{name:'Holy Water',quantity:1}]}};
+  const next=useOwnedConsumable(campaign,{...request,name:'Holy Water',throwRolls:{saveTotal:12,damage:7,targetType}});
+  expect(next.companionEncounter?.participants.enemy.hp).toBe(hp);
+  expect(next.companionEncounter?.participants.nighthawk.actionUsed).toBe(true);
+  expect(next.inventoryLedger?.gear[0].quantity).toBe(0);
+  expect(()=>useOwnedConsumable(campaign,{...request,name:'Holy Water'})).toThrow('DM-verified creature type');
+ });
+
+ it('ignites a creature, ticks once at turn start after reload, and ends with the Prone action',()=>{
+  const source=fixture();
+  const campaign={...source,inventoryLedger:{...source.inventoryLedger!,gear:[{name:'Alchemist’s Fire',quantity:1}]}};
+  const flask={...request,name:'Alchemist’s Fire' as const,throwRolls:{saveTotal:12,damage:3}};
+  const hit=useOwnedConsumable(campaign,flask);
+  expect(hit.inventoryLedger?.gear[0].quantity).toBe(0);
+  expect(hit.companionEncounter?.participants.enemy.hp).toBe(9);
+  expect(hit.companionEncounter?.burningCreatures).toEqual(['enemy']);
+  const reloaded=JSON.parse(JSON.stringify(hit)) as Campaign;
+  const tick=endCompanionTurn(reloaded,'nighthawk',()=>2);
+  expect(tick.companionEncounter?.participants.enemy.hp).toBe(7);
+  const extinguished=extinguishCompanionFire(tick,'enemy','Roll on ground');
+  expect(extinguished.companionEncounter?.burningCreatures).toEqual([]);
+  expect(extinguished.companionEncounter?.participants.enemy.conditions).toContain('Prone');
+  expect(extinguished.companionEncounter?.participants.enemy.actionUsed).toBe(true);
+  const next=endCompanionTurn(endCompanionTurn(extinguished,'enemy'),'nighthawk');
+  expect(next.companionEncounter?.participants.enemy.hp).toBe(7);
+ });
+ it('spends the flask on a successful save and allows verified environmental extinguishing',()=>{
+  const source=fixture();
+  const campaign={...source,inventoryLedger:{...source.inventoryLedger!,gear:[{name:'Alchemist’s Fire',quantity:1}]}};
+  const flask={...request,name:'Alchemist’s Fire' as const,throwRolls:{saveTotal:13,damage:4}};
+  const saved=useOwnedConsumable(campaign,flask);
+  expect(saved.inventoryLedger?.gear[0].quantity).toBe(0);
+  expect(saved.companionEncounter?.burningCreatures).toBeUndefined();
+  const hit=useOwnedConsumable(campaign,{...flask,throwRolls:{...flask.throwRolls,saveTotal:12}});
+  const doused=extinguishCompanionFire(hit,'enemy','DM verified');
+  expect(doused.companionEncounter?.participants.enemy.actionUsed).toBe(false);
+  expect(doused.companionEncounter?.burningCreatures).toEqual([]);
+ });
+
+ it('coats without impact damage and adds five fire damage once after reload',()=>{
+  const source=fixture();
+  const campaign={...source,inventoryLedger:{...source.inventoryLedger!,gear:[{name:'Oil',quantity:1}]}};
+  const oil={...request,name:'Oil' as const,throwRolls:{saveTotal:12,damage:0}};
+  const coated=useOwnedConsumable(campaign,oil);
+  expect(coated.inventoryLedger?.gear[0].quantity).toBe(0);
+  expect(coated.companionEncounter?.participants.enemy.hp).toBe(12);
+  const reloaded=JSON.parse(JSON.stringify(coated)) as Campaign;
+  const acid=damageCompanion(reloaded,'enemy',1,'Acid');
+  const ignited=damageCompanion(acid,'enemy',2,'Fire');
+  expect(ignited.companionEncounter?.participants.enemy.hp).toBe(4);
+  expect(ignited.companionEncounter?.participants.enemy.oilExpires).toBeUndefined();
+  expect(damageCompanion(ignited,'enemy',2,'Fire').companionEncounter?.participants.enemy.hp).toBe(2);
+ });
+ it('expires at the corresponding turn ten rounds later and does not coat on a successful save',()=>{
+  const source=fixture();
+  const campaign={...source,inventoryLedger:{...source.inventoryLedger!,gear:[{name:'Oil',quantity:1}]}};
+  const requestOil={...request,name:'Oil' as const,throwRolls:{saveTotal:13,damage:0}};
+  expect(useOwnedConsumable(campaign,requestOil).companionEncounter?.participants.enemy.oilExpires).toBeUndefined();
+  let coated=useOwnedConsumable(campaign,{...requestOil,throwRolls:{saveTotal:12,damage:0}});
+  for(let round=0;round<9;round++)coated=endCompanionTurn(endCompanionTurn(coated,'nighthawk'),'enemy');
+  coated=endCompanionTurn(coated,'nighthawk');
+  expect(coated.companionEncounter?.participants.enemy.oilExpires).toBeDefined();
+  const dry=endCompanionTurn(coated,'enemy');
+  expect(dry.companionEncounter?.participants.enemy.oilExpires).toBeUndefined();
+  expect(damageCompanion(dry,'enemy',2,'Fire').companionEncounter?.participants.enemy.hp).toBe(10);
+ });
+
+ it('automatically fails an object save, consumes Acid once and persists destruction',()=>{
+  const campaign=addCompanionObject(fixture(),'Crate',6,2,7);
+  const throwRequest={...request,targetId:'Crate',expectedTargetHP:7,throwRolls:{saveTotal:100,damage:7}};
+  const hit=useOwnedConsumable(campaign,throwRequest);
+  expect(hit.companionEncounter?.objects?.Crate.hp).toBe(0);
+  expect(hit.inventoryLedger?.gear[0].quantity).toBe(0);
+  expect(useOwnedConsumable(hit,throwRequest)).toBe(hit);
+ });
+ it('coats an object and ignites the coating exactly once after reload',()=>{
+  const original=fixture();
+  const campaign=addCompanionObject({...original,inventoryLedger:{...original.inventoryLedger!,gear:[{name:'Oil',quantity:1}]}},'Crate',6,2,12);
+  const coated=useOwnedConsumable(campaign,{...request,name:'Oil',targetId:'Crate',throwRolls:{saveTotal:100,damage:0}});
+  const reloaded=JSON.parse(JSON.stringify(coated)) as Campaign;
+  const ignited=recordCompanionObjectFire(reloaded,'Crate',2);
+  expect(ignited.companionEncounter?.objects?.Crate.hp).toBe(5);
+  expect(recordCompanionObjectFire(ignited,'Crate',2).companionEncounter?.objects?.Crate.hp).toBe(3);
+ });
+
 });

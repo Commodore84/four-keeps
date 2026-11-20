@@ -323,12 +323,12 @@ test('newly created fighter completes organic AI encounter, saves rewards and re
 test('organic combat proposal can be declined and AI narration resumes without losing state',async({page})=>{
  test.setTimeout(90000);
  await page.addInitScript(()=>{localStorage.setItem('four-keeps-access-code','browser-test-code');localStorage.setItem('four-keeps-dm-mode','on');});
- await createAndImport(page,'fighter');
  let calls=0;
  await page.route('**/api/dm',async route=>{
   calls++;
   await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({narration:calls===1?'A watchman greets you.':calls===2?'Which stranger do you mean?':calls===3?'A suspicious stranger reaches for a sword.':'The stranger lowers the sword and walks away.',clarificationRequest:calls===2?{question:'Which stranger do you mean?'}:null,combatStart:calls===3?{enemyName:'Suspicious stranger'}:null,newFacts:['The watchman is present'],worldUpdates:{}})});
  });
+ await createAndImport(page,'fighter');
  await expect.poll(async()=> (await saved(page))?.journal?.some((entry:any)=>entry.id?.endsWith('-dm-opening'))).toBe(true);
  const initial=await saved(page);
  await page.getByLabel('Message the Dungeon Master').fill('I question the stranger.');

@@ -1227,8 +1227,14 @@ test('AI combat proposal for imported character persists and enters verified com
  await page.getByRole('button',{name:'Campaigns',exact:true}).click();
  await page.getByRole('button',{name:'New Adventure'}).click();
  await page.getByLabel('Starting character').selectOption('organic-rogue');
+ await page.route('**/api/dm',async route=>{
+  const opening=route.request().postDataJSON().opening;
+  await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({
+   narration:opening?'You begin your adventure on a busy street in Dasahi.':'A road bandit blocks your path.',
+   combatStart:opening?null:{enemyName:'Road bandit'},newFacts:[],worldUpdates:{},
+  })});
+ });
  await page.getByRole('button',{name:'Begin Adventure'}).click();
- await page.route('**/api/dm',async route=>await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({narration:'A road bandit blocks your path.',combatStart:{enemyName:'Road bandit'},newFacts:[],worldUpdates:{}})}));
  await expect(page.getByLabel('Adventure',{exact:true})).toBeVisible();
  await page.getByLabel('Message the Dungeon Master').fill('I approach the road cautiously.');
  await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
