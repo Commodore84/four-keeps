@@ -468,3 +468,17 @@ describe('persisted consumable time integrity',()=>{
   }
  });
 });
+
+describe('SRD ground Oil deployment integrity',()=>{
+ it('spills one flask atomically, persists square and rejects duplicate confirmation',()=>{
+  const c={...encounter(),inventoryLedger:{...base().inventoryLedger!,gear:[{name:'Oil',quantity:2}]}} as Campaign;
+  const request={name:'Oil' as const,confirmed:true,requestId:'oil-square-1',expectedQuantity:2,expectedElapsedMinutes:100,expectedRound:2,expectedTurnIndex:0,expectedActorPosition:{x:2,y:2},ground:{x:3,y:2,level:true}};
+  const used=useOwnedConsumable(c,request);
+  expect(used.inventoryLedger?.gear[0].quantity).toBe(1);
+  expect(used.companionEncounter?.groundOil).toEqual([{id:'oil-square-1',x:3,y:2,expiresRound:12}]);
+  expect(used.companionEncounter?.participants.nighthawk.actionUsed).toBe(true);
+  expect(useOwnedConsumable(used,request)).toBe(used);
+  expect(()=>useOwnedConsumable(c,{...request,ground:{x:5,y:2,level:true}})).toThrow('verified level ground');
+  expect(()=>useOwnedConsumable(c,{...request,confirmed:false})).toThrow('confirmation');
+ });
+});
