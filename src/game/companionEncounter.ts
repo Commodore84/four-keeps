@@ -20,9 +20,11 @@ export interface CompanionEncounter {
  round:number;
  turnIndex:number;
  order:string[];
- participants:Record<string,{oilExpires?:{round:number;turnIndex:number};x:number;y:number;hp:number;maxHp:number;initiative:number;conditions:('Charmed'|'Poisoned'|'Blinded'|'Deafened'|'Frightened'|'Grappled'|'Incapacitated'|'Invisible'|'Paralyzed'|'Petrified'|'Prone'|'Restrained'|'Stunned'|'Unconscious'|'Exhaustion')[];speedFeet:number;movementSpentFeet:number;actionUsed:boolean;bonusActionUsed:boolean;dashFeet:number;disengaged:boolean;dodging:boolean;reactionUsed?:boolean;rogueSneakUsed?:boolean;roguePoisonDC?:number;roguePoisonRounds?:number;roguePoisonSaveResolved?:boolean;rogueObscureUntilTurn?:number;rogueDazeTurns?:number;rogueDazeChoice?:'movement'|'action';rogueKnockoutDC?:number;rogueKnockoutRounds?:number;rogueKnockoutSaveResolved?:boolean;conditionImmunities?:string[];rogueSteadyAim?:boolean;rogueHidden?:boolean;rogueHideDC?:number;rogueHideConcealment?:boolean;rogueDetectedBy?:string[];rogueMovedThisTurn?:boolean;concentratingOn?:string;consumables?:Record<string,number>;faction?:string;reachFeet?:number;actorKind?:'party'|'enemy';armorClass?:number;attackModifier?:number;constitutionSaveModifier?:number;damageModifier?:number;damageDice?:string;enemyTactic?:'hold'|'nearest'|'lowest-hp';rangedAttackFeet?:number;deathSaves?:{successes:number;failures:number;stable:boolean;dead:boolean}}>;
+ participants:Record<string,{caltropsStopped?:boolean;oilExpires?:{round:number;turnIndex:number};x:number;y:number;hp:number;maxHp:number;initiative:number;conditions:('Charmed'|'Poisoned'|'Blinded'|'Deafened'|'Frightened'|'Grappled'|'Incapacitated'|'Invisible'|'Paralyzed'|'Petrified'|'Prone'|'Restrained'|'Stunned'|'Unconscious'|'Exhaustion')[];speedFeet:number;movementSpentFeet:number;actionUsed:boolean;bonusActionUsed:boolean;dashFeet:number;disengaged:boolean;dodging:boolean;reactionUsed?:boolean;rogueSneakUsed?:boolean;roguePoisonDC?:number;roguePoisonRounds?:number;roguePoisonSaveResolved?:boolean;rogueObscureUntilTurn?:number;rogueDazeTurns?:number;rogueDazeChoice?:'movement'|'action';rogueKnockoutDC?:number;rogueKnockoutRounds?:number;rogueKnockoutSaveResolved?:boolean;conditionImmunities?:string[];rogueSteadyAim?:boolean;rogueHidden?:boolean;rogueHideDC?:number;rogueHideConcealment?:boolean;rogueDetectedBy?:string[];rogueMovedThisTurn?:boolean;concentratingOn?:string;consumables?:Record<string,number>;faction?:string;reachFeet?:number;actorKind?:'party'|'enemy';armorClass?:number;attackModifier?:number;constitutionSaveModifier?:number;damageModifier?:number;damageDice?:string;enemyTactic?:'hold'|'nearest'|'lowest-hp';rangedAttackFeet?:number;deathSaves?:{successes:number;failures:number;stable:boolean;dead:boolean}}>;
  objects?:Record<string,{x:number;y:number;hp:number;oilExpires?:{round:number;turnIndex:number}}>;
  basicPoison?:{weaponId:string;expiresRound:number};
+ groundSupplies?:{id:string;name:'Ball Bearings'|'Caltrops';x:number;y:number}[];
+ groundEntries?:string[];
  burningCreatures?:string[];
  wizardHoldPersonTargets?:string[];
  rogueHoldPersonTargets?:string[];
@@ -402,14 +404,14 @@ export function companionConditionEffects(campaign:Campaign,actorId:string){
 export function standCompanionFromProne(campaign:Campaign,actorId:string):Campaign{
  const battle=activeActor(campaign,actorId),actor=battle.participants[actorId];
  if(!actor.conditions.includes('Prone'))throw Error('Actor is not prone');
- if(actor.hp<=0||actor.conditions.some(c=>IMMOBILE.includes(c))||actor.speedFeet===0)throw Error('Condition prevents standing');
+ if(actor.hp<=0||actor.caltropsStopped||actor.conditions.some(c=>IMMOBILE.includes(c))||actor.speedFeet===0)throw Error('Condition prevents standing');
  const cost=Math.floor(actor.speedFeet/10)*5;
  if(actor.speedFeet+actor.dashFeet-actor.movementSpentFeet<cost)throw Error('Insufficient movement to stand');
  return save(campaign,{...battle,participants:{...battle.participants,[actorId]:{...actor,conditions:actor.conditions.filter(c=>c!=='Prone'),movementSpentFeet:actor.movementSpentFeet+cost}},log:[...battle.log,actorId+' stood from Prone using '+cost+' ft of movement']});
 }
-export function moveCompanion(campaign:Campaign,actorId:string,x:number,y:number):Campaign{
+export function moveCompanion(campaign:Campaign,actorId:string,x:number,y:number,groundSave?:number):Campaign{
  const battle=activeActor(campaign,actorId),actor=battle.participants[actorId];
- if(actor.hp<=0)throw Error('Actor at zero HP cannot move');
+ if(actor.hp<=0||actor.caltropsStopped)throw Error('Actor cannot move at zero HP or speed');
  if(actor.rogueDazeTurns!==undefined&&(actor.rogueDazeChoice==='action'||actor.actionUsed||actor.bonusActionUsed))throw Error('Dazed: cannot move after taking an action or bonus action');
  if(actor.conditions.some(c=>IMMOBILE.includes(c)))throw Error('Condition prevents movement');
  if(actor.rogueSteadyAim)throw Error('Steady Aim prevents movement this turn');
@@ -426,7 +428,31 @@ export function moveCompanion(campaign:Campaign,actorId:string,x:number,y:number
  const movementCost=traversedSteps*5*(actor.conditions.includes('Prone')?2:1);
  if(movementCost>actor.speedFeet+actor.dashFeet-actor.movementSpentFeet)throw Error('Move exceeds remaining movement');
  if(Object.entries(battle.participants).some(([id,p])=>id!==actorId&&p.hp>0&&p.x===destination.x&&p.y===destination.y))throw Error('Square occupied');
- return save(campaign,revealRogueOnVisibilityChange({...battle,participants:{...battle.participants,[actorId]:{...actor,x:destination.x,y:destination.y,movementSpentFeet:actor.movementSpentFeet+movementCost,...(actor.rogueDazeTurns!==undefined&&movementCost>0?{rogueDazeChoice:'movement' as const}:{}),rogueMovedThisTurn:actor.rogueMovedThisTurn||movementCost>0,rogueHidden:actorId==='nighthawk'&&movementCost>0&&Object.values(battle.participants).some(enemy=>enemy.actorKind==='enemy'&&enemy.hp>0&&companionLineOfSight(battle,enemy,destination))?false:actor.rogueHidden}},pendingOpportunity:candidates.length?{moverId:actorId,attackerIds:candidates,from:interrupt?{x:firstTrigger.from.x,y:firstTrigger.from.y}:{x:actor.x,y:actor.y},to:interrupt?{x:firstTrigger.to.x,y:firstTrigger.to.y}:{x,y},...(interrupt?{destination:{x,y}}:{})}:undefined,log:[...battle.log,actorId+' moved to '+destination.x+','+destination.y+(interrupt?' · interrupted before leaving reach toward '+firstTrigger.to.x+','+firstTrigger.to.y:candidates.length?' · potential opportunity attackers: '+candidates.join(', '):'')]}));
+ const entered=(battle.groundSupplies??[]).filter(supply=>{
+  if(battle.groundEntries?.includes(supply.id))return false;
+  const size=supply.name==='Ball Bearings'?2:1;
+  const inside=(cell:Cell)=>cell.x>=supply.x&&cell.x<supply.x+size&&cell.y>=supply.y&&cell.y<supply.y+size;
+  return route.slice(1,traversedSteps+1).some((cell,index)=>inside(cell)&&!inside(route[index]));
+ });
+ const supply=entered[0];
+ if(supply){
+  if(entered.length>1||traversedSteps>1)throw Error('Enter hazard squares one 5-foot step at a time');
+  if(!Number.isInteger(groundSave)||Math.abs(groundSave!)>100)throw Error('Enter the verified Dexterity save for '+supply.name);
+ }
+ const moved=save(campaign,revealRogueOnVisibilityChange({...battle,participants:{...battle.participants,[actorId]:{...actor,x:destination.x,y:destination.y,movementSpentFeet:actor.movementSpentFeet+movementCost,...(actor.rogueDazeTurns!==undefined&&movementCost>0?{rogueDazeChoice:'movement' as const}:{}),rogueMovedThisTurn:actor.rogueMovedThisTurn||movementCost>0,rogueHidden:actorId==='nighthawk'&&movementCost>0&&Object.values(battle.participants).some(enemy=>enemy.actorKind==='enemy'&&enemy.hp>0&&companionLineOfSight(battle,enemy,destination))?false:actor.rogueHidden}},pendingOpportunity:candidates.length?{moverId:actorId,attackerIds:candidates,from:interrupt?{x:firstTrigger.from.x,y:firstTrigger.from.y}:{x:actor.x,y:actor.y},to:interrupt?{x:firstTrigger.to.x,y:firstTrigger.to.y}:{x,y},...(interrupt?{destination:{x,y}}:{})}:undefined,log:[...battle.log,actorId+' moved to '+destination.x+','+destination.y+(interrupt?' · interrupted before leaving reach toward '+firstTrigger.to.x+','+firstTrigger.to.y:candidates.length?' · potential opportunity attackers: '+candidates.join(', '):'')]}));
+ if(!supply)return moved;
+ const current=encounter(moved);
+ const failed=actor.conditions.some(condition=>['Paralyzed','Petrified','Stunned','Unconscious'].includes(condition))||
+  groundSave!<(supply.name==='Caltrops'?15:10);
+ const resolved=save(moved,{...current,groundEntries:[...(current.groundEntries??[]),supply.id],
+  log:[...current.log,actorId+' '+(failed?'failed':'passed')+' the '+supply.name+' save']});
+ if(!failed)return resolved;
+ if(supply.name==='Ball Bearings')return applyCompanionCondition(resolved,actorId,'Prone');
+ const damaged=damageCompanion(resolved,actorId,1,'Piercing');
+ const battleAfter=encounter(damaged);
+ return save(damaged,{...battleAfter,participants:{...battleAfter.participants,
+  [actorId]:{...battleAfter.participants[actorId],caltropsStopped:true}}});
+
 }
 /** Knock Out ends on a verified Constitution save, damage, or after ten target turns. */
 export function resolveRogueKnockoutSave(campaign:Campaign,targetId:string,saveTotal:number):Campaign{
@@ -455,7 +481,7 @@ export function endCompanionTurn(campaign:Campaign,actorId:string,rollBurning=()
   : campaign;
  const clocked=next===0&&battle.mode==='unified'
   ? {...timed,equipmentCombatSeconds:(timed.equipmentCombatSeconds??0)+6}:timed;
- const nextId=battle.order[next];const outgoing=battle.participants[actorId];const participants={...battle.participants,[actorId]:{...outgoing,disengaged:false,roguePoisonSaveResolved:false,rogueKnockoutSaveResolved:false,...(outgoing.rogueDazeTurns!==undefined?(outgoing.rogueDazeTurns<=1?{rogueDazeTurns:undefined,rogueDazeChoice:undefined}:{rogueDazeTurns:outgoing.rogueDazeTurns-1,rogueDazeChoice:undefined}):{}),...(outgoing.rogueObscureUntilTurn!==undefined?(outgoing.rogueObscureUntilTurn<=1?{rogueObscureUntilTurn:undefined,conditions:outgoing.conditions.filter(c=>c!=='Blinded')}:{rogueObscureUntilTurn:outgoing.rogueObscureUntilTurn-1}):{})}};participants[nextId]={...participants[nextId],movementSpentFeet:0,actionUsed:false,bonusActionUsed:false,dashFeet:0,disengaged:false,dodging:false,reactionUsed:false,rogueSneakUsed:false,rogueSteadyAim:false,rogueMovedThisTurn:false};const nextRound=battle.round+(next===0?1:0);
+ const nextId=battle.order[next];const outgoing=battle.participants[actorId];const participants={...battle.participants,[actorId]:{...outgoing,disengaged:false,roguePoisonSaveResolved:false,rogueKnockoutSaveResolved:false,...(outgoing.rogueDazeTurns!==undefined?(outgoing.rogueDazeTurns<=1?{rogueDazeTurns:undefined,rogueDazeChoice:undefined}:{rogueDazeTurns:outgoing.rogueDazeTurns-1,rogueDazeChoice:undefined}):{}),...(outgoing.rogueObscureUntilTurn!==undefined?(outgoing.rogueObscureUntilTurn<=1?{rogueObscureUntilTurn:undefined,conditions:outgoing.conditions.filter(c=>c!=='Blinded')}:{rogueObscureUntilTurn:outgoing.rogueObscureUntilTurn-1}):{})}};participants[nextId]={...participants[nextId],caltropsStopped:undefined,movementSpentFeet:0,actionUsed:false,bonusActionUsed:false,dashFeet:0,disengaged:false,dodging:false,reactionUsed:false,rogueSneakUsed:false,rogueSteadyAim:false,rogueMovedThisTurn:false};const nextRound=battle.round+(next===0?1:0);
  for(const [id,participant] of Object.entries(participants)){
   const expiry=participant.oilExpires;
   if(expiry&&(expiry.round<nextRound||expiry.round===nextRound&&(battle.order.indexOf('nighthawk')===-1?expiry.turnIndex:battle.order.indexOf('nighthawk'))<=next))
@@ -468,7 +494,7 @@ export function endCompanionTurn(campaign:Campaign,actorId:string,rollBurning=()
  }));
  const basicPoison=battle.basicPoison;
  const poisonExpired=basicPoison&&nextId==='nighthawk'&&nextRound>=basicPoison.expiresRound;
- const advanced=save(clocked,{...battle,...(poisonExpired?{basicPoison:undefined}:{}),...(objects?{objects}:{}),participants,turnIndex:next,round:battle.round+(next===0?1:0),log:[...battle.log,actorId+' ended turn']});
+ const advanced=save(clocked,{...battle,...(poisonExpired?{basicPoison:undefined}:{}),...(objects?{objects}:{}),participants,groundEntries:undefined,turnIndex:next,round:battle.round+(next===0?1:0),log:[...battle.log,actorId+' ended turn']});
  if(!battle.burningCreatures?.includes(nextId)||participants[nextId].deathSaves?.dead||
     (participants[nextId].actorKind==='enemy'&&participants[nextId].hp===0))return advanced;
  const damage=rollBurning();

@@ -1,5 +1,5 @@
-import {attackCompanion,addCompanionObject,recordCompanionObjectFire,damageCompanion,endCompanionTurn,extinguishCompanionFire,resolveCompanionSavingThrow} from './companionEncounter';
-import {advanceConsumableTime,antitoxinSecondsRemaining,equipmentLightRemaining} from './consumables';
+import {moveCompanion,attackCompanion,addCompanionObject,recordCompanionObjectFire,damageCompanion,endCompanionTurn,extinguishCompanionFire,resolveCompanionSavingThrow} from './companionEncounter';
+import {advanceConsumableTime,antitoxinSecondsRemaining,equipmentLightRemaining,provisionsToday} from './consumables';
 import {describe,it,expect} from 'vitest';
 import {useOwnedConsumable,eligibleKitTargets} from './consumables';
 import type {Campaign} from './campaign';
@@ -312,5 +312,58 @@ describe('confirmed adventuring lights',()=>{
   expect(lit.companionEncounter?.participants.nighthawk.bonusActionUsed).toBe(true);
   const next=endCompanionTurn(endCompanionTurn(lit,'nighthawk'),'ally');
   expect(equipmentLightRemaining(next,'Torch')).toBe(3594);
+ });
+});
+
+describe('field supplies',()=>{
+ const request={confirmed:true,requestId:'supply',expectedQuantity:1,expectedElapsedMinutes:100};
+ function supplies(name:string,combat=false){
+  const source=combat?encounter():base();
+  return {...source,journal:[],inventoryLedger:{...source.inventoryLedger!,gear:[{name,quantity:1}]}};
+ }
+ it('consumes and records one ration for the current day',()=>{
+  const current=supplies('Rations');
+  const next=useOwnedConsumable(current,{...request,name:'Rations',expectedSupplyState:JSON.stringify(provisionsToday(current))});
+  expect(next.inventoryLedger?.gear[0].quantity).toBe(0);
+  expect(provisionsToday(next).rations).toBe(1);
+  expect(provisionsToday({...next,elapsedMinutes:1440}).rations).toBe(0);
+ });
+ it('drinks and refills one waterskin without consuming the container',()=>{
+  const current=supplies('Waterskin');
+  const drink=useOwnedConsumable(current,{...request,name:'Waterskin',supplyOperation:'drink',
+   expectedSupplyState:JSON.stringify({today:provisionsToday(current),pints:4})});
+  expect(drink.waterskinPints).toBe(3);
+  const refill=useOwnedConsumable(drink,{...request,requestId:'refill',name:'Waterskin',supplyOperation:'refill',
+   expectedSupplyState:JSON.stringify({today:provisionsToday(drink),pints:3})});
+  expect(refill.waterskinPints).toBe(4);
+  expect(provisionsToday(refill).waterPints).toBe(1);
+  expect(refill.inventoryLedger?.gear[0].quantity).toBe(1);
+ });
+ it('records a successful verified Rope knot without consuming the rope',()=>{
+  const current=supplies('Rope');
+  const tied=useOwnedConsumable(current,{...request,name:'Rope',ropeCheck:10,expectedSupplyState:'false'});
+  expect(tied.ropeKnotted).toBe(true);
+  expect(tied.inventoryLedger?.gear[0].quantity).toBe(1);
+ });
+ it.each(['Ball Bearings','Caltrops'] as const)('deploys %s and resolves normal grid entry once per turn',(name)=>{
+  const current=supplies(name,true),battle=current.companionEncounter!;
+  const source={...current,companionEncounter:{...battle,participants:{...battle.participants,
+   nighthawk:{...battle.participants.nighthawk,speedFeet:30,dashFeet:0,movementSpentFeet:0}}}};
+  const deployed=useOwnedConsumable(source,{...request,name,ground:{x:2,y:1,level:true},
+   expectedRound:2,expectedTurnIndex:0,expectedActorPosition:{x:2,y:2}});
+  expect(deployed.inventoryLedger?.gear[0].quantity).toBe(0);
+  // Bearings cover two squares in each direction. Approach from a non-covered square.
+  const active=deployed.companionEncounter!;
+  const staged={...deployed,companionEncounter:{...active,participants:{
+   ...active.participants,nighthawk:{...active.participants.nighthawk,x:1,y:1},
+  }}};
+  expect(()=>moveCompanion(staged,'nighthawk',2,1)).toThrow('verified Dexterity save');
+  const entered=moveCompanion(staged,'nighthawk',2,1,5);
+  expect(entered.companionEncounter?.groundEntries).toEqual(['supply']);
+  if(name==='Ball Bearings')expect(entered.companionEncounter?.participants.nighthawk.conditions).toContain('Prone');
+  else{
+   expect(entered.companionEncounter?.participants.nighthawk.hp).toBe(11);
+   expect(()=>moveCompanion(entered,'nighthawk',1,1)).toThrow('zero HP or speed');
+  }
  });
 });

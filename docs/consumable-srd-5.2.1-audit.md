@@ -9,8 +9,8 @@ Catalog includes 182 named equipment records across all categories, including ar
 | Acid | Attack replacement; Dexterity save; 2d6 Acid on failed save | Throw range, enemy save, damage and attack replacement | Supported against tracked creatures in unified combat for imported level 1–4 characters, with DM-verified save and damage rolls. DM-registered objects without ability scores are also supported. Higher levels are deferred. |
 | Alchemist’s Fire | Attack replacement; Dexterity save; Fire damage and Burning | Burning lifecycle, damage timing and extinguish | Supported for tracked creatures in imported level 1–4 unified encounters, including turn-start damage and extinguishing. Object targets remain deferred. |
 | Antitoxin | Bonus Action; self; 1 hour; advantage on saves to avoid/end Poisoned | Owned vial, turn Bonus Action, save context, elapsed time | Encounter adjudication supports avoiding and ending Poisoned, and recorded elapsed time governs expiry |
-| Ball Bearings | Utilize; area hazard; Dexterity save and Prone | Persistent terrain hazard and movement entry | Deferred: no authoritative persistent ground-hazard state |
-| Caltrops | Utilize; area hazard; movement and Dexterity save | Persistent terrain hazard and movement entry | Deferred: no authoritative persistent ground-hazard state |
+| Ball Bearings | Utilize; area hazard; Dexterity save and Prone | Persistent terrain hazard and movement entry | Supports confirmed deployment and verified Dexterity saves on normal grid movement. Recovery and forced movement remain open. |
+| Caltrops | Utilize; area hazard; movement and Dexterity save | Persistent terrain hazard and movement entry | Supports confirmed deployment and verified Dexterity saves on normal grid movement. Recovery and forced movement remain open. |
 | Candle | Light source with finite duration | Light radius, world clock, visibility | Tracks a one-hour candle and displays bright and dim radii. Automatic map visibility remains open. |
 | Healer’s Kit | Utilize; stabilize 0 HP creature; 10 uses | Adjacent target, Action, stable death saves | Implemented for eligible adjacent allies in unified encounter |
 | Holy Water | Attack replacement; Dexterity save; Radiant damage to qualifying creature types | Creature type and thrown attack | Supported in unified combat for imported level 1–4 characters. The DM verifies the target type during confirmation. |
@@ -18,11 +18,11 @@ Catalog includes 182 named equipment records across all categories, including ar
 | Oil | Attack replacement or ground spill; fire interaction | Surface fire, timed oil effect and target state | Creature coating supported in imported level 1–4 unified encounters. DM-registered objects can also be coated, and verified object fire damage ignites the coating once. Ground ignition and fuel remain deferred. |
 | Poison, Basic | Bonus Action coating; extra Poison damage on a qualifying hit; no saving throw | Coating duration, weapon hit, save | Supported for one uniquely owned, equipped piercing or slashing weapon in unified combat, through verified weapon attacks. Ammunition coating and manually adjudicated reactions remain deferred. |
 | Potion of Healing | SRD: Bonus Action to drink or administer within 5 feet; 2d4 + 2 HP for standard potion | HP, inventory, action economy | Existing four-tier implementation retained. Ally administration currently costs an Action, which differs from SRD 5.2.1 |
-| Rations | Food supply consumed during travel/rest | Hunger and travel consumption | Deferred: no hunger engine |
-| Rope | Utilize for binding/climbing, not consumed by ordinary use | Interaction and object state | Deferred: no object interaction engine |
+| Rations | Food supply consumed during travel/rest | Hunger and travel consumption | Tracks confirmed ration consumption by game day. Automatic malnutrition remains open. |
+| Rope | Utilize for binding/climbing, not consumed by ordinary use | Interaction and object state | Supports a verified knot check, with Utilize in combat. Binding and breaking remain open. |
 | Tinderbox | Ignition utility; reusable | Environmental fire and lighting | Reusable for lighting owned candles, torches and lamps. Other exposed fuel and environmental fires remain open. |
 | Torch | Lit light source, finite duration, potential improvised attack | Light and fire/attack integration | Tracks a one-hour torch and displays bright and dim radii. Weapon attacks and automatic visibility remain open. |
-| Waterskin | Water container, refillable | Hydration and refill source | Deferred: no hydration engine |
+| Waterskin | Water container, refillable | Hydration and refill source | Tracks drinking and DM-confirmed refills of a single four-pint container. Dehydration and multiple containers remain open. |
 
 **Safeguards:** Do not consume items merely to show a descriptive effect. Acid, Holy Water, Alchemist’s Fire and Oil coating use the confirmed inventory transaction and the current single-attack encounter flow. Other throwables, hazards, light sources, hunger and coatings require additional engine support. No unsupported 2014 rules are substituted for 2024 SRD mechanics.
 

@@ -1,12 +1,14 @@
 import {useRef,useState} from 'react';
 import type {Campaign} from '../game/campaign';
-import {antitoxinSecondsRemaining,eligibleKitTargets,equipmentLightRemaining,equipmentLightRules,type EquipmentLight,type ConsumableName,type ConsumableRequest} from '../game/consumables';
+import {antitoxinSecondsRemaining,eligibleKitTargets,equipmentLightRemaining,equipmentLightRules,provisionsToday,type EquipmentLight,type ConsumableName,type ConsumableRequest} from '../game/consumables';
 import {basicPoisonWeapon,thrownConsumableTargets,type HolyWaterTargetType} from '../game/companionEncounter';
 export function ConsumablePanel({campaign,saving,onUse}:{campaign:Campaign;saving:boolean;onUse:(r:ConsumableRequest)=>Promise<boolean>}){
- const owned=(campaign.inventoryLedger?.gear??[]).filter(g=>g.quantity>0&&(g.name==='Candle'||g.name==='Lamp'||g.name==='Torch'||g.name==='Poison, Basic'||g.name==='Oil'||g.name==='Alchemist’s Fire'||g.name==='Holy Water'||g.name==='Acid'||g.name==='Antitoxin'||g.name==="Healer's Kit"));
+ const owned=(campaign.inventoryLedger?.gear??[]).filter(g=>g.quantity>0&&(g.name==='Ball Bearings'||g.name==='Caltrops'||g.name==='Rations'||g.name==='Waterskin'||g.name==='Rope'||g.name==='Candle'||g.name==='Lamp'||g.name==='Torch'||g.name==='Poison, Basic'||g.name==='Oil'||g.name==='Alchemist’s Fire'||g.name==='Holy Water'||g.name==='Acid'||g.name==='Antitoxin'||g.name==="Healer's Kit"));
  const [name,setName]=useState<ConsumableName|null>(null),[target,setTarget]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState('');
  const [acidSave,setAcidSave]=useState(''),[acidDamage,setAcidDamage]=useState('');
  const [creatureType,setCreatureType]=useState<HolyWaterTargetType|''>('');
+  const [ropeCheck,setRopeCheck]=useState(''),[waterChoice,setWaterChoice]=useState<'drink'|'refill'>('drink');
+ const [groundX,setGroundX]=useState(''),[groundY,setGroundY]=useState(''),[level,setLevel]=useState(false);
  const pending=useRef<string|null>(null);
  const antitoxinRemaining=antitoxinSecondsRemaining(campaign);
  const lights=(Object.keys(equipmentLightRules) as EquipmentLight[]).filter(light=>equipmentLightRemaining(campaign,light)>0);
@@ -28,8 +30,15 @@ export function ConsumablePanel({campaign,saving,onUse}:{campaign:Campaign;savin
  const canLight=!!lightName&&(extinguishing||!isBurning&&
   campaign.inventoryLedger?.gear.some(gear=>gear.name==='Tinderbox'&&gear.quantity>0)&&
   (lightName!=='Lamp'||lightRemaining>0||!!oil?.quantity));
- const ready=canLight||canCoat||throwing&&targetsInRange.includes(target)&&(objectTarget||acidSave!=='')&&(!needsDamage||acidDamage!=='')&&(name!=='Holy Water'||creatureType!=='')||name==='Antitoxin'||name==="Healer's Kit"&&!!selected;
- const clear=()=>{setName(null);setTarget('');setAcidSave('');setAcidDamage('');setCreatureType('');pending.current=null;setError('')};
+ const today=provisionsToday(campaign),pints=campaign.waterskinPints??4;
+ const supplyState=name==='Rope'?campaign.ropeKnotted??false:name==='Waterskin'?{today,pints}:today;
+ const useSupply=name==='Rations'&&battle?.status!=='active'||
+  name==='Waterskin'&&item?.quantity===1&&battle?.status!=='active'&&(waterChoice==='drink'?pints>0:pints<4)||
+  name==='Rope'&&item?.quantity===1&&!campaign.ropeKnotted&&ropeCheck!=='';
+ const deploying=name==='Ball Bearings'||name==='Caltrops';
+ const canDeploy=deploying&&battle?.status==='active'&&level&&groundX!==''&&groundY!=='';
+ const ready=canDeploy||useSupply||canLight||canCoat||throwing&&targetsInRange.includes(target)&&(objectTarget||acidSave!=='')&&(!needsDamage||acidDamage!=='')&&(name!=='Holy Water'||creatureType!=='')||name==='Antitoxin'||name==="Healer's Kit"&&!!selected;
+ const clear=()=>{setName(null);setTarget('');setAcidSave('');setAcidDamage('');setCreatureType('');setRopeCheck('');setWaterChoice('drink');setGroundX('');setGroundY('');setLevel(false);pending.current=null;setError('')};
  return <section aria-label="Adventuring consumables" className="rounded-xl border border-white/20 p-3 space-y-2">
  <h3 className="font-semibold">Adventuring consumables</h3>
  <p className="text-xs text-parchment/70">Antitoxin: Bonus Action, advantage against Poisoned for 1 in-game hour. Healer's Kit: Action, stabilize an adjacent unconscious ally at 0 HP; 10 uses per kit.</p>
@@ -40,7 +49,20 @@ export function ConsumablePanel({campaign,saving,onUse}:{campaign:Campaign;savin
   return <p key={source} role="status">{source}: {burning?`${rules.bright} ft bright, ${rules.dim} ft additional dim`:'extinguished'} · {remaining} min remaining</p>;
  })}
  {lightName&&<p className="text-sm">{extinguishing?'Extinguish the lamp with Utilize. Unused oil is retained.':`Light ${lightName} with an owned Tinderbox as a Bonus Action.${lightName==='Lamp'&&!lightRemaining?' A new burn uses one flask of Oil.':''}`}</p>}
- <label className="block text-sm">Supply<select aria-label="Choose consumable" className="mt-1 block w-full rounded bg-slate-900 p-2" value={name??''} onChange={e=>{setName(e.target.value as ConsumableName||null);setTarget('');setAcidSave('');setAcidDamage('');setCreatureType('');pending.current=null;setError('')}}><option value="">Choose a supply</option>{owned.map(g=><option key={g.name} value={g.name}>{g.name} ({g.quantity}{g.name==="Healer's Kit"?", "+(campaign.healerKitUsesRemaining??10)+" uses in current kit":''})</option>)}</select></label>
+ <label className="block text-sm">Supply<select aria-label="Choose consumable" className="mt-1 block w-full rounded bg-slate-900 p-2" value={name??''} onChange={e=>{setName(e.target.value as ConsumableName||null);setTarget('');setAcidSave('');setAcidDamage('');setCreatureType('');setRopeCheck('');setWaterChoice('drink');setGroundX('');setGroundY('');setLevel(false);pending.current=null;setError('')}}><option value="">Choose a supply</option>{owned.map(g=><option key={g.name} value={g.name}>{g.name} ({g.quantity}{g.name==="Healer's Kit"?", "+(campaign.healerKitUsesRemaining??10)+" uses in current kit":''})</option>)}</select></label>
+ {deploying&&<fieldset className="space-y-2">
+  <label>Ground X<input type="number" className="w-full bg-slate-900" value={groundX} onChange={e=>{setGroundX(e.target.value);pending.current=null}}/></label>
+  <label>Ground Y<input type="number" className="w-full bg-slate-900" value={groundY} onChange={e=>{setGroundY(e.target.value);pending.current=null}}/></label>
+  <label><input type="checkbox" checked={level} onChange={e=>{setLevel(e.target.checked);pending.current=null}}/> DM confirms level ground</label>
+ </fieldset>}
+ {name==='Rations'&&<p>Eat one ration. Today: {today.rations} eaten.</p>}
+ {name==='Waterskin'&&<div><p>Water: {pints}/4 pints · {today.waterPints} drunk today</p>
+  <label>Waterskin use<select className="block w-full bg-slate-900" value={waterChoice} onChange={e=>{setWaterChoice(e.target.value as 'drink'|'refill');pending.current=null}}>
+   <option value="drink">Drink one pint</option><option value="refill">Refill from a DM-confirmed source</option>
+  </select></label></div>}
+ {name==='Rope'&&(campaign.ropeKnotted?<p>Rope knot tied.</p>:<label>Tie a knot · DC 10 Sleight of Hand
+  <input className="block w-full bg-slate-900" type="number" aria-label="Verified Rope check total" value={ropeCheck} onChange={e=>{setRopeCheck(e.target.value);pending.current=null}}/>
+ </label>)}
  {name==="Healer's Kit"&&<label className="block text-sm">Recipient<select aria-label="Consumable recipient" className="mt-1 block w-full rounded bg-slate-900 p-2" value={target} onChange={e=>{setTarget(e.target.value);pending.current=null;setError('')}}><option value="">Select an eligible ally</option>{targets.map(t=><option key={t.id} value={t.id}>{t.id} (0 HP)</option>)}</select></label>}
  {battle?.basicPoison&&<p role="status">Basic Poison coating active.</p>}
  {name==='Poison, Basic'&&<p>{poisonWeapon?'Coat '+poisonWeapon.name+' as a Bonus Action.':'Equip a single owned piercing or slashing weapon without ammunition.'}</p>}
@@ -55,7 +77,7 @@ export function ConsumablePanel({campaign,saving,onUse}:{campaign:Campaign;savin
  {item&&<div className="flex gap-2"><button type="button" disabled={saving||busy||!ready} onClick={async()=>{
   if(!pending.current)pending.current=crypto.randomUUID();
   setBusy(true);setError('');
-  try{const ok=await onUse({name:item.name as ConsumableName,requestId:pending.current,confirmed:true,expectedQuantity:item.quantity,expectedElapsedMinutes:campaign.elapsedMinutes??0,expectedWeaponId:poisonWeapon?.id,...(lightName?{lightOperation:extinguishing?'extinguish' as const:'light' as const,expectedLight:JSON.stringify(light??null),expectedFuelQuantity:oil?.quantity}:{}),...(throwing?{targetId:target,expectedTargetHP:recipient?.hp,expectedTargetPosition:recipient?{x:recipient.x,y:recipient.y}:undefined,throwRolls:{saveTotal:Number(acidSave),damage:Number(acidDamage),targetType:name==='Holy Water'?creatureType||undefined:undefined}}:name==="Healer's Kit"?{expectedKitUses:campaign.healerKitUsesRemaining??10,targetId:target,expectedTargetHP:recipient?.hp,expectedTargetPosition:recipient?{x:recipient.x,y:recipient.y}:undefined}:{targetId:'nighthawk'}),...(battle?.status==='active'?{expectedEncounterId:battle.id,expectedTurnIndex:battle.turnIndex,expectedRound:battle.round,expectedActorPosition:actor?{x:actor.x,y:actor.y}:undefined}:{})});if(ok)clear();else setError('Use rejected; refresh and check the current state.')}catch(e){setError(String(e))}finally{setBusy(false)}
+  try{const ok=await onUse({name:item.name as ConsumableName,requestId:pending.current,confirmed:true,expectedQuantity:item.quantity,expectedElapsedMinutes:campaign.elapsedMinutes??0,expectedWeaponId:poisonWeapon?.id,expectedSupplyState:JSON.stringify(supplyState),supplyOperation:waterChoice,ropeCheck:Number(ropeCheck),...(deploying?{ground:{x:Number(groundX),y:Number(groundY),level}}:{}),...(lightName?{lightOperation:extinguishing?'extinguish' as const:'light' as const,expectedLight:JSON.stringify(light??null),expectedFuelQuantity:oil?.quantity}:{}),...(throwing?{targetId:target,expectedTargetHP:recipient?.hp,expectedTargetPosition:recipient?{x:recipient.x,y:recipient.y}:undefined,throwRolls:{saveTotal:Number(acidSave),damage:Number(acidDamage),targetType:name==='Holy Water'?creatureType||undefined:undefined}}:name==="Healer's Kit"?{expectedKitUses:campaign.healerKitUsesRemaining??10,targetId:target,expectedTargetHP:recipient?.hp,expectedTargetPosition:recipient?{x:recipient.x,y:recipient.y}:undefined}:{targetId:'nighthawk'}),...(battle?.status==='active'?{expectedEncounterId:battle.id,expectedTurnIndex:battle.turnIndex,expectedRound:battle.round,expectedActorPosition:actor?{x:actor.x,y:actor.y}:undefined}:{})});if(ok)clear();else setError('Use rejected; refresh and check the current state.')}catch(e){setError(String(e))}finally{setBusy(false)}
  }} className="rounded bg-amber-700 px-3 py-2 disabled:opacity-40">Confirm use</button><button type="button" onClick={clear}>Cancel</button></div>}
  {error&&<p role="alert">{error}</p>}
  </section>;

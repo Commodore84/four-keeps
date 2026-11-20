@@ -17,7 +17,7 @@ export function equipmentLightRemaining(campaign:Campaign,name:EquipmentLight){
  return Math.max(0,light.remainingSeconds-(light.startedAt===undefined?0:equipmentTime(campaign)-light.startedAt));
 }
 
-export type ConsumableName=EquipmentLight|'Poison, Basic'|'Oil'|'Alchemist’s Fire'|'Acid'|'Holy Water'|'Antitoxin'|"Healer's Kit";
+export type ConsumableName=EquipmentLight|'Ball Bearings'|'Caltrops'|'Rations'|'Waterskin'|'Rope'|'Poison, Basic'|'Oil'|'Alchemist’s Fire'|'Acid'|'Holy Water'|'Antitoxin'|"Healer's Kit";
 
 export function antitoxinSecondsRemaining(campaign: Campaign): number {
  const minutes = (campaign.antitoxinUntilMinute ?? 0) - (campaign.elapsedMinutes ?? 0);
@@ -29,12 +29,19 @@ export function advanceConsumableTime(c:Campaign,minutes:number):Campaign{
  return {...c,elapsedMinutes:(c.elapsedMinutes??0)+minutes};
 }
 
+export function provisionsToday(campaign:Campaign){
+ const day=Math.floor((campaign.elapsedMinutes??0)/1440);
+ return campaign.provisions?.day===day?campaign.provisions:{day,rations:0,waterPints:0};
+}
+
 export interface ConsumableRequest {
  name:ConsumableName;requestId:string;confirmed:boolean;expectedQuantity:number;
  expectedElapsedMinutes:number;expectedKitUses?:number;targetId?:string;expectedTargetHP?:number;
  expectedEncounterId?:string;expectedTurnIndex?:number;expectedRound?:number;expectedActorPosition?:{x:number;y:number};
  throwRolls?:{saveTotal:number;damage:number;targetType?:HolyWaterTargetType};
  lightOperation?:'light'|'extinguish';expectedLight?:string;expectedFuelQuantity?:number;
+ ground?:{x:number;y:number;level:boolean};
+ supplyOperation?:'drink'|'refill';expectedSupplyState?:string;ropeCheck?:number;
  expectedWeaponId?:string;
  expectedTargetPosition?:{x:number;y:number};
 }
@@ -47,9 +54,11 @@ export function useOwnedConsumable(c:Campaign,r:ConsumableRequest):Campaign{
  if(!r.confirmed||!r.requestId.trim())throw Error('Consumable confirmation and request ID required');
  if(c.consumableUseIds?.includes(r.requestId))return c;
  const name=r.name;
+ const groundSupply=name==='Ball Bearings'||name==='Caltrops';
+ const fieldSupply=name==='Rations'||name==='Waterskin'||name==='Rope';
  const isLight=name==='Candle'||name==='Lamp'||name==='Torch';
  const extinguishing=isLight&&r.lightOperation==='extinguish';
- if(!isLight&&r.name!=='Poison, Basic' &&r.name!=='Oil'&&r.name!=='Alchemist’s Fire'&&r.name!=='Holy Water'&&r.name!=='Acid'&&r.name!=='Antitoxin'&&r.name!=="Healer's Kit")throw Error('Unknown consumable');
+ if(!groundSupply&&!fieldSupply&&!isLight&&r.name!=='Poison, Basic' &&r.name!=='Oil'&&r.name!=='Alchemist’s Fire'&&r.name!=='Holy Water'&&r.name!=='Acid'&&r.name!=='Antitoxin'&&r.name!=="Healer's Kit")throw Error('Unknown consumable');
  if((c.elapsedMinutes??0)!==r.expectedElapsedMinutes)throw Error('Stale campaign time');
  if(c.combat?.status==='initiative-set'||c.combat?.status==='awaiting-initiative')throw Error('Legacy combat unsupported');
  const b=c.companionEncounter,active=b?.status==='active',actor=active?b.participants.nighthawk:undefined;
@@ -59,6 +68,7 @@ export function useOwnedConsumable(c:Campaign,r:ConsumableRequest):Campaign{
  if(actor&&(r.expectedActorPosition?.x!==actor.x||r.expectedActorPosition?.y!==actor.y))throw Error('Stale actor position');
  if(actor&&(actor.hp<=0||actor.conditions.some(x=>['Incapacitated','Paralyzed','Petrified','Stunned','Unconscious'].includes(x))))throw Error('Actor cannot act');
  if(actor?.rogueDazeTurns!==undefined&&(actor.rogueDazeChoice==='movement'||actor.movementSpentFeet>0||actor.actionUsed||actor.bonusActionUsed))throw Error('Dazed: choose movement or one action or bonus action');
+ if(actor&&fieldSupply&&name!=='Rope')throw Error('Use provisions during exploration');
  if(actor&&(r.name==='Antitoxin'||r.name==='Poison, Basic'||isLight&&!extinguishing?actor.bonusActionUsed:actor.actionUsed))throw Error('Required action already spent');
  if(isLight){
   const light=c.equipmentLights?.[name];
@@ -92,6 +102,53 @@ export function useOwnedConsumable(c:Campaign,r:ConsumableRequest):Campaign{
  }
  const gear=c.inventoryLedger?.gear,idx=gear?.findIndex(g=>g.name===r.name);
  if(!gear||idx===undefined||idx<0||gear[idx].quantity!==r.expectedQuantity||gear[idx].quantity<1)throw Error('Stale consumable inventory');
+ if(groundSupply){
+  const ground=r.ground,size=name==='Ball Bearings'?2:1,reach=name==='Ball Bearings'?2:1;
+  if(!b||!active||!actor||!ground?.level||!Number.isInteger(ground.x)||!Number.isInteger(ground.y)||
+   ground.x<0||ground.y<0||ground.x+size>20||ground.y+size>20||
+   Math.max(Math.abs(ground.x-actor.x),Math.abs(ground.y-actor.y))>reach)
+   throw Error('Choose verified level ground in range');
+  const overlaps=b.groundSupplies?.some(supply=>{
+   const existing=supply.name==='Ball Bearings'?2:1;
+   return supply.x<ground.x+size&&ground.x<supply.x+existing&&supply.y<ground.y+size&&ground.y<supply.y+existing;
+  });
+  if(overlaps)throw Error('Ground supplies already occupy that space');
+  return {...c,consumableUseIds:[...(c.consumableUseIds??[]),r.requestId],
+   inventoryLedger:{...c.inventoryLedger!,gear:gear.map((item,index)=>index===idx?{...item,quantity:item.quantity-1}:item)},
+   companionEncounter:{...b,groundSupplies:[...(b.groundSupplies??[]),{id:r.requestId,name,x:ground.x,y:ground.y}],
+    participants:{...b.participants,nighthawk:{...actor,actionUsed:true,
+      ...(actor.rogueDazeTurns!==undefined?{rogueDazeChoice:'action' as const}:{})}},
+    log:[...b.log,name+' deployed (Utilize)']},updatedAt:new Date().toISOString()};
+ }
+ if(fieldSupply){
+  const today=provisionsToday(c);
+  const pints=c.waterskinPints??4;
+  const state=name==='Rope'?c.ropeKnotted??false:name==='Waterskin'?{today,pints}:today;
+  if(r.expectedSupplyState!==JSON.stringify(state))throw Error('Stale supply state');
+  const confirmed={...c,consumableUseIds:[...(c.consumableUseIds??[]),r.requestId],updatedAt:new Date().toISOString()};
+  if(name==='Rations'){
+   return {...confirmed,provisions:{...today,rations:today.rations+1},
+    inventoryLedger:{...c.inventoryLedger!,gear:gear.map((item,index)=>index===idx?{...item,quantity:item.quantity-1}:item)}};
+  }
+  if(name==='Waterskin'){
+   if(gear[idx].quantity!==1)throw Error('Individual waterskins require a single tracked container');
+   if(r.supplyOperation==='refill'){
+    if(pints>=4)throw Error('Waterskin is already full');
+    return {...confirmed,waterskinPints:4};
+   }
+   if(r.supplyOperation!=='drink'||pints<=0)throw Error('Choose a drink from a nonempty waterskin');
+   return {...confirmed,waterskinPints:pints-1,provisions:{...today,waterPints:today.waterPints+1}};
+  }
+  if(gear[idx].quantity!==1||c.ropeKnotted||!Number.isInteger(r.ropeCheck)||Math.abs(r.ropeCheck!)>100)
+   throw Error('An unknotted, individually tracked rope and a verified check are required');
+  const success=r.ropeCheck!>=10;
+  return {...confirmed,ropeKnotted:success,
+   journal:[...c.journal,{id:r.requestId,text:success?'Tied a Rope knot':'Failed to tie a Rope knot',
+    createdAt:confirmed.updatedAt,kind:'system'}],
+   ...(active&&b&&actor?{companionEncounter:{...b,participants:{...b.participants,
+    nighthawk:{...actor,actionUsed:true,...(actor.rogueDazeTurns!==undefined?{rogueDazeChoice:'action' as const}:{})}},
+    log:[...b.log,success?'Rope knot tied (Utilize)':'Rope knot check failed (Utilize)']}}:{})};
+ }
  if(r.name==='Poison, Basic'){
   const weapon=basicPoisonWeapon(c);
   if(!active||!b||!actor||!weapon||weapon.id!==r.expectedWeaponId||b.basicPoison)

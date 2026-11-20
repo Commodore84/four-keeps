@@ -222,3 +222,38 @@ test('iPhone lamp lighting, pause and relight spend one Oil flask and survive re
  await expect(panel.getByRole('status')).toHaveText('Lamp: 15 ft bright, 30 ft additional dim · 360 min remaining');
  await expect(panel.getByLabel('Choose consumable').getByRole('option',{name:/Oil/})).toHaveCount(0);
 });
+
+test('iPhone rations, waterskin and rope keep verified supply changes after reload',async({page})=>{
+ const id=await createCampaign(page,'Field supplies');
+ await page.evaluate(async id=>{
+  const {localCampaignStorage}=await import('/src/game/storage.ts');
+  const current=await localCampaignStorage.get(id);
+  if(!current?.inventoryLedger)throw Error('Campaign fixture was not saved');
+  await localCampaignStorage.save({...current,inventoryLedger:{...current.inventoryLedger,gear:[
+   {name:'Rations',quantity:1},{name:'Waterskin',quantity:1},{name:'Rope',quantity:1},
+  ]}});
+ },id);
+ await page.reload();
+ await page.getByRole('button',{name:'Campaigns',exact:true}).click();
+ await page.getByRole('button',{name:'Continue Adventure'}).click();
+ const panel=page.getByRole('region',{name:'Adventuring consumables'});
+ const supplies=panel.getByLabel('Choose consumable');
+ const confirm=panel.getByRole('button',{name:'Confirm use'});
+ await supplies.selectOption('Rations');
+ await confirm.click();
+ await expect(supplies).toHaveValue('');
+ await supplies.selectOption('Waterskin');
+ await confirm.click();
+ await expect(supplies).toHaveValue('');
+ await supplies.selectOption('Rope');
+ await panel.getByLabel('Verified Rope check total').fill('10');
+ await confirm.click();
+ await expect(supplies).toHaveValue('');
+ await page.reload();
+ const saved=await page.evaluate(async id=>{
+  const {localCampaignStorage}=await import('/src/game/storage.ts');
+  const current=await localCampaignStorage.get(id);
+  return {provisions:current?.provisions,pints:current?.waterskinPints,knotted:current?.ropeKnotted};
+ },id);
+ expect(saved).toEqual({provisions:{day:0,rations:1,waterPints:1},pints:3,knotted:true});
+});
