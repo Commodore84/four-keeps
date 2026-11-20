@@ -63,7 +63,11 @@ export function MerchantShop({campaign,saving,onClose,onPrepare,onSettle,onDiscu
      </div>
      <span className="shrink-0 tabular-nums text-gold">{formatFrontierPrice(unit)}</span>
     </div>
-    <p className="text-sm leading-snug text-parchment/90">{merchantItemDescription(item)}</p>
+    <details className="group rounded-lg border border-white/10 bg-ink/20 px-2 py-1">
+     <summary className="cursor-pointer select-none py-1 text-sm text-parchment/90">Item details <span className="text-xs text-parchment/60">(rules, usage and weight)</span></summary>
+     <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-parchment/90">{merchantItemDescription(item)}</p>
+     <p className="mt-2 text-xs leading-snug text-parchment/75">{merchantItemFacts(item).join(' · ')}</p>
+    </details>
     <div className="flex items-center justify-between gap-2">
      <p className="min-w-0 text-xs leading-snug text-parchment/75">{merchantItemFacts(item).join(' · ')}</p>
      <div className="flex shrink-0 items-center gap-1">
