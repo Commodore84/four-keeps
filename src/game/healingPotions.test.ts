@@ -48,7 +48,7 @@ describe('SRD 5.2.1 healing potions',()=>{
   expect(()=>useOwnedHealingPotion({...campaign,character:{...campaign.character!,currentHitPoints:20}}, {...req,expectedHP:20})).toThrow('cannot heal');
   expect(campaign.inventoryLedger?.gear[0].quantity).toBe(2);
  });
- it('administers to an adjacent companion with an Action, preserving player HP and Bonus Action',()=>{
+ it('administers to an adjacent companion with a Bonus Action, preserving player HP and Action',()=>{
   const actor={x:2,y:3,hp:8,maxHp:20,conditions:[],actionUsed:false,bonusActionUsed:false};
   const ally={...actor,x:3,y:3,hp:0,maxHp:18,actorKind:'party',conditions:['Unconscious'],deathSaves:{successes:1,failures:1,stable:false,dead:false}};
   const campaign={character:{currentHitPoints:8,maxHitPoints:20},inventoryLedger:{gear:[{name:'Potion of Healing (greater)',quantity:2}]},companionEncounter:{status:'active',mode:'unified',round:2,turnIndex:0,order:['nighthawk','ally'],log:[],participants:{nighthawk:actor,ally},nighthawkSheetHpSnapshot:8}} as unknown as Campaign;
@@ -58,11 +58,11 @@ describe('SRD 5.2.1 healing potions',()=>{
   expect(used.companionEncounter?.participants.ally.hp).toBe(8);
   expect(used.companionEncounter?.participants.ally.conditions).not.toContain('Unconscious');
   expect(used.companionEncounter?.participants.ally.deathSaves?.failures).toBe(0);
-  expect(used.companionEncounter?.participants.nighthawk.actionUsed).toBe(true);
-  expect(used.companionEncounter?.participants.nighthawk.bonusActionUsed).toBe(false);
+  expect(used.companionEncounter?.participants.nighthawk.actionUsed).toBe(false);
+  expect(used.companionEncounter?.participants.nighthawk.bonusActionUsed).toBe(true);
   expect(used.inventoryLedger?.gear[0].quantity).toBe(1);
   expect(useOwnedHealingPotion(used,req)).toBe(used);
-  expect(()=>useOwnedHealingPotion(used,{...req,requestId:'ally-2',expectedQuantity:1,expectedTargetHP:8})).toThrow('Action already spent');
+  expect(()=>useOwnedHealingPotion(used,{...req,requestId:'ally-2',expectedQuantity:1,expectedTargetHP:8})).toThrow('Bonus Action already spent');
   expect(()=>useOwnedHealingPotion(campaign,{...req,expectedTargetHP:2})).toThrow('Stale target');
   expect(()=>useOwnedHealingPotion(campaign,{...req,expectedRound:1})).toThrow('Stale encounter');
   expect(()=>useOwnedHealingPotion({...campaign,companionEncounter:{...campaign.companionEncounter!,participants:{...campaign.companionEncounter!.participants,ally:{...campaign.companionEncounter!.participants.ally,x:8}}}},req)).toThrow('adjacent');
