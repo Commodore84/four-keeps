@@ -481,9 +481,9 @@ describe('SRD ground Oil deployment integrity',()=>{
   const lit=igniteGroundOil(used,'oil-square-1');
   expect(lit.companionEncounter?.groundOil?.[0].ignitedRound).toBe(2);
   const entered={...lit,companionEncounter:{...lit.companionEncounter!,participants:{...lit.companionEncounter!.participants,nighthawk:{...lit.companionEncounter!.participants.nighthawk,x:3,y:2}}}};
-  const damaged=resolveGroundOilHazard(entered,'nighthawk',true);
+  const damaged=resolveGroundOilHazard(entered,'nighthawk');
   expect(damaged.companionEncounter?.participants.nighthawk.hp).toBe(entered.companionEncounter.participants.nighthawk.hp-5);
-  expect(resolveGroundOilHazard(damaged,'nighthawk',false).companionEncounter?.participants.nighthawk.hp).toBe(damaged.companionEncounter?.participants.nighthawk.hp);
+  expect(resolveGroundOilHazard(damaged,'nighthawk').companionEncounter?.participants.nighthawk.hp).toBe(damaged.companionEncounter?.participants.nighthawk.hp);
   expect(()=>igniteGroundOil(lit,'oil-square-1')).toThrow('No unignited ground Oil');
   const igniteRequest={name:'Oil' as const,requestId:'ignite-square-1',confirmed:true,expectedQuantity:0,expectedElapsedMinutes:100,expectedEncounterId:used.companionEncounter?.id,expectedRound:2,expectedTurnIndex:0,igniteOilId:'oil-square-1'};
   const confirmed=useOwnedConsumable(used,igniteRequest);
@@ -492,7 +492,7 @@ describe('SRD ground Oil deployment integrity',()=>{
   expect(confirmed.inventoryLedger?.gear[0].quantity).toBe(1);
   expect(()=>useOwnedConsumable(used,{...igniteRequest,expectedRound:3})).toThrow('Stale Oil ignition');
   const expired={...lit,companionEncounter:{...lit.companionEncounter!,round:5}} as Campaign;
-  expect(resolveGroundOilHazard(expired,'nighthawk',true)).toBe(expired);
+  expect(resolveGroundOilHazard(expired,'nighthawk')).toBe(expired);
   expect(()=>useOwnedConsumable(c,{...request,ground:{x:5,y:2,level:true}})).toThrow('verified level ground');
   expect(()=>useOwnedConsumable(c,{...request,confirmed:false})).toThrow('confirmation');
  });
