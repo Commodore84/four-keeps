@@ -547,10 +547,12 @@ export function endCompanionTurn(campaign:Campaign,actorId:string,rollBurning=()
  if(battle.participants[actorId]?.actorKind==='enemy'&&battle.pendingOpportunity?.moverId===actorId&&battle.pendingOpportunity.attackerIds.length)throw Error('Pending opportunity reactions require DM adjudication');
  if(battle.participants[actorId]?.roguePoisonDC!==undefined&&!battle.participants[actorId]?.roguePoisonSaveResolved)throw Error('Resolve Rogue Poison end-of-turn Constitution save before ending turn');
  if(battle.participants[actorId]?.rogueKnockoutDC!==undefined&&!battle.participants[actorId]?.rogueKnockoutSaveResolved)throw Error('Resolve Rogue Knock Out end-of-turn Constitution save before ending turn');
+ const oilResolved=resolveGroundOilHazard(campaign,actorId,false);
+ const afterOil=encounter(oilResolved);
  const next=(battle.turnIndex+1)%battle.order.length;
  const timed = next === 0 && battle.mode === 'unified' && antitoxinSecondsRemaining(oilResolved) > 0
-  ? { ...campaign, antitoxinCombatSeconds: (campaign.antitoxinCombatSeconds ?? 0) + 6 }
-  : campaign;
+  ? { ...oilResolved, antitoxinCombatSeconds: (oilResolved.antitoxinCombatSeconds ?? 0) + 6 }
+  : oilResolved;
  const clocked=next===0&&battle.mode==='unified'
   ? {...timed,equipmentCombatSeconds:(timed.equipmentCombatSeconds??0)+6}:timed;
  const nextId=battle.order[next];const outgoing=afterOil.participants[actorId];const participants={...afterOil.participants,[actorId]:{...outgoing,disengaged:false,roguePoisonSaveResolved:false,rogueKnockoutSaveResolved:false,...(outgoing.rogueDazeTurns!==undefined?(outgoing.rogueDazeTurns<=1?{rogueDazeTurns:undefined,rogueDazeChoice:undefined}:{rogueDazeTurns:outgoing.rogueDazeTurns-1,rogueDazeChoice:undefined}):{}),...(outgoing.rogueObscureUntilTurn!==undefined?(outgoing.rogueObscureUntilTurn<=1?{rogueObscureUntilTurn:undefined,conditions:outgoing.conditions.filter(c=>c!=='Blinded')}:{rogueObscureUntilTurn:outgoing.rogueObscureUntilTurn-1}):{})}};participants[nextId]={...participants[nextId],caltropsStopped:undefined,movementSpentFeet:0,actionUsed:false,bonusActionUsed:false,dashFeet:0,disengaged:false,dodging:false,reactionUsed:false,rogueSneakUsed:false,rogueSteadyAim:false,rogueMovedThisTurn:false};const nextRound=battle.round+(next===0?1:0);
