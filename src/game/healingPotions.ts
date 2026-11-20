@@ -48,7 +48,7 @@ export function useOwnedHealingPotion(campaign:Campaign,request:HealingPotionReq
  const actor=battle?.status==='active'?battle.participants.nighthawk:undefined;
  if(actor&&(actor.conditions?.some(c=>['Incapacitated','Paralyzed','Petrified','Stunned','Unconscious'].includes(c))||actor.hp<=0))throw Error('Actor cannot take actions');
  if(actor&&request.expectedActorPosition&&(request.expectedActorPosition.x!==actor.x||request.expectedActorPosition.y!==actor.y))throw Error('Stale actor position');
- if(actor&&(targetId==='nighthawk'?actor.bonusActionUsed:actor.actionUsed))throw Error(targetId==='nighthawk'?'Bonus Action already spent':'Action already spent');
+ if(actor?.bonusActionUsed)throw Error('Bonus Action already spent');
  const recipient=targetId==='nighthawk'?undefined:battle?.participants[targetId];
  if(targetId!=='nighthawk'&&(!recipient||recipient.actorKind==='enemy'||!eligiblePotionTargets(campaign).some(t=>t.id===targetId)))throw Error('Target is not an eligible adjacent ally');
  if(recipient&&(request.expectedTargetHP!==recipient.hp||!request.expectedTargetPosition||request.expectedTargetPosition.x!==recipient.x||request.expectedTargetPosition.y!==recipient.y))throw Error('Stale target HP or position');
@@ -60,7 +60,7 @@ export function useOwnedHealingPotion(campaign:Campaign,request:HealingPotionReq
  if(targetId==='nighthawk'&&(ch.currentHitPoints<=0||ch.currentHitPoints>=ch.maxHitPoints))throw Error('Potion cannot heal this character');
  const heal=healingPotionAmount(request.name,request.rollDie);
  const hp=targetId==='nighthawk'?Math.min(ch.maxHitPoints,ch.currentHitPoints+heal):ch.currentHitPoints;
- const nextBattle=battle?.status==='active'?{...battle,participants:{...battle.participants,nighthawk:{...battle.participants.nighthawk,...(targetId==='nighthawk'?{bonusActionUsed:true,hp}:{actionUsed:true})},...(recipient?{[targetId]:{...recipient,hp:Math.min(recipient.maxHp,recipient.hp+heal),...(recipient.hp===0?{conditions:recipient.conditions.filter(c=>c!=='Unconscious'),...(recipient.deathSaves?{deathSaves:{successes:0,failures:0,stable:false,dead:false}}:{})}:{})}}:{})},nighthawkSheetHpSnapshot:hp,log:[...battle.log,'Nighthawk used '+request.name+' on '+targetId]}:battle;
+ const nextBattle=battle?.status==='active'?{...battle,participants:{...battle.participants,nighthawk:{...battle.participants.nighthawk,...(targetId==='nighthawk'?{bonusActionUsed:true,hp}:{bonusActionUsed:true})},...(recipient?{[targetId]:{...recipient,hp:Math.min(recipient.maxHp,recipient.hp+heal),...(recipient.hp===0?{conditions:recipient.conditions.filter(c=>c!=='Unconscious'),...(recipient.deathSaves?{deathSaves:{successes:0,failures:0,stable:false,dead:false}}:{})}:{})}}:{})},nighthawkSheetHpSnapshot:hp,log:[...battle.log,'Nighthawk used '+request.name+' on '+targetId]}:battle;
  return {...campaign,healingPotionUseIds:[...(campaign.healingPotionUseIds??[]),request.requestId],...(nextBattle?{companionEncounter:nextBattle}:{}),character:{...ch,currentHitPoints:hp},
   inventoryLedger:{...campaign.inventoryLedger!,gear:gear.map((g,i)=>i===index?{...g,quantity:g.quantity-1}:g)},updatedAt:new Date().toISOString()};
 }
