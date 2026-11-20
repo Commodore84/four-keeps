@@ -28,14 +28,18 @@ export function MerchantShop({campaign,saving,onClose,onPrepare,onSettle,onDiscu
  const visible=lines.filter(line=>line.item.name.toLowerCase().includes(search.toLowerCase()));
  const groupFor=(item:(typeof lines)[number]['item'])=>{
   const name=item.name.toLowerCase();
-  if(name.endsWith(' pack')||name.endsWith(' pack (10)')||name.endsWith(' pack (20)'))return 'Adventuring packs';
-  if(item.category==='tool'&&(name.includes('kit')||name.includes('tools')||name.includes('supplies')))return 'Kits and tools';
-  if(item.category==='weapon')return 'Weapons';
+  if(item.category==='weapon')return name.includes('crossbow')||name.includes('bow')||name.includes('sling')||name.includes('blowgun')?'Ranged weapons':'Melee weapons';
   if(item.category==='armor'||item.category==='shield')return 'Armor and shields';
   if(item.category==='ammunition')return 'Ammunition';
-  if(name.includes('potion')||name.includes('rations')||name.includes('oil')||name.includes('torch')||name.includes('candle'))return 'Consumables';
-  if(item.category==='tool')return 'Kits and tools';
-  return 'Adventuring gear';
+  if(name.includes('potion')||name.includes('antitoxin')||name.includes('acid')||name.includes('alchemist')||name.includes('holy water')||name.includes('poison'))return 'Potions and alchemical supplies';
+  if(name.includes('rations')||name.includes('waterskin')||name.includes('wine')||name.includes('ale'))return 'Food and drink';
+  if(name.includes('torch')||name.includes('candle')||name.includes('lantern')||name.includes('lamp')||name.includes('tinderbox')||name.includes('oil'))return 'Lighting and fuel';
+  if(name.includes('rope')||name.includes('grappling hook')||name.includes('climber')||name.includes('piton')||name.includes('ladder'))return 'Climbing and rope';
+  if(name.includes('tent')||name.includes('bedroll')||name.includes('blanket')||name.includes('pack'))return 'Camping and travel';
+  if(name.includes('backpack')||name.includes('pouch')||name.includes('sack')||name.includes('chest')||name.includes('barrel')||name.includes('basket')||name.includes('bottle')||name.includes('case')||name.includes('flask')||name.includes('vial'))return 'Containers and storage';
+  if(item.category==='tool'||name.includes('kit')||name.includes('tools')||name.includes('supplies'))return 'Kits and tools';
+  if(name.includes('ball bearing')||name.includes('caltrop')||name.includes('trap')||name.includes('manacles')||name.includes('chain'))return 'Traps and restraints';
+  return 'Other adventuring gear';
  };
  const grouped=Object.entries(visible.reduce<Record<string,typeof visible>>((groups,line)=>{const name=groupFor(line.item);(groups[name]??=[]).push(line);return groups;},{})).sort(([a],[b])=>a.localeCompare(b));
  const total=selected.reduce((sum,line)=>sum+line.unit*line.quantity,0);
@@ -48,8 +52,9 @@ export function MerchantShop({campaign,saving,onClose,onPrepare,onSettle,onDiscu
   <div className="rounded-lg border border-gold/25 bg-ink/50 p-3 text-sm" aria-label="Current wallet"><span className="text-parchment/70">Your money</span><strong className="float-right text-gold">{formatFrontierPrice(funds)}</strong></div>
   <div className="space-y-2"><h3 className="font-semibold">Available equipment</h3>
   <input aria-label="Search merchandise" placeholder="Search items" value={search} onChange={e=>setSearch(e.target.value)} className="w-full rounded-lg border border-white/25 bg-ink p-2 text-sm"/>
+  {grouped.length>1&&<nav aria-label="Jump to merchandise section" className="flex gap-2 overflow-x-auto pb-1" >{grouped.map(([group,entries],index)=><button key={group} type="button" onClick={()=>document.getElementById('merchant-group-'+index)?.scrollIntoView({behavior:'smooth',block:'start'})} className="shrink-0 rounded-lg border border-gold/40 px-3 py-2 text-xs text-gold">{group} ({entries.length})</button>)}</nav>}
   <div className="max-h-[65vh] overflow-y-auto rounded-lg border border-gold/50 bg-[#322c24] focus-visible:outline focus-visible:outline-2 focus-visible:outline-gold" role="region" aria-label="Merchant inventory" tabIndex={0}>
-   {grouped.map(([group,entries])=><section key={group} aria-label={group} className="border-b border-white/20"><h4 className="sticky top-0 z-10 bg-[#3d3428] px-3 py-2 font-semibold text-gold">{group} ({entries?.length??0})</h4>
+   {grouped.map(([group,entries])=><section key={group} id={"merchant-group-"+grouped.findIndex(([name])=>name===group)} aria-label={group} className="scroll-mt-2 border-b border-white/20"><h4 className="sticky top-0 z-10 bg-[#3d3428] px-3 py-2 font-semibold text-gold">{group} ({entries?.length??0})</h4>
    {entries?.map(({item,quantity,unit,stock,owned})=><div key={item.id} className="space-y-1 border-t border-white/10 px-3 py-2" aria-label={item.name}>
     <div className="flex items-baseline justify-between gap-x-2 text-sm" aria-label={item.name+' availability'}>
      <div className="flex min-w-0 flex-wrap items-baseline gap-x-2">
