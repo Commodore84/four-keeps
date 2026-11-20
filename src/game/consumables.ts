@@ -141,7 +141,7 @@ export function useOwnedConsumable(c:Campaign,r:ConsumableRequest):Campaign{
   if(overlaps||b.groundOil?.some(o=>o.x===ground.x&&o.y===ground.y&&b.round<o.expiresRound))throw Error('Ground supplies already occupy that space');
   return {...c,consumableUseIds:[...(c.consumableUseIds??[]),r.requestId],
    inventoryLedger:{...c.inventoryLedger!,gear:gear.map((item,index)=>index===idx?{...item,quantity:item.quantity-1}:item)},
-   companionEncounter:{...b,groundSupplies:[...(b.groundSupplies??[]),{id:r.requestId,name,x:ground.x,y:ground.y}],
+   companionEncounter:{...b,...(name==='Oil'?{groundOil:[...(b.groundOil??[]),{id:r.requestId,x:ground.x,y:ground.y,expiresRound:b.round+10}]}:{groundSupplies:[...(b.groundSupplies??[]),{id:r.requestId,name:name as 'Ball Bearings'|'Caltrops',x:ground.x,y:ground.y}]}),
     participants:{...b.participants,nighthawk:{...actor,actionUsed:true,
       ...(actor.rogueDazeTurns!==undefined?{rogueDazeChoice:'action' as const}:{})}},
     log:[...b.log,name+' deployed (Utilize)']},updatedAt:new Date().toISOString()};
