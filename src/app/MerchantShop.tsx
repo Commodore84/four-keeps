@@ -50,19 +50,24 @@ export function MerchantShop({campaign,saving,onClose,onPrepare,onSettle,onDiscu
   <input aria-label="Search merchandise" placeholder="Search items" value={search} onChange={e=>setSearch(e.target.value)} className="w-full rounded-lg border border-white/25 bg-ink p-2 text-sm"/>
   <div className="max-h-[65vh] overflow-y-auto rounded-lg border border-white/15" aria-label="Merchant inventory">
    {grouped.map(([group,entries])=><section key={group} aria-label={group} className="border-b border-white/20"><h4 className="sticky top-0 z-10 bg-panel px-3 py-2 font-semibold text-gold">{group} ({entries?.length??0})</h4>
-   {entries?.map(({item,quantity,unit,stock,owned})=><div key={item.id} className="border-t border-white/10 p-3 space-y-2" aria-label={item.name}>
-    <div className="flex justify-between gap-2 text-sm">
-     <div className="min-w-0"><strong className="block">{item.name}</strong>
-      <span className="text-xs text-parchment/60">{stock} in stock · {owned} in inventory{item.packQuantity?' · pack of '+item.packQuantity:''}</span>
+   {entries?.map(({item,quantity,unit,stock,owned})=><div key={item.id} className="space-y-1 border-t border-white/10 px-3 py-2" aria-label={item.name}>
+    <div className="flex items-baseline justify-between gap-x-2 text-sm" aria-label={item.name+' availability'}>
+     <div className="flex min-w-0 flex-wrap items-baseline gap-x-2">
+      <strong>{item.name}</strong>
+      <span className="whitespace-nowrap text-xs tabular-nums text-parchment/70">{owned} owned · {stock} in stock</span>
      </div>
      <span className="shrink-0 tabular-nums text-gold">{formatFrontierPrice(unit)}</span>
     </div>
-    <details className="rounded-lg border border-white/15 px-3 text-sm text-parchment/90">
-     <summary className="cursor-pointer py-2 font-medium text-gold" aria-label={item.name+' description'}>Description &amp; rules</summary>
-     <p className="pb-2 leading-relaxed">{merchantItemDescription(item)}</p>
-     <p className="pb-2 text-xs text-parchment/75">{merchantItemFacts(item).join(' · ')}</p>
-    </details>
-    <div className="flex items-center justify-between gap-2"><div className="flex items-center gap-3"><button type="button" aria-label={'Remove '+item.name} disabled={saving||!!pending||quantity===0} onClick={()=>setCart(old=>({...old,[item.id]:Math.max(0,quantity-1)}))} className="rounded-lg border border-white/30 px-3 py-1 text-lg">−</button><span className="w-5 text-center tabular-nums">{quantity}</span><button type="button" aria-label={'Add '+item.name} disabled={saving||!!pending||quantity>=Math.min(stock,20)} onClick={()=>setCart(old=>({...old,[item.id]:quantity+1}))} className="rounded-lg border border-white/30 px-3 py-1 text-lg">+</button></div><span className="text-xs text-parchment/70">{quantity?formatFrontierPrice(unit*quantity):'Select quantity'}</span></div>
+    <p className="text-sm leading-snug text-parchment/90">{merchantItemDescription(item)}</p>
+    <div className="flex items-center justify-between gap-2">
+     <p className="min-w-0 text-xs leading-snug text-parchment/75">{merchantItemFacts(item).join(' · ')}</p>
+     <div className="flex shrink-0 items-center gap-1">
+      {quantity>1&&<span className="text-xs tabular-nums text-parchment/70" aria-label={item.name+' subtotal'}>{formatFrontierPrice(unit*quantity)}</span>}
+      <button type="button" aria-label={'Remove '+item.name} disabled={saving||!!pending||quantity===0} onClick={()=>setCart(old=>({...old,[item.id]:Math.max(0,quantity-1)}))} className="h-11 w-11 rounded-lg border border-white/30 text-lg disabled:opacity-40">−</button>
+      <span className="min-w-4 text-center tabular-nums" aria-label={item.name+' quantity'}>{quantity}</span>
+      <button type="button" aria-label={'Add '+item.name} disabled={saving||!!pending||quantity>=Math.min(stock,20)} onClick={()=>setCart(old=>({...old,[item.id]:quantity+1}))} className="h-11 w-11 rounded-lg border border-white/30 text-lg disabled:opacity-40">+</button>
+     </div>
+    </div>
    </div>)}</section>)}
 {visible.length===0&&<p className="text-sm text-parchment/60">No merchandise matches your search.</p>}</div></div>
 
