@@ -128,7 +128,7 @@ export function useOwnedConsumable(c:Campaign,r:ConsumableRequest):Campaign{
  }
  const gear=c.inventoryLedger?.gear,idx=gear?.findIndex(g=>g.name===r.name);
  if(!gear||idx===undefined||idx<0||gear[idx].quantity!==r.expectedQuantity||gear[idx].quantity<1)throw Error('Stale consumable inventory');
- if(groundSupply){
+ if(groundSupply||name==='Oil'&&r.ground){
   const ground=r.ground,size=name==='Ball Bearings'?2:1,reach=name==='Ball Bearings'?2:1;
   if(!b||!active||!actor||!ground?.level||!Number.isInteger(ground.x)||!Number.isInteger(ground.y)||
    ground.x<0||ground.y<0||ground.x+size>20||ground.y+size>20||
@@ -138,7 +138,7 @@ export function useOwnedConsumable(c:Campaign,r:ConsumableRequest):Campaign{
    const existing=supply.name==='Ball Bearings'?2:1;
    return supply.x<ground.x+size&&ground.x<supply.x+existing&&supply.y<ground.y+size&&ground.y<supply.y+existing;
   });
-  if(overlaps)throw Error('Ground supplies already occupy that space');
+  if(overlaps||b.groundOil?.some(o=>o.x===ground.x&&o.y===ground.y&&b.round<o.expiresRound))throw Error('Ground supplies already occupy that space');
   return {...c,consumableUseIds:[...(c.consumableUseIds??[]),r.requestId],
    inventoryLedger:{...c.inventoryLedger!,gear:gear.map((item,index)=>index===idx?{...item,quantity:item.quantity-1}:item)},
    companionEncounter:{...b,groundSupplies:[...(b.groundSupplies??[]),{id:r.requestId,name,x:ground.x,y:ground.y}],
