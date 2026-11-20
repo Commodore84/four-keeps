@@ -493,6 +493,10 @@ describe('SRD ground Oil deployment integrity',()=>{
   expect(()=>useOwnedConsumable(used,{...igniteRequest,expectedRound:3})).toThrow('Stale Oil ignition');
   const expired={...lit,companionEncounter:{...lit.companionEncounter!,round:5}} as Campaign;
   expect(resolveGroundOilHazard(expired,'nighthawk')).toBe(expired);
+  const boundary={...lit,companionEncounter:{...lit.companionEncounter!,round:4,turnIndex:0,groundOil:lit.companionEncounter!.groundOil!.map(o=>({...o,damagedActorsThisTurn:[]})),participants:{...lit.companionEncounter!.participants,nighthawk:{...lit.companionEncounter!.participants.nighthawk,x:3,y:2}}}} as Campaign;
+  expect(resolveGroundOilHazard(boundary,'nighthawk').companionEncounter?.participants.nighthawk.hp).toBe(boundary.companionEncounter!.participants.nighthawk.hp-5);
+  const pastBoundary={...boundary,companionEncounter:{...boundary.companionEncounter!,turnIndex:1}};
+  expect(resolveGroundOilHazard(pastBoundary,'nighthawk')).toBe(pastBoundary);
   expect(()=>useOwnedConsumable(c,{...request,ground:{x:5,y:2,level:true}})).toThrow('verified level ground');
   expect(()=>useOwnedConsumable(c,{...request,confirmed:false})).toThrow('confirmation');
  });
