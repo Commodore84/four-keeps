@@ -20,6 +20,14 @@ test('iPhone magic items menu supports favorites and persistence',async ({page})
  expect(descriptions.every(description=>description.trim().length>0)).toBe(true);
  const armor=cards.filter({has:page.getByRole('heading',{name:'Armor +1',exact:true})});
  await expect(armor.getByText(/Armor Class/)).toBeVisible();
+ const groupFilter=compendium.getByRole('combobox',{name:'Magic item group'});
+ await groupFilter.selectOption('Weapons');
+ await expect(compendium.getByRole('heading',{name:'Armor +1',exact:true})).toHaveCount(0);
+ await groupFilter.selectOption('All');
+ const rarityFilter=compendium.getByRole('combobox',{name:'Magic item rarity'});
+ await rarityFilter.selectOption('Rare');
+ await expect(compendium.getByText('Rare',{exact:true}).first()).toHaveClass(/text-blue-300/);
+ await rarityFilter.selectOption('All');
  const search=page.getByRole('textbox',{name:'Search magic items'});
  await search.fill('Alchemy Jug');
  const jug=cards.filter({has:page.getByRole('heading',{name:'Alchemy Jug',exact:true})});
@@ -31,10 +39,12 @@ test('iPhone magic items menu supports favorites and persistence',async ({page})
  await search.fill('Wraps of Unarmed Power');
  const wraps=cards.filter({has:page.getByRole('heading',{name:'+3 Wraps of Unarmed Power',exact:true})});
  await expect(wraps.getByText(/\+3 to Unarmed Strike attack and damage rolls.*Force damage/)).toBeVisible();
+ await groupFilter.selectOption('Storage and containers');
  await search.fill('Bag of Holding');
  await expect(page.getByRole('heading',{name:'Bag of Holding',exact:true})).toBeVisible();
  await expect(compendium.getByText(/stores up to 500 pounds/)).toBeVisible();
  await page.getByRole('button',{name:'Add Bag of Holding to Wish List'}).click();
+ await groupFilter.selectOption('All');
  await page.getByRole('button',{name:'Wish List (1)'}).click();
  await expect(page.getByRole('heading',{name:'Bag of Holding',exact:true})).toBeVisible();
  await expect(compendium.getByText(/stores up to 500 pounds/)).toBeVisible();
