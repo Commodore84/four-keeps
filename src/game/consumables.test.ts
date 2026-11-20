@@ -1,4 +1,4 @@
-import {moveCompanionForced,bindCompanionWithRope,escapeCompanionRope,moveCompanion,attackCompanion,addCompanionObject,recordCompanionObjectFire,igniteGroundOil,damageCompanion,endCompanionTurn,extinguishCompanionFire,resolveCompanionSavingThrow} from './companionEncounter';
+import {moveCompanionForced,bindCompanionWithRope,escapeCompanionRope,moveCompanion,attackCompanion,addCompanionObject,recordCompanionObjectFire,igniteGroundOil,resolveGroundOilHazard,damageCompanion,endCompanionTurn,extinguishCompanionFire,resolveCompanionSavingThrow} from './companionEncounter';
 import {advanceConsumableTime,antitoxinSecondsRemaining,equipmentLightRemaining,provisionsToday} from './consumables';
 import {describe,it,expect} from 'vitest';
 import {useOwnedConsumable,eligibleKitTargets} from './consumables';
@@ -480,6 +480,10 @@ describe('SRD ground Oil deployment integrity',()=>{
   expect(useOwnedConsumable(used,request)).toBe(used);
   const lit=igniteGroundOil(used,'oil-square-1');
   expect(lit.companionEncounter?.groundOil?.[0].ignitedRound).toBe(2);
+  const entered={...lit,companionEncounter:{...lit.companionEncounter!,participants:{...lit.companionEncounter!.participants,nighthawk:{...lit.companionEncounter!.participants.nighthawk,x:3,y:2}}}};
+  const damaged=resolveGroundOilHazard(entered,'nighthawk',true);
+  expect(damaged.companionEncounter?.participants.nighthawk.hp).toBe(entered.companionEncounter.participants.nighthawk.hp-5);
+  expect(resolveGroundOilHazard(damaged,'nighthawk',false).companionEncounter?.participants.nighthawk.hp).toBe(damaged.companionEncounter?.participants.nighthawk.hp);
   expect(()=>igniteGroundOil(lit,'oil-square-1')).toThrow('No unignited ground Oil');
   expect(()=>useOwnedConsumable(c,{...request,ground:{x:5,y:2,level:true}})).toThrow('verified level ground');
   expect(()=>useOwnedConsumable(c,{...request,confirmed:false})).toThrow('confirmation');
