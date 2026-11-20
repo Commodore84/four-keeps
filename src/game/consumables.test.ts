@@ -458,3 +458,13 @@ describe('persisted equipment light clock boundaries',()=>{
   expect(equipmentLightRemaining(c,'Candle')).toBe(3600);
  });
 });
+
+describe('persisted consumable time integrity',()=>{
+ it('rejects a negative, fractional or overflowing saved game clock before advancing',()=>{
+  for(const elapsedMinutes of [-1,1.5,Number.MAX_SAFE_INTEGER]){
+   const campaign={...base(),elapsedMinutes} as Campaign;
+   expect(()=>advanceConsumableTime(campaign,1)).toThrow('Invalid elapsed game time');
+   expect(campaign.elapsedMinutes).toBe(elapsedMinutes);
+  }
+ });
+});
