@@ -32,6 +32,8 @@ test('iPhone magic items menu supports favorites and persistence',async ({page})
  await search.fill('Alchemy Jug');
  const jug=cards.filter({has:page.getByRole('heading',{name:'Alchemy Jug',exact:true})});
  await expect(jug.getByText(/Magic action.*Utilize action.*dawn/)).toBeVisible();
+ await jug.locator('details').getByText('Rules, requirements and source').click();
+ await expect(jug.getByText(/Source: 2024 Dungeon Master/)).toBeVisible();
  const liquids=jug.getByRole('table',{name:'Alchemy Jug liquids'});
  await expect(liquids.getByRole('row')).toHaveCount(11);
  await expect(liquids.getByRole('row',{name:'Basic Poison 4 ounces'})).toBeVisible();
