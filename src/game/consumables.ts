@@ -15,7 +15,7 @@ function equipmentTime(campaign:Campaign){
 export function equipmentLightRemaining(campaign:Campaign,name:EquipmentLight){
  const light=campaign.equipmentLights?.[name];
  if(!light)return 0;
- return Math.max(0,light.remainingSeconds-(light.startedAt===undefined?0:equipmentTime(campaign)-light.startedAt));
+ return Math.max(0,Math.min(equipmentLightRules[name].seconds,light.remainingSeconds)-Math.max(0,light.startedAt===undefined?0:equipmentTime(campaign)-light.startedAt));
 }
 
 export type ConsumableName=EquipmentLight|'Ball Bearings'|'Caltrops'|'Rations'|'Waterskin'|'Rope'|'Poison, Basic'|'Oil'|'Alchemist’s Fire'|'Acid'|'Holy Water'|'Antitoxin'|"Healer's Kit";
