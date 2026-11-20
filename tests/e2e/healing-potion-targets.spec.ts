@@ -1,6 +1,6 @@
 import {test,expect} from '@playwright/test';
 
-test('iPhone adjacent companion administration spends Action, heals companion, and persists',async({page})=>{
+test('iPhone adjacent companion administration spends Bonus Action, heals companion, and persists',async({page})=>{
  await page.goto('/four-keeps/');
  await page.getByRole('button',{name:'Settings',exact:true}).click();
  await page.getByRole('button',{name:'Open navigation menu'}).click();
@@ -23,10 +23,10 @@ test('iPhone adjacent companion administration spends Action, heals companion, a
  const panel=page.getByRole('region',{name:'Healing potions'});
  await panel.getByLabel('Choose healing potion').selectOption('Potion of Healing');
  await panel.getByLabel('Potion recipient').selectOption('ally');
- await panel.getByRole('button',{name:'Confirm drink potion'}).click();
+ await panel.getByRole('button',{name:'Confirm administer potion'}).click();
  await expect(panel).toContainText('Potion of Healing (1)');
  const saved=await page.evaluate(async()=>{const db=await new Promise<IDBDatabase>(resolve=>{const r=indexedDB.open('four-keeps-local',1);r.onsuccess=()=>resolve(r.result)});const c=await new Promise<any>(resolve=>{const r=db.transaction('campaigns').objectStore('campaigns').getAll();r.onsuccess=()=>resolve(r.result[0])});db.close();return {hp:c.character.currentHitPoints,ally:c.companionEncounter.participants.ally.hp,action:c.companionEncounter.participants.nighthawk.actionUsed,bonus:c.companionEncounter.participants.nighthawk.bonusActionUsed}});
- expect(saved.hp).toBe(12);expect(saved.ally).toBeGreaterThan(2);expect(saved.action).toBe(true);expect(saved.bonus).toBe(false);
+ expect(saved.hp).toBe(12);expect(saved.ally).toBeGreaterThan(2);expect(saved.action).toBe(false);expect(saved.bonus).toBe(true);
 });
 
 
