@@ -972,8 +972,8 @@ export function throwConsumable(campaign: Campaign, name: 'Acid' | 'Holy Water' 
 
 /** DM-verified ignition of an existing oil slick; no implicit ignition from unrelated damage. */
 export function igniteGroundOil(campaign:Campaign,id:string):Campaign{
- const battle=activeActor(campaign,'nighthawk');
- if(battle.mode!=='unified')throw Error('Ground Oil requires unified combat');
+ const battle=encounter(campaign);
+ if(battle.status!=='active'||battle.mode!=='unified')throw Error('Ground Oil requires unified combat');
  const slick=battle.groundOil?.find(o=>o.id===id);
  if(!slick||slick.ignitedRound!==undefined||battle.round>=slick.expiresRound)throw Error('No unignited ground Oil remains');
  return save(campaign,{...battle,groundOil:battle.groundOil!.map(o=>o.id===id?{...o,ignitedRound:battle.round,ignitedTurn:battle.turnIndex}:o),log:[...battle.log,'DM verified ignition of ground Oil '+id]});
