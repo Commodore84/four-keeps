@@ -328,3 +328,20 @@ test('iPhone records verified forced movement into a ground hazard and persists 
  },id);
  expect(saved).toEqual({x:4,hp:11,stopped:true});
 });
+
+test('iPhone Oil controls distinguish ground spill from thrown flask',async({page})=>{
+ await createCampaign(page,'Oil ground selector');
+ await page.evaluate(async()=>{
+  const db=await new Promise<IDBDatabase>(resolve=>{const r=indexedDB.open('four-keeps-local',1);r.onsuccess=()=>resolve(r.result)});
+  await new Promise<void>((resolve,reject)=>{const tx=db.transaction('campaigns','readwrite'),store=tx.objectStore('campaigns'),r=store.getAll();r.onsuccess=()=>{const c=r.result[0];c.inventoryLedger.gear.push({name:'Oil',quantity:2});store.put(c)};tx.oncomplete=()=>resolve();tx.onerror=()=>reject(tx.error)});db.close();
+ });
+ await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();await page.getByRole('button',{name:'Continue Adventure'}).click();
+ const panel=await openSupplies(page);
+ await panel.getByLabel('Choose consumable').selectOption('Oil');
+ await expect(panel.getByText('Spill Oil on an adjacent 5-foot square instead of throwing at a target')).toBeVisible();
+ await panel.getByText('Spill Oil on an adjacent 5-foot square instead of throwing at a target').click();
+ await expect(panel.getByText('Ground X')).toBeVisible();
+ await expect(panel.getByText('Ground Y')).toBeVisible();
+ await panel.getByRole('button',{name:'Cancel'}).click();
+ await expect(panel.getByLabel('Choose consumable')).toHaveValue('');
+});
