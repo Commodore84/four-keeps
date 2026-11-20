@@ -1,4 +1,4 @@
-import {addCompanionObject,recordCompanionObjectFire,damageCompanion,endCompanionTurn,extinguishCompanionFire,resolveCompanionSavingThrow} from './companionEncounter';
+import {attackCompanion,addCompanionObject,recordCompanionObjectFire,damageCompanion,endCompanionTurn,extinguishCompanionFire,resolveCompanionSavingThrow} from './companionEncounter';
 import {advanceConsumableTime,antitoxinSecondsRemaining} from './consumables';
 import {describe,it,expect} from 'vitest';
 import {useOwnedConsumable,eligibleKitTargets} from './consumables';
@@ -236,6 +236,32 @@ describe('Acid in a single-attack unified encounter',()=>{
   const ignited=recordCompanionObjectFire(reloaded,'Crate',2);
   expect(ignited.companionEncounter?.objects?.Crate.hp).toBe(5);
   expect(recordCompanionObjectFire(ignited,'Crate',2).companionEncounter?.objects?.Crate.hp).toBe(3);
+ });
+
+ it('coats one verified weapon, survives reload and deals Poison once on qualifying damage',()=>{
+  const source=fixture();
+  const campaign={...source,encounterLoadout:{weaponId:'dagger'},
+   inventoryLedger:{...source.inventoryLedger!,gear:[{name:'Dagger',quantity:1},{name:'Poison, Basic',quantity:1}]}};
+  const use={...request,name:'Poison, Basic' as const,expectedWeaponId:'dagger'};
+  const coated=useOwnedConsumable(campaign,use);
+  expect(coated.companionEncounter?.participants.nighthawk.bonusActionUsed).toBe(true);
+  expect(coated.inventoryLedger?.gear[1].quantity).toBe(0);
+  expect(useOwnedConsumable(coated,use)).toBe(coated);
+  const loaded=JSON.parse(JSON.stringify(coated)) as Campaign;
+  const missed=attackCompanion(loaded,'nighthawk','enemy',1,3,10,3,0,'Piercing',20,undefined,undefined,'dagger',()=>4);
+  expect(missed.companionEncounter?.basicPoison).toBeDefined();
+  const ready=endCompanionTurn(endCompanionTurn(missed,'nighthawk'),'enemy');
+  const hit=attackCompanion(ready,'nighthawk','enemy',15,3,10,3,0,'Piercing',20,undefined,undefined,'dagger',()=>4);
+  expect(hit.companionEncounter?.participants.enemy.hp).toBe(5);
+  expect(hit.companionEncounter?.basicPoison).toBeUndefined();
+ });
+ it('expires a Basic Poison coating ten rounds after confirmation',()=>{
+  const source=fixture();
+  let campaign:Campaign={...source,encounterLoadout:{weaponId:'dagger'},
+   inventoryLedger:{...source.inventoryLedger!,gear:[{name:'Dagger',quantity:1},{name:'Poison, Basic',quantity:1}]}};
+  campaign=useOwnedConsumable(campaign,{...request,name:'Poison, Basic',expectedWeaponId:'dagger'});
+  for(let round=0;round<10;round++)campaign=endCompanionTurn(endCompanionTurn(campaign,'nighthawk'),'enemy');
+  expect(campaign.companionEncounter?.basicPoison).toBeUndefined();
  });
 
 });

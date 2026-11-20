@@ -1,6 +1,6 @@
 import type {Campaign} from './campaign';
-import {throwConsumable,type HolyWaterTargetType} from './companionEncounter';
-export type ConsumableName='Oil'|'Alchemist’s Fire'|'Acid'|'Holy Water'|'Antitoxin'|"Healer's Kit";
+import {basicPoisonWeapon,throwConsumable,type HolyWaterTargetType} from './companionEncounter';
+export type ConsumableName='Poison, Basic'|'Oil'|'Alchemist’s Fire'|'Acid'|'Holy Water'|'Antitoxin'|"Healer's Kit";
 
 export function antitoxinSecondsRemaining(campaign: Campaign): number {
  const minutes = (campaign.antitoxinUntilMinute ?? 0) - (campaign.elapsedMinutes ?? 0);
@@ -17,6 +17,7 @@ export interface ConsumableRequest {
  expectedElapsedMinutes:number;expectedKitUses?:number;targetId?:string;expectedTargetHP?:number;
  expectedEncounterId?:string;expectedTurnIndex?:number;expectedRound?:number;expectedActorPosition?:{x:number;y:number};
  throwRolls?:{saveTotal:number;damage:number;targetType?:HolyWaterTargetType};
+ expectedWeaponId?:string;
  expectedTargetPosition?:{x:number;y:number};
 }
 export function eligibleKitTargets(c:Campaign){
@@ -27,7 +28,7 @@ export function eligibleKitTargets(c:Campaign){
 export function useOwnedConsumable(c:Campaign,r:ConsumableRequest):Campaign{
  if(!r.confirmed||!r.requestId.trim())throw Error('Consumable confirmation and request ID required');
  if(c.consumableUseIds?.includes(r.requestId))return c;
- if(r.name!=='Oil'&&r.name!=='Alchemist’s Fire'&&r.name!=='Holy Water'&&r.name!=='Acid'&&r.name!=='Antitoxin'&&r.name!=="Healer's Kit")throw Error('Unknown consumable');
+ if(r.name!=='Poison, Basic'&&r.name!=='Oil'&&r.name!=='Alchemist’s Fire'&&r.name!=='Holy Water'&&r.name!=='Acid'&&r.name!=='Antitoxin'&&r.name!=="Healer's Kit")throw Error('Unknown consumable');
  if((c.elapsedMinutes??0)!==r.expectedElapsedMinutes)throw Error('Stale campaign time');
  if(c.combat?.status==='initiative-set'||c.combat?.status==='awaiting-initiative')throw Error('Legacy combat unsupported');
  const b=c.companionEncounter,active=b?.status==='active',actor=active?b.participants.nighthawk:undefined;
@@ -37,9 +38,21 @@ export function useOwnedConsumable(c:Campaign,r:ConsumableRequest):Campaign{
  if(actor&&(r.expectedActorPosition?.x!==actor.x||r.expectedActorPosition?.y!==actor.y))throw Error('Stale actor position');
  if(actor&&(actor.hp<=0||actor.conditions.some(x=>['Incapacitated','Paralyzed','Petrified','Stunned','Unconscious'].includes(x))))throw Error('Actor cannot act');
  if(actor?.rogueDazeTurns!==undefined&&(actor.rogueDazeChoice==='movement'||actor.movementSpentFeet>0||actor.actionUsed||actor.bonusActionUsed))throw Error('Dazed: choose movement or one action or bonus action');
- if(actor&&(r.name==='Antitoxin'?actor.bonusActionUsed:actor.actionUsed))throw Error('Required action already spent');
+ if(actor&&(r.name==='Antitoxin'||r.name==='Poison, Basic'?actor.bonusActionUsed:actor.actionUsed))throw Error('Required action already spent');
  const gear=c.inventoryLedger?.gear,idx=gear?.findIndex(g=>g.name===r.name);
  if(!gear||idx===undefined||idx<0||gear[idx].quantity!==r.expectedQuantity||gear[idx].quantity<1)throw Error('Stale consumable inventory');
+ if(r.name==='Poison, Basic'){
+  const weapon=basicPoisonWeapon(c);
+  if(!active||!b||!actor||!weapon||weapon.id!==r.expectedWeaponId||b.basicPoison)
+   throw Error('Basic Poison requires an uncoated, individually verified equipped weapon on your turn');
+  return {...c,consumableUseIds:[...(c.consumableUseIds??[]),r.requestId],
+   companionEncounter:{...b,basicPoison:{weaponId:weapon.id,expiresRound:b.round+10},
+    participants:{...b.participants,nighthawk:{...actor,bonusActionUsed:true,
+     ...(actor.rogueDazeTurns!==undefined?{rogueDazeChoice:'action' as const}:{})}},
+    log:[...b.log,weapon.name+' coated with Basic Poison']},
+   inventoryLedger:{...c.inventoryLedger!,gear:gear.map((item,index)=>index===idx?{...item,quantity:item.quantity-1}:item)},
+   updatedAt:new Date().toISOString()};
+ }
  if(r.name==='Oil'||r.name==='Alchemist’s Fire'||r.name==='Acid'||r.name==='Holy Water'){
   const target=b?.participants[r.targetId??'']??b?.objects?.[r.targetId??''];
   if(!active||!target||!r.targetId||!r.throwRolls)throw Error(r.name+' requires an encounter target and verified rolls');

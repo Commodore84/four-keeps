@@ -159,3 +159,34 @@ for(const [item,target] of [['Acid','Bandit'],['Holy Water','Bandit'],['Alchemis
  expect(result).toEqual({hp:item==='Oil'?12:item==='Alchemist’s Fire'?9:5,used:true,vials:0,oiled:item==='Oil',
   burning:item==='Alchemist’s Fire'?['Bandit']:[]});
 });
+
+test('iPhone Basic Poison coats the equipped dagger and preserves the coating after reload',async({page})=>{
+ const id=await createCampaign(page,'Basic Poison');
+ await page.evaluate(async id=>{
+  const {localCampaignStorage}=await import('/src/game/storage.ts');
+  const {startUnifiedEncounter}=await import('/src/game/companionEncounter.ts');
+  const current=await localCampaignStorage.get(id);
+  if(!current?.inventoryLedger)throw Error('Campaign fixture was not saved');
+  const equipped={...current,encounterLoadout:{weaponId:'dagger'},
+   inventoryLedger:{...current.inventoryLedger,gear:[{name:'Dagger',quantity:1},{name:'Poison, Basic',quantity:1}]}};
+  const encounter=startUnifiedEncounter(equipped,{nighthawk:20},{nighthawk:{x:2,y:2}},{});
+  await localCampaignStorage.save({...encounter,adventureSession:{status:'encounter',site:'watchtower',
+   characterSource:'campaign-character',visited:['watchtower'],interactions:[]}});
+ },id);
+ await page.reload();
+ await page.getByRole('button',{name:'Campaigns',exact:true}).click();
+ await page.getByRole('button',{name:'Continue Adventure'}).click();
+ const panel=page.getByRole('region',{name:'Adventuring consumables'});
+ await panel.getByLabel('Choose consumable').selectOption('Poison, Basic');
+ await panel.getByRole('button',{name:'Confirm use'}).click();
+ await expect(panel.getByRole('status')).toHaveText('Basic Poison coating active.');
+ await page.reload();
+ const saved=await page.evaluate(async id=>{
+  const {localCampaignStorage}=await import('/src/game/storage.ts');
+  const current=await localCampaignStorage.get(id);
+  return {weapon:current?.companionEncounter?.basicPoison?.weaponId,
+   used:current?.companionEncounter?.participants.nighthawk.bonusActionUsed,
+   vial:current?.inventoryLedger?.gear.find(item=>item.name==='Poison, Basic')?.quantity};
+ },id);
+ expect(saved).toEqual({weapon:'dagger',used:true,vial:0});
+});
