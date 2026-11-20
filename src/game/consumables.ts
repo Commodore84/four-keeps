@@ -26,7 +26,7 @@ export function antitoxinSecondsRemaining(campaign: Campaign): number {
 }
 /** Only advance time from a verified gameplay time event; never from a UI refresh. */
 export function advanceConsumableTime(c:Campaign,minutes:number):Campaign{
- if(!Number.isSafeInteger(minutes)||minutes<=0||minutes>1440)throw Error('Invalid elapsed game time');
+ if(!Number.isSafeInteger(minutes)||minutes<=0||minutes>1440||!Number.isSafeInteger(c.elapsedMinutes??0)|| (c.elapsedMinutes??0)<0||!Number.isSafeInteger((c.elapsedMinutes??0)+minutes))throw Error('Invalid elapsed game time');
  return advanceProvisionsClock(c,{...c,elapsedMinutes:(c.elapsedMinutes??0)+minutes});
 }
 
