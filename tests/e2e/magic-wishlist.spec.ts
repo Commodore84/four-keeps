@@ -26,7 +26,7 @@ test('iPhone magic items menu supports favorites and persistence',async ({page})
  await groupFilter.selectOption('All');
  const rarityFilter=compendium.getByRole('combobox',{name:'Magic item rarity'});
  await rarityFilter.selectOption('Rare');
- await expect(compendium.getByText('Rare',{exact:true}).first()).toHaveClass(/text-blue-300/);
+ await expect(compendium.getByRole('article').first().locator('span.text-blue-300')).toHaveText('Rare');
  await rarityFilter.selectOption('All');
  const search=page.getByRole('textbox',{name:'Search magic items'});
  await search.fill('Alchemy Jug');
