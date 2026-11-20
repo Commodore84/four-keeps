@@ -20,7 +20,7 @@ export interface CompanionEncounter {
  round:number;
  turnIndex:number;
  order:string[];
- participants:Record<string,{caltropsStopped?:boolean;oilExpires?:{round:number;turnIndex:number};x:number;y:number;hp:number;maxHp:number;initiative:number;conditions:('Charmed'|'Poisoned'|'Blinded'|'Deafened'|'Frightened'|'Grappled'|'Incapacitated'|'Invisible'|'Paralyzed'|'Petrified'|'Prone'|'Restrained'|'Stunned'|'Unconscious'|'Exhaustion')[];speedFeet:number;movementSpentFeet:number;actionUsed:boolean;bonusActionUsed:boolean;dashFeet:number;disengaged:boolean;dodging:boolean;reactionUsed?:boolean;rogueSneakUsed?:boolean;roguePoisonDC?:number;roguePoisonRounds?:number;roguePoisonSaveResolved?:boolean;rogueObscureUntilTurn?:number;rogueDazeTurns?:number;rogueDazeChoice?:'movement'|'action';rogueKnockoutDC?:number;rogueKnockoutRounds?:number;rogueKnockoutSaveResolved?:boolean;conditionImmunities?:string[];rogueSteadyAim?:boolean;rogueHidden?:boolean;rogueHideDC?:number;rogueHideConcealment?:boolean;rogueDetectedBy?:string[];rogueMovedThisTurn?:boolean;concentratingOn?:string;consumables?:Record<string,number>;faction?:string;reachFeet?:number;actorKind?:'party'|'enemy';armorClass?:number;attackModifier?:number;constitutionSaveModifier?:number;damageModifier?:number;damageDice?:string;enemyTactic?:'hold'|'nearest'|'lowest-hp';rangedAttackFeet?:number;deathSaves?:{successes:number;failures:number;stable:boolean;dead:boolean}}>;
+ participants:Record<string,{ropeBound?:boolean;ropeAddedRestraint?:boolean;caltropsStopped?:boolean;oilExpires?:{round:number;turnIndex:number};x:number;y:number;hp:number;maxHp:number;initiative:number;conditions:('Charmed'|'Poisoned'|'Blinded'|'Deafened'|'Frightened'|'Grappled'|'Incapacitated'|'Invisible'|'Paralyzed'|'Petrified'|'Prone'|'Restrained'|'Stunned'|'Unconscious'|'Exhaustion')[];speedFeet:number;movementSpentFeet:number;actionUsed:boolean;bonusActionUsed:boolean;dashFeet:number;disengaged:boolean;dodging:boolean;reactionUsed?:boolean;rogueSneakUsed?:boolean;roguePoisonDC?:number;roguePoisonRounds?:number;roguePoisonSaveResolved?:boolean;rogueObscureUntilTurn?:number;rogueDazeTurns?:number;rogueDazeChoice?:'movement'|'action';rogueKnockoutDC?:number;rogueKnockoutRounds?:number;rogueKnockoutSaveResolved?:boolean;conditionImmunities?:string[];rogueSteadyAim?:boolean;rogueHidden?:boolean;rogueHideDC?:number;rogueHideConcealment?:boolean;rogueDetectedBy?:string[];rogueMovedThisTurn?:boolean;concentratingOn?:string;consumables?:Record<string,number>;faction?:string;reachFeet?:number;actorKind?:'party'|'enemy';armorClass?:number;attackModifier?:number;constitutionSaveModifier?:number;damageModifier?:number;damageDice?:string;enemyTactic?:'hold'|'nearest'|'lowest-hp';rangedAttackFeet?:number;deathSaves?:{successes:number;failures:number;stable:boolean;dead:boolean}}>;
  objects?:Record<string,{x:number;y:number;hp:number;oilExpires?:{round:number;turnIndex:number}}>;
  basicPoison?:{weaponId:string;expiresRound:number};
  groundSupplies?:{id:string;name:'Ball Bearings'|'Caltrops';x:number;y:number}[];
@@ -428,23 +428,36 @@ export function moveCompanion(campaign:Campaign,actorId:string,x:number,y:number
  const movementCost=traversedSteps*5*(actor.conditions.includes('Prone')?2:1);
  if(movementCost>actor.speedFeet+actor.dashFeet-actor.movementSpentFeet)throw Error('Move exceeds remaining movement');
  if(Object.entries(battle.participants).some(([id,p])=>id!==actorId&&p.hp>0&&p.x===destination.x&&p.y===destination.y))throw Error('Square occupied');
+ const supply=groundEntry(battle,actorId,route.slice(0,traversedSteps+1),groundSave);
+ const moved=save(campaign,revealRogueOnVisibilityChange({...battle,participants:{...battle.participants,[actorId]:{...actor,x:destination.x,y:destination.y,movementSpentFeet:actor.movementSpentFeet+movementCost,...(actor.rogueDazeTurns!==undefined&&movementCost>0?{rogueDazeChoice:'movement' as const}:{}),rogueMovedThisTurn:actor.rogueMovedThisTurn||movementCost>0,rogueHidden:actorId==='nighthawk'&&movementCost>0&&Object.values(battle.participants).some(enemy=>enemy.actorKind==='enemy'&&enemy.hp>0&&companionLineOfSight(battle,enemy,destination))?false:actor.rogueHidden}},pendingOpportunity:candidates.length?{moverId:actorId,attackerIds:candidates,from:interrupt?{x:firstTrigger.from.x,y:firstTrigger.from.y}:{x:actor.x,y:actor.y},to:interrupt?{x:firstTrigger.to.x,y:firstTrigger.to.y}:{x,y},...(interrupt?{destination:{x,y}}:{})}:undefined,log:[...battle.log,actorId+' moved to '+destination.x+','+destination.y+(interrupt?' · interrupted before leaving reach toward '+firstTrigger.to.x+','+firstTrigger.to.y:candidates.length?' · potential opportunity attackers: '+candidates.join(', '):'')]}));
+ return resolveGroundEntry(moved,actorId,supply,groundSave);
+}
+
+type GroundSupply=NonNullable<CompanionEncounter['groundSupplies']>[number];
+const groundEntryKey=(actorId:string,supplyId:string)=>JSON.stringify([actorId,supplyId]);
+
+function groundEntry(battle:CompanionEncounter,actorId:string,route:Cell[],verifiedSave?:number){
  const entered=(battle.groundSupplies??[]).filter(supply=>{
-  if(battle.groundEntries?.includes(supply.id))return false;
+  if(battle.groundEntries?.includes(groundEntryKey(actorId,supply.id))||
+     (battle.order[battle.turnIndex]===actorId&&battle.groundEntries?.includes(supply.id)))return false;
   const size=supply.name==='Ball Bearings'?2:1;
   const inside=(cell:Cell)=>cell.x>=supply.x&&cell.x<supply.x+size&&cell.y>=supply.y&&cell.y<supply.y+size;
-  return route.slice(1,traversedSteps+1).some((cell,index)=>inside(cell)&&!inside(route[index]));
+  return route.slice(1).some((cell,index)=>inside(cell)&&!inside(route[index]));
  });
- const supply=entered[0];
- if(supply){
-  if(entered.length>1||traversedSteps>1)throw Error('Enter hazard squares one 5-foot step at a time');
-  if(!Number.isInteger(groundSave)||Math.abs(groundSave!)>100)throw Error('Enter the verified Dexterity save for '+supply.name);
+ if(entered.length){
+  if(entered.length>1||route.length>2)throw Error('Enter hazard squares one 5-foot step at a time');
+  if(!Number.isInteger(verifiedSave)||Math.abs(verifiedSave!)>100)
+   throw Error('Enter the verified Dexterity save for '+entered[0].name);
  }
- const moved=save(campaign,revealRogueOnVisibilityChange({...battle,participants:{...battle.participants,[actorId]:{...actor,x:destination.x,y:destination.y,movementSpentFeet:actor.movementSpentFeet+movementCost,...(actor.rogueDazeTurns!==undefined&&movementCost>0?{rogueDazeChoice:'movement' as const}:{}),rogueMovedThisTurn:actor.rogueMovedThisTurn||movementCost>0,rogueHidden:actorId==='nighthawk'&&movementCost>0&&Object.values(battle.participants).some(enemy=>enemy.actorKind==='enemy'&&enemy.hp>0&&companionLineOfSight(battle,enemy,destination))?false:actor.rogueHidden}},pendingOpportunity:candidates.length?{moverId:actorId,attackerIds:candidates,from:interrupt?{x:firstTrigger.from.x,y:firstTrigger.from.y}:{x:actor.x,y:actor.y},to:interrupt?{x:firstTrigger.to.x,y:firstTrigger.to.y}:{x,y},...(interrupt?{destination:{x,y}}:{})}:undefined,log:[...battle.log,actorId+' moved to '+destination.x+','+destination.y+(interrupt?' · interrupted before leaving reach toward '+firstTrigger.to.x+','+firstTrigger.to.y:candidates.length?' · potential opportunity attackers: '+candidates.join(', '):'')]}));
+ return entered[0];
+}
+
+function resolveGroundEntry(moved:Campaign,actorId:string,supply:GroundSupply|undefined,groundSave?:number):Campaign{
  if(!supply)return moved;
  const current=encounter(moved);
- const failed=actor.conditions.some(condition=>['Paralyzed','Petrified','Stunned','Unconscious'].includes(condition))||
+ const failed=current.participants[actorId].conditions.some(condition=>['Paralyzed','Petrified','Stunned','Unconscious'].includes(condition))||
   groundSave!<(supply.name==='Caltrops'?15:10);
- const resolved=save(moved,{...current,groundEntries:[...(current.groundEntries??[]),supply.id],
+ const resolved=save(moved,{...current,groundEntries:[...(current.groundEntries??[]),groundEntryKey(actorId,supply.id)],
   log:[...current.log,actorId+' '+(failed?'failed':'passed')+' the '+supply.name+' save']});
  if(!failed)return resolved;
  if(supply.name==='Ball Bearings')return applyCompanionCondition(resolved,actorId,'Prone');
@@ -453,6 +466,51 @@ export function moveCompanion(campaign:Campaign,actorId:string,x:number,y:number
  return save(damaged,{...battleAfter,participants:{...battleAfter.participants,
   [actorId]:{...battleAfter.participants[actorId],caltropsStopped:true}}});
 
+}
+
+export function moveCompanionForced(campaign:Campaign,actorId:string,x:number,y:number,groundSave?:number):Campaign{
+ const battle=encounter(campaign),actor=battle.participants[actorId],destination={x,y};
+ if(battle.mode!=='unified'||!actor||actor.deathSaves?.dead||!valid(destination)||
+    Math.max(Math.abs(x-actor.x),Math.abs(y-actor.y))!==1||
+    battle.obstacles?.some(cell=>cell.x===x&&cell.y===y)||
+    Object.entries(battle.participants).some(([id,other])=>id!==actorId&&other.hp>0&&other.x===x&&other.y===y))
+  throw Error('Choose an adjacent unoccupied square for verified forced movement');
+ if(battle.pendingOpportunity?.attackerIds.length)throw Error('Resolve pending opportunity reactions first');
+ const supply=groundEntry(battle,actorId,[actor,destination],groundSave);
+ const moved=save(campaign,revealRogueOnVisibilityChange({...battle,
+  participants:{...battle.participants,[actorId]:{...actor,...destination}},
+  log:[...battle.log,actorId+' was forcibly moved to '+x+','+y+' (DM verified)']}));
+ return resolveGroundEntry(moved,actorId,supply,groundSave);
+}
+
+export function bindCompanionWithRope(campaign:Campaign,targetId:string):Campaign{
+ const battle=activeActor(campaign,'nighthawk'),actor=battle.participants.nighthawk,target=battle.participants[targetId];
+ if(battle.mode!=='unified'||actor.hp<=0||actor.conditions.includes('Petrified')||!target||target.deathSaves?.dead||targetId==='nighthawk'||
+    Math.max(Math.abs(target.x-actor.x),Math.abs(target.y-actor.y))>1||
+    !target.conditions.some(c=>['Grappled','Incapacitated','Restrained','Paralyzed','Petrified','Stunned','Unconscious'].includes(c))||
+    Object.values(battle.participants).some(p=>p.ropeBound)||
+    campaign.inventoryLedger?.gear.find(g=>g.name==='Rope')?.quantity!==1)
+  throw Error('Binding requires one available rope and an eligible adjacent creature');
+ const used=useCompanionAction(campaign,'nighthawk','Utilize'),current=encounter(used);
+ return save(used,{...current,participants:{...current.participants,[targetId]:{
+  ...target,ropeBound:true,ropeAddedRestraint:!target.conditions.includes('Restrained'),
+  conditions:[...new Set([...target.conditions,'Restrained' as const])],
+ }},log:[...current.log,targetId+' was restrained by Rope']});
+}
+
+export function escapeCompanionRope(campaign:Campaign,actorId:string,total:number,method:'escape'|'break'):Campaign{
+ const battle=activeActor(campaign,actorId),actor=battle.participants[actorId];
+ if(!actor.ropeBound||actor.hp<=0||actor.conditions.includes('Petrified')||
+    !Number.isInteger(total)||Math.abs(total)>100)throw Error('A bound actor and a verified check are required');
+ const used=useCompanionAction(campaign,actorId,'Utilize'),current=encounter(used);
+ if(total<(method==='break'?20:15))return save(used,{...current,log:[...current.log,actorId+' failed the Rope check']});
+ const inventoryLedger=used.inventoryLedger;
+ return save({...used,...(method==='break'&&inventoryLedger?{ropeKnotted:false,inventoryLedger:{...inventoryLedger,
+  gear:inventoryLedger.gear.map(g=>g.name==='Rope'?{...g,quantity:Math.max(0,g.quantity-1)}:g)}}:{})},
+  {...current,participants:{...current.participants,[actorId]:{...current.participants[actorId],
+    ropeBound:undefined,ropeAddedRestraint:undefined,conditions:actor.ropeAddedRestraint?
+     actor.conditions.filter(c=>c!=='Restrained'):actor.conditions}},
+   log:[...current.log,actorId+(method==='break'?' broke the Rope':' escaped the Rope')]});
 }
 /** Knock Out ends on a verified Constitution save, damage, or after ten target turns. */
 export function resolveRogueKnockoutSave(campaign:Campaign,targetId:string,saveTotal:number):Campaign{
@@ -635,13 +693,18 @@ export function applyCompanionCondition(campaign:Campaign,targetId:string,condit
  const battle=encounter(campaign),actor=battle.participants[targetId];
  if(!actor)throw Error('Unknown condition target');
  const conditions=[...new Set([...actor.conditions,condition])];
- return save(campaign,{...battle,participants:{...battle.participants,[targetId]:{...actor,conditions,concentratingOn:condition==='Incapacitated'||condition==='Unconscious'||condition==='Stunned'||condition==='Paralyzed'?undefined:actor.concentratingOn}},log:[...battle.log,targetId+' gained '+condition+' (DM adjudicated)']});
+ return save(campaign,{...battle,participants:{...battle.participants,[targetId]:{...actor,conditions,...(condition==='Restrained'&&actor.ropeBound?{ropeAddedRestraint:false}:{}),concentratingOn:condition==='Incapacitated'||condition==='Unconscious'||condition==='Stunned'||condition==='Paralyzed'?undefined:actor.concentratingOn}},log:[...battle.log,targetId+' gained '+condition+' (DM adjudicated)']});
 }
 export function removeCompanionCondition(campaign:Campaign,targetId:string,condition:CompanionCondition):Campaign{
  const tracked=encounter(campaign).participants[targetId];
  if(tracked&&((condition==='Unconscious'&&tracked.rogueKnockoutDC!==undefined)||(condition==='Blinded'&&tracked.rogueObscureUntilTurn!==undefined)))throw Error('Resolve the tracked Rogue strike condition before removing it');
  const battle=encounter(campaign),actor=battle.participants[targetId];
  if(!actor)throw Error('Unknown condition target');
+ if(condition==='Restrained'&&actor.ropeBound){
+  if(actor.ropeAddedRestraint)throw Error('Resolve the rope binding first');
+  return save(campaign,{...battle,participants:{...battle.participants,[targetId]:{...actor,ropeAddedRestraint:true}},
+   log:[...battle.log,targetId+' is still restrained by Rope']});
+ }
  return save(campaign,{...battle,participants:{...battle.participants,[targetId]:{...actor,conditions:actor.conditions.filter(c=>c!==condition)}},log:[...battle.log,targetId+' ended '+condition+' (DM adjudicated)']});
 }
 /** Derive only statistics explicitly present on the character sheet; weapon proficiency remains unverified. */

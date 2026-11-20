@@ -1,3 +1,4 @@
+import {advanceProvisionsClock,recoverProvisionExhaustion} from './provisionsClock';
 import {validPlayerState} from './playerState';
 import type {Campaign} from './campaign';
 import type {CharacterStats} from './checks';
@@ -77,10 +78,10 @@ export function completePlayerRest(campaign:Campaign,kind:'short'|'long',options
  const duration=kind==='short'?60:options.useTrance?240:480;
  const end=elapsed+wait+duration;
  if(!Number.isSafeInteger(end))throw Error('In-game clock exceeds safe range');
- const exhaustion=kind==='long'&&c.exhaustionLevel!==undefined?Math.max(0,c.exhaustionLevel-1):c.exhaustionLevel;
+ const exhaustion=kind==='long'&&c.exhaustionLevel!==undefined?recoverProvisionExhaustion(campaign,c.exhaustionLevel):c.exhaustionLevel;
  const conditions=kind==='long'&&exhaustion===0?c.conditions?.filter(s=>s!=='Exhaustion'):c.conditions;
  const character={...c,currentHitPoints:hp,spellSlots:slots,resources,conditions,exhaustionLevel:exhaustion};
- return {...campaign,...(cls.id==='wizard'&&campaign.importedSubclassId==='wizard-diviner'&&kind==='long'?{importedWizardPortents:[...(options.portentRolls??[])]}:{}),character,hitDiceRemaining:kind==='long'?Math.min(level,available+Math.max(1,Math.ceil(level/2))):available-rolls.length,elapsedMinutes:end,lastLongRestCompletedAt:kind==='long'?end:campaign.lastLongRestCompletedAt,concentration:kind==='long'&&!options.useTrance?undefined:campaign.concentration,updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',createdAt:now,text:(campaign.characterIdentity?.name??'Player')+' completes a '+kind+' rest ('+duration+' minutes'+(wait?', after '+wait+' minutes approved waiting':'')+'). HP '+c.currentHitPoints+' → '+hp+'. Hit Dice '+(kind==='long'?Math.min(level,available+Math.max(1,Math.ceil(level/2))):available-rolls.length)+'/'+level+'.'+(options.arcaneRecovery?' Arcane Recovery restored '+(options.arcaneRecoveryCount??1)+' level-'+(options.arcaneRecoveryLevel??1)+' slot(s).':'')}]};
+ return advanceProvisionsClock(campaign,{...campaign,...(cls.id==='wizard'&&campaign.importedSubclassId==='wizard-diviner'&&kind==='long'?{importedWizardPortents:[...(options.portentRolls??[])]}:{}),character,hitDiceRemaining:kind==='long'?Math.min(level,available+Math.max(1,Math.ceil(level/2))):available-rolls.length,elapsedMinutes:end,lastLongRestCompletedAt:kind==='long'?end:campaign.lastLongRestCompletedAt,concentration:kind==='long'&&!options.useTrance?undefined:campaign.concentration,updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',createdAt:now,text:(campaign.characterIdentity?.name??'Player')+' completes a '+kind+' rest ('+duration+' minutes'+(wait?', after '+wait+' minutes approved waiting':'')+'). HP '+c.currentHitPoints+' → '+hp+'. Hit Dice '+(kind==='long'?Math.min(level,available+Math.max(1,Math.ceil(level/2))):available-rolls.length)+'/'+level+'.'+(options.arcaneRecovery?' Arcane Recovery restored '+(options.arcaneRecoveryCount??1)+' level-'+(options.arcaneRecoveryLevel??1)+' slot(s).':'')}]});
 }
 /** Magical Cunning: 1-minute ritual, once per long rest, recover half Pact slots (rounded up). */
 export function performWarlockMagicalCunning(campaign:Campaign):Campaign{
@@ -88,5 +89,5 @@ export function performWarlockMagicalCunning(campaign:Campaign):Campaign{
  if(campaign.characterIdentity?.classId!=='warlock'||(ch?.level??0)<2||!ch||!pool||!slots||pool.used>=pool.maximum||slots.usedLevel1<1)throw Error('Magical Cunning is unavailable');
  if(campaign.pendingCheck||campaign.companionEncounter?.status==='active'||campaign.adventureSession?.status==='encounter'||campaign.combat&&campaign.combat.status!=='completed')throw Error('Magical Cunning requires exploration outside combat');
  const recovered=Math.min(slots.usedLevel1,Math.ceil(slots.level1/2));
- return {...campaign,character:{...ch,spellSlots:{...slots,usedLevel1:slots.usedLevel1-recovered},resources:{...ch.resources,'Magical Cunning':{...pool,used:pool.used+1}}},elapsedMinutes:(campaign.elapsedMinutes??0)+1,updatedAt:new Date().toISOString(),journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',createdAt:new Date().toISOString(),text:`Magical Cunning: 1 minute spent; ${recovered} Pact Magic slot restored.`}]};
+ return advanceProvisionsClock(campaign,{...campaign,character:{...ch,spellSlots:{...slots,usedLevel1:slots.usedLevel1-recovered},resources:{...ch.resources,'Magical Cunning':{...pool,used:pool.used+1}}},elapsedMinutes:(campaign.elapsedMinutes??0)+1,updatedAt:new Date().toISOString(),journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',createdAt:new Date().toISOString(),text:`Magical Cunning: 1 minute spent; ${recovered} Pact Magic slot restored.`}]});
 }

@@ -288,3 +288,37 @@ test('iPhone recovers Caltrops from a completed encounter and persists inventory
  },id);
  expect(saved).toEqual({minutes:110,placements:0,quantity:1});
 });
+
+test('iPhone records verified forced movement into a ground hazard and persists it',async({page})=>{
+ const id=await createCampaign(page,'Forced ground entry');
+ await page.evaluate(async id=>{
+  const {localCampaignStorage}=await import('/src/game/storage.ts');
+  const {startUnifiedEncounter,addCompanionEnemy}=await import('/src/game/companionEncounter.ts');
+  const current=await localCampaignStorage.get(id);
+  if(!current)throw Error('Campaign fixture was not saved');
+  const encounter=startUnifiedEncounter(current,{nighthawk:20},{nighthawk:{x:2,y:2}},{});
+  const fight=addCompanionEnemy(encounter,'Bandit',10,{x:3,y:2},12,12,2);
+  await localCampaignStorage.save({...fight,companionEncounter:{...fight.companionEncounter!,
+   groundSupplies:[{id:'caltrops',name:'Caltrops',x:4,y:2}]},
+   adventureSession:{status:'encounter',site:'watchtower',characterSource:'campaign-character',visited:['watchtower'],interactions:[]}});
+ },id);
+ await page.reload();
+ await page.getByRole('button',{name:'Campaigns',exact:true}).click();
+ await page.getByRole('button',{name:'Continue Adventure'}).click();
+ const encounter=page.getByLabel('Companion encounter',{exact:true});
+ await encounter.getByText('DM forced movement and Rope',{exact:true}).click();
+ await encounter.getByLabel('Forced movement creature',{exact:true}).selectOption('Bandit');
+ await encounter.getByLabel('Forced X').fill('4');
+ await encounter.getByLabel('Forced Y').fill('2');
+ await encounter.getByLabel('Verified ground hazard Dexterity save').fill('1');
+ await encounter.getByRole('button',{name:'Confirm forced 5-foot step'}).click();
+ await expect(encounter).toContainText('Verified forced movement recorded');
+ await page.reload();
+ const saved=await page.evaluate(async id=>{
+  const {localCampaignStorage}=await import('/src/game/storage.ts');
+  const current=await localCampaignStorage.get(id);
+  const bandit=current?.companionEncounter?.participants.Bandit;
+  return {x:bandit?.x,hp:bandit?.hp,stopped:bandit?.caltropsStopped};
+ },id);
+ expect(saved).toEqual({x:4,hp:11,stopped:true});
+});

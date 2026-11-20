@@ -1,4 +1,4 @@
-import {moveCompanion,attackCompanion,addCompanionObject,recordCompanionObjectFire,damageCompanion,endCompanionTurn,extinguishCompanionFire,resolveCompanionSavingThrow} from './companionEncounter';
+import {moveCompanionForced,bindCompanionWithRope,escapeCompanionRope,moveCompanion,attackCompanion,addCompanionObject,recordCompanionObjectFire,damageCompanion,endCompanionTurn,extinguishCompanionFire,resolveCompanionSavingThrow} from './companionEncounter';
 import {advanceConsumableTime,antitoxinSecondsRemaining,equipmentLightRemaining,provisionsToday} from './consumables';
 import {describe,it,expect} from 'vitest';
 import {useOwnedConsumable,eligibleKitTargets} from './consumables';
@@ -359,7 +359,7 @@ describe('field supplies',()=>{
   }}};
   expect(()=>moveCompanion(staged,'nighthawk',2,1)).toThrow('verified Dexterity save');
   const entered=moveCompanion(staged,'nighthawk',2,1,5);
-  expect(entered.companionEncounter?.groundEntries).toEqual(['supply']);
+  expect(entered.companionEncounter?.groundEntries).toEqual([JSON.stringify(['nighthawk','supply'])]);
   if(name==='Ball Bearings')expect(entered.companionEncounter?.participants.nighthawk.conditions).toContain('Prone');
   else{
    expect(entered.companionEncounter?.participants.nighthawk.hp).toBe(11);
@@ -383,5 +383,65 @@ describe('recover deployed supplies',()=>{
   expect(recovered.inventoryLedger?.gear.find(item=>item.name===name)?.quantity).toBe(1);
   expect(useOwnedConsumable(recovered,request)).toBe(recovered);
   expect(()=>useOwnedConsumable(recovered,{...request,requestId:'replay',expectedElapsedMinutes:110})).toThrow('Confirm access');
+ });
+});
+
+describe('equipment rules follow-up',()=>{
+ function field(){
+  const campaign=encounter(),battle=campaign.companionEncounter!;
+  return {...campaign,inventoryLedger:{...campaign.inventoryLedger!,gear:[{name:'Rope',quantity:1}]},
+   companionEncounter:{...battle,participants:{...battle.participants,
+    ally:{...battle.participants.ally,actorKind:'enemy' as const,hp:12,
+     conditions:['Grappled' as const],deathSaves:undefined}}}};
+ }
+ it('checks each displaced creature once per deployment per turn across reload',()=>{
+  const source=field(),battle=source.companionEncounter;
+  const deployed={...source,companionEncounter:{...battle,groundSupplies:[
+   {id:'bearings',name:'Ball Bearings' as const,x:4,y:2}]}};
+  expect(()=>moveCompanionForced(deployed,'ally',4,2)).toThrow('verified Dexterity save');
+  const first=moveCompanionForced(deployed,'ally',4,2,1);
+  expect(first.companionEncounter?.participants.ally.conditions).toContain('Prone');
+  expect(first.companionEncounter?.pendingOpportunity).toBeUndefined();
+  const reloaded=JSON.parse(JSON.stringify(first)) as Campaign;
+  const back=moveCompanionForced(reloaded,'ally',3,2);
+  const twice=moveCompanionForced(back,'ally',4,2);
+  expect(twice.companionEncounter?.groundEntries).toHaveLength(1);
+  const near=moveCompanionForced(twice,'nighthawk',3,3);
+  const second=moveCompanionForced(near,'nighthawk',4,3,15);
+  expect(second.companionEncounter?.groundEntries).toHaveLength(2);
+ });
+ it('binds with Utilize, checks an escape on the target turn and keeps the rope',()=>{
+  const bound=bindCompanionWithRope(field(),'ally');
+  expect(bound.companionEncounter?.participants.nighthawk.actionUsed).toBe(true);
+  expect(bound.companionEncounter?.participants.ally.conditions).toContain('Restrained');
+  const turn=endCompanionTurn(bound,'nighthawk');
+  const escaped=escapeCompanionRope(turn,'ally',15,'escape');
+  expect(escaped.companionEncounter?.participants.ally.conditions).toEqual(['Grappled']);
+  expect(escaped.inventoryLedger?.gear[0].quantity).toBe(1);
+ });
+ it('breaks rope at DC 20 while preserving prior restraint',()=>{
+  const source=field();
+  const already={...source,companionEncounter:{...source.companionEncounter,participants:{
+   ...source.companionEncounter.participants,ally:{...source.companionEncounter.participants.ally,conditions:['Restrained' as const]}}}};
+  const turn=endCompanionTurn(bindCompanionWithRope(already,'ally'),'nighthawk');
+  const broken=escapeCompanionRope(turn,'ally',20,'break');
+  expect(broken.companionEncounter?.participants.ally.conditions).toContain('Restrained');
+  expect(broken.inventoryLedger?.gear[0].quantity).toBe(0);
+ });
+ it('assesses dehydration after the first full opted-in day',()=>{
+  const current={...base(),characterIdentity:{} as NonNullable<Campaign['characterIdentity']>};
+  const track=useOwnedConsumable(current,{name:'Rations',confirmed:true,requestId:'track',
+   expectedQuantity:0,expectedElapsedMinutes:100,supplyOperation:'track'});
+  const incomplete=advanceConsumableTime(track,1340);
+  expect(incomplete.character?.exhaustionLevel).toBeUndefined();
+  const complete=advanceConsumableTime(incomplete,1440);
+  expect(complete.character?.exhaustionLevel).toBe(1);
+  expect(complete.provisionTracking).toMatchObject({nextDay:2,missedFood:1,waterLevels:1});
+ });
+ it('counts successive foodless days and applies exhaustion after five hydrated days',()=>{
+  let current:Campaign={...base(),elapsedMinutes:0,provisionTracking:{nextDay:0,missedFood:0,foodLevels:0,waterLevels:0}};
+  for(let day=0;day<5;day++)current=advanceConsumableTime({...current,provisions:{day,rations:0,waterPints:8}},1440);
+  expect(current.character?.exhaustionLevel).toBe(1);
+  expect(current.provisionTracking?.foodLevels).toBe(1);
  });
 });

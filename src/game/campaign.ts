@@ -1,3 +1,4 @@
+import {advanceProvisionsClock} from './provisionsClock';
 import type {EncounterRecord} from './encounterJournal';
 import type {DynamicSite} from './anchamidaDynamic';
 import type {CharacterDraft} from '../app/CharacterCreator';
@@ -11,6 +12,7 @@ export interface JournalEntry { id: string; text: string; createdAt: string; kin
 export interface Campaign {
   healingPotionUseIds?:string[];
   consumableUseIds?:string[];
+  provisionTracking?:{nextDay:number;missedFood:number;foodLevels:number;waterLevels:number};
   provisions?:{day:number;rations:number;waterPints:number};
   waterskinPints?:number;
   ropeKnotted?:boolean;
@@ -316,7 +318,7 @@ export function castNighthawkSpell(campaign: Campaign, spell: string, ritual: bo
   const prior = campaign.concentration;
   const effect = { id:crypto.randomUUID(), spell, target:cleanTarget || undefined, status:'awaiting-adjudication' as const, createdAt:now };
   const message = 'Nighthawk casts '+spell+(ritual?' as a ritual':'')+'. '+(ritual||cantrip?'No spell slot spent.':'One Level 1 spell slot spent.')+(minutes?' '+minutes+' minutes pass.':'')+(spell==='Find Familiar'?' Owl familiar summoned; 10 gp material components consumed (player confirmed).':' Spell effect awaits DM adjudication.')+(cleanTarget?' Target/intent: '+cleanTarget+'.':'')+(concentrating?' Concentrating on '+spell+(prior?' (replaces '+prior.spell+').':'.'):'');
-  return { ...campaign, character: { ...character, spellSlots: nextSlots }, elapsedMinutes: (campaign.elapsedMinutes ?? 0) + minutes, familiar: spell==='Find Familiar' ? { form:'Owl', summonedAt:now } : campaign.familiar, concentration:concentrating?{spell,target:cleanTarget||undefined,startedAt:now}:campaign.concentration, spellEffects:spell==='Find Familiar'?(campaign.spellEffects??[]):[...(campaign.spellEffects??[]).filter(e=>!prior || !concentrating || e.spell!==prior.spell),effect].slice(-30), updatedAt:now, journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:message,createdAt:now}] };
+  return advanceProvisionsClock(campaign,{ ...campaign, character: { ...character, spellSlots: nextSlots }, elapsedMinutes: (campaign.elapsedMinutes ?? 0) + minutes, familiar: spell==='Find Familiar' ? { form:'Owl', summonedAt:now } : campaign.familiar, concentration:concentrating?{spell,target:cleanTarget||undefined,startedAt:now}:campaign.concentration, spellEffects:spell==='Find Familiar'?(campaign.spellEffects??[]):[...(campaign.spellEffects??[]).filter(e=>!prior || !concentrating || e.spell!==prior.spell),effect].slice(-30), updatedAt:now, journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:message,createdAt:now}] });
 }
 
 export function minutesUntilLongRestEligible(campaign: Campaign): number {
@@ -343,10 +345,10 @@ export function advanceToLongRestEligibility(campaign: Campaign, minutes: number
   if(!Number.isInteger(minutes)||minutes!==required||minutes<0)throw new Error('Invalid Long Rest waiting period');
   if(minutes===0)return campaign;
   const now=new Date().toISOString();
-  return {...campaign,elapsedMinutes:(campaign.elapsedMinutes??0)+minutes,
+  return advanceProvisionsClock(campaign,{...campaign,elapsedMinutes:(campaign.elapsedMinutes??0)+minutes,
     lastLongRestCompletedAt:campaign.lastLongRestCompletedAt??(campaign.elapsedMinutes??0)+minutes-1440,
     updatedAt:now,
-    journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:'Nighthawk waits '+minutes+' minutes for Long Rest eligibility (DM approved uninterrupted waiting).',createdAt:now}]};
+    journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:'Nighthawk waits '+minutes+' minutes for Long Rest eligibility (DM approved uninterrupted waiting).',createdAt:now}]});
 }
 export function takeNighthawkRest(campaign: Campaign, kind: 'short'|'long', hitDiceToSpend = 0, hitDieRolls: number[] = []): Campaign {
   requireLegacyNighthawk(campaign);
@@ -368,7 +370,7 @@ export function takeNighthawkRest(campaign: Campaign, kind: 'short'|'long', hitD
   const nextCharacter={...character,currentHitPoints:nextHp,spellSlots:slots?{...slots,usedLevel1:kind==='long'?0:slots.usedLevel1}:slots};
   const minutes=kind==='long'?480:60;
   const details=kind==='long'?'HP restored to maximum; spell slots restored; Hit Dice recovered.':'Spent '+hitDiceToSpend+' Hit Dice'+(rolls.length?' ('+rolls.join(', ')+')':'')+'; healed '+(nextHp-currentHp)+' HP. Spell slots unchanged.';
-  return {...campaign,character:nextCharacter,hitDiceRemaining:remaining,elapsedMinutes:(campaign.elapsedMinutes??0)+minutes,lastLongRestCompletedAt:kind==='long'?(campaign.elapsedMinutes??0)+minutes:campaign.lastLongRestCompletedAt,updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:'Nighthawk completes a '+kind+' rest ('+minutes+' minutes). '+details,createdAt:now}]};
+  return advanceProvisionsClock(campaign,{...campaign,character:nextCharacter,hitDiceRemaining:remaining,elapsedMinutes:(campaign.elapsedMinutes??0)+minutes,lastLongRestCompletedAt:kind==='long'?(campaign.elapsedMinutes??0)+minutes:campaign.lastLongRestCompletedAt,updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:'Nighthawk completes a '+kind+' rest ('+minutes+' minutes). '+details,createdAt:now}]});
 }
 
 export function applyNighthawkDamage(campaign: Campaign, amount: number, source: string): Campaign {

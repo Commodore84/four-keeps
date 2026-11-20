@@ -1,3 +1,4 @@
+import {advanceProvisionsClock} from './provisionsClock';
 import type {Campaign} from './campaign';
 import {basicPoisonWeapon,throwConsumable,type HolyWaterTargetType} from './companionEncounter';
 export const equipmentLightRules={
@@ -26,7 +27,7 @@ export function antitoxinSecondsRemaining(campaign: Campaign): number {
 /** Only advance time from a verified gameplay time event; never from a UI refresh. */
 export function advanceConsumableTime(c:Campaign,minutes:number):Campaign{
  if(!Number.isSafeInteger(minutes)||minutes<=0||minutes>1440)throw Error('Invalid elapsed game time');
- return {...c,elapsedMinutes:(c.elapsedMinutes??0)+minutes};
+ return advanceProvisionsClock(c,{...c,elapsedMinutes:(c.elapsedMinutes??0)+minutes});
 }
 
 export function provisionsToday(campaign:Campaign){
@@ -42,7 +43,7 @@ export interface ConsumableRequest {
  lightOperation?:'light'|'extinguish';expectedLight?:string;expectedFuelQuantity?:number;
  recoverGround?:{id:string;accessConfirmed:boolean};
  ground?:{x:number;y:number;level:boolean};
- supplyOperation?:'drink'|'refill';expectedSupplyState?:string;ropeCheck?:number;
+ supplyOperation?:'drink'|'refill'|'track';expectedSupplyState?:string;ropeCheck?:number;
  expectedWeaponId?:string;
  expectedTargetPosition?:{x:number;y:number};
 }
@@ -63,6 +64,13 @@ export function useOwnedConsumable(c:Campaign,r:ConsumableRequest):Campaign{
  if((c.elapsedMinutes??0)!==r.expectedElapsedMinutes)throw Error('Stale campaign time');
  if(c.combat?.status==='initiative-set'||c.combat?.status==='awaiting-initiative')throw Error('Legacy combat unsupported');
  const b=c.companionEncounter,active=b?.status==='active',actor=active?b.participants.nighthawk:undefined;
+ if(r.supplyOperation==='track'){
+  if(name!=='Rations'||active||!c.characterIdentity||!c.character||c.provisionTracking)
+   throw Error('Supply tracking requires an imported character outside combat');
+  const minutes=c.elapsedMinutes??0;
+  return {...c,provisionTracking:{nextDay:Math.ceil(minutes/1440),missedFood:0,foodLevels:0,waterLevels:0},
+   consumableUseIds:[...(c.consumableUseIds??[]),r.requestId],updatedAt:new Date().toISOString()};
+ }
  if(r.recoverGround){
   const supply=b?.groundSupplies?.find(entry=>entry.id===r.recoverGround!.id);
   if(!groundSupply||b?.status!=='completed'||b.mode!=='unified'||!supply||supply.name!==name||
@@ -145,7 +153,7 @@ export function useOwnedConsumable(c:Campaign,r:ConsumableRequest):Campaign{
   if(r.expectedSupplyState!==JSON.stringify(state))throw Error('Stale supply state');
   const confirmed={...c,consumableUseIds:[...(c.consumableUseIds??[]),r.requestId],updatedAt:new Date().toISOString()};
   if(name==='Rations'){
-   return {...confirmed,provisions:{...today,rations:today.rations+1},
+   return {...confirmed,...(c.provisionTracking?{provisionTracking:{...c.provisionTracking,foodLevels:0,missedFood:0}}:{}),provisions:{...today,rations:today.rations+1},
     inventoryLedger:{...c.inventoryLedger!,gear:gear.map((item,index)=>index===idx?{...item,quantity:item.quantity-1}:item)}};
   }
   if(name==='Waterskin'){
@@ -155,9 +163,9 @@ export function useOwnedConsumable(c:Campaign,r:ConsumableRequest):Campaign{
     return {...confirmed,waterskinPints:4};
    }
    if(r.supplyOperation!=='drink'||pints<=0)throw Error('Choose a drink from a nonempty waterskin');
-   return {...confirmed,waterskinPints:pints-1,provisions:{...today,waterPints:today.waterPints+1}};
+   return {...confirmed,...(c.provisionTracking&&today.waterPints+1>=8?{provisionTracking:{...c.provisionTracking,waterLevels:0}}:{}),waterskinPints:pints-1,provisions:{...today,waterPints:today.waterPints+1}};
   }
-  if(gear[idx].quantity!==1||c.ropeKnotted||!Number.isInteger(r.ropeCheck)||Math.abs(r.ropeCheck!)>100)
+  if(gear[idx].quantity!==1||c.ropeKnotted||Object.values(b?.participants??{}).some(actor=>actor.ropeBound)||!Number.isInteger(r.ropeCheck)||Math.abs(r.ropeCheck!)>100)
    throw Error('An unknotted, individually tracked rope and a verified check are required');
   const success=r.ropeCheck!>=10;
   return {...confirmed,ropeKnotted:success,

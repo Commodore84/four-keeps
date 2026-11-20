@@ -2,9 +2,10 @@ import {useState} from 'react';
 import {castArcaneTricksterHoldPerson,resolveArcaneTricksterHoldPersonEndSave} from '../game/companionEncounter';
 import {resolveImportedRogueEvasion,importedRogueSteadyAim,importedRogueHide,resolveImportedRogueDetection,importedRogueCunningAction,attackImportedRogue,resolveRoguePoisonSave,resolveRogueKnockoutSave,importedRogueUncannyDodge,useImportedMageHandLegerdemain,useImportedWarlockInvocation,attackImportedEldritchBlast,useImportedHealingLight,resolveWarlockEldritchMindSave,useImportedWizardPortentAttack,resolveImportedWizardSpell,resolveWizardHoldPersonEndSave,resolveWizardScorchingRayMulti,resolveWizardPortentSave,resolveWizardPortentAttack,resolveWizardMagicMissileMulti} from '../game/companionEncounter';
 import type {Campaign} from '../game/campaign';
-import {startCompanionEncounter,moveCompanion,endCompanionTurn,addCompanionObject,recordCompanionObjectFire,extinguishCompanionFire,damageCompanion,conditionCompanion,finishCompanionEncounter,attackCompanion,setCompanionSpeed ,useCompanionAction,setCompanionObstacles,companionOpportunityAttackEligible,setCompanionCover,companionPartySnapshot,startUnifiedEncounter,synchronizeNighthawkHitPoints,recordCompanionReaction,removeCompanionCondition,nighthawkEncounterStatistics,useCompanionBonusAction,setCompanionConcentration,resolveCompanionConcentrationSave,setCompanionConsumable,spendCompanionConsumable,spendUnifiedNighthawkSpellSlot,resolveCompanionOpportunityAttack,nighthawkEncounterInventory,spendUnifiedNighthawkInventory,setCompanionTactics,applyCompanionCondition,nighthawkEquipmentReferences,addCompanionEnemy,companionConditionEffects,setNighthawkEncounterLoadout,resolveCompanionSavingThrow,resolveCompanionDeathSave,healCompanion,nighthawkEquippedAttack,nighthawkEquippedDefense,standCompanionFromProne,attackCompanionWithVerifiedStats,configureEnemyTactic,previewEnemyTurn,refreshNighthawkEncounterStatistics,executeEnemyMovementTurn,stabilizeCompanion,recoverStableCompanion,attackWithThrownEquippedWeapon,executeEnemyMoveAndAttackTurn,executeEnemyAttackTurn,dismissEnemyOpportunityReactions,recoverEncounterThrownWeapons,recoverEncounterAmmunition,resumeEnemyInterruptedMovement,configureEnemyRangedAttack,executeEnemyRangedAttackTurn,previewCompanionMovement,spendPlayerResource,spendPlayerOriginSpell} from '../game/companionEncounter';
+import {startCompanionEncounter,moveCompanion,moveCompanionForced,bindCompanionWithRope,escapeCompanionRope,endCompanionTurn,addCompanionObject,recordCompanionObjectFire,extinguishCompanionFire,damageCompanion,conditionCompanion,finishCompanionEncounter,attackCompanion,setCompanionSpeed ,useCompanionAction,setCompanionObstacles,companionOpportunityAttackEligible,setCompanionCover,companionPartySnapshot,startUnifiedEncounter,synchronizeNighthawkHitPoints,recordCompanionReaction,removeCompanionCondition,nighthawkEncounterStatistics,useCompanionBonusAction,setCompanionConcentration,resolveCompanionConcentrationSave,setCompanionConsumable,spendCompanionConsumable,spendUnifiedNighthawkSpellSlot,resolveCompanionOpportunityAttack,nighthawkEncounterInventory,spendUnifiedNighthawkInventory,setCompanionTactics,applyCompanionCondition,nighthawkEquipmentReferences,addCompanionEnemy,companionConditionEffects,setNighthawkEncounterLoadout,resolveCompanionSavingThrow,resolveCompanionDeathSave,healCompanion,nighthawkEquippedAttack,nighthawkEquippedDefense,standCompanionFromProne,attackCompanionWithVerifiedStats,configureEnemyTactic,previewEnemyTurn,refreshNighthawkEncounterStatistics,executeEnemyMovementTurn,stabilizeCompanion,recoverStableCompanion,attackWithThrownEquippedWeapon,executeEnemyMoveAndAttackTurn,executeEnemyAttackTurn,dismissEnemyOpportunityReactions,recoverEncounterThrownWeapons,recoverEncounterAmmunition,resumeEnemyInterruptedMovement,configureEnemyRangedAttack,executeEnemyRangedAttackTurn,previewCompanionMovement,spendPlayerResource,spendPlayerOriginSpell} from '../game/companionEncounter';
 import type {DamageType} from '../game/subclassCombatRules';
 export function CompanionEncounterPanel({campaign,saving,onChange}:{campaign:Campaign;saving:boolean;onChange:(next:Campaign,message:string)=>Promise<boolean>|boolean|void}){
+ const [forcedActor,setForcedActor]=useState(''),[forcedX,setForcedX]=useState(''),[forcedY,setForcedY]=useState(''),[ropeTotal,setRopeTotal]=useState('');
  const [groundSave,setGroundSave]=useState('');
  const verifiedGroundSave=groundSave===''?undefined:Number(groundSave);
  const [objectName,setObjectName]=useState(''),[objectX,setObjectX]=useState(''),[objectY,setObjectY]=useState(''),[objectHP,setObjectHP]=useState('');
@@ -148,6 +149,27 @@ export function CompanionEncounterPanel({campaign,saving,onChange}:{campaign:Cam
    <button disabled={saving} onClick={()=>apply(()=>extinguishCompanionFire(campaign,id,'DM verified'),'Fire extinguished')}>Confirm doused, submerged, or suffocated</button>
   </div>)}
  </div>:null}
+ {battle.mode==='unified'&&<details className="rounded border border-white/20 p-2">
+  <summary>DM forced movement and Rope</summary>
+  <label>Creature<select aria-label="Forced movement creature" className="block w-full bg-slate-900" value={forcedActor} onChange={e=>setForcedActor(e.target.value)}>
+   <option value="">Choose a creature</option>{battle.order.map(id=><option key={id}>{id}</option>)}
+  </select></label>
+  <div className="grid grid-cols-2 gap-2">
+   <label>Forced X<input className="w-full bg-slate-900" type="number" value={forcedX} onChange={e=>setForcedX(e.target.value)}/></label>
+   <label>Forced Y<input className="w-full bg-slate-900" type="number" value={forcedY} onChange={e=>setForcedY(e.target.value)}/></label>
+  </div>
+  <button disabled={saving||!forcedActor||forcedX===''||forcedY===''} onClick={()=>apply(()=>{
+   const moved=moveCompanionForced(campaign,forcedActor,Number(forcedX),Number(forcedY),verifiedGroundSave);
+   setGroundSave('');return moved;
+  },'Verified forced movement recorded')}>Confirm forced 5-foot step</button>
+  {active==='nighthawk'&&campaign.inventoryLedger?.gear.some(item=>item.name==='Rope'&&item.quantity===1)&&
+   <button disabled={saving||!forcedActor} onClick={()=>apply(()=>bindCompanionWithRope(campaign,forcedActor),'Rope binding recorded')}>Bind legs with Rope</button>}
+  {battle.participants[active].ropeBound&&<div>
+   <label>Verified Rope escape or break check<input className="block w-full bg-slate-900" type="number" value={ropeTotal} onChange={e=>setRopeTotal(e.target.value)}/></label>
+   <button disabled={saving||ropeTotal===''} onClick={()=>apply(()=>escapeCompanionRope(campaign,active,Number(ropeTotal),'escape'),'Rope escape checked')}>Escape · DC 15 Acrobatics</button>
+   <button disabled={saving||ropeTotal===''} onClick={()=>apply(()=>escapeCompanionRope(campaign,active,Number(ropeTotal),'break'),'Rope break checked')}>Break · DC 20 Athletics</button>
+  </div>}
+ </details>}
  {battle.groundSupplies?.length?<section aria-label="Deployed ground supplies">
   <ul>{battle.groundSupplies.map(supply=><li key={supply.id}>{supply.name} at ({supply.x}, {supply.y})</li>)}</ul>
   <label>Verified ground hazard Dexterity save<input type="number" className="block w-full bg-slate-900" value={groundSave} onChange={e=>setGroundSave(e.target.value)}/></label>

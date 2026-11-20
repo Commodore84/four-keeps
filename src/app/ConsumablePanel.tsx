@@ -16,7 +16,8 @@ export function ConsumablePanel({campaign,saving,onUse}:{campaign:Campaign;savin
  const recovery=campaign.companionEncounter?.status==='completed'?
   campaign.companionEncounter.groundSupplies??[]:[];
  const recoverable=recovery.find(supply=>supply.id===recoveryId);
- if(!recovery.length&&!owned.length&&!antitoxinRemaining&&!campaign.companionEncounter?.basicPoison&&!lights.length)return null;
+ const canTrack=!!campaign.characterIdentity&&campaign.companionEncounter?.status!=='active'&&!campaign.provisionTracking;
+ if(!canTrack&&!campaign.provisionTracking&&!recovery.length&&!owned.length&&!antitoxinRemaining&&!campaign.companionEncounter?.basicPoison&&!lights.length)return null;
  const item=owned.find(g=>g.name===name),battle=campaign.companionEncounter,actor=battle?.participants.nighthawk,targets=eligibleKitTargets(campaign);
  const selected=targets.find(t=>t.id===target),recipient=battle?.participants[target]??battle?.objects?.[target];
  const throwing=name==='Oil'||name==='Alchemist’s Fire'||name==='Acid'||name==='Holy Water';
@@ -83,6 +84,17 @@ export function ConsumablePanel({campaign,saving,onUse}:{campaign:Campaign;savin
   setBusy(true);setError('');
   try{const ok=await onUse({name:item.name as ConsumableName,requestId:pending.current,confirmed:true,expectedQuantity:item.quantity,expectedElapsedMinutes:campaign.elapsedMinutes??0,expectedWeaponId:poisonWeapon?.id,expectedSupplyState:JSON.stringify(supplyState),supplyOperation:waterChoice,ropeCheck:Number(ropeCheck),...(deploying?{ground:{x:Number(groundX),y:Number(groundY),level}}:{}),...(lightName?{lightOperation:extinguishing?'extinguish' as const:'light' as const,expectedLight:JSON.stringify(light??null),expectedFuelQuantity:oil?.quantity}:{}),...(throwing?{targetId:target,expectedTargetHP:recipient?.hp,expectedTargetPosition:recipient?{x:recipient.x,y:recipient.y}:undefined,throwRolls:{saveTotal:Number(acidSave),damage:Number(acidDamage),targetType:name==='Holy Water'?creatureType||undefined:undefined}}:name==="Healer's Kit"?{expectedKitUses:campaign.healerKitUsesRemaining??10,targetId:target,expectedTargetHP:recipient?.hp,expectedTargetPosition:recipient?{x:recipient.x,y:recipient.y}:undefined}:{targetId:'nighthawk'}),...(battle?.status==='active'?{expectedEncounterId:battle.id,expectedTurnIndex:battle.turnIndex,expectedRound:battle.round,expectedActorPosition:actor?{x:actor.x,y:actor.y}:undefined}:{})});if(ok)clear();else setError('Use rejected; refresh and check the current state.')}catch(e){setError(String(e))}finally{setBusy(false)}
  }} className="rounded bg-amber-700 px-3 py-2 disabled:opacity-40">Confirm use</button><button type="button" onClick={clear}>Cancel</button></div>}
+ {canTrack&&<details className="rounded border border-white/20 p-2">
+  <summary>Daily food and water</summary>
+  <p>Track the next full game day. Use the Rations and Waterskin controls to record intake. Enable this for campaigns using those supplies.</p>
+  <button disabled={saving||busy} onClick={async()=>{
+   setBusy(true);setError('');
+   try{if(!await onUse({name:'Rations',requestId:crypto.randomUUID(),confirmed:true,expectedQuantity:0,
+    expectedElapsedMinutes:campaign.elapsedMinutes??0,supplyOperation:'track'}))setError('Supply tracking could not be enabled.')}
+   catch(error){setError(String(error))}finally{setBusy(false)}
+  }}>Enable daily supply tracking</button>
+ </details>}
+ {campaign.provisionTracking&&<p>Daily supplies: {today.rations} ration(s) · {today.waterPints}/8 pints</p>}
  {recovery.length>0&&<fieldset className="space-y-2">
   <legend>Recover deployed supplies</legend>
   <label>Deployed supply<select className="block w-full bg-slate-900" value={recoveryId} onChange={e=>{setRecoveryId(e.target.value);setRecoveryAccess(false)}}>
