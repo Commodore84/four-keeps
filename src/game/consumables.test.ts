@@ -1,5 +1,5 @@
 import {attackCompanion,addCompanionObject,recordCompanionObjectFire,damageCompanion,endCompanionTurn,extinguishCompanionFire,resolveCompanionSavingThrow} from './companionEncounter';
-import {advanceConsumableTime,antitoxinSecondsRemaining} from './consumables';
+import {advanceConsumableTime,antitoxinSecondsRemaining,equipmentLightRemaining} from './consumables';
 import {describe,it,expect} from 'vitest';
 import {useOwnedConsumable,eligibleKitTargets} from './consumables';
 import type {Campaign} from './campaign';
@@ -264,4 +264,53 @@ describe('Acid in a single-attack unified encounter',()=>{
   expect(campaign.companionEncounter?.basicPoison).toBeUndefined();
  });
 
+});
+
+describe('confirmed adventuring lights',()=>{
+ function supplies(){
+  const campaign=base();
+  return {...campaign,inventoryLedger:{...campaign.inventoryLedger!,gear:[
+   {name:'Candle',quantity:2},{name:'Torch',quantity:1},{name:'Lamp',quantity:1},
+   {name:'Oil',quantity:1},{name:'Tinderbox',quantity:1},
+  ]}};
+ }
+ const light={confirmed:true,requestId:'ignition',expectedElapsedMinutes:100,expectedLight:'null',
+  lightOperation:'light' as const,expectedQuantity:1};
+ it.each([['Candle',2],['Torch',1]] as const)('lights a %s for one hour and retains the Tinderbox',(name,quantity)=>{
+  const before=supplies();
+  const request={...light,name,expectedQuantity:quantity};
+  const lit=useOwnedConsumable(before,request);
+  expect(lit.inventoryLedger?.gear.find(item=>item.name===name)?.quantity).toBe(quantity-1);
+  expect(lit.inventoryLedger?.gear.find(item=>item.name==='Tinderbox')?.quantity).toBe(1);
+  expect(useOwnedConsumable(lit,request)).toBe(lit);
+  expect(equipmentLightRemaining(advanceConsumableTime(lit,59),name)).toBe(60);
+  expect(equipmentLightRemaining(advanceConsumableTime(lit,60),name)).toBe(0);
+ });
+ it('requires a Tinderbox and checks current lamp fuel ownership',()=>{
+  const before=supplies();
+  const noTinderbox={...before,inventoryLedger:{...before.inventoryLedger,gear:before.inventoryLedger.gear.filter(item=>item.name!=='Tinderbox')}};
+  expect(()=>useOwnedConsumable(noTinderbox,{...light,name:'Torch'})).toThrow('Tinderbox');
+  expect(()=>useOwnedConsumable(before,{...light,name:'Lamp',expectedFuelQuantity:2})).toThrow('Oil');
+ });
+ it('pauses and resumes cumulative lamp fuel without spending another flask',()=>{
+  const lit=useOwnedConsumable(supplies(),{...light,name:'Lamp',expectedFuelQuantity:1});
+  const later=advanceConsumableTime(lit,60);
+  const paused=useOwnedConsumable(later,{...light,name:'Lamp',requestId:'pause',
+   expectedElapsedMinutes:160,expectedLight:JSON.stringify(later.equipmentLights?.Lamp),lightOperation:'extinguish'});
+  const reloaded=JSON.parse(JSON.stringify(advanceConsumableTime(paused,30))) as Campaign;
+  expect(equipmentLightRemaining(reloaded,'Lamp')).toBe(18000);
+  const resumed=useOwnedConsumable(reloaded,{...light,name:'Lamp',requestId:'resume',
+   expectedElapsedMinutes:190,expectedLight:JSON.stringify(reloaded.equipmentLights?.Lamp)});
+  expect(resumed.inventoryLedger?.gear.find(item=>item.name==='Oil')?.quantity).toBe(0);
+  expect(equipmentLightRemaining(advanceConsumableTime(resumed,300),'Lamp')).toBe(0);
+ });
+ it('uses the combat Bonus Action to light and counts six seconds per round',()=>{
+  const source=encounter(),battle=source.companionEncounter!;
+  const current={...source,inventoryLedger:supplies().inventoryLedger,companionEncounter:{...battle,
+   participants:{...battle.participants,ally:{...battle.participants.ally,actorKind:'enemy' as const}}}};
+  const lit=useOwnedConsumable(current,{...light,name:'Torch',expectedRound:2,expectedTurnIndex:0,expectedActorPosition:{x:2,y:2}});
+  expect(lit.companionEncounter?.participants.nighthawk.bonusActionUsed).toBe(true);
+  const next=endCompanionTurn(endCompanionTurn(lit,'nighthawk'),'ally');
+  expect(equipmentLightRemaining(next,'Torch')).toBe(3594);
+ });
 });

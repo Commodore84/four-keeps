@@ -453,6 +453,8 @@ export function endCompanionTurn(campaign:Campaign,actorId:string,rollBurning=()
  const timed = next === 0 && battle.mode === 'unified' && antitoxinSecondsRemaining(campaign) > 0
   ? { ...campaign, antitoxinCombatSeconds: (campaign.antitoxinCombatSeconds ?? 0) + 6 }
   : campaign;
+ const clocked=next===0&&battle.mode==='unified'
+  ? {...timed,equipmentCombatSeconds:(timed.equipmentCombatSeconds??0)+6}:timed;
  const nextId=battle.order[next];const outgoing=battle.participants[actorId];const participants={...battle.participants,[actorId]:{...outgoing,disengaged:false,roguePoisonSaveResolved:false,rogueKnockoutSaveResolved:false,...(outgoing.rogueDazeTurns!==undefined?(outgoing.rogueDazeTurns<=1?{rogueDazeTurns:undefined,rogueDazeChoice:undefined}:{rogueDazeTurns:outgoing.rogueDazeTurns-1,rogueDazeChoice:undefined}):{}),...(outgoing.rogueObscureUntilTurn!==undefined?(outgoing.rogueObscureUntilTurn<=1?{rogueObscureUntilTurn:undefined,conditions:outgoing.conditions.filter(c=>c!=='Blinded')}:{rogueObscureUntilTurn:outgoing.rogueObscureUntilTurn-1}):{})}};participants[nextId]={...participants[nextId],movementSpentFeet:0,actionUsed:false,bonusActionUsed:false,dashFeet:0,disengaged:false,dodging:false,reactionUsed:false,rogueSneakUsed:false,rogueSteadyAim:false,rogueMovedThisTurn:false};const nextRound=battle.round+(next===0?1:0);
  for(const [id,participant] of Object.entries(participants)){
   const expiry=participant.oilExpires;
@@ -466,7 +468,7 @@ export function endCompanionTurn(campaign:Campaign,actorId:string,rollBurning=()
  }));
  const basicPoison=battle.basicPoison;
  const poisonExpired=basicPoison&&nextId==='nighthawk'&&nextRound>=basicPoison.expiresRound;
- const advanced=save(timed,{...battle,...(poisonExpired?{basicPoison:undefined}:{}),...(objects?{objects}:{}),participants,turnIndex:next,round:battle.round+(next===0?1:0),log:[...battle.log,actorId+' ended turn']});
+ const advanced=save(clocked,{...battle,...(poisonExpired?{basicPoison:undefined}:{}),...(objects?{objects}:{}),participants,turnIndex:next,round:battle.round+(next===0?1:0),log:[...battle.log,actorId+' ended turn']});
  if(!battle.burningCreatures?.includes(nextId)||participants[nextId].deathSaves?.dead||
     (participants[nextId].actorKind==='enemy'&&participants[nextId].hp===0))return advanced;
  const damage=rollBurning();

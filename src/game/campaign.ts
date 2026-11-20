@@ -11,6 +11,8 @@ export interface JournalEntry { id: string; text: string; createdAt: string; kin
 export interface Campaign {
   healingPotionUseIds?:string[];
   consumableUseIds?:string[];
+  equipmentCombatSeconds?:number;
+  equipmentLights?:Partial<Record<'Candle'|'Lamp'|'Torch',{remainingSeconds:number;startedAt?:number}>>;
   antitoxinUntilMinute?:number;
   antitoxinCombatSeconds?:number;
   healerKitUsesRemaining?:number;

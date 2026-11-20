@@ -190,3 +190,35 @@ test('iPhone Basic Poison coats the equipped dagger and preserves the coating af
  },id);
  expect(saved).toEqual({weapon:'dagger',used:true,vial:0});
 });
+
+test('iPhone lamp lighting, pause and relight spend one Oil flask and survive reload',async({page})=>{
+ const id=await createCampaign(page,'Lamp fuel');
+ await page.evaluate(async id=>{
+  const {localCampaignStorage}=await import('/src/game/storage.ts');
+  const current=await localCampaignStorage.get(id);
+  if(!current?.inventoryLedger)throw Error('Campaign fixture was not saved');
+  await localCampaignStorage.save({...current,inventoryLedger:{...current.inventoryLedger,gear:[
+   {name:'Lamp',quantity:1},{name:'Oil',quantity:1},{name:'Tinderbox',quantity:1},
+  ]}});
+ },id);
+ async function reopen(){
+  await page.reload();
+  await page.getByRole('button',{name:'Campaigns',exact:true}).click();
+  await page.getByRole('button',{name:'Continue Adventure'}).click();
+ }
+ await reopen();
+ const panel=page.getByRole('region',{name:'Adventuring consumables'});
+ async function useLamp(){
+  await panel.getByLabel('Choose consumable').selectOption('Lamp');
+  await panel.getByRole('button',{name:'Confirm use'}).click();
+ }
+ await useLamp();
+ await expect(panel.getByRole('status')).toHaveText('Lamp: 15 ft bright, 30 ft additional dim · 360 min remaining');
+ await useLamp();
+ await expect(panel.getByRole('status')).toHaveText('Lamp: extinguished · 360 min remaining');
+ await reopen();
+ await expect(panel.getByRole('status')).toHaveText('Lamp: extinguished · 360 min remaining');
+ await useLamp();
+ await expect(panel.getByRole('status')).toHaveText('Lamp: 15 ft bright, 30 ft additional dim · 360 min remaining');
+ await expect(panel.getByLabel('Choose consumable').getByRole('option',{name:/Oil/})).toHaveCount(0);
+});

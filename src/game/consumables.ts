@@ -1,6 +1,23 @@
 import type {Campaign} from './campaign';
 import {basicPoisonWeapon,throwConsumable,type HolyWaterTargetType} from './companionEncounter';
-export type ConsumableName='Poison, Basic'|'Oil'|'Alchemist’s Fire'|'Acid'|'Holy Water'|'Antitoxin'|"Healer's Kit";
+export const equipmentLightRules={
+ Candle:{seconds:3600,bright:5,dim:5},
+ Lamp:{seconds:21600,bright:15,dim:30},
+ Torch:{seconds:3600,bright:20,dim:20},
+} as const;
+export type EquipmentLight=keyof typeof equipmentLightRules;
+
+function equipmentTime(campaign:Campaign){
+ return (campaign.elapsedMinutes??0)*60+(campaign.equipmentCombatSeconds??0);
+}
+
+export function equipmentLightRemaining(campaign:Campaign,name:EquipmentLight){
+ const light=campaign.equipmentLights?.[name];
+ if(!light)return 0;
+ return Math.max(0,light.remainingSeconds-(light.startedAt===undefined?0:equipmentTime(campaign)-light.startedAt));
+}
+
+export type ConsumableName=EquipmentLight|'Poison, Basic'|'Oil'|'Alchemist’s Fire'|'Acid'|'Holy Water'|'Antitoxin'|"Healer's Kit";
 
 export function antitoxinSecondsRemaining(campaign: Campaign): number {
  const minutes = (campaign.antitoxinUntilMinute ?? 0) - (campaign.elapsedMinutes ?? 0);
@@ -17,6 +34,7 @@ export interface ConsumableRequest {
  expectedElapsedMinutes:number;expectedKitUses?:number;targetId?:string;expectedTargetHP?:number;
  expectedEncounterId?:string;expectedTurnIndex?:number;expectedRound?:number;expectedActorPosition?:{x:number;y:number};
  throwRolls?:{saveTotal:number;damage:number;targetType?:HolyWaterTargetType};
+ lightOperation?:'light'|'extinguish';expectedLight?:string;expectedFuelQuantity?:number;
  expectedWeaponId?:string;
  expectedTargetPosition?:{x:number;y:number};
 }
@@ -28,7 +46,10 @@ export function eligibleKitTargets(c:Campaign){
 export function useOwnedConsumable(c:Campaign,r:ConsumableRequest):Campaign{
  if(!r.confirmed||!r.requestId.trim())throw Error('Consumable confirmation and request ID required');
  if(c.consumableUseIds?.includes(r.requestId))return c;
- if(r.name!=='Poison, Basic'&&r.name!=='Oil'&&r.name!=='Alchemist’s Fire'&&r.name!=='Holy Water'&&r.name!=='Acid'&&r.name!=='Antitoxin'&&r.name!=="Healer's Kit")throw Error('Unknown consumable');
+ const name=r.name;
+ const isLight=name==='Candle'||name==='Lamp'||name==='Torch';
+ const extinguishing=isLight&&r.lightOperation==='extinguish';
+ if(!isLight&&r.name!=='Poison, Basic' &&r.name!=='Oil'&&r.name!=='Alchemist’s Fire'&&r.name!=='Holy Water'&&r.name!=='Acid'&&r.name!=='Antitoxin'&&r.name!=="Healer's Kit")throw Error('Unknown consumable');
  if((c.elapsedMinutes??0)!==r.expectedElapsedMinutes)throw Error('Stale campaign time');
  if(c.combat?.status==='initiative-set'||c.combat?.status==='awaiting-initiative')throw Error('Legacy combat unsupported');
  const b=c.companionEncounter,active=b?.status==='active',actor=active?b.participants.nighthawk:undefined;
@@ -38,7 +59,37 @@ export function useOwnedConsumable(c:Campaign,r:ConsumableRequest):Campaign{
  if(actor&&(r.expectedActorPosition?.x!==actor.x||r.expectedActorPosition?.y!==actor.y))throw Error('Stale actor position');
  if(actor&&(actor.hp<=0||actor.conditions.some(x=>['Incapacitated','Paralyzed','Petrified','Stunned','Unconscious'].includes(x))))throw Error('Actor cannot act');
  if(actor?.rogueDazeTurns!==undefined&&(actor.rogueDazeChoice==='movement'||actor.movementSpentFeet>0||actor.actionUsed||actor.bonusActionUsed))throw Error('Dazed: choose movement or one action or bonus action');
- if(actor&&(r.name==='Antitoxin'||r.name==='Poison, Basic'?actor.bonusActionUsed:actor.actionUsed))throw Error('Required action already spent');
+ if(actor&&(r.name==='Antitoxin'||r.name==='Poison, Basic'||isLight&&!extinguishing?actor.bonusActionUsed:actor.actionUsed))throw Error('Required action already spent');
+ if(isLight){
+  const light=c.equipmentLights?.[name];
+  const remaining=equipmentLightRemaining(c,name);
+  if(JSON.stringify(light??null)!==r.expectedLight)throw Error('Stale light state');
+  if(r.lightOperation!=='light'&&r.lightOperation!=='extinguish')throw Error('Confirm a light operation');
+  const gear=c.inventoryLedger?.gear;
+  const item=gear?.find(entry=>entry.name===name);
+  if(!gear||(item?.quantity??0)!==r.expectedQuantity)throw Error('Stale light inventory');
+  const oil=gear.find(entry=>entry.name==='Oil');
+  const refill=name==='Lamp'&&!extinguishing&&remaining===0;
+  if(extinguishing){
+   if(name!=='Lamp'||!remaining||light?.startedAt===undefined)throw Error('No lit lamp to extinguish');
+  }else{
+   if(!item?.quantity)throw Error('Light source is not owned');
+   if(remaining&&light?.startedAt!==undefined)throw Error('This type of light is already burning');
+   if(!gear.some(entry=>entry.name==='Tinderbox'&&entry.quantity>0))throw Error('An owned Tinderbox is required');
+   if(refill&&(!oil?.quantity||oil.quantity!==r.expectedFuelQuantity))throw Error('Current Oil flask is required');
+  }
+  const burnedItem=extinguishing?null:refill?oil:name==='Lamp'?null:item;
+  const nextLight=extinguishing?{remainingSeconds:remaining}
+   :{remainingSeconds:remaining||equipmentLightRules[name].seconds,startedAt:equipmentTime(c)};
+  return {...c,equipmentLights:{...c.equipmentLights,[name]:nextLight},
+   consumableUseIds:[...(c.consumableUseIds??[]),r.requestId],
+   ...(b&&active&&actor?{companionEncounter:{...b,participants:{...b.participants,nighthawk:{
+    ...actor,...(extinguishing?{actionUsed:true}:{bonusActionUsed:true}),
+    ...(actor.rogueDazeTurns!==undefined?{rogueDazeChoice:'action' as const}:{})}},
+    log:[...b.log,name+(extinguishing?' extinguished':' lit')]}}:{}),
+   inventoryLedger:{...c.inventoryLedger!,gear:gear.map(entry=>entry===burnedItem?{...entry,quantity:entry.quantity-1}:entry)},
+   updatedAt:new Date().toISOString()};
+ }
  const gear=c.inventoryLedger?.gear,idx=gear?.findIndex(g=>g.name===r.name);
  if(!gear||idx===undefined||idx<0||gear[idx].quantity!==r.expectedQuantity||gear[idx].quantity<1)throw Error('Stale consumable inventory');
  if(r.name==='Poison, Basic'){
