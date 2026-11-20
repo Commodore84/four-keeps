@@ -1,6 +1,6 @@
 import {advanceProvisionsClock} from './provisionsClock';
 import type {Campaign} from './campaign';
-import {basicPoisonWeapon,throwConsumable,type HolyWaterTargetType} from './companionEncounter';
+import {basicPoisonWeapon,igniteGroundOil,throwConsumable,type HolyWaterTargetType} from './companionEncounter';
 export const equipmentLightRules={
  Candle:{seconds:3600,bright:5,dim:5},
  Lamp:{seconds:21600,bright:15,dim:30},
@@ -43,6 +43,7 @@ export interface ConsumableRequest {
  lightOperation?:'light'|'extinguish';expectedLight?:string;expectedFuelQuantity?:number;
  recoverGround?:{id:string;accessConfirmed:boolean};
  ground?:{x:number;y:number;level:boolean};
+ igniteOilId?:string;
  supplyOperation?:'drink'|'refill'|'track';expectedSupplyState?:string;ropeCheck?:number;
  expectedWeaponId?:string;
  expectedTargetPosition?:{x:number;y:number};
@@ -55,6 +56,13 @@ export function eligibleKitTargets(c:Campaign){
 export function useOwnedConsumable(c:Campaign,r:ConsumableRequest):Campaign{
  if(!r.confirmed||!r.requestId.trim())throw Error('Consumable confirmation and request ID required');
  if(c.consumableUseIds?.includes(r.requestId))return c;
+ if(r.igniteOilId){
+  const battle=c.companionEncounter;
+  if(!battle||battle.status!=='active'||battle.mode!=='unified'||battle.id!==r.expectedEncounterId||battle.round!==r.expectedRound||battle.turnIndex!==r.expectedTurnIndex||
+   (c.elapsedMinutes??0)!==r.expectedElapsedMinutes)throw Error('Stale Oil ignition request');
+  const ignited=igniteGroundOil(c,r.igniteOilId);
+  return {...ignited,consumableUseIds:[...(c.consumableUseIds??[]),r.requestId]};
+ }
  const name=r.name;
  const groundSupply=name==='Ball Bearings'||name==='Caltrops';
  const fieldSupply=name==='Rations'||name==='Waterskin'||name==='Rope';
