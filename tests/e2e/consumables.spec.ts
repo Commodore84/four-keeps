@@ -1,4 +1,9 @@
-import {test,expect} from '@playwright/test';
+import {test,expect,type Page} from '@playwright/test';
+async function openSupplies(page:Page){
+ await page.getByRole('button',{name:'Open navigation menu'}).click();
+ await page.getByRole('navigation',{name:'Primary navigation'}).getByRole('button',{name:'Player',exact:true}).click();
+ return page.getByLabel('Equipment and inventory',{exact:true}).getByRole('region',{name:'Adventuring consumables'});
+}
 async function createCampaign(page:import('@playwright/test').Page,name:string){
  await page.goto('/four-keeps/');
  await page.getByRole('button',{name:'Settings',exact:true}).click();
@@ -19,7 +24,7 @@ async function createCampaign(page:import('@playwright/test').Page,name:string){
 test('iPhone antitoxin confirms, cancels, persists one-hour effect and stock',async({page})=>{
  const id=await createCampaign(page,'Antitoxin smoke');
  await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();await page.getByRole('button',{name:'Continue Adventure'}).click();
- const panel=page.getByRole('region',{name:'Adventuring consumables'});
+ const panel=await openSupplies(page);
  await panel.getByLabel('Choose consumable').selectOption('Antitoxin');
  await panel.getByRole('button',{name:'Cancel'}).click();
  await expect(panel).toContainText('Antitoxin (2)');
@@ -28,7 +33,7 @@ test('iPhone antitoxin confirms, cancels, persists one-hour effect and stock',as
  await expect(panel).toContainText('Antitoxin (1)');
  await expect(panel).toContainText('60 in-game minutes remaining');
  await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();await page.getByRole('button',{name:'Continue Adventure'}).click();
- await expect(page.getByRole('region',{name:'Adventuring consumables'})).toContainText('Antitoxin (1)');
+ await expect(await openSupplies(page)).toContainText('Antitoxin (1)');
  const result=await page.evaluate(async id=>{const db=await new Promise<IDBDatabase>(resolve=>{const r=indexedDB.open('four-keeps-local',1);r.onsuccess=()=>resolve(r.result)});const c=await new Promise<any>(resolve=>{const r=db.transaction('campaigns').objectStore('campaigns').get(id);r.onsuccess=()=>resolve(r.result)});db.close();return {until:c.antitoxinUntilMinute,ids:c.consumableUseIds.length}},id);
  expect(result).toEqual({until:160,ids:1});
 });
@@ -61,7 +66,7 @@ test('iPhone healer kit stabilizes adjacent ally and preserves nine remaining us
   });db.close();
  },id);
  await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();await page.getByRole('button',{name:'Continue Adventure'}).click();
- const panel=page.getByRole('region',{name:'Adventuring consumables'});
+ const panel=await openSupplies(page);
  await panel.getByLabel('Choose consumable').selectOption("Healer's Kit");
  await panel.getByLabel('Consumable recipient').selectOption('ally');
  await panel.getByRole('button',{name:'Confirm use'}).click();
@@ -88,7 +93,7 @@ test('iPhone encounter antitoxin affects Poisoned saves after reload',async({pag
   await page.getByRole('button',{name:'Continue Adventure'}).click();
  };
  await reopen();
- const panel=page.getByRole('region',{name:'Adventuring consumables'});
+ const panel=await openSupplies(page);
  await panel.getByLabel('Choose consumable').selectOption('Antitoxin');
  await panel.getByRole('button',{name:'Confirm use'}).click();
  await expect(panel).toContainText('Antitoxin (1)');
@@ -128,7 +133,6 @@ for(const [item,target] of [['Acid','Bandit'],['Holy Water','Bandit'],['Alchemis
  await page.reload();
  await page.getByRole('button',{name:'Campaigns',exact:true}).click();
  await page.getByRole('button',{name:'Continue Adventure'}).click();
- const panel=page.getByRole('region',{name:'Adventuring consumables'});
  if(target==='Crate'){
   await page.getByText('DM encounter objects',{exact:true}).click();
   await page.getByLabel('Object name').fill('Crate');
@@ -138,6 +142,7 @@ for(const [item,target] of [['Acid','Bandit'],['Holy Water','Bandit'],['Alchemis
   await page.getByRole('button',{name:'Add encounter object'}).click();
   await expect(page.getByText('Crate · 12 HP',{exact:true})).toBeVisible();
  }
+ const panel=await openSupplies(page);
  await panel.getByLabel('Choose consumable').selectOption(item);
  await panel.getByLabel(item+' target').selectOption(target);
  if(target==='Bandit')await panel.getByLabel('Dexterity save total').fill('1');
@@ -176,7 +181,7 @@ test('iPhone Basic Poison coats the equipped dagger and preserves the coating af
  await page.reload();
  await page.getByRole('button',{name:'Campaigns',exact:true}).click();
  await page.getByRole('button',{name:'Continue Adventure'}).click();
- const panel=page.getByRole('region',{name:'Adventuring consumables'});
+ const panel=await openSupplies(page);
  await panel.getByLabel('Choose consumable').selectOption('Poison, Basic');
  await panel.getByRole('button',{name:'Confirm use'}).click();
  await expect(panel.getByRole('status')).toHaveText('Basic Poison coating active.');
@@ -207,7 +212,7 @@ test('iPhone lamp lighting, pause and relight spend one Oil flask and survive re
   await page.getByRole('button',{name:'Continue Adventure'}).click();
  }
  await reopen();
- const panel=page.getByRole('region',{name:'Adventuring consumables'});
+ const panel=await openSupplies(page);
  async function useLamp(){
   await panel.getByLabel('Choose consumable').selectOption('Lamp');
   await panel.getByRole('button',{name:'Confirm use'}).click();
@@ -217,6 +222,7 @@ test('iPhone lamp lighting, pause and relight spend one Oil flask and survive re
  await useLamp();
  await expect(panel.getByRole('status')).toHaveText('Lamp: extinguished · 360 min remaining');
  await reopen();
+ await openSupplies(page);
  await expect(panel.getByRole('status')).toHaveText('Lamp: extinguished · 360 min remaining');
  await useLamp();
  await expect(panel.getByRole('status')).toHaveText('Lamp: 15 ft bright, 30 ft additional dim · 360 min remaining');
@@ -236,7 +242,7 @@ test('iPhone rations, waterskin and rope keep verified supply changes after relo
  await page.reload();
  await page.getByRole('button',{name:'Campaigns',exact:true}).click();
  await page.getByRole('button',{name:'Continue Adventure'}).click();
- const panel=page.getByRole('region',{name:'Adventuring consumables'});
+ const panel=await openSupplies(page);
  const supplies=panel.getByLabel('Choose consumable');
  const confirm=panel.getByRole('button',{name:'Confirm use'});
  await supplies.selectOption('Rations');
@@ -274,7 +280,7 @@ test('iPhone recovers Caltrops from a completed encounter and persists inventory
  await page.reload();
  await page.getByRole('button',{name:'Campaigns',exact:true}).click();
  await page.getByRole('button',{name:'Continue Adventure'}).click();
- const panel=page.getByRole('region',{name:'Adventuring consumables'});
+ const panel=await openSupplies(page);
  await panel.getByLabel('Deployed supply').selectOption('caltrops-test');
  await panel.getByLabel('DM confirms access to the deployed supply').check();
  await panel.getByRole('button',{name:'Recover (10 minutes)'}).click();

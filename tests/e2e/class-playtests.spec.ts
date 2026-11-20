@@ -1057,6 +1057,7 @@ test('iPhone opening has intentional loading, safe retry and one saved opening',
  await page.getByRole('button',{name:'Continue Adventure'}).click();
  const opening=page.getByRole('region',{name:'Adventure opening'});
  await expect(opening).toContainText('Your adventure begins');
+ await expect(page.getByRole('region',{name:'Adventuring consumables'})).toHaveCount(0);
  await expect(opening).toContainText('preparing your opening scene');
  await expect(page.getByLabel('Message the Dungeon Master')).toBeDisabled();
  await expect(page.getByRole('button',{name:'Send message to Dungeon Master'})).toBeDisabled();
@@ -1072,6 +1073,10 @@ test('iPhone opening has intentional loading, safe retry and one saved opening',
  await page.getByRole('button',{name:'Continue Adventure'}).click();
  await expect(page.getByLabel('Adventure',{exact:true})).toContainText('harbor bells welcome you');
  expect(count).toBe(2);
+ await expect(page.getByRole('region',{name:'Adventuring consumables'})).toHaveCount(0);
+ await navigate(page,'Player');
+ await page.getByLabel('Jump to character section').selectOption('equipment');
+ await expect(page.getByLabel('Equipment and inventory',{exact:true}).getByRole('region',{name:'Adventuring consumables'})).toBeVisible();
  expect((await saved(page)).journal.filter((entry:any)=>entry.id.endsWith('-dm-opening'))).toHaveLength(1);
 });
 
