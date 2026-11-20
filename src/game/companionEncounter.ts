@@ -412,7 +412,7 @@ export function standCompanionFromProne(campaign:Campaign,actorId:string):Campai
  return save(campaign,{...battle,participants:{...battle.participants,[actorId]:{...actor,conditions:actor.conditions.filter(c=>c!=='Prone'),movementSpentFeet:actor.movementSpentFeet+cost}},log:[...battle.log,actorId+' stood from Prone using '+cost+' ft of movement']});
 }
 /** Apply at most one oil hazard hit per actor per active turn, even across multiple slicks. */
-export function resolveGroundOilHazard(campaign:Campaign,actorId:string,entered:boolean):Campaign{
+export function resolveGroundOilHazard(campaign:Campaign,actorId:string):Campaign{
  const battle=encounter(campaign),actor=battle.participants[actorId];
  if(battle.status!=='active'||battle.mode!=='unified'||!actor||actor.hp<=0)return campaign;
  if(battle.groundOil?.some(o=>o.damagedActorsThisTurn?.includes(actorId)))return campaign;
@@ -446,7 +446,7 @@ export function moveCompanion(campaign:Campaign,actorId:string,x:number,y:number
  if(traversedSteps>1&&route.slice(1,traversedSteps+1).some(cell=>battle.groundOil?.some(o=>o.ignitedRound!==undefined&&o.x===cell.x&&o.y===cell.y)))throw Error('Enter burning Oil one 5-foot step at a time');
  const supply=groundEntry(battle,actorId,route.slice(0,traversedSteps+1),groundSave);
  const moved=save(campaign,revealRogueOnVisibilityChange({...battle,participants:{...battle.participants,[actorId]:{...actor,x:destination.x,y:destination.y,movementSpentFeet:actor.movementSpentFeet+movementCost,...(actor.rogueDazeTurns!==undefined&&movementCost>0?{rogueDazeChoice:'movement' as const}:{}),rogueMovedThisTurn:actor.rogueMovedThisTurn||movementCost>0,rogueHidden:actorId==='nighthawk'&&movementCost>0&&Object.values(battle.participants).some(enemy=>enemy.actorKind==='enemy'&&enemy.hp>0&&companionLineOfSight(battle,enemy,destination))?false:actor.rogueHidden}},pendingOpportunity:candidates.length?{moverId:actorId,attackerIds:candidates,from:interrupt?{x:firstTrigger.from.x,y:firstTrigger.from.y}:{x:actor.x,y:actor.y},to:interrupt?{x:firstTrigger.to.x,y:firstTrigger.to.y}:{x,y},...(interrupt?{destination:{x,y}}:{})}:undefined,log:[...battle.log,actorId+' moved to '+destination.x+','+destination.y+(interrupt?' · interrupted before leaving reach toward '+firstTrigger.to.x+','+firstTrigger.to.y:candidates.length?' · potential opportunity attackers: '+candidates.join(', '):'')]}));
- return resolveGroundOilHazard(resolveGroundEntry(moved,actorId,supply,groundSave),actorId,true);
+ return resolveGroundOilHazard(resolveGroundEntry(moved,actorId,supply,groundSave),actorId);
 }
 
 type GroundSupply=NonNullable<CompanionEncounter['groundSupplies']>[number];
@@ -496,7 +496,7 @@ export function moveCompanionForced(campaign:Campaign,actorId:string,x:number,y:
  const moved=save(campaign,revealRogueOnVisibilityChange({...battle,
   participants:{...battle.participants,[actorId]:{...actor,...destination}},
   log:[...battle.log,actorId+' was forcibly moved to '+x+','+y+' (DM verified)']}));
- return resolveGroundOilHazard(resolveGroundEntry(moved,actorId,supply,groundSave),actorId,true);
+ return resolveGroundOilHazard(resolveGroundEntry(moved,actorId,supply,groundSave),actorId);
 }
 
 export function bindCompanionWithRope(campaign:Campaign,targetId:string):Campaign{
@@ -549,7 +549,7 @@ export function endCompanionTurn(campaign:Campaign,actorId:string,rollBurning=()
  if(battle.participants[actorId]?.actorKind==='enemy'&&battle.pendingOpportunity?.moverId===actorId&&battle.pendingOpportunity.attackerIds.length)throw Error('Pending opportunity reactions require DM adjudication');
  if(battle.participants[actorId]?.roguePoisonDC!==undefined&&!battle.participants[actorId]?.roguePoisonSaveResolved)throw Error('Resolve Rogue Poison end-of-turn Constitution save before ending turn');
  if(battle.participants[actorId]?.rogueKnockoutDC!==undefined&&!battle.participants[actorId]?.rogueKnockoutSaveResolved)throw Error('Resolve Rogue Knock Out end-of-turn Constitution save before ending turn');
- const oilResolved=resolveGroundOilHazard(campaign,actorId,false);
+ const oilResolved=resolveGroundOilHazard(campaign,actorId);
  const afterOil=encounter(oilResolved);
  const next=(battle.turnIndex+1)%battle.order.length;
  const timed = next === 0 && battle.mode === 'unified' && antitoxinSecondsRemaining(oilResolved) > 0
