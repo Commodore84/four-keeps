@@ -662,6 +662,7 @@ test('new Rogue starts at Frontier Village, buys supplies, and sees persisted Pl
  await expect(shop.getByLabel('Melee weapons')).toBeVisible();
  const dagger=shop.getByLabel('Dagger',{exact:true});
  await expect(dagger.getByLabel('Dagger availability')).toContainText(/Dagger.*\d+ owned · \d+ in stock/);
+ await dagger.locator('details').getByText('Item details').click();
  await expect(dagger.getByText('Simple weapon proficiency',{exact:false})).toBeVisible();
  await expect(dagger.getByText('1d4 Piercing damage',{exact:false})).toBeVisible();
  await expect(shop.getByLabel('Current wallet')).toBeVisible();
