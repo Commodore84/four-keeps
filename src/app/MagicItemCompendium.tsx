@@ -1,5 +1,6 @@
 import {useEffect,useMemo,useState} from 'react';
 import {MAGIC_ITEMS,readMagicWishlist,writeMagicWishlist} from '../game/magicWishlist';
+import {ALCHEMY_JUG_LIQUIDS,magicItemExtendedRules,magicItemUseDescription} from '../game/magicItemUseDescriptions';
 export function MagicItemCompendium({campaignId}:{campaignId:string|null}){
  const [wanted,setWanted]=useState<string[]>([]);
  const [tab,setTab]=useState<'all'|'wishlist'>('all');
@@ -23,7 +24,10 @@ export function MagicItemCompendium({campaignId}:{campaignId:string|null}){
   <input aria-label="Search magic items" value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search magic items" className="w-full rounded-lg border border-white/20 bg-panel p-3 text-base"/>
   <div className="grid grid-cols-2 gap-2"><label className="text-xs">Category<select aria-label="Magic item category" value={category} onChange={e=>setCategory(e.target.value)} className="mt-1 w-full rounded-lg border border-white/20 bg-panel p-2 text-base">{categories.map(c=><option key={c}>{c}</option>)}</select></label><label className="text-xs">Rarity<select aria-label="Magic item rarity" value={rarity} onChange={e=>setRarity(e.target.value)} className="mt-1 w-full rounded-lg border border-white/20 bg-panel p-2 text-base">{rarities.map(r=><option key={r}>{r}</option>)}</select></label></div>
   <p className="text-xs text-parchment/60">{filtered.length} items</p>
-  {filtered.map(item=><article key={item.id} className="rounded-xl border border-white/15 bg-panel p-3">
+  {filtered.map(item=>{
+   const usage=magicItemUseDescription(item);
+   const extendedRules=magicItemExtendedRules(item.id);
+   return <article key={item.id} className="rounded-xl border border-white/15 bg-panel p-3">
    <div className="flex items-start gap-3">
     <button type="button" disabled={!campaignId} aria-label={wanted.includes(item.id)?`Remove ${item.name} from Wish List`:`Add ${item.name} to Wish List`} aria-pressed={wanted.includes(item.id)} onClick={()=>toggle(item.id)} className="rounded-lg border border-white/20 px-3 py-2 text-xl text-gold disabled:opacity-40">{wanted.includes(item.id)?'♥':'♡'}</button>
     <div className="min-w-0 flex-1">
@@ -31,10 +35,20 @@ export function MagicItemCompendium({campaignId}:{campaignId:string|null}){
      <p className="mt-1 text-xs text-parchment/65">{item.rarity} · {item.category}{item.attunement?' · Attunement':''}</p>
     </div>
    </div>
-   <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-relaxed text-parchment/85">{item.description}</p>
-  </article>)}
+   <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-relaxed text-parchment/85">{usage??item.description}</p>
+   {item.id==='dmg24-alchemy-jug'&&<table className="mt-3 w-full text-left text-sm">
+    <caption className="pb-1 text-left font-semibold">Alchemy Jug liquids</caption>
+    <thead><tr><th scope="col" className="pb-1">Liquid</th><th scope="col" className="pb-1 text-right">Maximum per dawn</th></tr></thead>
+    <tbody>{ALCHEMY_JUG_LIQUIDS.map(([liquid,amount])=><tr key={liquid} className="border-t border-white/10">
+     <th scope="row" className="py-1 pr-2 font-normal">{liquid}</th><td className="py-1 text-right">{amount}</td>
+    </tr>)}</tbody>
+   </table>}
+   {!usage&&item.mechanics?.recharge&&<p className="mt-2 text-sm text-parchment/75">{item.mechanics.recharge}</p>}
+   {!usage&&item.mechanics?.attunementRequirement&&<p className="mt-2 text-sm text-parchment/75">Attunement requires {item.mechanics.attunementRequirement}.</p>}
+   {extendedRules&&<a className="mt-2 inline-block text-sm text-gold underline" href={extendedRules} target="_blank" rel="noopener noreferrer">Full rules for {item.name}</a>}
+  </article>})}
   {filtered.length===0&&<p className="py-8 text-center text-sm text-parchment/70">No matching items.</p>}
-  <p className="text-xs text-parchment/50">Includes SRD 5.2.1 material by Wizards of the Coast LLC (CC BY 4.0), plus original brief summaries of additional 2024 DMG items. Non-SRD summaries are for discovery, not complete rules. For authoritative item mechanics, consult the 2024 DMG on D&D Beyond.</p>
+  <p className="text-xs text-parchment/50">Includes SRD 5.2.1 material by Wizards of the Coast LLC (CC BY 4.0), plus practical summaries of additional 2024 DMG items. Use the full rules for artifact properties, random tables, and unusual interactions.</p>
  <a className="text-sm underline text-gold" href="https://www.dndbeyond.com/sources/dnd/dmg-2024" target="_blank" rel="noopener noreferrer">Official 2024 Dungeon Master’s Guide</a>
  </section>;
 }

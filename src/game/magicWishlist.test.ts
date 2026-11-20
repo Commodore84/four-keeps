@@ -1,5 +1,6 @@
 import {beforeEach,describe,expect,it,vi} from 'vitest';
 import {MAGIC_ITEMS,readMagicWishlist,writeMagicWishlist,magicWishlistNames} from './magicWishlist';
+import {ALCHEMY_JUG_LIQUIDS,magicItemUseDescription} from './magicItemUseDescriptions';
 const storage=new Map<string,string>();
 beforeEach(()=>{storage.clear();vi.stubGlobal('localStorage',{getItem:(k:string)=>storage.get(k)??null,setItem:(k:string,v:string)=>{storage.set(k,v)}});});
 describe('magic item wish list',()=>{
@@ -31,6 +32,14 @@ describe('magic item wish list',()=>{
   expect(MAGIC_ITEMS.find(x=>x.name==='Gloves of Thievery')?.rights).toBe('srd-5.2.1');
   expect(MAGIC_ITEMS.find(x=>x.name==='Hat of Many Spells')?.rights).toBe('srd-5.2.1');
   expect(MAGIC_ITEMS).toHaveLength(511);
+ });
+ it('gives every imported DMG item actionable rules or a specific effect',()=>{
+  const imported=MAGIC_ITEMS.filter(item=>item.id.startsWith('dmg24-'));
+  expect(imported).toHaveLength(249);
+  expect(imported.filter(item=>!magicItemUseDescription(item)).map(item=>item.name)).toEqual([]);
+  expect(ALCHEMY_JUG_LIQUIDS).toHaveLength(10);
+  expect(ALCHEMY_JUG_LIQUIDS).toContainEqual(['Basic Poison','4 ounces']);
+  expect(magicItemUseDescription(MAGIC_ITEMS.find(item=>item.name==='Enspelled Staff (Level 8)')!)).toContain('save DC 18, spell attack +10');
  });
  it('saves only known item ids without duplicates',()=>{const id=MAGIC_ITEMS[0].id;writeMagicWishlist('campaign-a',[id,id,'not-an-item']);expect(readMagicWishlist('campaign-a')).toEqual([id]);expect(magicWishlistNames('campaign-a')).toEqual([MAGIC_ITEMS[0].name]);});
  it('isolates separate campaigns',()=>{writeMagicWishlist('one',[MAGIC_ITEMS[0].id]);expect(readMagicWishlist('two')).toEqual([]);});
