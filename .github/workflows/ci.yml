@@ -23,4 +23,5 @@ jobs:
           path: |
             test-results/
             playwright-report/
+            screenshots/
           if-no-files-found: ignore
