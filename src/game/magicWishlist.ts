@@ -37,17 +37,21 @@ export const MAGIC_ITEMS: MagicItem[] = [
   ...catalog.map(item => ({...withDefinition(item),...srdProvenance})),
   ...[...dmg1,...dmg2,...dmg3,...dmg4,...dmg5,...dmg6,...dmg7,...dmg8].map(item => ({...withDefinition(item),...(srdOverlap.has(item.name)?srdProvenance:dmgProvenance)})),
 ];
+/** Catalog references with more than one rarity are never concrete inventory products. */
+export const isConcreteMagicItem=(item:MagicItem):boolean=>!item.rarity.includes(',')&&!item.rarity.includes('Varies');
+export const MAGIC_ITEM_PRODUCTS=MAGIC_ITEMS.filter(isConcreteMagicItem);
+const selectableIds=new Set(MAGIC_ITEM_PRODUCTS.map(item=>item.id));
 const prefix = 'four-keeps-magic-wishlist:';
 export function readMagicWishlist(campaignId:string):string[] {
   if (!campaignId) return [];
   try {
     const value:unknown=JSON.parse(localStorage.getItem(prefix+campaignId)??'[]');
-    return Array.isArray(value)?[...new Set(value.filter((id):id is string=>typeof id==='string'&&MAGIC_ITEMS.some(item=>item.id===id)))]:[];
+    return Array.isArray(value)?[...new Set(value.filter((id):id is string=>typeof id==='string'&&selectableIds.has(id)))]:[];
   } catch {return [];}
 }
 export function writeMagicWishlist(campaignId:string,ids:string[]):void {
   if(!campaignId)return;
-  localStorage.setItem(prefix+campaignId,JSON.stringify([...new Set(ids)].filter(id=>MAGIC_ITEMS.some(item=>item.id===id))));
+  localStorage.setItem(prefix+campaignId,JSON.stringify([...new Set(ids)].filter(id=>selectableIds.has(id))));
 }
 export function magicWishlistNames(campaignId:string):string[] {
   const wanted=new Set(readMagicWishlist(campaignId));
