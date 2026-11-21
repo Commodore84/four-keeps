@@ -120,14 +120,11 @@ export function MagicItemCompendium({campaignId}:{campaignId:string|null}){
      <th scope="row" className="py-1 pr-2 font-normal">{liquid}</th><td className="py-1 text-right">{amount}</td>
     </tr>)}</tbody>
    </table>}
-   <section aria-label={item.name+' rules and source'} className="mt-2 rounded-lg border border-white/15 px-3 py-2">
-    <h5 className="text-sm font-semibold text-gold">Rules, requirements and source</h5>
-    <p className="mt-2 text-sm text-parchment/80">Source: {item.source}{item.license?' · '+item.license:''}</p>
-    <p className="mt-1 text-sm text-parchment/80">Type: {item.category} · Rarity: {item.rarity}{item.attunement?' · Requires attunement':''}</p>
-    {item.mechanics?.recharge&&<p className="mt-2 text-sm text-parchment/75">{item.mechanics.recharge}</p>}
-    {item.mechanics?.attunementRequirement&&<p className="mt-2 text-sm text-parchment/75">Attunement requires {item.mechanics.attunementRequirement}.</p>}
-    {extendedRules&&<a className="mt-2 inline-block text-sm text-gold underline" href={extendedRules} target="_blank" rel="noopener noreferrer">Full rules for {item.name}</a>}
-   </section>
+   {(item.mechanics?.recharge||item.mechanics?.attunementRequirement||extendedRules)&&<div className="mt-2 space-y-1 text-sm text-parchment/80">
+    {item.mechanics?.recharge&&<p>{item.mechanics.recharge}</p>}
+    {item.mechanics?.attunementRequirement&&<p>Attunement requires {item.mechanics.attunementRequirement}.</p>}
+    {extendedRules&&<a className="inline-block text-gold underline" href={extendedRules} target="_blank" rel="noopener noreferrer">Full rules for {item.name}</a>}
+   </div>}
   </article></div>})}
   {filtered.length===0&&<p className="py-8 text-center text-sm text-parchment/70">No matching items.</p>}
   <p className="text-xs text-parchment/50">Includes SRD 5.2.1 material by Wizards of the Coast LLC (CC BY 4.0), plus practical summaries of additional 2024 DMG items. Use the full rules for artifact properties, random tables, and unusual interactions.</p>
