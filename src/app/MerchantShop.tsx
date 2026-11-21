@@ -1,3 +1,4 @@
+import {CatalogJumpNavigation} from './CatalogJumpNavigation';
 import {merchantItemDescription,merchantItemFacts} from '../game/merchantItemDetails';
 import {prepareCitySupplyOrder,confirmCitySupplyOrder,collectCitySupplyOrder} from '../game/merchantSupply';
 import {useState} from 'react';
@@ -69,12 +70,11 @@ export function MerchantShop({campaign,saving,onClose,onPrepare,onSettle,onDiscu
   <div className="rounded-lg border border-gold/25 bg-ink/50 p-3 text-sm" aria-label="Current wallet"><span className="text-parchment/70">Your money</span><strong className="float-right text-gold">{formatFrontierPrice(funds)}</strong></div>
   <div className="space-y-2"><h3 className="font-semibold">Available equipment</h3>
   <input aria-label="Search merchandise" placeholder="Search items" value={search} onChange={e=>setSearch(e.target.value)} className="w-full rounded-lg border border-white/25 bg-ink p-2 text-sm"/>
-  {grouped.length>1&&<nav aria-label="Jump to merchandise section" className="flex gap-2 overflow-x-auto pb-1" >{grouped.map(([group,entries],index)=><button key={group} type="button" onClick={()=>document.getElementById('merchant-group-'+index)?.scrollIntoView({behavior:'smooth',block:'start'})} className="shrink-0 rounded-lg border border-gold/40 px-3 py-2 text-xs text-gold">{group} ({entries.length})</button>)}</nav>}
-  {grouped.length>0&&<nav aria-label="Jump to merchandise subgroup" className="flex gap-2 overflow-x-auto pb-1">{grouped.flatMap(([group,entries])=>[...new Set(entries.map(line=>subgroupFor(line.item)))].map(subgroup=><button key={group+'|'+subgroup} type="button" onClick={()=>document.getElementById('merchant-subgroup-'+encodeURIComponent(group)+'-'+encodeURIComponent(subgroup))?.scrollIntoView({behavior:'smooth',block:'start'})} className="shrink-0 rounded-lg border border-white/30 px-3 py-2 text-xs">{subgroup}</button>))}</nav>}
+  <CatalogJumpNavigation title="Merchandise" groups={grouped.length>1?grouped.map(([group,entries],index)=>({id:'merchant-group-'+index,label:group+' ('+entries.length+')'})):[]} subgroups={grouped.flatMap(([group,entries])=>[...new Set(entries.map(line=>subgroupFor(line.item)))].map(subgroup=>({id:'merchant-subgroup-'+encodeURIComponent(group)+'-'+encodeURIComponent(subgroup),label:group+' — '+subgroup})))}/>
   <div className="rounded-lg border border-gold/50 bg-[#322c24] focus-visible:outline focus-visible:outline-2 focus-visible:outline-gold" role="region" aria-label="Merchant inventory" tabIndex={0}>
-   {grouped.map(([group,entries])=><section key={group} id={"merchant-group-"+grouped.findIndex(([name])=>name===group)} aria-label={group} className="scroll-mt-2 border-b border-white/20"><h4 className="sticky top-0 z-10 bg-[#3d3428] px-3 py-2 font-semibold text-gold">{group} ({entries?.length??0})</h4>
+   {grouped.map(([group,entries])=><section key={group} id={"merchant-group-"+grouped.findIndex(([name])=>name===group)} aria-label={group} className="scroll-mt-44 border-b border-white/20"><h4 className="sticky top-0 z-10 bg-[#3d3428] px-3 py-2 font-semibold text-gold">{group} ({entries?.length??0})</h4>
    {entries?.map(({item,quantity,unit,stock,owned},index)=><div key={item.id} id={'merchant-item-'+item.id} className="scroll-mt-14 space-y-1 border-t border-white/10 px-3 py-2" aria-label={item.name}>
-    {(index===0||subgroupFor(entries[index-1].item)!==subgroupFor(item))&&<h5 id={'merchant-subgroup-'+encodeURIComponent(group)+'-'+encodeURIComponent(subgroupFor(item))} className="scroll-mt-14 border-b border-white/15 py-2 text-sm font-semibold text-parchment/85">{subgroupFor(item)}</h5>}
+    {(index===0||subgroupFor(entries[index-1].item)!==subgroupFor(item))&&<h5 id={'merchant-subgroup-'+encodeURIComponent(group)+'-'+encodeURIComponent(subgroupFor(item))} className="scroll-mt-44 border-b border-white/15 py-2 text-sm font-semibold text-parchment/85">{subgroupFor(item)}</h5>}
     <div className="flex items-baseline justify-between gap-x-2 text-sm" aria-label={item.name+' availability'}>
      <div className="flex min-w-0 flex-wrap items-baseline gap-x-2">
       <strong>{item.name}</strong>
