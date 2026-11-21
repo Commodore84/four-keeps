@@ -659,7 +659,7 @@ test('new Rogue starts at Frontier Village, buys supplies, and sees persisted Pl
  const sectionNav=shop.getByRole('navigation',{name:'Jump to merchandise section'});
  await expect(sectionNav).toBeVisible();
  await sectionNav.getByRole('button',{name:/Melee weapons/}).click();
- await expect(shop.getByLabel('Melee weapons')).toBeVisible();
+ await expect(shop.getByRole('region',{name:'Melee weapons',exact:true})).toBeVisible();
  const dagger=shop.getByLabel('Dagger',{exact:true});
  await expect(dagger.getByLabel('Dagger availability')).toContainText(/Dagger.*\d+ owned · \d+ in stock/);
  await expect(dagger.getByLabel('Dagger description')).toBeVisible();
