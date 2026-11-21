@@ -501,3 +501,32 @@ describe('SRD ground Oil deployment integrity',()=>{
   expect(()=>useOwnedConsumable(c,{...request,confirmed:false})).toThrow('confirmation');
  });
 });
+
+describe('ground Oil combat turn integration',()=>{
+ const staged=()=>{
+  const c=encounter(),b=c.companionEncounter!;
+  return {...c,companionEncounter:{...b,groundOil:[{id:'slick',x:3,y:2,expiresRound:12,ignitedRound:2,ignitedTurn:0}],participants:{...b.participants,nighthawk:{...b.participants.nighthawk,speedFeet:30,dashFeet:0,movementSpentFeet:0,rogueMovedThisTurn:false},ally:{...b.participants.ally,x:6,y:6}}}} as Campaign;
+ };
+ it('applies fire on verified entry, not again on exit or turn end, and persists after reload',()=>{
+  const c=staged();
+  const moved=moveCompanion(c,'nighthawk',3,2);
+  expect(moved.companionEncounter!.participants.nighthawk.hp).toBe(7);
+  const persisted=JSON.parse(JSON.stringify(moved)) as Campaign;
+  const departed=moveCompanion(persisted,'nighthawk',2,2);
+  expect(departed.companionEncounter!.participants.nighthawk.hp).toBe(7);
+  expect(endCompanionTurn(departed,'nighthawk').companionEncounter!.participants.nighthawk.hp).toBe(7);
+ });
+ it('applies end-turn damage if stationary and clears per-turn damage tracking',()=>{
+  const c=staged(),b=c.companionEncounter!;
+  const stationary={...c,companionEncounter:{...b,participants:{...b.participants,nighthawk:{...b.participants.nighthawk,x:3,y:2}}}} as Campaign;
+  const ended=endCompanionTurn(stationary,'nighthawk');
+  expect(ended.companionEncounter!.participants.nighthawk.hp).toBe(7);
+  expect(ended.companionEncounter!.groundOil?.[0].damagedActorsThisTurn).toEqual([]);
+ });
+ it('expires unlit slicks after one minute of combat rounds',()=>{
+  const c=staged(),b=c.companionEncounter!;
+  const dry={...c,companionEncounter:{...b,round:11,turnIndex:1,groundOil:[{id:'dry',x:3,y:2,expiresRound:12}]}} as Campaign;
+  const advanced=endCompanionTurn(dry,'ally');
+  expect(advanced.companionEncounter!.groundOil).toEqual([]);
+ });
+});
