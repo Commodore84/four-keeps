@@ -40,4 +40,20 @@ describe('magic item taxonomy',()=>{
   expect(readMagicWishlist(id)).toEqual(['ammunition-1','shield-2']);
   vi.unstubAllGlobals();
  });
+ it('provides precise effects for every giant belt and potion tier',()=>{
+  const strengths={hill:21,frost:23,stone:23,fire:25,cloud:27,storm:29};
+  for(const [giant,strength] of Object.entries(strengths)){
+   for(const kind of ['belt','potion']){
+    const id='dmg24-'+kind+'-of-'+giant+'-giant-strength';
+    const item=MAGIC_ITEM_PRODUCTS.find(item=>item.id===id);
+    expect(item,id).toBeDefined();
+    expect(item!.description).toContain(String(strength));
+    expect(item!.description).not.toContain('associated with');
+   }
+  }
+ });
+ it.each([['healing','2d4 + 2'],['greater-healing','4d4 + 4'],['superior-healing','8d4 + 8'],['supreme-healing','10d4 + 20']])('describes %s potion healing precisely',(kind,amount)=>{
+  const item=MAGIC_ITEM_PRODUCTS.find(item=>item.id==='dmg24-potion-of-'+kind);
+  expect(item?.description).toContain(amount);
+ });
 });
