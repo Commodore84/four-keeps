@@ -1,0 +1,61 @@
+import {describe,it,expect} from 'vitest';
+import {CLASSES} from './creationClasses';
+import {subclassesForClass} from './creationSubclasses';
+import {progressionFeatures,earnedClassMilestones,VERIFIED_MILESTONE_DETAILS,rogueSheetReference} from './creationProgression';
+describe('all-class advancement explanation coverage',()=>{
+ it('uses individual earned Rogue features and excludes generic subclass placeholders',()=>{
+  const rogue=CLASSES.find(cls=>cls.id==='rogue')!;
+  const atSix=earnedClassMilestones('rogue',6,rogue.features);
+  expect(atSix.filter(feature=>feature.name==='Expertise')).toHaveLength(1);
+  expect(atSix.some(feature=>feature.name.includes(' and Uncanny Dodge'))).toBe(false);
+  const atTwenty=earnedClassMilestones('rogue',20,rogue.features);
+  expect(atTwenty.some(feature=>feature.name==='Subclass Feature')).toBe(false);
+  expect(atTwenty.filter(feature=>feature.name==='Ability Score Improvement')).toHaveLength(5);
+  expect(atTwenty.some(feature=>feature.level===19&&feature.name==='Epic Boon')).toBe(true);
+ });
+ it('gates Rogue Sneak Attack and Cunning Strike through level twenty',()=>{
+  expect(rogueSheetReference(1)).toMatchObject({sneakAttack:'1d6',cunningOptions:[],expertiseChoices:2,hasEvasion:false});
+  expect(rogueSheetReference(5)).toMatchObject({sneakAttack:'3d6',cunningEffectsPerHit:1,hasUncannyDodge:true});
+  expect(rogueSheetReference(6).expertiseChoices).toBe(4);
+  expect(rogueSheetReference(7)).toMatchObject({sneakAttack:'4d6',hasEvasion:true,hasReliableTalent:true});
+  expect(rogueSheetReference(11).cunningEffectsPerHit).toBe(2);
+  expect(rogueSheetReference(13).cunningOptions).toHaveLength(3);
+  expect(rogueSheetReference(14).cunningOptions).toHaveLength(6);
+  expect(rogueSheetReference(20).sneakAttack).toBe('10d6');
+ });
+
+ it('provides concrete action and rules summaries for the audited class milestones',()=>{
+  for(const [name,detail] of Object.entries(VERIFIED_MILESTONE_DETAILS)){
+   expect(detail.description.length,name).toBeGreaterThan(25);
+   expect(detail.activation.length,name).toBeGreaterThan(3);
+   expect(detail.description,name).not.toMatch(/forecast|provisional|not verified/i);
+  }
+ });
+
+ it('shows only earned class milestones without duplicating the class catalog',()=>{
+  for(const cls of CLASSES){
+   expect(earnedClassMilestones(cls.id,1,cls.features)).toEqual([]);
+   const atFive=earnedClassMilestones(cls.id,5,cls.features);
+   expect(atFive.every(feature=>feature.level<=5&&feature.source==='class'),cls.id).toBe(true);
+   expect(atFive.some(feature=>feature.level>5),cls.id).toBe(false);
+   expect(atFive.every(feature=>!cls.features.some(group=>group.level<=feature.level&&group.names.includes(feature.name))),cls.id).toBe(true);
+   expect(earnedClassMilestones(cls.id,20,cls.features).some(feature=>feature.name==='Epic Boon'),cls.id).toBe(true);
+  }
+ });
+
+ it('provides readable explanations for every class milestone',()=>{
+  for(const cls of CLASSES)for(let level=2;level<=20;level++){
+   for(const feature of progressionFeatures(cls.id,level)){
+    expect(feature.description.length,cls.id+' level '+level+' '+feature.name).toBeGreaterThan(30);
+    expect(feature.description,cls.id+' level '+level).not.toMatch(/^Class milestone at this level/);
+   }
+  }
+ });
+ it('provides subclass tier previews for every 2024 subclass',()=>{
+  for(const cls of CLASSES)for(const subclass of subclassesForClass(cls.id)){
+   const features=Array.from({length:18},(_,i)=>progressionFeatures(cls.id,i+3,subclass.name)).flat().filter(f=>f.source==='subclass');
+   expect(features.length,subclass.name).toBeGreaterThanOrEqual(3);
+   for(const feature of features)expect(feature.description.length,subclass.name+' '+feature.level).toBeGreaterThan(45);
+  }
+ });
+});
