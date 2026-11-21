@@ -386,15 +386,15 @@ test('DM clarification pauses dangerous action, persists answer, and resumes exa
  failConfirmed=true;
  await page.getByLabel('Message the Dungeon Master').fill('Yes, I know it is dangerous. I attack.');
  await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
- await expect(page.getByRole('button',{name:'Retry confirmed action'})).toBeVisible();
+ await expect(page.getByRole('button',{name:'Continue conversation'})).toBeVisible();
  const pendingAfterError=await saved(page);
  expect(pendingAfterError.pendingClarification.answer).toContain('Yes, I know');
  await page.getByRole('button',{name:'Open navigation menu'}).click();
  await page.getByRole('navigation',{name:'Primary navigation'}).getByRole('button',{name:'Home'}).click();
  await page.getByRole('button',{name:'Campaigns',exact:true}).click();await page.getByRole('button',{name:'Continue Adventure'}).click();
- await expect(page.getByRole('button',{name:'Retry confirmed action'})).toBeVisible();
+ await expect(page.getByRole('button',{name:'Continue conversation'})).toBeVisible();
  failConfirmed=false;
- await page.getByRole('button',{name:'Retry confirmed action'}).click();
+ await page.getByRole('button',{name:'Continue conversation'}).click();
  await expect(page.getByLabel('Dungeon Master clarification')).toHaveCount(0);
  await expect(page.getByLabel('Adventure',{exact:true})).toContainText('The dragon notices you.');
  const final=await saved(page);
