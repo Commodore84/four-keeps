@@ -1,5 +1,5 @@
 import {describe,expect,it} from 'vitest';
-import {MAGIC_ITEMS} from '../game/magicWishlist';
+import {MAGIC_ITEMS,MAGIC_ITEM_PRODUCTS,isConcreteMagicItem,readMagicWishlist,writeMagicWishlist} from '../game/magicWishlist';
 import {itemGroup,itemSubgroup} from './MagicItemCompendium';
 
 describe('magic item taxonomy',()=>{
@@ -21,5 +21,21 @@ describe('magic item taxonomy',()=>{
  ])('places %s into a meaningful group and subgroup',(name,category,group,subgroup)=>{
   expect(itemGroup(category,name)).toBe(group);
   expect(itemSubgroup(category,name)).toBe(subgroup);
+ });
+ it('keeps all 13 multi-rarity references but never exposes them as concrete products',()=>{
+  const references=MAGIC_ITEMS.filter(item=>!isConcreteMagicItem(item));
+  expect(references).toHaveLength(13);
+  expect(MAGIC_ITEM_PRODUCTS).toHaveLength(498);
+  expect(new Set(MAGIC_ITEM_PRODUCTS.map(item=>item.id)).size).toBe(498);
+  expect(MAGIC_ITEM_PRODUCTS.every(item=>!item.rarity.includes(',')&&!item.rarity.includes('Varies'))).toBe(true);
+  for(const id of ['ammunition-1','ammunition-2','ammunition-3','armor-1','armor-2','armor-3','shield-1','shield-2','shield-3','weapon-1','weapon-2','weapon-3']){
+   expect(MAGIC_ITEM_PRODUCTS.some(item=>item.id===id)).toBe(true);
+  }
+ });
+ it('rejects ambiguous rarity references from saved wishlists',()=>{
+  const id='variant-test-campaign';
+  writeMagicWishlist(id,['ammunition','ammunition-1','shield','shield-2']);
+  expect(readMagicWishlist(id)).toEqual(['ammunition-1','shield-2']);
+  localStorage.removeItem('four-keeps-magic-wishlist:'+id);
  });
 });
