@@ -28,6 +28,27 @@ const itemGroup=(category:string,name:string)=>{
  if(n.includes('boots')||n.includes('cloak')||n.includes('gloves')||n.includes('gauntlets')||n.includes('hat')||n.includes('helm'))return 'Wearable wonders';
  return 'Other wondrous items';
 };
+const itemSubgroup=(category:string,name:string)=>{
+ const c=category.toLowerCase(),n=name.toLowerCase();
+ if(c.includes('weapon'))return /bow|crossbow|sling|blowgun/.test(n)?'Ranged weapons':/ammunition|arrow|bolt/.test(n)?'Ammunition':'Melee weapons';
+ if(c.includes('armor')||c.includes('shield'))return c.includes('shield')?'Shields':'Armor';
+ if(c.includes('potion')||n.startsWith('potion '))return /healing|vitality|restoration/.test(n)?'Healing and restoration':'Other potions';
+ if(c.includes('scroll'))return 'Spell scrolls';
+ if(c.includes('ring'))return 'Magic rings';
+ if(c.includes('wand'))return 'Magic wands';
+ if(c.includes('staff'))return 'Magic staffs';
+ if(c.includes('rod'))return 'Magic rods';
+ if(/bag|backpack|portable hole|quiver|chest|bottle|decanter/.test(n))return 'Containers and storage';
+ if(/boots|slippers|horseshoes/.test(n))return 'Footwear and movement';
+ if(/cloak|robe|mantle|cape/.test(n))return 'Cloaks and robes';
+ if(/gloves|gauntlets|bracers|belt/.test(n))return 'Gloves, bracers and belts';
+ if(/hat|helm|headband|circlet|goggles|eyes/.test(n))return 'Headwear and vision';
+ if(/amulet|necklace|periapt|medallion|brooch/.test(n))return 'Amulets and jewelry';
+ if(/instrument|horn|drum|lyre|pipes/.test(n))return 'Musical instruments';
+ if(/figurine|statue|stone|gem|orb|crystal/.test(n))return 'Figurines, stones and gems';
+ if(/manual|tome|book|deck|card/.test(n))return 'Books, decks and knowledge';
+ return 'Other magical wonders';
+};
 export function MagicItemCompendium({campaignId}:{campaignId:string|null}){
  const [wanted,setWanted]=useState<string[]>([]);
  const [tab,setTab]=useState<'all'|'wishlist'>('all');
@@ -38,8 +59,10 @@ export function MagicItemCompendium({campaignId}:{campaignId:string|null}){
  useEffect(()=>setWanted(campaignId?readMagicWishlist(campaignId):[]),[campaignId]);
  const categories=useMemo(()=>['All',...new Set(MAGIC_ITEMS.map(item=>item.category))],[]);
  const groups=useMemo(()=>['All',...new Set(MAGIC_ITEMS.map(item=>itemGroup(item.category,item.name)))].sort((a,b)=>a==='All'?-1:b==='All'?1:a.localeCompare(b)),[]);
+ const subgroups=useMemo(()=>['All',...new Set(MAGIC_ITEMS.filter(item=>(category==='All'||item.category===category)&&(group==='All'||itemGroup(item.category,item.name)===group)).map(item=>itemSubgroup(item.category,item.name)))].sort((a,b)=>a==='All'?-1:b==='All'?1:a.localeCompare(b)),[category,group]);
+ const [subgroup,setSubgroup]=useState('All');
  const rarities=['All','Common','Uncommon','Rare','Very Rare','Legendary','Artifact','Varies'];
- const filtered=MAGIC_ITEMS.filter(item=>(tab==='all'||wanted.includes(item.id))&&(category==='All'||item.category===category)&&(group==='All'||itemGroup(item.category,item.name)===group)&&(rarity==='All'||rarityTier(item.rarity)===rarity)&&item.name.toLowerCase().includes(search.trim().toLowerCase())).sort((a,b)=>a.name.localeCompare(b.name));
+ const filtered=MAGIC_ITEMS.filter(item=>(tab==='all'||wanted.includes(item.id))&&(category==='All'||item.category===category)&&(group==='All'||itemGroup(item.category,item.name)===group)&&(subgroup==='All'||itemSubgroup(item.category,item.name)===subgroup)&&(rarity==='All'||rarityTier(item.rarity)===rarity)&&item.name.toLowerCase().includes(search.trim().toLowerCase())).sort((a,b)=>itemGroup(a.category,a.name).localeCompare(itemGroup(b.category,b.name))||itemSubgroup(a.category,a.name).localeCompare(itemSubgroup(b.category,b.name))||a.name.localeCompare(b.name));
  function toggle(id:string){
   if(!campaignId)return;
   const next=wanted.includes(id)?wanted.filter(item=>item!==id):[...wanted,id];
@@ -53,11 +76,16 @@ export function MagicItemCompendium({campaignId}:{campaignId:string|null}){
   <input aria-label="Search magic items" value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search magic items" className="w-full rounded-lg border border-white/20 bg-panel p-3 text-base"/>
   <div className="grid grid-cols-2 gap-2"><label className="text-xs">Category<select aria-label="Magic item category" value={category} onChange={e=>setCategory(e.target.value)} className="mt-1 w-full rounded-lg border border-white/20 bg-panel p-2 text-base">{categories.map(c=><option key={c}>{c}</option>)}</select></label><label className="text-xs">Rarity<select aria-label="Magic item rarity" value={rarity} onChange={e=>setRarity(e.target.value)} className="mt-1 w-full rounded-lg border border-white/20 bg-panel p-2 text-base">{rarities.map(r=><option key={r}>{r}</option>)}</select></label></div>
   <label className="block text-xs">Item group<select aria-label="Magic item group" value={group} onChange={e=>setGroup(e.target.value)} className="mt-1 w-full rounded-lg border border-white/20 bg-panel p-2 text-base">{groups.map(g=><option key={g}>{g}</option>)}</select></label>
-  <p className="text-xs text-parchment/60">{filtered.length} items</p>
-  {filtered.map(item=>{
+  <label className="block text-xs">Subgroup<select aria-label="Magic item subgroup" value={subgroups.includes(subgroup)?subgroup:'All'} onChange={e=>setSubgroup(e.target.value)} className="mt-1 w-full rounded-lg border border-white/20 bg-panel p-2 text-base">{subgroups.map(g=><option key={g}>{g}</option>)}</select></label>
+  <p className="text-xs text-parchment/60">{filtered.length} items · grouped by type and subgroup</p>
+  {filtered.map((item,index)=>{
+   const previous=filtered[index-1];
+   const currentGroup=itemGroup(item.category,item.name),currentSubgroup=itemSubgroup(item.category,item.name);
+   const newGroup=!previous||itemGroup(previous.category,previous.name)!==currentGroup;
+   const newSubgroup=newGroup||itemSubgroup(previous.category,previous.name)!==currentSubgroup;
    const usage=magicItemUseDescription(item);
    const extendedRules=magicItemExtendedRules(item.id);
-   return <article key={item.id} className="rounded-xl border border-white/15 bg-panel p-3">
+   return <div key={item.id}>{newGroup&&<h3 className="mt-5 border-b border-gold/40 pb-2 font-serif text-xl text-gold">{currentGroup}</h3>}{newSubgroup&&<h4 className="mt-3 text-sm font-semibold text-parchment/80">{currentSubgroup}</h4>}<article className="rounded-xl border border-white/15 bg-panel p-3">
    <div className="flex items-start gap-3">
     <button type="button" disabled={!campaignId} aria-label={wanted.includes(item.id)?`Remove ${item.name} from Wish List`:`Add ${item.name} to Wish List`} aria-pressed={wanted.includes(item.id)} onClick={()=>toggle(item.id)} className="rounded-lg border border-white/20 px-3 py-2 text-xl text-gold disabled:opacity-40">{wanted.includes(item.id)?'♥':'♡'}</button>
     <div className="min-w-0 flex-1">
@@ -73,15 +101,15 @@ export function MagicItemCompendium({campaignId}:{campaignId:string|null}){
      <th scope="row" className="py-1 pr-2 font-normal">{liquid}</th><td className="py-1 text-right">{amount}</td>
     </tr>)}</tbody>
    </table>}
-   <details className="mt-2 rounded-lg border border-white/15 px-3 py-2">
-    <summary className="cursor-pointer select-none text-sm text-gold">Rules, requirements and source</summary>
+   <section aria-label={item.name+' rules and source'} className="mt-2 rounded-lg border border-white/15 px-3 py-2">
+    <h5 className="text-sm font-semibold text-gold">Rules, requirements and source</h5>
     <p className="mt-2 text-sm text-parchment/80">Source: {item.source}{item.license?' · '+item.license:''}</p>
     <p className="mt-1 text-sm text-parchment/80">Type: {item.category} · Rarity: {item.rarity}{item.attunement?' · Requires attunement':''}</p>
     {item.mechanics?.recharge&&<p className="mt-2 text-sm text-parchment/75">{item.mechanics.recharge}</p>}
     {item.mechanics?.attunementRequirement&&<p className="mt-2 text-sm text-parchment/75">Attunement requires {item.mechanics.attunementRequirement}.</p>}
     {extendedRules&&<a className="mt-2 inline-block text-sm text-gold underline" href={extendedRules} target="_blank" rel="noopener noreferrer">Full rules for {item.name}</a>}
-   </details>
-  </article>})}
+   </section>
+  </article></div>})}
   {filtered.length===0&&<p className="py-8 text-center text-sm text-parchment/70">No matching items.</p>}
   <p className="text-xs text-parchment/50">Includes SRD 5.2.1 material by Wizards of the Coast LLC (CC BY 4.0), plus practical summaries of additional 2024 DMG items. Use the full rules for artifact properties, random tables, and unusual interactions.</p>
  <a className="text-sm underline text-gold" href="https://www.dndbeyond.com/sources/dnd/dmg-2024" target="_blank" rel="noopener noreferrer">Official 2024 Dungeon Master’s Guide</a>
