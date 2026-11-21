@@ -1,3 +1,4 @@
+import {useOwnedConsumable} from './consumables';
 import {describe,it,expect} from 'vitest';
 import {newCampaign,registerSubclassActor,chooseSubclassResistance} from './campaign';
 import {initialSubclassCombatState} from './subclassCombatRules';
@@ -774,5 +775,39 @@ describe('isolated companion encounter vertical slice',()=>{
   expect(()=>startCompanionEncounter(c,{fiend:10},{fiend:{x:0,y:0}},{fiend:20})).toThrow('existing');
   expect(()=>startCompanionEncounter(build(),{stranger:10},{stranger:{x:0,y:0}},{stranger:20})).toThrow('registered');
   expect(finishCompanionEncounter(c).companionEncounter?.status).toBe('completed');
+ });
+});
+
+describe('SRD Basic Poison on verified ammunition',()=>{
+ const setup=()=>{
+  const base=build();
+  let c=startUnifiedEncounter({...base,equipment:{daggers:0,arrows:4,caltrops:0,ballBearings:0},inventoryLedger:{currency:{CP:0,SP:0,EP:0,GP:0,PP:0},gear:[{name:'Shortbow',quantity:1},{name:'Poison, Basic',quantity:1}]}},{nighthawk:20,paladin:10},{nighthawk:{x:0,y:2},paladin:{x:0,y:0}},{paladin:20});
+  c=addCompanionEnemy(c,'goblin1',15,{x:2,y:2},20,13,4);
+  return setNighthawkEncounterLoadout(c,'weaponId','shortbow');
+ };
+ const request=(c:ReturnType<typeof setup>,quantity:number)=>({name:'Poison, Basic' as const,confirmed:true,requestId:'poison-ammo-1',expectedQuantity:1,expectedElapsedMinutes:c.elapsedMinutes??0,expectedEncounterId:c.companionEncounter?.id,expectedRound:c.companionEncounter!.round,expectedTurnIndex:c.companionEncounter!.turnIndex,expectedActorPosition:{x:0,y:2},poisonAmmunition:{name:'Arrows' as const,quantity}});
+ it('coats three owned arrows once, spends one on a hit and persists remaining shots',()=>{
+  const c=setup(),r=request(c,3);
+  const coated=useOwnedConsumable(c,r);
+  expect(coated.equipment?.arrows).toBe(4);
+  expect(coated.inventoryLedger?.gear.find(g=>g.name==='Poison, Basic')?.quantity).toBe(0);
+  expect(coated.companionEncounter?.poisonedAmmunition?.remaining).toBe(3);
+  expect(useOwnedConsumable(coated,r)).toBe(coated);
+  const reloaded=JSON.parse(JSON.stringify(coated));
+  const attacked=attackCompanionWithVerifiedStats(reloaded,'nighthawk','goblin1',15,2,'Piercing',80,undefined,undefined,()=>4);
+  expect(attacked.equipment?.arrows).toBe(3);
+  expect(attacked.companionEncounter?.poisonedAmmunition?.remaining).toBe(2);
+  expect(attacked.companionEncounter?.ammunitionPendingRecovery?.arrows).toBe(1);
+  expect(attacked.companionEncounter?.participants.goblin1.hp).toBeLessThan(20);
+  expect(c.equipment?.arrows).toBe(4);
+ });
+ it('rejects stale or insufficient ammunition and invalid attacks without inventory changes',()=>{
+  const c=setup();
+  expect(()=>useOwnedConsumable(c,request(c,5))).toThrow('1–3');
+  expect(()=>useOwnedConsumable(c,{...request(c,3),expectedQuantity:0})).toThrow('Stale consumable inventory');
+  const coated=useOwnedConsumable(c,request(c,3));
+  expect(()=>attackCompanionWithVerifiedStats(coated,'nighthawk','goblin1',0,2,'Piercing',80)).toThrow();
+  expect(coated.equipment?.arrows).toBe(4);
+  expect(coated.companionEncounter?.poisonedAmmunition?.remaining).toBe(3);
  });
 });
