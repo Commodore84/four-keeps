@@ -255,6 +255,15 @@ describe('Acid in a single-attack unified encounter',()=>{
   expect(hit.companionEncounter?.participants.enemy.hp).toBe(5);
   expect(hit.companionEncounter?.basicPoison).toBeUndefined();
  });
+ it('rejects unsupported ammunition coating without spending Poison or arrows',()=>{
+  const source=fixture();
+  const campaign={...source,encounterLoadout:{weaponId:'shortbow'},inventoryLedger:{...source.inventoryLedger!,gear:[{name:'Shortbow',quantity:1},{name:'Arrows',quantity:3},{name:'Poison, Basic',quantity:1}]}} as Campaign;
+  const use={...request,name:'Poison, Basic' as const,expectedWeaponId:'shortbow'};
+  expect(()=>useOwnedConsumable(campaign,use)).toThrow('individually verified equipped weapon');
+  expect(campaign.inventoryLedger?.gear.find(g=>g.name==='Poison, Basic')?.quantity).toBe(1);
+  expect(campaign.inventoryLedger?.gear.find(g=>g.name==='Arrows')?.quantity).toBe(3);
+  expect(campaign.companionEncounter?.basicPoison).toBeUndefined();
+ });
  it('expires a Basic Poison coating ten rounds after confirmation',()=>{
   const source=fixture();
   let campaign:Campaign={...source,encounterLoadout:{weaponId:'dagger'},
