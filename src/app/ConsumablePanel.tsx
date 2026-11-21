@@ -1,8 +1,8 @@
 import {useRef,useState} from 'react';
 import type {Campaign} from '../game/campaign';
 import {antitoxinSecondsRemaining,eligibleKitTargets,equipmentLightRemaining,equipmentLightRules,provisionsToday,type EquipmentLight,type ConsumableName,type ConsumableRequest} from '../game/consumables';
-import {basicPoisonWeapon,thrownConsumableTargets,type HolyWaterTargetType} from '../game/companionEncounter';
-export function ConsumablePanel({campaign,saving,onUse}:{campaign:Campaign;saving:boolean;onUse:(r:ConsumableRequest)=>Promise<boolean>}){
+import {attackCompanionWithVerifiedStats,basicPoisonWeapon,endCompanionTurn,finishCompanionEncounter,recoverEncounterAmmunition,thrownConsumableTargets,type HolyWaterTargetType} from '../game/companionEncounter';
+export function ConsumablePanel({campaign,saving,onUse,onEncounterChange}:{campaign:Campaign;saving:boolean;onUse:(r:ConsumableRequest)=>Promise<boolean>;onEncounterChange?:(next:Campaign,message:string)=>Promise<boolean>|boolean|void}){
  const owned=(campaign.inventoryLedger?.gear??[]).filter(g=>g.quantity>0&&(g.name==='Ball Bearings'||g.name==='Caltrops'||g.name==='Rations'||g.name==='Waterskin'||g.name==='Rope'||g.name==='Candle'||g.name==='Lamp'||g.name==='Torch'||g.name==='Poison, Basic'||g.name==='Oil'||g.name==='Alchemist’s Fire'||g.name==='Holy Water'||g.name==='Acid'||g.name==='Antitoxin'||g.name==="Healer's Kit"));
  const [name,setName]=useState<ConsumableName|null>(null),[target,setTarget]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState('');
  const [acidSave,setAcidSave]=useState(''),[acidDamage,setAcidDamage]=useState('');
@@ -10,6 +10,7 @@ export function ConsumablePanel({campaign,saving,onUse}:{campaign:Campaign;savin
   const [ropeCheck,setRopeCheck]=useState(''),[waterChoice,setWaterChoice]=useState<'drink'|'refill'>('drink');
  const [groundX,setGroundX]=useState(''),[groundY,setGroundY]=useState(''),[level,setLevel]=useState(false),[spillOil,setSpillOil]=useState(false);
  const [poisonQuantity,setPoisonQuantity]=useState('3');
+ const [combatTarget,setCombatTarget]=useState(''),[combatD20,setCombatD20]=useState(''),[combatDamage,setCombatDamage]=useState(''),[combatRange,setCombatRange]=useState(''),[recoverAmmo,setRecoverAmmo]=useState('1');
  const [recoveryId,setRecoveryId]=useState(''),[recoveryAccess,setRecoveryAccess]=useState(false);
  const pending=useRef<string|null>(null);
  const antitoxinRemaining=antitoxinSecondsRemaining(campaign);
@@ -80,6 +81,19 @@ export function ConsumablePanel({campaign,saving,onUse}:{campaign:Campaign;savin
  {name==="Healer's Kit"&&<label className="block text-sm">Recipient<select aria-label="Consumable recipient" className="mt-1 block w-full rounded bg-slate-900 p-2" value={target} onChange={e=>{setTarget(e.target.value);pending.current=null;setError('')}}><option value="">Select an eligible ally</option>{targets.map(t=><option key={t.id} value={t.id}>{t.id} (0 HP)</option>)}</select></label>}
  {battle?.basicPoison&&<p role="status">Basic Poison coating active.</p>}
  {battle?.poisonedAmmunition&&<p role="status">Poisoned {battle.poisonedAmmunition.name}: {battle.poisonedAmmunition.remaining} coated shot(s) remain.</p>}
+ {battle?.poisonedAmmunition&&onEncounterChange&&<section aria-label="Player poisoned ammunition combat" className="space-y-2 rounded border border-amber-500/40 p-2">
+  <strong>Poisoned ammunition combat</strong><p className="text-xs">A coated shot is spent on a hit or miss. Use the DM-verified attack roll, damage dice and range; weapon bonuses are calculated from your equipped weapon.</p>
+  {battle.status==='active'&&battle.order[battle.turnIndex]==='nighthawk'&&<>
+   <label className="block">Enemy target<select aria-label="Poisoned ammunition enemy" className="block w-full bg-slate-900" value={combatTarget} onChange={e=>setCombatTarget(e.target.value)}><option value="">Choose enemy</option>{Object.entries(battle.participants).filter(([,a])=>a.actorKind==='enemy'&&a.hp>0).map(([id])=><option key={id} value={id}>{id}</option>)}</select></label>
+   <label className="block">Attack d20<input aria-label="Poisoned ammunition d20" type="number" min="1" max="20" className="block w-full bg-slate-900" value={combatD20} onChange={e=>setCombatD20(e.target.value)}/></label>
+   <label className="block">Verified weapon damage dice<input aria-label="Poisoned ammunition damage dice" type="number" min="0" className="block w-full bg-slate-900" value={combatDamage} onChange={e=>setCombatDamage(e.target.value)}/></label>
+   <label className="block">Range (feet)<input aria-label="Poisoned ammunition range" type="number" min="5" step="5" className="block w-full bg-slate-900" value={combatRange} onChange={e=>setCombatRange(e.target.value)}/></label>
+   <button type="button" disabled={saving||busy||battle.participants.nighthawk.actionUsed||!combatTarget||!combatD20||combatDamage===''||!combatRange} className="rounded bg-amber-700 px-3 py-2 disabled:opacity-40" onClick={async()=>{setBusy(true);setError('');try{const next=attackCompanionWithVerifiedStats(campaign,'nighthawk',combatTarget,Number(combatD20),Number(combatDamage),'Piercing',Number(combatRange));if(await onEncounterChange(next,'Poisoned ammunition attack resolved')===false)throw Error('Attack could not be saved');setCombatD20('');setCombatDamage('')}catch(e){setError(String(e))}finally{setBusy(false)}}}>Attack with poisoned ammunition</button>
+   <button type="button" disabled={saving||busy} className="rounded border border-white/30 px-3 py-2" onClick={async()=>{setBusy(true);setError('');try{const next=endCompanionTurn(campaign,'nighthawk');if(await onEncounterChange(next,'Player combat turn ended')===false)throw Error('Turn could not be saved')}catch(e){setError(String(e))}finally{setBusy(false)}}}>End player turn</button>
+  </>}
+  {battle.status==='completed'&&<><label className="block">Recoverable arrows<input aria-label="Poisoned ammunition recovery quantity" type="number" min="1" className="block w-full bg-slate-900" value={recoverAmmo} onChange={e=>setRecoverAmmo(e.target.value)}/></label><button type="button" disabled={saving||busy} onClick={async()=>{setBusy(true);setError('');try{const next=recoverEncounterAmmunition(campaign,'Arrows',Number(recoverAmmo));if(await onEncounterChange(next,'Ammunition recovered')===false)throw Error('Recovery could not be saved')}catch(e){setError(String(e))}finally{setBusy(false)}}}>Recover spent arrows</button></>}
+  {battle.status==='active'&&battle.order[battle.turnIndex]==='nighthawk'&&<button type="button" disabled={saving||busy} onClick={async()=>{setBusy(true);setError('');try{const next=finishCompanionEncounter(campaign);if(await onEncounterChange(next,'Encounter completed')===false)throw Error('Encounter could not be saved')}catch(e){setError(String(e))}finally{setBusy(false)}}}>Finish encounter (DM confirmed)</button>}
+ </section>}
  {name==='Poison, Basic'&&<p>{poisonWeapon?'Coat '+poisonWeapon.name+' as a Bonus Action.':equippedAmmo?'Coat up to three owned '+equippedAmmo+' as a Bonus Action.':'Equip a compatible owned weapon.'}</p>}
  {name==='Poison, Basic'&&equippedAmmo&&<label className="block">Ammunition pieces (1–3)<input aria-label="Poisoned ammunition quantity" type="number" min={1} max={3} className="block w-full bg-slate-900" value={poisonQuantity} onChange={e=>{setPoisonQuantity(e.target.value);pending.current=null}}/></label>}
  {throwing&&<fieldset className="space-y-2">
