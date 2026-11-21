@@ -376,6 +376,7 @@ test('iPhone poisoned arrows coating confirms once and survives reload',async({p
  expect(saved).toEqual({coated:2,poison:0,arrows:4});
  const combat=await openSupplies(page);
  await expect(combat.getByRole('region',{name:'Player poisoned ammunition combat'})).toBeVisible();
+ await page.screenshot({path:'screenshots/poison-ammunition-iphone-player.png',fullPage:true});
  await testInfo.attach('poison-ammunition-iphone-player',{body:await page.screenshot({fullPage:true}),contentType:'image/png'});
  await combat.getByLabel('Poisoned ammunition enemy').selectOption('enemy');
  await combat.getByLabel('Poisoned ammunition d20').fill('1');
