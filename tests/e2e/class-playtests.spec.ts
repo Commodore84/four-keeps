@@ -672,6 +672,16 @@ test('new Rogue starts at Frontier Village, buys supplies, and sees persisted Pl
  await expect(compactCart).toBeVisible();
  expect(await persistentNav.evaluate(element=>getComputedStyle(element).position)).toBe('sticky');
  expect(await compactCart.evaluate(element=>getComputedStyle(element).position)).toBe('sticky');
+ // On an iPhone viewport, jumping deep into the single-page inventory must
+ // preserve both compact shop controls without covering the DM composer.
+ await shop.getByRole('navigation',{name:'Jump to merchandise section'}).getByRole('button',{name:/Melee weapons/}).click();
+ await expect.poll(async()=>{
+  const nav=await persistentNav.boundingBox();
+  const cart=await compactCart.boundingBox();
+  const composer=await page.getByLabel('Message the Dungeon Master').boundingBox();
+  if(!nav||!cart||!composer)return false;
+  return nav.y>=0&&nav.y+nav.height<cart.y&&cart.y+cart.height<=composer.y+2;
+ }).toBe(true);
  await expect(compactCart).toContainText('Available');
  await expect(compactCart).toContainText('Cart (0)');
  await expect(shop.getByLabel('City supplier orders')).toBeVisible();
