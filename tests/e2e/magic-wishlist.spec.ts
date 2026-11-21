@@ -35,7 +35,7 @@ test('iPhone magic items menu supports favorites and persistence',async ({page})
  await groupJump.getByRole('button',{name:'Storage and containers'}).click();
  await expect(compendium.getByRole('heading',{name:'Storage and containers',exact:true})).toBeVisible();
  await subgroupJump.getByRole('button',{name:'Storage and containers — Containers and storage'}).click();
- await expect(compendium.getByRole('heading',{name:'Containers and storage',exact:true})).toBeVisible();
+ await expect(compendium.getByRole('heading',{name:'Containers and storage',exact:true}).first()).toBeVisible();
  await expect(compendium.locator('article details')).toHaveCount(0);
  await expect(compendium.getByRole('heading',{name:'Weapons',exact:true})).toBeVisible();
  await groupFilter.selectOption('Weapons');
