@@ -4,6 +4,10 @@ test('iPhone magic items menu supports favorites and persistence',async ({page})
  await page.getByRole('button',{name:'Settings',exact:true}).click();
  const menu=page.getByRole('button',{name:'Open navigation menu'});
  await menu.click();
+ await expect(page.getByRole('navigation',{name:'Primary navigation'})).toBeVisible();
+ await page.getByRole('button',{name:'Close navigation menu'}).click({position:{x:300,y:300}});
+ await expect(page.getByRole('navigation',{name:'Primary navigation'})).toHaveCount(0);
+ await menu.click();
  await page.getByRole('navigation',{name:'Primary navigation'}).getByRole('button',{name:'Developer'}).click();
  const development=page.getByLabel('Development section');
  if(!(await development.getByLabel('Legacy campaign creation').isVisible()))await development.locator('summary').first().click();
