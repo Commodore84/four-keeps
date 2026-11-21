@@ -570,7 +570,7 @@ export function endCompanionTurn(campaign:Campaign,actorId:string,rollBurning=()
  }));
  const basicPoison=battle.basicPoison;
  const poisonExpired=basicPoison&&nextId==='nighthawk'&&nextRound>=basicPoison.expiresRound;
- const advanced=save(clocked,{...afterOil,groundOil:afterOil.groundOil?.filter(o=>o.ignitedRound===undefined||nextRound<o.ignitedRound+2||nextRound===o.ignitedRound+2&&next<=o.ignitedTurn!).map(o=>({...o,damagedActorsThisTurn:[]})),...(poisonExpired?{basicPoison:undefined}:{}),...(objects?{objects}:{}),participants,groundEntries:undefined,turnIndex:next,round:battle.round+(next===0?1:0),log:[...battle.log,actorId+' ended turn']});
+ const advanced=save(clocked,{...afterOil,groundOil:afterOil.groundOil?.filter(o=>o.ignitedRound===undefined?nextRound<o.expiresRound:nextRound<o.ignitedRound+2||nextRound===o.ignitedRound+2&&next<=o.ignitedTurn!).map(o=>({...o,damagedActorsThisTurn:[]})),...(poisonExpired?{basicPoison:undefined}:{}),...(objects?{objects}:{}),participants,groundEntries:undefined,turnIndex:next,round:battle.round+(next===0?1:0),log:[...battle.log,actorId+' ended turn']});
  if(!battle.burningCreatures?.includes(nextId)||participants[nextId].deathSaves?.dead||
     (participants[nextId].actorKind==='enemy'&&participants[nextId].hp===0))return advanced;
  const damage=rollBurning();
