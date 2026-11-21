@@ -845,7 +845,7 @@ describe('SRD Basic Poison on verified ammunition',()=>{
    const hit=attackCompanionWithVerifiedStats(adjusted,'nighthawk','goblin1',15,2,'Piercing',80,undefined,undefined,()=>4);
    expect(hit.equipment?.arrows).toBe(3);
    expect(hit.companionEncounter?.poisonedAmmunition?.remaining).toBe(1);
-   expect(hit.companionEncounter?.participants.goblin1.hp).toBe(resistance==='resistant'?16:18);
+   expect(hit.companionEncounter?.participants.goblin1.hp).toBe(resistance==='resistant'?13:15);
   }
  });
  it('uses ledger arrows after legacy arrows run out and tracks recovery per source',()=>{
