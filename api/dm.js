@@ -144,7 +144,8 @@ export default async function handler(req, res) {
     const checkRequest = requested && SKILLS.includes(requested.skill) && Object.hasOwn(DC,requested.difficulty) ? { skill:requested.skill, mode:['normal','advantage','disadvantage'].includes(requested.mode) ? requested.mode : 'normal', reason:typeof requested.reason === 'string' ? requested.reason.slice(0,160) : 'Resolve the uncertain action', token:sealCheck({skill:requested.skill,mode:['normal','advantage','disadvantage'].includes(requested.mode) ? requested.mode : 'normal',dc:DC[requested.difficulty],character,issuedAt:Date.now()}) } : null;
     const clarificationRequest = !opening && !restRequest && !checkResult && !combatAdjudication && !sharedEncounterActive && parsed.clarificationRequest && typeof parsed.clarificationRequest.question==='string' && parsed.clarificationRequest.question.trim() ? {question:parsed.clarificationRequest.question.trim().slice(0,300)} : null;
     if(clarificationRequest){
-      if(clarification?.answer)return res.status(502).json({error:'The Dungeon Master repeated an answered clarification. Retry the confirmed action; nothing was changed.'});
+      // A follow-up question is a conversational turn, not an HTTP failure.
+      // The client retains the original pending action and collects the next answer.
       return res.status(200).json({narration:parsed.narration,clarificationRequest,combatStart:null,checkRequest:null,newFacts:[],worldUpdates:{},travelDestination:null,model:MODEL});
     }
     const merchant = state.merchant && typeof state.merchant==='object' ? state.merchant : null;
