@@ -58,7 +58,7 @@ export function MerchantShop({campaign,saving,onClose,onPrepare,onSettle,onDiscu
   if(/lock|key|crowbar|hammer|shovel|pick|pole/.test(n))return 'Utility and construction';
   return 'General supplies';
  };
- const grouped=Object.entries(visible.reduce<Record<string,typeof visible>>((groups,line)=>{const name=groupFor(line.item);(groups[name]??=[]).push(line);return groups;},{})).sort(([a],[b])=>a.localeCompare(b));
+ const grouped=Object.entries(visible.reduce<Record<string,typeof visible>>((groups,line)=>{const name=groupFor(line.item);(groups[name]??=[]).push(line);return groups;},{})).map(([group,entries])=>[group,entries.sort((a,b)=>subgroupFor(a.item).localeCompare(subgroupFor(b.item))||a.item.name.localeCompare(b.item.name))] as [string,typeof visible]).sort(([a],[b])=>a.localeCompare(b));
  const total=selected.reduce((sum,line)=>sum+line.unit*line.quantity,0);
  const eligible=selected.length>0&&total<=funds&&selected.every(line=>line.quantity<=line.stock&&line.quantity<=20);
  const pendingLines=pending?.lines??(pending?[{itemId:pending.itemId,quantity:pending.quantity,unitCostCp:pending.unitCostCp}]:[]);
