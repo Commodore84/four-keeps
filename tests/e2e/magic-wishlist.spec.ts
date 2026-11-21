@@ -27,6 +27,10 @@ test('iPhone magic items menu supports favorites and persistence',async ({page})
  const groupFilter=compendium.getByRole('combobox',{name:'Magic item group'});
  const subgroupFilter=compendium.getByRole('combobox',{name:'Magic item subgroup'});
  await expect(subgroupFilter).toBeVisible();
+ const stickyNav=compendium.getByLabel('Magic item section navigation');
+ await expect(stickyNav).toHaveCSS('position','sticky');
+ await expect(compendium.getByText('Rules reference only — select a specific rarity or variant').first()).toBeVisible();
+ await expect(compendium.getByRole('button',{name:'Choose a specific variant of Ammunition instead',exact:true})).toBeDisabled();
  await expect(compendium.locator('article details')).toHaveCount(0);
  const groupJump=compendium.getByRole('navigation',{name:'Jump to magic item section'});
  const subgroupJump=compendium.getByRole('navigation',{name:'Jump to magic item subgroup'});
