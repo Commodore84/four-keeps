@@ -1488,4 +1488,5 @@ test('Four Keeps uses its approved castle for menu, opening screen and Home Scre
  expect(emblem.ok()).toBe(true);
  expect(await emblem.text()).toContain('fill-rule="evenodd"');
  await expect(page.locator('img[src="/four-keeps-emblem.svg"]').first()).toBeVisible();
+ await page.screenshot({path:'test-results/v19-four-keeps-approved-logo-iphone.png',fullPage:false});
 });
