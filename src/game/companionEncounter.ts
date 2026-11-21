@@ -1046,9 +1046,9 @@ export function attackCompanion(campaign:Campaign,attackerId:string,targetId:str
   dealt=result.taken;
   participants[targetId]=result.updated;
   if(ammunitionPoisonName&&battle.poisonedAmmunition?.name===ammunitionPoisonName&&dealt>0&&(damageType==='Piercing'||damageType==='Slashing')){
-   const die=rollPoison();
-   if(!Number.isInteger(die)||die<1||die>4)throw Error('Invalid Basic Poison damage roll');
-   const bonus=resolveTypedCompanionDamage(campaign,targetId,result.updated,die,'Poison');
+   const firstDie=rollPoison(),secondDie=criticalHit?rollPoison():0;
+   if(!Number.isInteger(firstDie)||firstDie<1||firstDie>4||criticalHit&&(!Number.isInteger(secondDie)||secondDie<1||secondDie>4))throw Error('Invalid Basic Poison damage roll');
+   const bonus=resolveTypedCompanionDamage(campaign,targetId,result.updated,firstDie+secondDie,'Poison');
    poisonDamage=bonus.taken;
    participants[targetId]=damagedActor(target,dealt+poisonDamage,criticalHit);
   }
