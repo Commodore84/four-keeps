@@ -22,7 +22,7 @@ export function CatalogJumpNavigation({title,groups,subgroups,embedded=false}:{t
   const center=(nav:HTMLElement|null,id:string|null)=>{
    if(!nav||!id)return;
    const button=Array.from(nav.querySelectorAll<HTMLButtonElement>('button[data-jump-id]')).find(item=>item.dataset.jumpId===id);
-   button?.scrollIntoView({behavior:'smooth',block:'nearest',inline:'center'});
+   if(button)nav.scrollTo({left:button.offsetLeft-nav.offsetLeft-(nav.clientWidth-button.offsetWidth)/2,behavior:'smooth'});
   };
   center(groupNav.current,activeGroup);
   center(subgroupNav.current,activeSubgroup);
