@@ -4,6 +4,10 @@ name: Full release verification
 # Before publishing gameplay or UI commits to feat/clean-app-shell, run this
 # workflow against the exact candidate branch/SHA and require a green result.
 on:
+  # A one-time push of a verify/* ref to an already finished candidate SHA
+  # starts the release gate even while main lacks workflow_dispatch support.
+  push:
+    branches: ['verify/**']
   workflow_dispatch:
 
 permissions:
