@@ -1471,3 +1471,21 @@ test('iPhone abandoning an unsent merchant cart clears it without spending',asyn
  await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();await page.getByRole('button',{name:'Continue Adventure'}).click();
  expect((await saved(page)).merchantCartDraft).toBeUndefined();
 });
+
+test('Four Keeps uses its approved castle for menu, opening screen and Home Screen installation',async({page})=>{
+ await page.goto('/');
+ await expect(page.locator('link[rel="manifest"]')).toHaveAttribute('href','/manifest.webmanifest');
+ await expect(page.locator('link[rel="apple-touch-icon"]')).toHaveAttribute('href','/apple-touch-icon.png');
+ await expect(page.locator('link[rel="icon"]')).toHaveAttribute('href','/four-keeps-app-icon.svg');
+ const manifest=await (await page.request.get('/manifest.webmanifest')).json();
+ expect(manifest.name).toBe('Four Keeps');
+ expect(manifest.display).toBe('standalone');
+ expect(manifest.icons.some((icon:{src:string})=>icon.src==='/four-keeps-app-icon.svg')).toBe(true);
+ const touch=await page.request.get('/apple-touch-icon.png');
+ expect(touch.ok()).toBe(true);
+ expect(touch.headers()['content-type']).toContain('image/png');
+ const emblem=await page.request.get('/four-keeps-emblem.svg');
+ expect(emblem.ok()).toBe(true);
+ expect(await emblem.text()).toContain('fill-rule="evenodd"');
+ await expect(page.locator('img[src="/four-keeps-emblem.svg"]').first()).toBeVisible();
+});
