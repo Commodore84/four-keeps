@@ -683,7 +683,14 @@ test('new Rogue starts at Frontier Village, buys supplies, and sees persisted Pl
  await shopAfterCancel.getByRole('button',{name:'Add Rope'}).click();
  await shopAfterCancel.getByRole('button',{name:'Add Rope'}).click();
  await shopAfterCancel.getByRole('button',{name:'Add Torch'}).click();
- await shopAfterCancel.getByRole('button',{name:'Review purchase'}).click();
+ const reviewButton=shopAfterCancel.getByRole('button',{name:'Review purchase'});
+ await reviewButton.scrollIntoViewIfNeeded();
+ const reviewBounds=await reviewButton.boundingBox();
+ const composerBounds=await page.getByLabel('Message the Dungeon Master').boundingBox();
+ expect(reviewBounds).not.toBeNull();
+ expect(composerBounds).not.toBeNull();
+ expect(reviewBounds!.y+reviewBounds!.height).toBeLessThanOrEqual(composerBounds!.y);
+ await reviewButton.click();
  await expect(shopAfterCancel.getByLabel('Confirm merchant purchase')).toContainText('2 × Rope');
  await shopAfterCancel.getByLabel('Confirm merchant purchase').getByRole('button',{name:'Confirm purchase'}).click();
  await expect.poll(async()=> (await saved(page)).merchantStockRemaining?.['location:dasahi:city:general:rope']).toBe(38);
