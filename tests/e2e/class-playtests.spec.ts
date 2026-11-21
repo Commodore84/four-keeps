@@ -668,7 +668,7 @@ test('new Rogue starts at Frontier Village, buys supplies, and sees persisted Pl
   return tab.left>=bounds.left-2&&tab.right<=bounds.right+2;
  })).toBe(true);
  const subgroupNav=shop.getByRole('navigation',{name:'Jump to merchandise subgroup'});
- const daggerSubgroup=subgroupNav.getByRole('button',{name:/Melee weapons — Simple melee weapons/});
+ const daggerSubgroup=subgroupNav.getByRole('button',{name:/Melee weapons — Blades/});
  await daggerSubgroup.click();
  await expect(daggerSubgroup).toHaveAttribute('aria-current','location');
  await expect(selectedGroup).toHaveAttribute('aria-current','location');
