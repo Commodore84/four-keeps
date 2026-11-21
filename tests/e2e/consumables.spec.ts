@@ -387,6 +387,27 @@ test('iPhone poisoned arrows coating confirms once and survives reload',async({p
  await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();await page.getByRole('button',{name:'Continue Adventure'}).click();
  const after=await page.evaluate(async id=>{const db=await new Promise<IDBDatabase>(resolve=>{const r=indexedDB.open('four-keeps-local',1);r.onsuccess=()=>resolve(r.result)});const c=await new Promise<any>(resolve=>{const r=db.transaction('campaigns').objectStore('campaigns').get(id);r.onsuccess=()=>resolve(r.result)});db.close();return {coated:c.companionEncounter.poisonedAmmunition.remaining,arrows:c.inventoryLedger.gear.find((g:any)=>g.name==='Arrows').quantity,recovery:c.companionEncounter.ammunitionPendingRecovery.Arrows}},id);
  expect(after).toEqual({coated:1,arrows:3,recovery:1});
+ const turn=await openSupplies(page);
+ await expect(turn.getByLabel('Last verified attack result')).toContainText(' miss');
+ await turn.getByRole('button',{name:'End player turn'}).click();
+ await expect(turn.getByLabel('Current combat turn')).toContainText('enemy');
+ await turn.getByRole('button',{name:'DM confirms enemy turn complete'}).click();
+ await expect(turn.getByLabel('Current combat turn')).toContainText('Your turn');
+ await turn.getByLabel('Poisoned ammunition enemy').selectOption('enemy');
+ await turn.getByLabel('Poisoned ammunition d20').fill('19');
+ await turn.getByLabel('Poisoned ammunition damage dice').fill('2');
+ await turn.getByLabel('Poisoned ammunition range').fill('15');
+ await turn.getByRole('button',{name:'Attack with poisoned ammunition'}).click();
+ await expect(turn.getByLabel('Last verified attack result')).toContainText(' hit');
+ await expect(turn.getByLabel('Current combat turn')).toContainText('Coated shots: 0');
+ await turn.getByRole('button',{name:'Finish encounter (DM confirmed)'}).click();
+ await expect(turn.getByLabel('Pending ammunition recovery')).toContainText('Arrows: 2');
+ await turn.getByLabel('Poisoned ammunition recovery quantity').fill('2');
+ await turn.getByRole('button',{name:'Recover ammunition'}).click();
+ await expect(turn.getByLabel('Pending ammunition recovery')).toHaveCount(0);
+ await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();await page.getByRole('button',{name:'Continue Adventure'}).click();
+ const reconciled=await page.evaluate(async id=>{const db=await new Promise<IDBDatabase>(resolve=>{const r=indexedDB.open('four-keeps-local',1);r.onsuccess=()=>resolve(r.result)});const c=await new Promise<any>(resolve=>{const r=db.transaction('campaigns').objectStore('campaigns').get(id);r.onsuccess=()=>resolve(r.result)});db.close();return {status:c.companionEncounter.status,arrows:c.inventoryLedger.gear.find((g:any)=>g.name==='Arrows').quantity,recovery:c.companionEncounter.ammunitionPendingRecovery.Arrows}},id);
+ expect(reconciled).toEqual({status:'completed',arrows:4,recovery:0});
 });
 
 test('poisoned ammunition atomic two-tab stale confirmation and interrupted write',async({page,context})=>{
