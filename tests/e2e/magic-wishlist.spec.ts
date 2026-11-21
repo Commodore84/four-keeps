@@ -43,7 +43,7 @@ test('iPhone magic items menu supports favorites and persistence',async ({page})
  expect(storageGroupId).toMatch(/^magic-group-\d+$/);
  const storageHeading=compendium.locator('[id="'+storageGroupId!.replace('magic-group-','magic-subgroup-')+'-Containers%20and%20storage"]');
  await expect(storageHeading).toBeVisible();
- await expect.poll(async()=>storageHeading.evaluate(element=>element.getBoundingClientRect().top>=0&&element.getBoundingClientRect().top<240)).toBe(true);
+ await expect.poll(async()=>storageHeading.evaluate(element=>{const heading=element.getBoundingClientRect();const main=document.getElementById('main-content')?.getBoundingClientRect();return !!main&&heading.top>=main.top&&heading.top<main.top+240;})).toBe(true);
  await expect(compendium.locator('article details')).toHaveCount(0);
  await expect(compendium.getByRole('heading',{name:'Weapons',exact:true})).toBeVisible();
  await groupFilter.selectOption('Weapons');
