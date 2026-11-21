@@ -20,7 +20,7 @@ export interface CompanionEncounter {
  round:number;
  turnIndex:number;
  order:string[];
- participants:Record<string,{ropeBound?:boolean;ropeAddedRestraint?:boolean;caltropsStopped?:boolean;oilExpires?:{round:number;turnIndex:number};x:number;y:number;hp:number;maxHp:number;initiative:number;conditions:('Charmed'|'Poisoned'|'Blinded'|'Deafened'|'Frightened'|'Grappled'|'Incapacitated'|'Invisible'|'Paralyzed'|'Petrified'|'Prone'|'Restrained'|'Stunned'|'Unconscious'|'Exhaustion')[];speedFeet:number;movementSpentFeet:number;actionUsed:boolean;bonusActionUsed:boolean;dashFeet:number;disengaged:boolean;dodging:boolean;reactionUsed?:boolean;rogueSneakUsed?:boolean;roguePoisonDC?:number;roguePoisonRounds?:number;roguePoisonSaveResolved?:boolean;rogueObscureUntilTurn?:number;rogueDazeTurns?:number;rogueDazeChoice?:'movement'|'action';rogueKnockoutDC?:number;rogueKnockoutRounds?:number;rogueKnockoutSaveResolved?:boolean;conditionImmunities?:string[];rogueSteadyAim?:boolean;rogueHidden?:boolean;rogueHideDC?:number;rogueHideConcealment?:boolean;rogueDetectedBy?:string[];rogueMovedThisTurn?:boolean;concentratingOn?:string;consumables?:Record<string,number>;faction?:string;reachFeet?:number;actorKind?:'party'|'enemy';armorClass?:number;attackModifier?:number;constitutionSaveModifier?:number;damageModifier?:number;damageDice?:string;enemyTactic?:'hold'|'nearest'|'lowest-hp';rangedAttackFeet?:number;deathSaves?:{successes:number;failures:number;stable:boolean;dead:boolean}}>;
+ participants:Record<string,{ropeBound?:boolean;ropeAddedRestraint?:boolean;caltropsStopped?:boolean;oilExpires?:{round:number;turnIndex:number};x:number;y:number;hp:number;maxHp:number;initiative:number;conditions:('Charmed'|'Poisoned'|'Blinded'|'Deafened'|'Frightened'|'Grappled'|'Incapacitated'|'Invisible'|'Paralyzed'|'Petrified'|'Prone'|'Restrained'|'Stunned'|'Unconscious'|'Exhaustion')[];speedFeet:number;movementSpentFeet:number;actionUsed:boolean;bonusActionUsed:boolean;dashFeet:number;disengaged:boolean;dodging:boolean;reactionUsed?:boolean;rogueSneakUsed?:boolean;roguePoisonDC?:number;roguePoisonRounds?:number;roguePoisonSaveResolved?:boolean;rogueObscureUntilTurn?:number;rogueDazeTurns?:number;rogueDazeChoice?:'movement'|'action';rogueKnockoutDC?:number;rogueKnockoutRounds?:number;rogueKnockoutSaveResolved?:boolean;conditionImmunities?:string[];damageResistances?:DamageType[];damageImmunities?:DamageType[];rogueSteadyAim?:boolean;rogueHidden?:boolean;rogueHideDC?:number;rogueHideConcealment?:boolean;rogueDetectedBy?:string[];rogueMovedThisTurn?:boolean;concentratingOn?:string;consumables?:Record<string,number>;faction?:string;reachFeet?:number;actorKind?:'party'|'enemy';armorClass?:number;attackModifier?:number;constitutionSaveModifier?:number;damageModifier?:number;damageDice?:string;enemyTactic?:'hold'|'nearest'|'lowest-hp';rangedAttackFeet?:number;deathSaves?:{successes:number;failures:number;stable:boolean;dead:boolean}}>;
  objects?:Record<string,{x:number;y:number;hp:number;oilExpires?:{round:number;turnIndex:number}}>;
  basicPoison?:{weaponId:string;expiresRound:number};
  poisonedAmmunition?:{name:string;remaining:number;expiresRound:number};
@@ -650,9 +650,9 @@ function resolveTypedCompanionDamage(campaign:Campaign,targetId:string,actor:Com
  const battle=encounter(campaign);
  const adjust=(value:number)=>(targetId==='nighthawk'&&battle.mode==='unified')||actor.actorKind==='enemy'
   ?value:adjudicateSubclassActorDamage(campaign,targetId,value,type);
- const base=adjust(amount);
+ const base=actor.damageImmunities?.includes(type)?0:actor.damageResistances?.includes(type)?Math.floor(adjust(amount)/2):adjust(amount);
  const ignited=type==='Fire'&&base>0&&!!actor.oilExpires;
- const taken=ignited?adjust(amount+5):base;
+ const taken=ignited?(actor.damageImmunities?.includes(type)?0:actor.damageResistances?.includes(type)?Math.floor(adjust(amount+5)/2):adjust(amount+5)):base;
  return {taken,ignited,updated:damagedActor(ignited?{...actor,oilExpires:undefined}:actor,taken,critical)};
 }
 
