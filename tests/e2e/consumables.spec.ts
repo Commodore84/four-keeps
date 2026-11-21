@@ -346,7 +346,8 @@ test('iPhone Oil controls distinguish ground spill from thrown flask',async({pag
  await expect(panel.getByLabel('Choose consumable')).toHaveValue('');
 });
 
-test('iPhone poisoned arrows coating confirms once and survives reload',async({page})=>{
+test('iPhone poisoned arrows coating confirms once and survives reload',async({page},testInfo)=>{
+ await page.setViewportSize({width:390,height:844});
  const id=await createCampaign(page,'Poisoned arrows iPhone');
  await page.evaluate(async id=>{
   const db=await new Promise<IDBDatabase>(resolve=>{const r=indexedDB.open('four-keeps-local',1);r.onsuccess=()=>resolve(r.result)});
@@ -375,6 +376,7 @@ test('iPhone poisoned arrows coating confirms once and survives reload',async({p
  expect(saved).toEqual({coated:2,poison:0,arrows:4});
  const combat=await openSupplies(page);
  await expect(combat.getByRole('region',{name:'Player poisoned ammunition combat'})).toBeVisible();
+ await testInfo.attach('poison-ammunition-iphone-player',{body:await page.screenshot({fullPage:true}),contentType:'image/png'});
  await combat.getByLabel('Poisoned ammunition enemy').selectOption('enemy');
  await combat.getByLabel('Poisoned ammunition d20').fill('1');
  await combat.getByLabel('Poisoned ammunition damage dice').fill('2');
