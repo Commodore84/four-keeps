@@ -1,6 +1,6 @@
 import {describe,it,expect} from 'vitest';
 import {newCampaign} from './campaign';
-import {OPENING_INTENT,openingIntentForCampaign,prepareAdventureOpening,commitAdventureOpening,needsAdventureOpening,prepareAdventureAction,commitAdventureAction,adventureMemory} from './adventureOrchestrator';
+import {OPENING_INTENT,openingIntentForCampaign,prepareAdventureOpening,commitAdventureOpening,needsAdventureOpening,prepareAdventureAction,commitAdventureAction,adventureMemory,pauseAdventureForClarification,answerAdventureClarification} from './adventureOrchestrator';
 
 describe('AI adventure opening orchestration',()=>{
  it('grounds imported campaign opening in Dasahi without moving a legacy campaign',()=>{
@@ -62,6 +62,19 @@ describe('persistent AI adventure actions',()=>{
     expect(committed.journal.filter(e=>e.id.startsWith('turn-1'))).toHaveLength(2);
     expect(commitAdventureAction(committed,'turn-1','Duplicate')).toBe(committed);
     expect(()=>commitAdventureAction(pending,'other-id','Stale')).toThrow();
+  });
+  it('keeps an action pending through a DM question and the player answer',()=>{
+    const pending=prepareAdventureAction(campaign(),'I look at the store','turn-clarify');
+    const asked=pauseAdventureForClarification(pending,'turn-clarify','Which store?');
+    const answered=answerAdventureClarification(asked,'The dockside general store');
+    expect(answered.pendingAdventureAction?.id).toBe('turn-clarify');
+    expect(answered.pendingClarification?.answer).toBe('The dockside general store');
+    const followup=pauseAdventureForClarification({...answered,pendingClarification:undefined},'turn-clarify','Do you want to browse?');
+    expect(followup.pendingClarification?.question).toBe('Do you want to browse?');
+    expect(followup.pendingAdventureAction?.id).toBe('turn-clarify');
+    const resolved=commitAdventureAction(answerAdventureClarification(followup,'Yes'),'turn-clarify','The merchant opens the shelves.');
+    expect(resolved.pendingAdventureAction).toBeUndefined();
+    expect(resolved.journal.filter(e=>e.id.startsWith('turn-clarify'))).toHaveLength(2);
   });
   it('remembers structured NPCs and reported clues without upgrading their certainty',()=>{
     const pending=prepareAdventureAction(campaign(),'Who was here?','turn-3');
