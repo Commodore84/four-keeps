@@ -363,7 +363,13 @@ test('iPhone poisoned arrows coating confirms once and survives reload',async({p
  await expect(panel.getByLabel('Poisoned ammunition quantity')).toBeVisible();
  await panel.getByLabel('Poisoned ammunition quantity').fill('2');
  await panel.getByRole('button',{name:'Confirm use'}).click();
- await expect(panel).toContainText('Poisoned Arrows: 2 coated shot(s) remain');
+ await expect.poll(async()=>{
+  const text=await panel.innerText();
+  if(text.includes('Poisoned Arrows: 2 coated shot(s) remain'))return 'success';
+  const notice=await page.locator('body').innerText();
+  if(notice.includes('Consumable rejected:'))throw Error(notice.slice(notice.indexOf('Consumable rejected:'),notice.indexOf('Consumable rejected:')+350));
+  return text;
+ },{timeout:8000}).toBe('success');
  await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();await page.getByRole('button',{name:'Continue Adventure'}).click();
  const saved=await page.evaluate(async id=>{const db=await new Promise<IDBDatabase>(resolve=>{const r=indexedDB.open('four-keeps-local',1);r.onsuccess=()=>resolve(r.result)});const c=await new Promise<any>(resolve=>{const r=db.transaction('campaigns').objectStore('campaigns').get(id);r.onsuccess=()=>resolve(r.result)});db.close();return {coated:c.companionEncounter.poisonedAmmunition.remaining,poison:c.inventoryLedger.gear.find((g:any)=>g.name==='Poison, Basic').quantity,arrows:c.inventoryLedger.gear.find((g:any)=>g.name==='Arrows').quantity}},id);
  expect(saved).toEqual({coated:2,poison:0,arrows:4});
