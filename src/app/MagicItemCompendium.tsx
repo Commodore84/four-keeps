@@ -10,6 +10,7 @@ const RARITY_STYLES:Record<string,string>={
  Artifact:'border-red-500/50 bg-red-500/15 text-red-300',
  Varies:'border-white/30 bg-white/10 text-parchment',
 };
+export const isMultiVariantReference=(rarity:string)=>rarity.includes(',')||rarity.includes('Varies');
 const rarityTier=(value:string)=>{
  if(value.includes(',')||value.includes('Varies'))return 'Varies';
  return ['Very Rare','Legendary','Uncommon','Common','Rare','Artifact'].find(tier=>value.startsWith(tier))??'Varies';
@@ -81,7 +82,7 @@ export function MagicItemCompendium({campaignId}:{campaignId:string|null}){
  const rarities=['All','Common','Uncommon','Rare','Very Rare','Legendary','Artifact','Varies'];
  const filtered=MAGIC_ITEMS.filter(item=>(tab==='all'||wanted.includes(item.id))&&(category==='All'||item.category===category)&&(group==='All'||itemGroup(item.category,item.name)===group)&&(subgroup==='All'||itemSubgroup(item.category,item.name)===subgroup)&&(rarity==='All'||rarityTier(item.rarity)===rarity)&&item.name.toLowerCase().includes(search.trim().toLowerCase())).sort((a,b)=>itemGroup(a.category,a.name).localeCompare(itemGroup(b.category,b.name))||itemSubgroup(a.category,a.name).localeCompare(itemSubgroup(b.category,b.name))||a.name.localeCompare(b.name));
  function toggle(id:string){
-  if(!campaignId)return;
+  if(!campaignId||MAGIC_ITEMS.some(item=>item.id===id&&isMultiVariantReference(item.rarity)))return;
   const next=wanted.includes(id)?wanted.filter(item=>item!==id):[...wanted,id];
   try {writeMagicWishlist(campaignId,next);setWanted(next);}catch{ /* Storage unavailable; do not claim a saved favorite. */ }
  }
@@ -94,9 +95,11 @@ export function MagicItemCompendium({campaignId}:{campaignId:string|null}){
   <div className="grid grid-cols-2 gap-2"><label className="text-xs">Category<select aria-label="Magic item category" value={category} onChange={e=>setCategory(e.target.value)} className="mt-1 w-full rounded-lg border border-white/20 bg-panel p-2 text-base">{categories.map(c=><option key={c}>{c}</option>)}</select></label><label className="text-xs">Rarity<select aria-label="Magic item rarity" value={rarity} onChange={e=>setRarity(e.target.value)} className="mt-1 w-full rounded-lg border border-white/20 bg-panel p-2 text-base">{rarities.map(r=><option key={r}>{r}</option>)}</select></label></div>
   <label className="block text-xs">Item group<select aria-label="Magic item group" value={group} onChange={e=>setGroup(e.target.value)} className="mt-1 w-full rounded-lg border border-white/20 bg-panel p-2 text-base">{groups.map(g=><option key={g}>{g}</option>)}</select></label>
   <label className="block text-xs">Subgroup<select aria-label="Magic item subgroup" value={subgroups.includes(subgroup)?subgroup:'All'} onChange={e=>setSubgroup(e.target.value)} className="mt-1 w-full rounded-lg border border-white/20 bg-panel p-2 text-base">{subgroups.map(g=><option key={g}>{g}</option>)}</select></label>
+  <div className="sticky top-14 z-20 space-y-1 rounded-lg border border-gold/30 bg-ink/95 p-2 shadow-lg backdrop-blur" aria-label="Magic item section navigation">
   <nav aria-label="Jump to magic item section" className="flex gap-2 overflow-x-auto pb-1">{[...new Set(filtered.map(item=>itemGroup(item.category,item.name)))].map(g=><button key={g} type="button" onClick={()=>document.getElementById('magic-group-'+groups.indexOf(g))?.scrollIntoView({behavior:'smooth',block:'start'})} className="shrink-0 rounded-lg border border-gold/40 px-3 py-2 text-xs text-gold">{g}</button>)}</nav>
   <nav aria-label="Jump to magic item subgroup" className="flex gap-2 overflow-x-auto pb-1">{[...new Set(filtered.map(item=>itemGroup(item.category,item.name)+'|'+itemSubgroup(item.category,item.name)))].map(key=>{const [g,sg]=key.split('|');return <button key={key} type="button" onClick={()=>document.getElementById('magic-subgroup-'+groups.indexOf(g)+'-'+encodeURIComponent(sg))?.scrollIntoView({behavior:'smooth',block:'start'})} aria-label={g+" — "+sg} className="shrink-0 rounded-lg border border-white/30 px-3 py-2 text-xs">{sg}</button>;})}</nav>
-  <p className="text-xs text-parchment/60">{filtered.length} items · grouped by type and subgroup</p>
+  </div>
+  <p className="text-xs text-parchment/60">{filtered.length} items · grouped by type and subgroup · combined-variant references cannot be wishlisted</p>
   {filtered.map((item,index)=>{
    const previous=filtered[index-1];
    const currentGroup=itemGroup(item.category,item.name),currentSubgroup=itemSubgroup(item.category,item.name);
@@ -104,11 +107,11 @@ export function MagicItemCompendium({campaignId}:{campaignId:string|null}){
    const newSubgroup=newGroup||itemSubgroup(previous.category,previous.name)!==currentSubgroup;
    const usage=magicItemUseDescription(item);
    const extendedRules=magicItemExtendedRules(item.id);
-   return <div key={item.id}>{newGroup&&<h3 id={"magic-group-"+groups.indexOf(currentGroup)} className="scroll-mt-4 mt-5 border-b border-gold/40 pb-2 font-serif text-xl text-gold">{currentGroup}</h3>}{newSubgroup&&<h4 id={"magic-subgroup-"+groups.indexOf(currentGroup)+"-"+encodeURIComponent(currentSubgroup)} className="scroll-mt-4 mt-3 text-sm font-semibold text-parchment/80">{currentSubgroup}</h4>}<article className="rounded-xl border border-white/15 bg-panel p-3">
+   return <div key={item.id}>{newGroup&&<h3 id={"magic-group-"+groups.indexOf(currentGroup)} className="scroll-mt-44 mt-5 border-b border-gold/40 pb-2 font-serif text-xl text-gold">{currentGroup}</h3>}{newSubgroup&&<h4 id={"magic-subgroup-"+groups.indexOf(currentGroup)+"-"+encodeURIComponent(currentSubgroup)} className="scroll-mt-44 mt-3 text-sm font-semibold text-parchment/80">{currentSubgroup}</h4>}<article className="rounded-xl border border-white/15 bg-panel p-3">
    <div className="flex items-start gap-3">
-    <button type="button" disabled={!campaignId} aria-label={wanted.includes(item.id)?`Remove ${item.name} from Wish List`:`Add ${item.name} to Wish List`} aria-pressed={wanted.includes(item.id)} onClick={()=>toggle(item.id)} className="rounded-lg border border-white/20 px-3 py-2 text-xl text-gold disabled:opacity-40">{wanted.includes(item.id)?'♥':'♡'}</button>
+    <button type="button" disabled={!campaignId||isMultiVariantReference(item.rarity)} aria-label={isMultiVariantReference(item.rarity)?`Choose a specific variant of ${item.name} instead`:wanted.includes(item.id)?`Remove ${item.name} from Wish List`:`Add ${item.name} to Wish List`} aria-pressed={wanted.includes(item.id)} onClick={()=>toggle(item.id)} className="rounded-lg border border-white/20 px-3 py-2 text-xl text-gold disabled:opacity-40">{wanted.includes(item.id)?'♥':'♡'}</button>
     <div className="min-w-0 flex-1">
-     <h3 className="font-semibold text-parchment">{item.name}</h3>
+     <h3 className="font-semibold text-parchment">{item.name}</h3>{isMultiVariantReference(item.rarity)&&<p className="text-xs text-gold">Rules reference only — select a specific rarity or variant</p>}
      <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-parchment/65"><span className={`rounded-md border px-2 py-0.5 font-semibold ${RARITY_STYLES[rarityTier(item.rarity)]}`}>{item.rarity}</span><span>{itemGroup(item.category,item.name)} · {item.category}{item.attunement?' · Attunement':''}</span></div>
     </div>
    </div>
