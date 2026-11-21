@@ -31,10 +31,10 @@ it('returns a clarification without applying proposed world changes, combat, or 
  const body=JSON.parse(fetch.mock.calls[0][1].body);
  expect(body.instructions).toContain('clarificationRequest (null or {question: string})');
 });
-it('fails safely when the provider repeats a question already answered',async()=>{
+it('continues safely when the provider asks a follow-up question after an answer',async()=>{
  const fetch=setup({narration:'Are you sure?',clarificationRequest:{question:'Are you sure?'}}),res=response();
  await handler(req({message:'Attack dragon',clarification:{question:'Are you sure?',answer:'Yes, I attack.'},character,gameState:{characterIdentity:{name:'Aster',classId:'fighter'},adventureSession:{site:'frontier',status:'exploring'}}}),res);
- expect(res.code).toBe(502);expect(res.body.error).toContain('repeated an answered clarification');
+ expect(res.code).toBe(200);expect(res.body.clarificationRequest.question).toBe('Are you sure?');expect(res.body.newFacts).toEqual([]);expect(res.body.worldUpdates).toEqual({});
  const body=JSON.parse(fetch.mock.calls[0][1].body);
  expect(body.input[0].content).toContain('Yes, I attack.');
 });
