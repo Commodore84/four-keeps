@@ -819,6 +819,14 @@ describe('SRD Basic Poison on verified ammunition',()=>{
   expect(expired.companionEncounter?.poisonedAmmunition).toBeUndefined();
   expect(expired.equipment?.arrows).toBe(4);
  });
+ it('doubles the two poison dice on a critical hit and consumes only one coated arrow',()=>{
+  const c=setup(),coated=useOwnedConsumable(c,request(c,3));
+  let rolls=0;
+  const hit=attackCompanionWithVerifiedStats(coated,'nighthawk','goblin1',20,4,'Piercing',80,undefined,undefined,()=>{rolls++;return 2});
+  expect(rolls).toBe(2);
+  expect(hit.companionEncounter?.poisonedAmmunition?.remaining).toBe(2);
+  expect(hit.equipment?.arrows).toBe(3);
+ });
  it('rejects stale or insufficient ammunition and invalid attacks without inventory changes',()=>{
   const c=setup();
   expect(()=>useOwnedConsumable(c,request(c,5))).toThrow('1–3');
