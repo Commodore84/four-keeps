@@ -41,6 +41,23 @@ export function MerchantShop({campaign,saving,onClose,onPrepare,onSettle,onDiscu
   if(name.includes('ball bearing')||name.includes('caltrop')||name.includes('trap')||name.includes('manacles')||name.includes('chain'))return 'Traps and restraints';
   return 'Other adventuring gear';
  };
+ const subgroupFor=(item:(typeof lines)[number]['item'])=>{
+  const n=item.name.toLowerCase();
+  if(item.category==='weapon')return /crossbow|bow|sling|blowgun/.test(n)?'Bows and ranged weapons':/dagger|rapier|shortsword|scimitar|sword/.test(n)?'Blades':'Other melee weapons';
+  if(item.category==='armor'||item.category==='shield')return item.category==='shield'?'Shields':/plate|splint|chain mail/.test(n)?'Heavy armor':/leather|hide|studded/.test(n)?'Light and medium armor':'Other armor';
+  if(item.category==='ammunition')return /arrow/.test(n)?'Arrows':/bolt/.test(n)?'Bolts':'Other ammunition';
+  if(/potion|antitoxin|acid|alchemist|holy water|poison/.test(n))return /healing|antitoxin/.test(n)?'Healing and protection':'Alchemical supplies';
+  if(/rope|grappling|climber|piton|ladder/.test(n))return 'Climbing equipment';
+  if(/torch|candle|lantern|lamp|tinderbox|oil/.test(n))return /oil|tinderbox/.test(n)?'Fuel and fire starting':'Light sources';
+  if(/kit|tools|supplies/.test(n))return /healer|herbal|poison/.test(n)?'Medical and herbal kits':'Professional tools and kits';
+  if(/ball bearing|caltrop|trap|manacles|chain/.test(n))return 'Traps and restraints';
+  if(/tent|bedroll|blanket|pack/.test(n))return 'Travel and shelter';
+  if(/pouch|sack|chest|barrel|basket|bottle|case|flask|vial/.test(n))return 'Containers';
+  if(/mirror|glass|spyglass|magnifying/.test(n))return 'Optics and observation';
+  if(/ink|paper|parchment|book|pen|chalk|map/.test(n))return 'Writing and navigation';
+  if(/lock|key|crowbar|hammer|shovel|pick|pole/.test(n))return 'Utility and construction';
+  return 'General supplies';
+ };
  const grouped=Object.entries(visible.reduce<Record<string,typeof visible>>((groups,line)=>{const name=groupFor(line.item);(groups[name]??=[]).push(line);return groups;},{})).sort(([a],[b])=>a.localeCompare(b));
  const total=selected.reduce((sum,line)=>sum+line.unit*line.quantity,0);
  const eligible=selected.length>0&&total<=funds&&selected.every(line=>line.quantity<=line.stock&&line.quantity<=20);
@@ -53,9 +70,11 @@ export function MerchantShop({campaign,saving,onClose,onPrepare,onSettle,onDiscu
   <div className="space-y-2"><h3 className="font-semibold">Available equipment</h3>
   <input aria-label="Search merchandise" placeholder="Search items" value={search} onChange={e=>setSearch(e.target.value)} className="w-full rounded-lg border border-white/25 bg-ink p-2 text-sm"/>
   {grouped.length>1&&<nav aria-label="Jump to merchandise section" className="flex gap-2 overflow-x-auto pb-1" >{grouped.map(([group,entries],index)=><button key={group} type="button" onClick={()=>document.getElementById('merchant-group-'+index)?.scrollIntoView({behavior:'smooth',block:'start'})} className="shrink-0 rounded-lg border border-gold/40 px-3 py-2 text-xs text-gold">{group} ({entries.length})</button>)}</nav>}
+  {grouped.length>0&&<nav aria-label="Jump to merchandise subgroup" className="flex gap-2 overflow-x-auto pb-1">{grouped.flatMap(([group,entries])=>[...new Set(entries.map(line=>subgroupFor(line.item)))].map(subgroup=><button key={group+'|'+subgroup} type="button" onClick={()=>document.getElementById('merchant-subgroup-'+encodeURIComponent(group)+'-'+encodeURIComponent(subgroup))?.scrollIntoView({behavior:'smooth',block:'start'})} className="shrink-0 rounded-lg border border-white/30 px-3 py-2 text-xs">{subgroup}</button>))}</nav>}
   <div className="max-h-[65vh] overflow-y-auto rounded-lg border border-gold/50 bg-[#322c24] focus-visible:outline focus-visible:outline-2 focus-visible:outline-gold" role="region" aria-label="Merchant inventory" tabIndex={0}>
    {grouped.map(([group,entries])=><section key={group} id={"merchant-group-"+grouped.findIndex(([name])=>name===group)} aria-label={group} className="scroll-mt-2 border-b border-white/20"><h4 className="sticky top-0 z-10 bg-[#3d3428] px-3 py-2 font-semibold text-gold">{group} ({entries?.length??0})</h4>
-   {entries?.map(({item,quantity,unit,stock,owned})=><div key={item.id} className="space-y-1 border-t border-white/10 px-3 py-2" aria-label={item.name}>
+   {entries?.map(({item,quantity,unit,stock,owned},index)=><div key={item.id} id={'merchant-item-'+item.id} className="scroll-mt-14 space-y-1 border-t border-white/10 px-3 py-2" aria-label={item.name}>
+    {(index===0||subgroupFor(entries[index-1].item)!==subgroupFor(item))&&<h5 id={'merchant-subgroup-'+encodeURIComponent(group)+'-'+encodeURIComponent(subgroupFor(item))} className="scroll-mt-14 border-b border-white/15 py-2 text-sm font-semibold text-parchment/85">{subgroupFor(item)}</h5>}
     <div className="flex items-baseline justify-between gap-x-2 text-sm" aria-label={item.name+' availability'}>
      <div className="flex min-w-0 flex-wrap items-baseline gap-x-2">
       <strong>{item.name}</strong>
