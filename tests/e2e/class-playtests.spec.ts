@@ -1473,6 +1473,7 @@ test('iPhone abandoning an unsent merchant cart clears it without spending',asyn
 });
 
 test('Four Keeps uses its approved castle for menu, opening screen and Home Screen installation',async({page})=>{
+ await page.setViewportSize({width:390,height:844});
  await page.goto('/');
  await expect(page.locator('link[rel="manifest"]')).toHaveAttribute('href','/manifest.webmanifest');
  await expect(page.locator('link[rel="apple-touch-icon"]')).toHaveAttribute('href','/apple-touch-icon.png');
