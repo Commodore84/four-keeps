@@ -1581,3 +1581,14 @@ for(const width of [375,390,430])test('journal tabs stay equal and sticky during
  expect(y).toBeLessThan(220);
  expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
 });
+
+test('Settings Reload App restarts the standalone shell without clearing saved campaigns', async ({page}) => {
+  await page.goto('/four-keeps/');
+  await navigate(page,'Settings');
+  await createLegacyCampaign(page,'Reload App regression');
+  await expect(page.getByRole('region',{name:'App controls'}).getByRole('button',{name:'Reload App'})).toBeVisible();
+  await page.getByRole('region',{name:'App controls'}).getByRole('button',{name:'Reload App'}).click();
+  await expect(page.getByRole('heading',{name:'Four Keeps'})).toBeVisible();
+  await page.getByRole('button',{name:'Campaigns',exact:true}).click();
+  await expect(page.getByText('Reload App regression')).toBeVisible();
+});
