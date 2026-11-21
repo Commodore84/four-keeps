@@ -45,7 +45,7 @@ export interface ConsumableRequest {
  ground?:{x:number;y:number;level:boolean};
  igniteOilId?:string;
  supplyOperation?:'drink'|'refill'|'track';expectedSupplyState?:string;ropeCheck?:number;
- expectedWeaponId?:string;
+ expectedWeaponId?:string;poisonAmmunition?:{name:'Arrows'|'Crossbow Bolts'|'Sling Bullets';quantity:number};
  expectedTargetPosition?:{x:number;y:number};
 }
 export function eligibleKitTargets(c:Campaign){
@@ -184,6 +184,20 @@ export function useOwnedConsumable(c:Campaign,r:ConsumableRequest):Campaign{
     log:[...b.log,success?'Rope knot tied (Utilize)':'Rope knot check failed (Utilize)']}}:{})};
  }
  if(r.name==='Poison, Basic'){
+  if(r.poisonAmmunition){
+   const {name:ammoName,quantity}=r.poisonAmmunition;
+   const weaponId=c.encounterLoadout?.weaponId;
+   const compatible=ammoName==='Arrows'?['shortbow','longbow']:ammoName==='Crossbow Bolts'?['light-crossbow','heavy-crossbow','hand-crossbow']:ammoName==='Sling Bullets'?['sling']:[];
+   const weaponItem=basicPoisonWeapon(c);
+   const ownedWeapon=c.inventoryLedger?.gear.some(g=>g.quantity>0&&g.name===({shortbow:'Shortbow',longbow:'Longbow','light-crossbow':'Light Crossbow','heavy-crossbow':'Heavy Crossbow','hand-crossbow':'Hand Crossbow',sling:'Sling'} as Record<string,string>)[weaponId??'']);
+   const available=(c.inventoryLedger?.gear.find(g=>g.name===ammoName)?.quantity??0)+(ammoName==='Arrows'&&!c.characterIdentity?c.equipment?.arrows??0:0);
+   if(!active||!b||!actor||!compatible.includes(weaponId??'')||!ownedWeapon||weaponItem||b.poisonedAmmunition||b.basicPoison||!Number.isInteger(quantity)||quantity<1||quantity>3||available<quantity)
+    throw Error('Basic Poison ammunition requires 1–3 verified owned compatible pieces');
+   return {...c,consumableUseIds:[...(c.consumableUseIds??[]),r.requestId],
+    companionEncounter:{...b,poisonedAmmunition:{name:ammoName,remaining:quantity,expiresRound:b.round+10},
+     participants:{...b.participants,nighthawk:{...actor,bonusActionUsed:true}},log:[...b.log,quantity+' '+ammoName+' coated with Basic Poison']},
+    inventoryLedger:{...c.inventoryLedger!,gear:gear.map((item,index)=>index===idx?{...item,quantity:item.quantity-1}:item)},updatedAt:new Date().toISOString()};
+  }
   const weapon=basicPoisonWeapon(c);
   if(!active||!b||!actor||!weapon||weapon.id!==r.expectedWeaponId||b.basicPoison)
    throw Error('Basic Poison requires an uncoated, individually verified equipped weapon on your turn');
