@@ -23,6 +23,7 @@ export interface CompanionEncounter {
  participants:Record<string,{ropeBound?:boolean;ropeAddedRestraint?:boolean;caltropsStopped?:boolean;oilExpires?:{round:number;turnIndex:number};x:number;y:number;hp:number;maxHp:number;initiative:number;conditions:('Charmed'|'Poisoned'|'Blinded'|'Deafened'|'Frightened'|'Grappled'|'Incapacitated'|'Invisible'|'Paralyzed'|'Petrified'|'Prone'|'Restrained'|'Stunned'|'Unconscious'|'Exhaustion')[];speedFeet:number;movementSpentFeet:number;actionUsed:boolean;bonusActionUsed:boolean;dashFeet:number;disengaged:boolean;dodging:boolean;reactionUsed?:boolean;rogueSneakUsed?:boolean;roguePoisonDC?:number;roguePoisonRounds?:number;roguePoisonSaveResolved?:boolean;rogueObscureUntilTurn?:number;rogueDazeTurns?:number;rogueDazeChoice?:'movement'|'action';rogueKnockoutDC?:number;rogueKnockoutRounds?:number;rogueKnockoutSaveResolved?:boolean;conditionImmunities?:string[];rogueSteadyAim?:boolean;rogueHidden?:boolean;rogueHideDC?:number;rogueHideConcealment?:boolean;rogueDetectedBy?:string[];rogueMovedThisTurn?:boolean;concentratingOn?:string;consumables?:Record<string,number>;faction?:string;reachFeet?:number;actorKind?:'party'|'enemy';armorClass?:number;attackModifier?:number;constitutionSaveModifier?:number;damageModifier?:number;damageDice?:string;enemyTactic?:'hold'|'nearest'|'lowest-hp';rangedAttackFeet?:number;deathSaves?:{successes:number;failures:number;stable:boolean;dead:boolean}}>;
  objects?:Record<string,{x:number;y:number;hp:number;oilExpires?:{round:number;turnIndex:number}}>;
  basicPoison?:{weaponId:string;expiresRound:number};
+ poisonedAmmunition?:{name:string;remaining:number;expiresRound:number};
  groundSupplies?:{id:string;name:'Ball Bearings'|'Caltrops';x:number;y:number}[];
  /** Oil spilled on a five-foot square; ignition is explicitly DM-verified. */
  groundOil?:{id:string;x:number;y:number;expiresRound:number;ignitedRound?:number;ignitedTurn?:number;damagedActorsThisTurn?:string[]}[];
@@ -569,8 +570,9 @@ export function endCompanionTurn(campaign:Campaign,actorId:string,rollBurning=()
    ?{...object,oilExpires:undefined}:object];
  }));
  const basicPoison=battle.basicPoison;
+ const ammunitionPoisonExpired=!!battle.poisonedAmmunition&&nextId==='nighthawk'&&nextRound>=battle.poisonedAmmunition.expiresRound;
  const poisonExpired=basicPoison&&nextId==='nighthawk'&&nextRound>=basicPoison.expiresRound;
- const advanced=save(clocked,{...afterOil,groundOil:afterOil.groundOil?.filter(o=>o.ignitedRound===undefined?nextRound<o.expiresRound:nextRound<o.ignitedRound+2||nextRound===o.ignitedRound+2&&next<=o.ignitedTurn!).map(o=>({...o,damagedActorsThisTurn:[]})),...(poisonExpired?{basicPoison:undefined}:{}),...(objects?{objects}:{}),participants,groundEntries:undefined,turnIndex:next,round:battle.round+(next===0?1:0),log:[...battle.log,actorId+' ended turn']});
+ const advanced=save(clocked,{...afterOil,groundOil:afterOil.groundOil?.filter(o=>o.ignitedRound===undefined?nextRound<o.expiresRound:nextRound<o.ignitedRound+2||nextRound===o.ignitedRound+2&&next<=o.ignitedTurn!).map(o=>({...o,damagedActorsThisTurn:[]})),...(poisonExpired?{basicPoison:undefined}:{}),...(ammunitionPoisonExpired?{poisonedAmmunition:undefined}:{}),...(objects?{objects}:{}),participants,groundEntries:undefined,turnIndex:next,round:battle.round+(next===0?1:0),log:[...battle.log,actorId+' ended turn']});
  if(!battle.burningCreatures?.includes(nextId)||participants[nextId].deathSaves?.dead||
     (participants[nextId].actorKind==='enemy'&&participants[nextId].hp===0))return advanced;
  const damage=rollBurning();
@@ -1005,7 +1007,7 @@ export function basicPoisonWeapon(campaign:Campaign){
 }
 
 /** Manual d20 and damage dice inputs; no automatic attack modifiers or dice invented. */
-export function attackCompanion(campaign:Campaign,attackerId:string,targetId:string,roll:number,attackModifier:number,targetAC:number,damageRoll:number,damageModifier:number,damageType:DamageType,rangeFeet?:number,secondD20?:number,elvenAccuracyReroll?:number,verifiedWeaponId?:string,rollPoison=()=>Math.floor(Math.random()*4)+1):Campaign{
+export function attackCompanion(campaign:Campaign,attackerId:string,targetId:string,roll:number,attackModifier:number,targetAC:number,damageRoll:number,damageModifier:number,damageType:DamageType,rangeFeet?:number,secondD20?:number,elvenAccuracyReroll?:number,verifiedWeaponId?:string,rollPoison=()=>Math.floor(Math.random()*4)+1,ammunitionPoisonName?:string):Campaign{
  const battle=activeActor(campaign,attackerId);
  const attacker=battle.participants[attackerId],target=battle.participants[targetId];
  if(!target||attackerId===targetId||attacker.hp<=0||(target.hp<=0&&(!target.conditions.includes('Unconscious')||target.deathSaves?.dead)))throw Error('Invalid attacker or target');
@@ -1033,12 +1035,23 @@ export function attackCompanion(campaign:Campaign,attackerId:string,targetId:str
  let dealt=0;
  let poisonDamage=0;
  let coating=battle.basicPoison;
+ let poisonedAmmunition=battle.poisonedAmmunition;
+ if(ammunitionPoisonName&&poisonedAmmunition?.name===ammunitionPoisonName){
+  poisonedAmmunition=poisonedAmmunition.remaining>1?{...poisonedAmmunition,remaining:poisonedAmmunition.remaining-1}:undefined;
+ }
  if(hit){
   // Caller supplies total rolled damage dice, including doubled dice on a critical hit.
   const raw=Math.max(0,damageRoll+damageModifier);
   const result=resolveTypedCompanionDamage(campaign,targetId,target,raw,damageType,criticalHit);
   dealt=result.taken;
   participants[targetId]=result.updated;
+  if(ammunitionPoisonName&&battle.poisonedAmmunition?.name===ammunitionPoisonName&&dealt>0&&(damageType==='Piercing'||damageType==='Slashing')){
+   const die=rollPoison();
+   if(!Number.isInteger(die)||die<1||die>4)throw Error('Invalid Basic Poison damage roll');
+   const bonus=resolveTypedCompanionDamage(campaign,targetId,result.updated,die,'Poison');
+   poisonDamage=bonus.taken;
+   participants[targetId]=damagedActor(target,dealt+poisonDamage,criticalHit);
+  }
   const weapon=coating&&attackerId==='nighthawk'&&verifiedWeaponId?basicPoisonWeapon(campaign):undefined;
   if(coating&&dealt>0&&(damageType==='Piercing'||damageType==='Slashing')&&
      weapon?.id===verifiedWeaponId&&coating.weaponId===verifiedWeaponId){
@@ -1051,7 +1064,7 @@ export function attackCompanion(campaign:Campaign,attackerId:string,targetId:str
    coating=undefined;
   }
  }
- return save(campaign,{...battle,participants,basicPoison:coating,log:[...battle.log,attackerId+' attack d20 '+effectiveRoll+(elvenAccuracyReroll!==undefined?' (Elven Accuracy reroll '+elvenAccuracyReroll+')':'')+(target.dodging?' (Dodge disadvantage)':'')+(criticalHit?' critical hit':hit?' hit':' miss')+' vs '+targetId+' AC '+targetAC+(hit?'; '+dealt+' '+damageType+' damage'+(poisonDamage?' + '+poisonDamage+' Poison':''):'')]});
+ return save(campaign,{...battle,participants,basicPoison:coating,poisonedAmmunition,log:[...battle.log,attackerId+' attack d20 '+effectiveRoll+(elvenAccuracyReroll!==undefined?' (Elven Accuracy reroll '+elvenAccuracyReroll+')':'')+(target.dodging?' (Dodge disadvantage)':'')+(criticalHit?' critical hit':hit?' hit':' miss')+' vs '+targetId+' AC '+targetAC+(hit?'; '+dealt+' '+damageType+' damage'+(poisonDamage?' + '+poisonDamage+' Poison':''):'')]});
 }
 export function setCompanionSpeed(campaign:Campaign,actorId:string,speedFeet:number):Campaign{
  const battle=encounter(campaign),actor=battle.participants[actorId];
@@ -1063,7 +1076,7 @@ export function setCompanionSpeed(campaign:Campaign,actorId:string,speedFeet:num
 /** Uses authoritative combat modifiers/AC for verified equipped Nighthawk or DM-stat enemies.
  * Damage dice are still supplied explicitly; attack actions remain subject to the usual rules.
  */
-export function attackCompanionWithVerifiedStats(campaign:Campaign,attackerId:string,targetId:string,roll:number,damageRoll:number,damageType:DamageType,rangeFeet?:number,secondD20?:number,elvenAccuracyReroll?:number):Campaign{
+export function attackCompanionWithVerifiedStats(campaign:Campaign,attackerId:string,targetId:string,roll:number,damageRoll:number,damageType:DamageType,rangeFeet?:number,secondD20?:number,elvenAccuracyReroll?:number,rollPoison?:()=>number):Campaign{
  const battle=encounter(campaign),attacker=battle.participants[attackerId],target=battle.participants[targetId];
  if(!attacker||!target)throw Error('Unknown attack participant');
  const equipped=attackerId==='nighthawk'&&battle.mode==='unified'?nighthawkEquippedAttack(campaign):null;
@@ -1081,10 +1094,11 @@ export function attackCompanionWithVerifiedStats(campaign:Campaign,attackerId:st
  const equipmentAvailable=ammoKey&&!campaign.characterIdentity?(campaign.equipment?.arrows??0):0;
  const ledgerAvailable=ammoName?(campaign.inventoryLedger?.gear.find(g=>g.name===ammoName)?.quantity??0):0;
  if(ammoName&&equipmentAvailable+ledgerAvailable<1)throw Error('Insufficient campaign ammunition');
- const result=attackCompanion(campaign,attackerId,targetId,roll,attackModifier,targetAC,damageRoll,damageModifier,damageType,rangeFeet,secondD20,elvenAccuracyReroll,equipped?.weaponId);
- if(!ammoName)return result;
+ if(!ammoName)return attackCompanion(campaign,attackerId,targetId,roll,attackModifier,targetAC,damageRoll,damageModifier,damageType,rangeFeet,secondD20,elvenAccuracyReroll,equipped?.weaponId,rollPoison);
  const source=equipmentAvailable>0?'arrows':ammoName;
- const spent=spendUnifiedNighthawkInventory(result,source,1);
+ // Spend first in a local immutable snapshot; an invalid attack never commits the expenditure.
+ const reserved=spendUnifiedNighthawkInventory(campaign,source,1);
+ const spent=attackCompanion(reserved,attackerId,targetId,roll,attackModifier,targetAC,damageRoll,damageModifier,damageType,rangeFeet,secondD20,elvenAccuracyReroll,equipped?.weaponId,rollPoison,ammoName);
  const current=spent.companionEncounter!;
  return save(spent,{...current,ammunitionPendingRecovery:{...current.ammunitionPendingRecovery,[source]:(current.ammunitionPendingRecovery?.[source]??0)+1},log:[...current.log,'Spent '+source+' awaiting DM ammunition reconciliation']});
 }
