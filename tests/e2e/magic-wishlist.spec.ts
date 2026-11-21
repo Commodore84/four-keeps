@@ -27,10 +27,10 @@ test('iPhone magic items menu supports favorites and persistence',async ({page})
  const groupJump=compendium.getByRole('navigation',{name:'Jump to magic item section'});
  const subgroupJump=compendium.getByRole('navigation',{name:'Jump to magic item subgroup'});
  await expect(groupJump.getByRole('button',{name:'Storage and containers'})).toBeVisible();
- await expect(subgroupJump.getByRole('button',{name:'Containers and storage'})).toBeVisible();
+ await expect(subgroupJump.getByRole('button',{name:'Storage and containers — Containers and storage'})).toBeVisible();
  await groupJump.getByRole('button',{name:'Storage and containers'}).click();
  await expect(compendium.getByRole('heading',{name:'Storage and containers',exact:true})).toBeVisible();
- await subgroupJump.getByRole('button',{name:'Containers and storage'}).click();
+ await subgroupJump.getByRole('button',{name:'Storage and containers — Containers and storage'}).click();
  await expect(compendium.getByRole('heading',{name:'Containers and storage',exact:true})).toBeVisible();
  await expect(compendium.locator('article details')).toHaveCount(0);
  await expect(compendium.getByRole('heading',{name:'Weapons',exact:true})).toBeVisible();
