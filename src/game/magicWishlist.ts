@@ -29,9 +29,18 @@ const dmgProvenance: ContentProvenance = {
 };
 // Some items in the DMG import are also explicitly present in SRD 5.2.1.
 const srdOverlap = new Set(['Gloves of Thievery','Hat of Many Spells']);
+/** Concrete DMG variants override abbreviated import summaries with rules-based effects. */
+const VARIANT_DESCRIPTIONS:Record<string,string>={
+ ...Object.fromEntries([['hill',21],['frost',23],['stone',23],['fire',25],['cloud',27],['storm',29]].map(([giant,score])=>['dmg24-belt-of-'+giant+'-giant-strength','While wearing this belt, your Strength score becomes '+score+'. The belt has no effect if your unmodified Strength is already equal to or greater than '+score+'.'])),
+ ...Object.fromEntries([['hill',21],['frost',23],['stone',23],['fire',25],['cloud',27],['storm',29]].map(([giant,score])=>['dmg24-potion-of-'+giant+'-giant-strength','Drink this potion to set your Strength score to '+score+' for 1 hour. It has no effect if your Strength is already equal to or greater than '+score+'. Single-use consumable.'])),
+ 'dmg24-potion-of-healing':'Drink this potion to regain 2d4 + 2 Hit Points. Single-use consumable.',
+ 'dmg24-potion-of-greater-healing':'Drink this potion to regain 4d4 + 4 Hit Points. Single-use consumable.',
+ 'dmg24-potion-of-superior-healing':'Drink this potion to regain 8d4 + 8 Hit Points. Single-use consumable.',
+ 'dmg24-potion-of-supreme-healing':'Drink this potion to regain 10d4 + 20 Hit Points. Single-use consumable.',
+};
 const withDefinition = <T extends {id:string;description:string}>(item:T) => {
   const mechanics=ADDITIONAL_MAGIC_ITEM_DEFINITIONS[item.id] ?? MAGIC_ITEM_DEFINITIONS[item.id];
-  return mechanics?{...item,description:mechanics.summary,mechanics}:item;
+  return {...item,description:VARIANT_DESCRIPTIONS[item.id]??mechanics?.summary??item.description,...(mechanics?{mechanics}:{})};
 };
 export const MAGIC_ITEMS: MagicItem[] = [
   ...catalog.map(item => ({...withDefinition(item),...srdProvenance})),
