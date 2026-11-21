@@ -25,7 +25,13 @@ const itemGroup=(category:string,name:string)=>{
  if(c.includes('staff')||n.startsWith('staff '))return 'Staffs';
  if(c.includes('rod'))return 'Rods';
  if(n.includes('bag')||n.includes('backpack')||n.includes('portable hole'))return 'Storage and containers';
- if(n.includes('boots')||n.includes('cloak')||n.includes('gloves')||n.includes('gauntlets')||n.includes('hat')||n.includes('helm'))return 'Wearable wonders';
+ if(/boots|cloak|gloves|gauntlets|hat|helm|robe|bracers|belt|amulet|necklace|periapt|brooch|circlet|goggles|slippers|horseshoes/.test(n))return 'Wearable wonders';
+ if(/figurine|statue|apparatus|carpet|broom|boat|fortress|chariot|vehicle/.test(n))return 'Constructs, companions and transport';
+ if(/manual|tome|book|deck|card|scrollcase/.test(n))return 'Books, decks and knowledge';
+ if(/instrument|horn|drum|lyre|pipes|chime|bell/.test(n))return 'Musical and signaling items';
+ if(/gem|stone|crystal|orb|bead|dust|powder|ioun/.test(n))return 'Gems, stones and magical substances';
+ if(/cube|gate|portal|mirror|teleport|dimensional|shackle/.test(n))return 'Planar and dimensional items';
+ if(/candle|lantern|lamp|light|torch/.test(n))return 'Light and illumination';
  return 'Other wondrous items';
 };
 const itemSubgroup=(category:string,name:string)=>{
@@ -47,7 +53,14 @@ const itemSubgroup=(category:string,name:string)=>{
  if(/instrument|horn|drum|lyre|pipes/.test(n))return 'Musical instruments';
  if(/figurine|statue|stone|gem|orb|crystal/.test(n))return 'Figurines, stones and gems';
  if(/manual|tome|book|deck|card/.test(n))return 'Books, decks and knowledge';
- return 'Other magical wonders';
+ if(/apparatus|carpet|broom|boat|chariot|vehicle/.test(n))return 'Travel and vehicles';
+ if(/figurine|statue|fortress|guardian|golem/.test(n))return 'Companions and constructs';
+ if(/cube|gate|portal|mirror|dimensional|shackle/.test(n))return 'Portals, barriers and dimensions';
+ if(/dust|powder|bead|ioun/.test(n))return 'Magical powders and beads';
+ if(/candle|lantern|lamp|torch|light/.test(n))return 'Light and illumination';
+ if(/chime|bell/.test(n))return 'Signals and sound';
+ if(/broom|carpet|wing|flight|flying/.test(n))return 'Flight and aerial travel';
+ return 'Miscellaneous wondrous items';
 };
 export function MagicItemCompendium({campaignId}:{campaignId:string|null}){
  const [wanted,setWanted]=useState<string[]>([]);
@@ -77,6 +90,8 @@ export function MagicItemCompendium({campaignId}:{campaignId:string|null}){
   <div className="grid grid-cols-2 gap-2"><label className="text-xs">Category<select aria-label="Magic item category" value={category} onChange={e=>setCategory(e.target.value)} className="mt-1 w-full rounded-lg border border-white/20 bg-panel p-2 text-base">{categories.map(c=><option key={c}>{c}</option>)}</select></label><label className="text-xs">Rarity<select aria-label="Magic item rarity" value={rarity} onChange={e=>setRarity(e.target.value)} className="mt-1 w-full rounded-lg border border-white/20 bg-panel p-2 text-base">{rarities.map(r=><option key={r}>{r}</option>)}</select></label></div>
   <label className="block text-xs">Item group<select aria-label="Magic item group" value={group} onChange={e=>setGroup(e.target.value)} className="mt-1 w-full rounded-lg border border-white/20 bg-panel p-2 text-base">{groups.map(g=><option key={g}>{g}</option>)}</select></label>
   <label className="block text-xs">Subgroup<select aria-label="Magic item subgroup" value={subgroups.includes(subgroup)?subgroup:'All'} onChange={e=>setSubgroup(e.target.value)} className="mt-1 w-full rounded-lg border border-white/20 bg-panel p-2 text-base">{subgroups.map(g=><option key={g}>{g}</option>)}</select></label>
+  <nav aria-label="Jump to magic item section" className="flex gap-2 overflow-x-auto pb-1">{[...new Set(filtered.map(item=>itemGroup(item.category,item.name)))].map(g=><button key={g} type="button" onClick={()=>document.getElementById('magic-group-'+groups.indexOf(g))?.scrollIntoView({behavior:'smooth',block:'start'})} className="shrink-0 rounded-lg border border-gold/40 px-3 py-2 text-xs text-gold">{g}</button>)}</nav>
+  <nav aria-label="Jump to magic item subgroup" className="flex gap-2 overflow-x-auto pb-1">{[...new Set(filtered.map(item=>itemGroup(item.category,item.name)+'|'+itemSubgroup(item.category,item.name)))].map(key=>{const [g,sg]=key.split('|');return <button key={key} type="button" onClick={()=>document.getElementById('magic-subgroup-'+groups.indexOf(g)+'-'+encodeURIComponent(sg))?.scrollIntoView({behavior:'smooth',block:'start'})} className="shrink-0 rounded-lg border border-white/30 px-3 py-2 text-xs">{sg}</button>;})}</nav>
   <p className="text-xs text-parchment/60">{filtered.length} items · grouped by type and subgroup</p>
   {filtered.map((item,index)=>{
    const previous=filtered[index-1];
@@ -85,7 +100,7 @@ export function MagicItemCompendium({campaignId}:{campaignId:string|null}){
    const newSubgroup=newGroup||itemSubgroup(previous.category,previous.name)!==currentSubgroup;
    const usage=magicItemUseDescription(item);
    const extendedRules=magicItemExtendedRules(item.id);
-   return <div key={item.id}>{newGroup&&<h3 className="mt-5 border-b border-gold/40 pb-2 font-serif text-xl text-gold">{currentGroup}</h3>}{newSubgroup&&<h4 className="mt-3 text-sm font-semibold text-parchment/80">{currentSubgroup}</h4>}<article className="rounded-xl border border-white/15 bg-panel p-3">
+   return <div key={item.id}>{newGroup&&<h3 id={"magic-group-"+groups.indexOf(currentGroup)} className="scroll-mt-4 mt-5 border-b border-gold/40 pb-2 font-serif text-xl text-gold">{currentGroup}</h3>}{newSubgroup&&<h4 id={"magic-subgroup-"+groups.indexOf(currentGroup)+"-"+encodeURIComponent(currentSubgroup)} className="scroll-mt-4 mt-3 text-sm font-semibold text-parchment/80">{currentSubgroup}</h4>}<article className="rounded-xl border border-white/15 bg-panel p-3">
    <div className="flex items-start gap-3">
     <button type="button" disabled={!campaignId} aria-label={wanted.includes(item.id)?`Remove ${item.name} from Wish List`:`Add ${item.name} to Wish List`} aria-pressed={wanted.includes(item.id)} onClick={()=>toggle(item.id)} className="rounded-lg border border-white/20 px-3 py-2 text-xl text-gold disabled:opacity-40">{wanted.includes(item.id)?'♥':'♡'}</button>
     <div className="min-w-0 flex-1">
