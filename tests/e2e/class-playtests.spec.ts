@@ -659,6 +659,27 @@ test('new Rogue starts at Frontier Village, buys supplies, and sees persisted Pl
  const sectionNav=shop.getByRole('navigation',{name:'Jump to merchandise section'});
  await expect(sectionNav).toBeVisible();
  await sectionNav.getByRole('button',{name:/Melee weapons/}).click();
+ const selectedGroup=sectionNav.getByRole('button',{name:/Melee weapons/});
+ await expect(selectedGroup).toHaveAttribute('aria-current','location');
+ await expect.poll(async()=>selectedGroup.evaluate(button=>{
+  const row=button.closest('nav')!;
+  const tab=button.getBoundingClientRect();
+  const bounds=row.getBoundingClientRect();
+  return tab.left>=bounds.left-2&&tab.right<=bounds.right+2;
+ })).toBe(true);
+ const subgroupNav=shop.getByRole('navigation',{name:'Jump to merchandise subgroup'});
+ const daggerSubgroup=subgroupNav.getByRole('button',{name:/Melee weapons — Simple melee weapons/});
+ await daggerSubgroup.click();
+ await expect(daggerSubgroup).toHaveAttribute('aria-current','location');
+ await expect(selectedGroup).toHaveAttribute('aria-current','location');
+ await expect.poll(async()=>daggerSubgroup.evaluate(button=>{
+  const row=button.closest('nav')!;
+  const tab=button.getBoundingClientRect();
+  const bounds=row.getBoundingClientRect();
+  return tab.left>=bounds.left-2&&tab.right<=bounds.right+2;
+ })).toBe(true);
+ await expect(page.locator('header h1 img[src="/four-keeps-emblem.svg"]')).toHaveCount(0);
+ await expect(page.getByRole('button',{name:'Open navigation menu'}).locator('img[src="/four-keeps-emblem.svg"]')).toHaveCount(1);
  await expect(shop.getByRole('region',{name:'Melee weapons',exact:true})).toBeVisible();
  const dagger=shop.getByLabel('Dagger',{exact:true});
  await expect(dagger.getByLabel('Dagger availability')).toContainText(/Dagger.*\d+ owned · \d+ in stock/);
