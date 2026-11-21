@@ -827,6 +827,38 @@ describe('SRD Basic Poison on verified ammunition',()=>{
   expect(hit.companionEncounter?.poisonedAmmunition?.remaining).toBe(2);
   expect(hit.equipment?.arrows).toBe(3);
  });
+ it('spends consecutive poisoned arrows on distinct turns and never spends a fourth poisoned shot',()=>{
+  let c=useOwnedConsumable(setup(),request(setup(),3));
+  for(let i=0;i<3;i++){
+   c=attackCompanionWithVerifiedStats(c,'nighthawk','goblin1',1,2,'Piercing',80);
+   expect(c.companionEncounter?.poisonedAmmunition?.remaining).toBe(i===2?undefined:2-i);
+   if(i<2){c=endCompanionTurn(c,'nighthawk');c=endCompanionTurn(c,'goblin1');}
+  }
+  expect(c.equipment?.arrows).toBe(1);
+  expect(c.companionEncounter?.ammunitionPendingRecovery?.arrows).toBe(3);
+ });
+ it('resolves poison resistance and immunity without losing ammunition accounting',()=>{
+  for(const resistance of ['resistant','immune'] as const){
+   const c=setup(),coated=useOwnedConsumable(c,request(c,2));
+   const battle=coated.companionEncounter!;
+   const adjusted={...coated,companionEncounter:{...battle,participants:{...battle.participants,goblin1:{...battle.participants.goblin1,...(resistance==='resistant'?{damageResistances:['Poison']}:{damageImmunities:['Poison']})}}}} as typeof coated;
+   const hit=attackCompanionWithVerifiedStats(adjusted,'nighthawk','goblin1',15,2,'Piercing',80,undefined,undefined,()=>4);
+   expect(hit.equipment?.arrows).toBe(3);
+   expect(hit.companionEncounter?.poisonedAmmunition?.remaining).toBe(1);
+  }
+ });
+ it('uses ledger arrows after legacy arrows run out and tracks recovery per source',()=>{
+  const c=setup(),mixed={...c,equipment:{...c.equipment!,arrows:1},inventoryLedger:{...c.inventoryLedger!,gear:[...c.inventoryLedger!.gear,{name:'Arrows',quantity:2}]}};
+  let coated=useOwnedConsumable(mixed,request(mixed,3));
+  coated=attackCompanionWithVerifiedStats(coated,'nighthawk','goblin1',1,2,'Piercing',80);
+  expect(coated.equipment?.arrows).toBe(0);
+  coated=endCompanionTurn(coated,'nighthawk');coated=endCompanionTurn(coated,'goblin1');
+  coated=attackCompanionWithVerifiedStats(coated,'nighthawk','goblin1',1,2,'Piercing',80);
+  expect(coated.inventoryLedger?.gear.find(g=>g.name==='Arrows')?.quantity).toBe(1);
+  expect(coated.companionEncounter?.ammunitionPendingRecovery).toMatchObject({arrows:1,Arrows:1});
+  const recovered=recoverEncounterAmmunition(coated,'Arrows',1);
+  expect(recovered.inventoryLedger?.gear.find(g=>g.name==='Arrows')?.quantity).toBe(2);
+ });
  it('rejects stale or insufficient ammunition and invalid attacks without inventory changes',()=>{
   const c=setup();
   expect(()=>useOwnedConsumable(c,request(c,5))).toThrow('1–3');
