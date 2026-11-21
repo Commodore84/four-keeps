@@ -801,6 +801,17 @@ describe('SRD Basic Poison on verified ammunition',()=>{
   expect(attacked.companionEncounter?.participants.goblin1.hp).toBeLessThan(20);
   expect(c.equipment?.arrows).toBe(4);
  });
+ it('spends one poisoned shot on a miss without poison damage, then recovers spent arrow',()=>{
+  const c=setup(),coated=useOwnedConsumable(c,request(c,2));
+  const missed=attackCompanionWithVerifiedStats(coated,'nighthawk','goblin1',1,2,'Piercing',80,undefined,undefined,()=>{throw Error('Poison die must not roll on a miss')});
+  expect(missed.companionEncounter?.participants.goblin1.hp).toBe(20);
+  expect(missed.companionEncounter?.poisonedAmmunition?.remaining).toBe(1);
+  expect(missed.equipment?.arrows).toBe(3);
+  expect(missed.companionEncounter?.ammunitionPendingRecovery?.arrows).toBe(1);
+  const recovered=recoverEncounterAmmunition(missed,'arrows',1);
+  expect(recovered.equipment?.arrows).toBe(4);
+  expect(recovered.companionEncounter?.poisonedAmmunition?.remaining).toBe(1);
+ });
  it('rejects stale or insufficient ammunition and invalid attacks without inventory changes',()=>{
   const c=setup();
   expect(()=>useOwnedConsumable(c,request(c,5))).toThrow('1–3');
