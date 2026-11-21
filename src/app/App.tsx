@@ -188,7 +188,7 @@ function Adventure({ campaign, fullHistory, onToggleHistory, onAdventureChange, 
     {campaign?.pendingClarification && <article aria-label="Dungeon Master clarification" className="mr-3 rounded-xl border border-white/10 bg-panel p-5">
       <p className="eyebrow">Dungeon Master · Question</p>
       <p className="mt-3 whitespace-pre-wrap leading-7 text-parchment/90">{campaign.pendingClarification.question}</p>
-      {campaign.pendingClarification.answer && <p aria-label="Your clarification reply" className="mt-4 ml-6 rounded-xl border border-gold/30 bg-gold/10 p-3 whitespace-pre-wrap">{campaign.pendingClarification.answer}</p>}
+      {campaign.pendingClarification.answer && <><p aria-label="Your clarification reply" className="mt-4 ml-6 rounded-xl border border-gold/30 bg-gold/10 p-3 whitespace-pre-wrap">{campaign.pendingClarification.answer}</p><button type="button" disabled={saving} className="mt-3 text-sm text-gold underline" onClick={()=>void onRetryAction()}>Continue conversation</button></>}
     </article>}
     {campaign?.pendingMerchantPurchase && <section aria-label="Pending merchant order" className="rounded-xl border border-gold/40 bg-panel p-4 space-y-3">
       <h3 className="font-semibold">Pending merchant order</h3>
