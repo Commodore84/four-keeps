@@ -1,9 +1,40 @@
+import {useEffect,useRef,useState} from 'react';
+
 type CatalogJump = {id:string;label:string};
-/** Shared page-scrolling navigation for catalog and merchant inventories. */
+/** Horizontal catalog navigation that retains the selected tab on narrow screens. */
 export function CatalogJumpNavigation({title,groups,subgroups,embedded=false}:{title:string;groups:CatalogJump[];subgroups:CatalogJump[];embedded?:boolean}){
- const jump=(id:string)=>document.getElementById(id)?.scrollIntoView({behavior:'smooth',block:'start'});
- return <div aria-label={title+' section navigation'} className={(embedded?"":"sticky top-14 z-20 ")+"space-y-1 rounded-lg border border-gold/30 bg-ink/95 p-2 shadow-lg backdrop-blur"}>
-  <nav aria-label={'Jump to '+title.toLowerCase()+' section'} className="flex gap-2 overflow-x-auto pb-1">{groups.map(item=><button key={item.id} type="button" onClick={()=>jump(item.id)} className="shrink-0 rounded-lg border border-gold/40 px-3 py-2 text-xs text-gold">{item.label}</button>)}</nav>
-  <nav aria-label={'Jump to '+title.toLowerCase()+' subgroup'} className="flex gap-2 overflow-x-auto pb-1">{subgroups.map(item=><button key={item.id} type="button" onClick={()=>jump(item.id)} aria-label={item.label} className="shrink-0 rounded-lg border border-white/30 px-3 py-2 text-xs">{item.label.split(' — ').at(-1)}</button>)}</nav>
+ const [activeGroup,setActiveGroup]=useState<string|null>(null);
+ const [activeSubgroup,setActiveSubgroup]=useState<string|null>(null);
+ const groupNav=useRef<HTMLElement>(null);
+ const subgroupNav=useRef<HTMLElement>(null);
+ const jump=(id:string,kind:'group'|'subgroup')=>{
+  const target=document.getElementById(id);
+  if(!target)return;
+  target.scrollIntoView({behavior:'smooth',block:'start'});
+  if(kind==='group')setActiveGroup(id);
+  else{
+   setActiveSubgroup(id);
+   const parent=target.closest('section[id]');
+   if(parent)setActiveGroup(parent.id);
+  }
+ };
+ useEffect(()=>{
+  const center=(nav:HTMLElement|null,id:string|null)=>{
+   if(!nav||!id)return;
+   const button=Array.from(nav.querySelectorAll<HTMLButtonElement>('button[data-jump-id]')).find(item=>item.dataset.jumpId===id);
+   button?.scrollIntoView({behavior:'smooth',block:'nearest',inline:'center'});
+  };
+  center(groupNav.current,activeGroup);
+  center(subgroupNav.current,activeSubgroup);
+ },[activeGroup,activeSubgroup]);
+ const renderRow=(items:CatalogJump[],kind:'group'|'subgroup')=><nav ref={kind==='group'?groupNav:subgroupNav} aria-label={'Jump to '+title.toLowerCase()+' '+(kind==='group'?'section':'subgroup')} className="flex gap-2 overflow-x-auto pb-1" style={{scrollbarWidth:'thin'}}>
+  {items.map(item=>{
+   const selected=(kind==='group'?activeGroup:activeSubgroup)===item.id;
+   return <button key={item.id} data-jump-id={item.id} type="button" onClick={()=>jump(item.id,kind)} aria-current={selected?'location':undefined} className={'shrink-0 rounded-lg border px-3 py-2 text-xs focus-visible:outline focus-visible:outline-2 focus-visible:outline-gold '+(selected?'border-gold bg-gold/20 text-gold':kind==='group'?'border-gold/40 text-gold':'border-white/30')}>{kind==='group'?item.label:item.label.split(' — ').at(-1)}</button>;
+  })}
+ </nav>;
+ return <div aria-label={title+' section navigation'} className={(embedded?'':'sticky top-0 z-20 ')+'space-y-1 rounded-lg border border-gold/30 bg-ink/95 p-2 shadow-lg backdrop-blur'}>
+  {renderRow(groups,'group')}
+  {renderRow(subgroups,'subgroup')}
  </div>;
 }
