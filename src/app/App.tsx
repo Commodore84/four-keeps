@@ -185,11 +185,11 @@ function Adventure({ campaign, fullHistory, onToggleHistory, onAdventureChange, 
       <p className="eyebrow">{entry.kind === 'player' ? (campaign?.characterIdentity?.name??'Nighthawk') : 'Dungeon Master'}</p>
       {entry.kind==='dm'?<DMNarration key={entry.id} id={entry.id} text={entry.text} speed={narrationSpeed} animate={!seen.includes(entry.id)} onComplete={()=>markSeen(entry.id)}/>:<p className="mt-2 whitespace-pre-wrap leading-7 text-parchment/90">{entry.text}</p>}
     </article>)}
-    {campaign?.pendingClarification && <section aria-label="Dungeon Master clarification" className="mr-3 rounded-xl border border-white/10 bg-panel p-5 space-y-3">
-      <p className="eyebrow">Dungeon Master</p>
-      <p className="text-parchment/90">{campaign.pendingClarification.question}</p>
-      {campaign.pendingClarification.answer ? <><p className="ml-6 rounded-xl border border-gold/30 bg-gold/10 p-3">{campaign.pendingClarification.answer}</p><button type="button" disabled={saving} className="text-sm text-gold underline" onClick={()=>void onRetryAction()}>Retry confirmed action</button></> : <p className="text-xs text-parchment/60">Reply using the message field below. Your original action is saved.</p>}
-    </section>}
+    {campaign?.pendingClarification && <article aria-label="Dungeon Master clarification" className="mr-3 rounded-xl border border-white/10 bg-panel p-5">
+      <p className="eyebrow">Dungeon Master · Question</p>
+      <p className="mt-3 whitespace-pre-wrap leading-7 text-parchment/90">{campaign.pendingClarification.question}</p>
+      {campaign.pendingClarification.answer && <p aria-label="Your clarification reply" className="mt-4 ml-6 rounded-xl border border-gold/30 bg-gold/10 p-3 whitespace-pre-wrap">{campaign.pendingClarification.answer}</p>}
+    </article>}
     {campaign?.pendingMerchantPurchase && <section aria-label="Pending merchant order" className="rounded-xl border border-gold/40 bg-panel p-4 space-y-3">
       <h3 className="font-semibold">Pending merchant order</h3>
       <p className="text-sm">{(campaign.pendingMerchantPurchase.lines??[{itemId:campaign.pendingMerchantPurchase.itemId,quantity:campaign.pendingMerchantPurchase.quantity,unitCostCp:campaign.pendingMerchantPurchase.unitCostCp}]).map(line=>line.quantity+' × '+(frontierShopStock.find(item=>item.id===line.itemId)?.name??line.itemId)).join(', ')}</p>
@@ -1066,11 +1066,14 @@ export function App() {
       if(result.checkRequest && (result.combatStart || result.travelDestination))
         throw new Error('Conflicting DM check and gameplay actions. Retry the saved action.');
       if(aiSession && result.clarificationRequest) {
-        if(prepared.pendingClarification?.answer)throw Error('The DM repeated a question you already answered. Your confirmed action is saved; retry to continue.');
-        const next=pauseAdventureForClarification(prepared,actionId!,result.clarificationRequest.question);
+        // A DM may need another detail even after the player answered a previous question.
+        // Keep the original action pending, and show the new question in the normal transcript.
+        const next=pauseAdventureForClarification(
+          prepared.pendingClarification?.answer ? {...prepared,pendingClarification:undefined} : prepared,
+          actionId!,result.clarificationRequest.question);
         await localCampaignStorage.save(next);
         setCampaign(next);setCampaigns(items=>items.map(item=>item.id===next.id?next:item));
-        setNotice('The Dungeon Master needs clarification before resolving your action.');
+        setNotice('');
         return;
       }
       const narrated = aiSession
