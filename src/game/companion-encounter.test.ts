@@ -812,6 +812,13 @@ describe('SRD Basic Poison on verified ammunition',()=>{
   expect(recovered.equipment?.arrows).toBe(4);
   expect(recovered.companionEncounter?.poisonedAmmunition?.remaining).toBe(1);
  });
+ it('expires unused poisoned ammunition on the corresponding turn one minute later',()=>{
+  const c=setup(),coated=useOwnedConsumable(c,request(c,3)),b=coated.companionEncounter!;
+  const nearly={...coated,companionEncounter:{...b,round:b.round+9,order:['nighthawk','goblin1'],turnIndex:1}};
+  const expired=endCompanionTurn(nearly,'goblin1');
+  expect(expired.companionEncounter?.poisonedAmmunition).toBeUndefined();
+  expect(expired.equipment?.arrows).toBe(4);
+ });
  it('rejects stale or insufficient ammunition and invalid attacks without inventory changes',()=>{
   const c=setup();
   expect(()=>useOwnedConsumable(c,request(c,5))).toThrow('1–3');
