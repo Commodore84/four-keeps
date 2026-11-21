@@ -525,7 +525,7 @@ describe('ground Oil combat turn integration',()=>{
  });
  it('expires unlit slicks after one minute of combat rounds',()=>{
   const c=staged(),b=c.companionEncounter!;
-  const dry={...c,companionEncounter:{...b,round:11,turnIndex:1,groundOil:[{id:'dry',x:3,y:2,expiresRound:12}]}} as Campaign;
+  const dry={...c,companionEncounter:{...b,round:11,turnIndex:1,groundOil:[{id:'dry',x:3,y:2,expiresRound:12}],participants:{...b.participants,ally:{...b.participants.ally,actorKind:'enemy' as const,hp:8}}}} as Campaign;
   const advanced=endCompanionTurn(dry,'ally');
   expect(advanced.companionEncounter!.groundOil).toEqual([]);
  });
