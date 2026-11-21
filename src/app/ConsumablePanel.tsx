@@ -18,7 +18,7 @@ export function ConsumablePanel({campaign,saving,onUse}:{campaign:Campaign;savin
   campaign.companionEncounter.groundSupplies??[]:[];
  const recoverable=recovery.find(supply=>supply.id===recoveryId);
  const canTrack=!!campaign.characterIdentity&&campaign.companionEncounter?.status!=='active'&&!campaign.provisionTracking;
- if(!canTrack&&!campaign.provisionTracking&&!recovery.length&&!owned.length&&!antitoxinRemaining&&!campaign.companionEncounter?.basicPoison&&!campaign.companionEncounter?.groundOil?.length&&!lights.length)return null;
+ if(!canTrack&&!campaign.provisionTracking&&!recovery.length&&!owned.length&&!antitoxinRemaining&&!campaign.companionEncounter?.basicPoison&&!campaign.companionEncounter?.poisonedAmmunition&&!campaign.companionEncounter?.groundOil?.length&&!lights.length)return null;
  const item=owned.find(g=>g.name===name),battle=campaign.companionEncounter,actor=battle?.participants.nighthawk,targets=eligibleKitTargets(campaign);
  const selected=targets.find(t=>t.id===target),recipient=battle?.participants[target]??battle?.objects?.[target];
  const throwing=name==='Oil'||name==='Alchemist’s Fire'||name==='Acid'||name==='Holy Water';
