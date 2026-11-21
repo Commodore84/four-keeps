@@ -828,11 +828,11 @@ describe('SRD Basic Poison on verified ammunition',()=>{
   expect(hit.equipment?.arrows).toBe(3);
  });
  it('spends consecutive poisoned arrows on distinct turns and never spends a fourth poisoned shot',()=>{
-  let c=useOwnedConsumable(setup(),request(setup(),3));
+  const original=setup();let c=useOwnedConsumable(original,request(original,3));
   for(let i=0;i<3;i++){
    c=attackCompanionWithVerifiedStats(c,'nighthawk','goblin1',1,2,'Piercing',80);
    expect(c.companionEncounter?.poisonedAmmunition?.remaining).toBe(i===2?undefined:2-i);
-   if(i<2){c=endCompanionTurn(c,'nighthawk');c=endCompanionTurn(c,'goblin1');}
+   if(i<2){c=endCompanionTurn(c,'nighthawk');while(c.companionEncounter!.order[c.companionEncounter!.turnIndex]!=='nighthawk')c=endCompanionTurn(c,c.companionEncounter!.order[c.companionEncounter!.turnIndex]);}
   }
   expect(c.equipment?.arrows).toBe(1);
   expect(c.companionEncounter?.ammunitionPendingRecovery?.arrows).toBe(3);
@@ -853,7 +853,7 @@ describe('SRD Basic Poison on verified ammunition',()=>{
   let coated=useOwnedConsumable(mixed,request(mixed,3));
   coated=attackCompanionWithVerifiedStats(coated,'nighthawk','goblin1',1,2,'Piercing',80);
   expect(coated.equipment?.arrows).toBe(0);
-  coated=endCompanionTurn(coated,'nighthawk');coated=endCompanionTurn(coated,'goblin1');
+  coated=endCompanionTurn(coated,'nighthawk');while(coated.companionEncounter!.order[coated.companionEncounter!.turnIndex]!=='nighthawk')coated=endCompanionTurn(coated,coated.companionEncounter!.order[coated.companionEncounter!.turnIndex]);
   coated=attackCompanionWithVerifiedStats(coated,'nighthawk','goblin1',1,2,'Piercing',80);
   expect(coated.inventoryLedger?.gear.find(g=>g.name==='Arrows')?.quantity).toBe(1);
   expect(coated.companionEncounter?.ammunitionPendingRecovery).toMatchObject({arrows:1,Arrows:1});
