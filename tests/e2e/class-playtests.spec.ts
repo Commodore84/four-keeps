@@ -666,6 +666,14 @@ test('new Rogue starts at Frontier Village, buys supplies, and sees persisted Pl
  await expect(dagger.getByText('Simple weapon proficiency',{exact:false})).toBeVisible();
  await expect(dagger.getByText('1d4 Piercing damage',{exact:false}).first()).toBeVisible();
  await expect(shop.getByLabel('Current wallet')).toBeVisible();
+ const persistentNav=shop.getByLabel('Persistent merchandise navigation');
+ const compactCart=shop.getByLabel('Compact purchase summary');
+ await expect(persistentNav).toBeVisible();
+ await expect(compactCart).toBeVisible();
+ expect(await persistentNav.evaluate(element=>getComputedStyle(element).position)).toBe('sticky');
+ expect(await compactCart.evaluate(element=>getComputedStyle(element).position)).toBe('sticky');
+ await expect(compactCart).toContainText('Available');
+ await expect(compactCart).toContainText('Cart (0)');
  await expect(shop.getByLabel('City supplier orders')).toBeVisible();
  expect((await saved(page)).pendingMerchantSupplyOrder).toBeUndefined();
  await expect(shop.getByLabel('Merchant inventory')).toContainText('Dagger');
