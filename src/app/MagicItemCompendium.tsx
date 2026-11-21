@@ -14,7 +14,7 @@ const rarityTier=(value:string)=>{
  if(value.includes(',')||value.includes('Varies'))return 'Varies';
  return ['Very Rare','Legendary','Uncommon','Common','Rare','Artifact'].find(tier=>value.startsWith(tier))??'Varies';
 };
-const itemGroup=(category:string,name:string)=>{
+export const itemGroup=(category:string,name:string)=>{
  const c=category.toLowerCase(),n=name.toLowerCase();
  if(n.startsWith('rod of ')||n==='immovable rod')return 'Rods';
  if(n==='spell scroll')return 'Scrolls';
@@ -36,7 +36,7 @@ const itemGroup=(category:string,name:string)=>{
  if(/candle|lantern|lamp|light|torch/.test(n))return 'Light and illumination';
  return 'Other wondrous items';
 };
-const itemSubgroup=(category:string,name:string)=>{
+export const itemSubgroup=(category:string,name:string)=>{
  const c=category.toLowerCase(),n=name.toLowerCase();
  if(n.startsWith('rod of ')||n==='immovable rod')return 'Magic rods';
  if(n==='spell scroll')return 'Spell scrolls';
