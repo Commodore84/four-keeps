@@ -682,7 +682,26 @@ test('new Rogue starts at Frontier Village, buys supplies, and sees persisted Pl
   if(!nav||!cart||!composer)return false;
   return nav.y>=0&&nav.y+nav.height<cart.y&&cart.y+cart.height<=composer.y+2;
  }).toBe(true);
- await expect(compactCart).toContainText('Available');
+ await page.setViewportSize({width:390,height:760});
+ await expect.poll(async()=>{
+  const main=await page.locator('#main-content').boundingBox();
+  const nav=await persistentNav.boundingBox();
+  const cart=await compactCart.boundingBox();
+  const composer=await page.getByLabel('Message the Dungeon Master').boundingBox();
+  if(!main||!nav||!cart||!composer)return false;
+  return nav.y>=main.y-2&&nav.y+nav.height<cart.y&&cart.y+cart.height<=composer.y+2;
+ }).toBe(true);
+ await page.screenshot({path:'test-results/v19-merchant-viewport-compact-iphone.png',fullPage:false});
+ await page.setViewportSize({width:390,height:844});
+ await expect.poll(async()=>{
+  const main=await page.locator('#main-content').boundingBox();
+  const cart=await compactCart.boundingBox();
+  const composer=await page.getByLabel('Message the Dungeon Master').boundingBox();
+  if(!main||!cart||!composer)return false;
+  return main.y>0&&cart.y+cart.height<=composer.y+2;
+ }).toBe(true);
+ await page.screenshot({path:'test-results/v19-merchant-viewport-expanded-iphone.png',fullPage:false});
+  await expect(compactCart).toContainText('Available');
  await expect(compactCart).toContainText('Cart (0)');
  await expect(shop.getByLabel('City supplier orders')).toBeVisible();
  expect((await saved(page)).pendingMerchantSupplyOrder).toBeUndefined();
