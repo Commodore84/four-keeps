@@ -374,3 +374,30 @@ test('iPhone poisoned arrows coating confirms once and survives reload',async({p
  const saved=await page.evaluate(async id=>{const db=await new Promise<IDBDatabase>(resolve=>{const r=indexedDB.open('four-keeps-local',1);r.onsuccess=()=>resolve(r.result)});const c=await new Promise<any>(resolve=>{const r=db.transaction('campaigns').objectStore('campaigns').get(id);r.onsuccess=()=>resolve(r.result)});db.close();return {coated:c.companionEncounter.poisonedAmmunition.remaining,poison:c.inventoryLedger.gear.find((g:any)=>g.name==='Poison, Basic').quantity,arrows:c.inventoryLedger.gear.find((g:any)=>g.name==='Arrows').quantity}},id);
  expect(saved).toEqual({coated:2,poison:0,arrows:4});
 });
+
+test('poisoned ammunition atomic two-tab stale confirmation and interrupted write',async({page,context})=>{
+ const id=await createCampaign(page,'Poison ammunition concurrency');
+ await page.evaluate(async id=>{
+  const db=await new Promise<IDBDatabase>(resolve=>{const r=indexedDB.open('four-keeps-local',1);r.onsuccess=()=>resolve(r.result)});
+  await new Promise<void>((resolve,reject)=>{const tx=db.transaction('campaigns','readwrite'),store=tx.objectStore('campaigns'),r=store.get(id);
+   r.onsuccess=()=>{const c=r.result;const actor={x:2,y:2,hp:12,maxHp:20,initiative:20,conditions:[],speedFeet:30,movementSpentFeet:0,actionUsed:false,bonusActionUsed:false,dashFeet:0,disengaged:false,dodging:false,actorKind:'party'};
+    c.inventoryLedger.gear=[{name:'Shortbow',quantity:1},{name:'Poison, Basic',quantity:1},{name:'Arrows',quantity:4}];c.encounterLoadout={weaponId:'shortbow'};
+    c.companionEncounter={id:'poison-concurrency',status:'active',mode:'unified',round:1,turnIndex:0,order:['nighthawk','enemy'],participants:{nighthawk:actor,enemy:{...actor,x:5,actorKind:'enemy'}},log:[]};store.put(c)};
+   tx.oncomplete=()=>resolve();tx.onerror=()=>reject(tx.error);
+  });db.close();
+ },id);
+ const other=await context.newPage();await other.goto('/four-keeps/');
+ const use=(p:Page,requestId:string,interrupt=false)=>p.evaluate(async({id,requestId,interrupt})=>{
+  const {commitConsumableUse}=await import('/src/game/storage.ts');
+  const req={name:'Poison, Basic' as const,confirmed:true,requestId,expectedQuantity:1,expectedElapsedMinutes:100,expectedEncounterId:'poison-concurrency',expectedRound:1,expectedTurnIndex:0,expectedActorPosition:{x:2,y:2},poisonAmmunition:{name:'Arrows' as const,quantity:3}};
+  const original=IDBObjectStore.prototype.put;
+  if(interrupt)IDBObjectStore.prototype.put=function(){throw Error('Interrupted transaction')};
+  try{await commitConsumableUse(id,req);return {ok:true}}catch(e){return {ok:false,error:String(e)}}finally{IDBObjectStore.prototype.put=original}
+ },{id,requestId,interrupt});
+ expect((await use(page,'interrupted',true)).ok).toBe(false);
+ const [a,b]=await Promise.all([use(page,'tab-a'),use(other,'tab-b')]);
+ expect([a.ok,b.ok].sort()).toEqual([false,true]);
+ const winner=a.ok?'tab-a':'tab-b';expect((await use(other,winner)).ok).toBe(true);
+ const saved=await page.evaluate(async id=>{const db=await new Promise<IDBDatabase>(resolve=>{const r=indexedDB.open('four-keeps-local',1);r.onsuccess=()=>resolve(r.result)});const c=await new Promise<any>(resolve=>{const r=db.transaction('campaigns').objectStore('campaigns').get(id);r.onsuccess=()=>resolve(r.result)});db.close();return {coated:c.companionEncounter.poisonedAmmunition.remaining,poison:c.inventoryLedger.gear.find((g:any)=>g.name==='Poison, Basic').quantity,ids:c.consumableUseIds}},id);
+ expect(saved).toEqual({coated:3,poison:0,ids:[winner]});await other.close();
+});
