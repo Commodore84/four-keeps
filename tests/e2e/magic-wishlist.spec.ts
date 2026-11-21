@@ -21,6 +21,10 @@ test('iPhone magic items menu supports favorites and persistence',async ({page})
  const armor=cards.filter({has:page.getByRole('heading',{name:'Armor +1',exact:true})});
  await expect(armor.getByText(/Armor Class/)).toBeVisible();
  const groupFilter=compendium.getByRole('combobox',{name:'Magic item group'});
+ const subgroupFilter=compendium.getByRole('combobox',{name:'Magic item subgroup'});
+ await expect(subgroupFilter).toBeVisible();
+ await expect(compendium.locator('article details')).toHaveCount(0);
+ await expect(compendium.getByRole('heading',{name:'Weapons',exact:true})).toBeVisible();
  await groupFilter.selectOption('Weapons');
  await expect(compendium.getByRole('heading',{name:'Armor +1',exact:true})).toHaveCount(0);
  await groupFilter.selectOption('All');
@@ -32,7 +36,7 @@ test('iPhone magic items menu supports favorites and persistence',async ({page})
  await search.fill('Alchemy Jug');
  const jug=cards.filter({has:page.getByRole('heading',{name:'Alchemy Jug',exact:true})});
  await expect(jug.getByText(/Magic action.*Utilize action.*dawn/)).toBeVisible();
- await jug.locator('details').getByText('Rules, requirements and source').click();
+ await expect(jug.getByRole('region',{name:'Alchemy Jug rules and source'})).toBeVisible();
  await expect(jug.getByText(/Source: 2024 Dungeon Master/)).toBeVisible();
  const liquids=jug.getByRole('table',{name:'Alchemy Jug liquids'});
  await expect(liquids.getByRole('row')).toHaveCount(11);
@@ -42,10 +46,12 @@ test('iPhone magic items menu supports favorites and persistence',async ({page})
  const wraps=cards.filter({has:page.getByRole('heading',{name:'+3 Wraps of Unarmed Power',exact:true})});
  await expect(wraps.getByText(/\+3 to Unarmed Strike attack and damage rolls.*Force damage/)).toBeVisible();
  await groupFilter.selectOption('Storage and containers');
+ await subgroupFilter.selectOption('Containers and storage');
  await search.fill('Bag of Holding');
  await expect(page.getByRole('heading',{name:'Bag of Holding',exact:true})).toBeVisible();
  await expect(compendium.getByText(/stores up to 500 pounds/)).toBeVisible();
  await page.getByRole('button',{name:'Add Bag of Holding to Wish List'}).click();
+ await subgroupFilter.selectOption('All');
  await groupFilter.selectOption('All');
  await page.getByRole('button',{name:'Wish List (1)'}).click();
  await expect(page.getByRole('heading',{name:'Bag of Holding',exact:true})).toBeVisible();
