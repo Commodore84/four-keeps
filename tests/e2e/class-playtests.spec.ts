@@ -1167,7 +1167,7 @@ test('iPhone Dasahi opening offers a voluntary waterfront store with readable di
  await expect(inventory).toHaveCSS('overflow-y','visible');
  expect(await inventory.evaluate(list=>list.scrollTop)).toBe(0);
  await expect(inventory).toHaveCSS('background-color','rgb(50, 44, 36)');
- expect(await inventory.evaluate(list=>list.scrollHeight>list.clientHeight)).toBe(true);
+ expect(await inventory.evaluate(list=>list.scrollHeight-list.clientHeight)).toBeLessThanOrEqual(1);
  await inventory.focus();
  await expect(inventory).toBeFocused();
  await page.getByLabel('Search merchandise').fill('Torch');
