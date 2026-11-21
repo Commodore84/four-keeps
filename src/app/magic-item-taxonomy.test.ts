@@ -1,4 +1,4 @@
-import {describe,expect,it} from 'vitest';
+import {describe,expect,it,vi} from 'vitest';
 import {MAGIC_ITEMS,MAGIC_ITEM_PRODUCTS,isConcreteMagicItem,readMagicWishlist,writeMagicWishlist} from '../game/magicWishlist';
 import {itemGroup,itemSubgroup} from './MagicItemCompendium';
 
@@ -33,9 +33,11 @@ describe('magic item taxonomy',()=>{
   }
  });
  it('rejects ambiguous rarity references from saved wishlists',()=>{
+  const storage=new Map<string,string>();
+  vi.stubGlobal('localStorage',{getItem:(key:string)=>storage.get(key)??null,setItem:(key:string,value:string)=>storage.set(key,value),removeItem:(key:string)=>storage.delete(key)});
   const id='variant-test-campaign';
   writeMagicWishlist(id,['ammunition','ammunition-1','shield','shield-2']);
   expect(readMagicWishlist(id)).toEqual(['ammunition-1','shield-2']);
-  localStorage.removeItem('four-keeps-magic-wishlist:'+id);
+  vi.unstubAllGlobals();
  });
 });
