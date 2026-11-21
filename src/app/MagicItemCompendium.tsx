@@ -16,6 +16,8 @@ const rarityTier=(value:string)=>{
 };
 const itemGroup=(category:string,name:string)=>{
  const c=category.toLowerCase(),n=name.toLowerCase();
+ if(n.startsWith('rod of ')||n==='immovable rod')return 'Rods';
+ if(n==='spell scroll')return 'Scrolls';
  if(c.includes('weapon'))return 'Weapons';
  if(c.includes('armor')||c.includes('shield'))return 'Armor and shields';
  if(c.includes('potion')||n.startsWith('potion '))return 'Potions';
@@ -26,17 +28,19 @@ const itemGroup=(category:string,name:string)=>{
  if(c.includes('rod'))return 'Rods';
  if(n.includes('bag')||n.includes('backpack')||n.includes('portable hole'))return 'Storage and containers';
  if(/boots|cloak|gloves|gauntlets|hat|helm|robe|bracers|belt|amulet|necklace|periapt|brooch|circlet|goggles|slippers|horseshoes/.test(n))return 'Wearable wonders';
- if(/figurine|statue|apparatus|carpet|broom|boat|fortress|chariot|vehicle/.test(n))return 'Constructs, companions and transport';
+ if(/figurine|statue|apparatus|carpet|broom|boat|fortress|chariot|vehicle|saddle|feather token/.test(n))return 'Constructs, companions and transport';
  if(/manual|tome|book|deck|card|scrollcase/.test(n))return 'Books, decks and knowledge';
- if(/instrument|horn|drum|lyre|pipes|chime|bell/.test(n))return 'Musical and signaling items';
- if(/gem|stone|crystal|orb|bead|dust|powder|ioun/.test(n))return 'Gems, stones and magical substances';
+ if(/instrument|horn|drum|lyre|pipes|chime|bell|sending stones|spirit board/.test(n))return 'Musical and signaling items';
+ if(/gem|stone|crystal|orb|bead|dust|powder|ioun|pearl|ruby/.test(n))return 'Gems, stones and magical substances';
  if(/cube|gate|portal|mirror|teleport|dimensional|shackle/.test(n))return 'Planar and dimensional items';
  if(/candle|lantern|lamp|light|torch/.test(n))return 'Light and illumination';
  return 'Other wondrous items';
 };
 const itemSubgroup=(category:string,name:string)=>{
  const c=category.toLowerCase(),n=name.toLowerCase();
- if(c.includes('weapon'))return /bow|crossbow|sling|blowgun/.test(n)?'Ranged weapons':/ammunition|arrow|bolt/.test(n)?'Ammunition':'Melee weapons';
+ if(n.startsWith('rod of ')||n==='immovable rod')return 'Magic rods';
+ if(n==='spell scroll')return 'Spell scrolls';
+ if(c.includes('weapon'))return /ammunition|arrow|bolt/.test(n)?'Ammunition':/bow|crossbow|sling|blowgun/.test(n)?'Ranged weapons':'Melee weapons';
  if(c.includes('armor')||c.includes('shield'))return c.includes('shield')?'Shields':'Armor';
  if(c.includes('potion')||n.startsWith('potion '))return /healing|vitality|restoration/.test(n)?'Healing and restoration':'Other potions';
  if(c.includes('scroll'))return 'Spell scrolls';
@@ -44,7 +48,7 @@ const itemSubgroup=(category:string,name:string)=>{
  if(c.includes('wand'))return 'Magic wands';
  if(c.includes('staff'))return 'Magic staffs';
  if(c.includes('rod'))return 'Magic rods';
- if(/bag|backpack|portable hole|quiver|chest|bottle|decanter/.test(n))return 'Containers and storage';
+ if(/bag|backpack|portable hole|quiver|chest|bottle|decanter|haversack|pouch|flask/.test(n))return 'Containers and storage';
  if(/boots|slippers|horseshoes/.test(n))return 'Footwear and movement';
  if(/cloak|robe|mantle|cape/.test(n))return 'Cloaks and robes';
  if(/gloves|gauntlets|bracers|belt/.test(n))return 'Gloves, bracers and belts';
@@ -52,8 +56,8 @@ const itemSubgroup=(category:string,name:string)=>{
  if(/amulet|necklace|periapt|medallion|brooch/.test(n))return 'Amulets and jewelry';
  if(/instrument|horn|drum|lyre|pipes/.test(n))return 'Musical instruments';
  if(/figurine|statue|stone|gem|orb|crystal/.test(n))return 'Figurines, stones and gems';
- if(/manual|tome|book|deck|card/.test(n))return 'Books, decks and knowledge';
- if(/apparatus|carpet|broom|boat|chariot|vehicle/.test(n))return 'Travel and vehicles';
+ if(/manual|tome|book|deck|card|spellbook|demonomicon/.test(n))return 'Books, decks and knowledge';
+ if(/apparatus|carpet|broom|boat|chariot|vehicle|saddle|feather token/.test(n))return 'Travel and vehicles';
  if(/figurine|statue|fortress|guardian|golem/.test(n))return 'Companions and constructs';
  if(/cube|gate|portal|mirror|dimensional|shackle/.test(n))return 'Portals, barriers and dimensions';
  if(/dust|powder|bead|ioun/.test(n))return 'Magical powders and beads';
