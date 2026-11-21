@@ -345,3 +345,26 @@ test('iPhone Oil controls distinguish ground spill from thrown flask',async({pag
  await panel.getByRole('button',{name:'Cancel'}).click();
  await expect(panel.getByLabel('Choose consumable')).toHaveValue('');
 });
+
+test('iPhone poisoned arrows coating confirms once and survives reload',async({page})=>{
+ const id=await createCampaign(page,'Poisoned arrows iPhone');
+ await page.evaluate(async id=>{
+  const db=await new Promise<IDBDatabase>(resolve=>{const r=indexedDB.open('four-keeps-local',1);r.onsuccess=()=>resolve(r.result)});
+  await new Promise<void>((resolve,reject)=>{const tx=db.transaction('campaigns','readwrite'),store=tx.objectStore('campaigns'),r=store.get(id);
+   r.onsuccess=()=>{const c=r.result;const actor={x:2,y:2,hp:12,maxHp:20,initiative:20,conditions:[],speedFeet:30,movementSpentFeet:0,actionUsed:false,bonusActionUsed:false,dashFeet:0,disengaged:false,dodging:false,actorKind:'party'};
+    c.inventoryLedger.gear=[{name:'Shortbow',quantity:1},{name:'Poison, Basic',quantity:1},{name:'Arrows',quantity:4}];c.encounterLoadout={weaponId:'shortbow'};
+    c.companionEncounter={id:'ammo-test',status:'active',mode:'unified',round:1,turnIndex:0,order:['nighthawk','enemy'],participants:{nighthawk:actor,enemy:{...actor,x:5,actorKind:'enemy'}},log:[]};store.put(c)};
+   tx.oncomplete=()=>resolve();tx.onerror=()=>reject(tx.error);
+  });db.close();
+ },id);
+ await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();await page.getByRole('button',{name:'Continue Adventure'}).click();
+ const panel=await openSupplies(page);
+ await panel.getByLabel('Choose consumable').selectOption('Poison, Basic');
+ await expect(panel.getByLabel('Poisoned ammunition quantity')).toBeVisible();
+ await panel.getByLabel('Poisoned ammunition quantity').fill('2');
+ await panel.getByRole('button',{name:'Confirm use'}).click();
+ await expect(panel).toContainText('Poisoned Arrows: 2 coated shot(s) remain');
+ await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();await page.getByRole('button',{name:'Continue Adventure'}).click();
+ const saved=await page.evaluate(async id=>{const db=await new Promise<IDBDatabase>(resolve=>{const r=indexedDB.open('four-keeps-local',1);r.onsuccess=()=>resolve(r.result)});const c=await new Promise<any>(resolve=>{const r=db.transaction('campaigns').objectStore('campaigns').get(id);r.onsuccess=()=>resolve(r.result)});db.close();return {coated:c.companionEncounter.poisonedAmmunition.remaining,poison:c.inventoryLedger.gear.find((g:any)=>g.name==='Poison, Basic').quantity,arrows:c.inventoryLedger.gear.find((g:any)=>g.name==='Arrows').quantity}},id);
+ expect(saved).toEqual({coated:2,poison:0,arrows:4});
+});
