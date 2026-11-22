@@ -658,14 +658,13 @@ test('new Rogue starts at Frontier Village, buys supplies, and sees persisted Pl
 
  await expect(shop.getByLabel('Merchant inventory')).toContainText('Dagger');
  await expect(shop.getByRole('region',{name:'Camping and travel',exact:true})).toBeVisible();
- await expect(shop.getByRole('region',{name:'Kits and tools',exact:true})).toBeVisible();
- await expect(shop.getByRole('region',{name:'Lighting and fuel',exact:true})).toBeVisible();
+ await expect(shop.getByRole('region',{name:'Artisan tools',exact:true})).toBeVisible();
+ await expect(shop.getByRole('region',{name:'Lighting and fire',exact:true})).toBeVisible();
  const sectionNav=shop.getByRole('navigation',{name:'Jump to merchandise section'});
  await expect(sectionNav).toBeVisible();
- const subgroupBefore=shop.getByRole('navigation',{name:'Jump to merchandise subgroup'});
- await expect(subgroupBefore.getByRole('button',{name:/Melee weapons — Blades/})).toHaveCount(0);
- await sectionNav.getByRole('button',{name:/Melee weapons/}).click();
- const selectedGroup=sectionNav.getByRole('button',{name:/Melee weapons/});
+ await expect(shop.getByRole('navigation',{name:'Jump to merchandise subgroup'})).toHaveCount(0);
+ await sectionNav.getByRole('button',{name:/Simple melee weapons/}).click();
+ const selectedGroup=sectionNav.getByRole('button',{name:/Simple melee weapons/});
  await expect(selectedGroup).toHaveAttribute('aria-current','location');
  await expect.poll(async()=>selectedGroup.evaluate(button=>{
   const row=button.closest('nav')!;
@@ -673,21 +672,9 @@ test('new Rogue starts at Frontier Village, buys supplies, and sees persisted Pl
   const bounds=row.getBoundingClientRect();
   return tab.left>=bounds.left-2&&tab.right<=bounds.right+2;
  })).toBe(true);
- const subgroupNav=shop.getByRole('navigation',{name:'Jump to merchandise subgroup'});
- await expect(subgroupNav.getByRole('button',{name:/Ammunition — Arrows/})).toHaveCount(0);
- const daggerSubgroup=subgroupNav.getByRole('button',{name:/Melee weapons — Blades/});
- await daggerSubgroup.click();
- await expect(daggerSubgroup).toHaveAttribute('aria-current','location');
- await expect(selectedGroup).toHaveAttribute('aria-current','location');
- await expect.poll(async()=>daggerSubgroup.evaluate(button=>{
-  const row=button.closest('nav')!;
-  const tab=button.getBoundingClientRect();
-  const bounds=row.getBoundingClientRect();
-  return tab.left>=bounds.left-2&&tab.right<=bounds.right+2;
- })).toBe(true);
  await expect(page.locator('header h1 img[src="/four-keeps-emblem.svg"]')).toHaveCount(0);
  await expect(page.getByRole('button',{name:'Open navigation menu'}).locator('img[src="/four-keeps-emblem.svg"]')).toHaveCount(1);
- await expect(shop.getByRole('region',{name:'Melee weapons',exact:true})).toBeVisible();
+ await expect(shop.getByRole('region',{name:'Simple melee weapons',exact:true})).toBeVisible();
  const dagger=shop.getByLabel('Dagger',{exact:true});
  await expect(dagger.getByLabel('Dagger availability')).toContainText(/Dagger.*\d+ owned · \d+ in stock/);
  await expect(dagger.getByLabel('Dagger description')).toBeVisible();
@@ -702,16 +689,17 @@ test('new Rogue starts at Frontier Village, buys supplies, and sees persisted Pl
  expect((await merchantHeader.boundingBox())!.height).toBeLessThan(70);
  const mainNav=shop.getByRole('navigation',{name:'Jump to merchandise section'});
  await mainNav.getByRole('button',{name:/Ammunition/}).click();
- await expect(subgroupNav.getByRole('button',{name:/Ammunition — Arrows/})).toBeVisible();
- await expect(subgroupNav.getByRole('button',{name:/Melee weapons — Blades/})).toHaveCount(0);
+ await expect(mainNav.getByRole('button',{name:/Ammunition/})).toHaveAttribute('aria-current','location');
+ await expect(shop.getByRole('navigation',{name:'Jump to merchandise subgroup'})).toHaveCount(0);
  await page.setViewportSize({width:390,height:844});
  await page.screenshot({path:'test-results/compact-storefront-iphone.png',fullPage:false});
 
- expect(await persistentNav.evaluate(element=>getComputedStyle(element).position)).toBe('sticky');
+ expect(await shop.getByLabel('Persistent shopping toolbar').evaluate(element=>getComputedStyle(element).position)).toBe('sticky');
  expect(await compactCart.evaluate(element=>getComputedStyle(element).position)).toBe('sticky');
+ await expect.poll(async()=>{const cart=await compactCart.boundingBox();const composer=await page.getByLabel('Message the Dungeon Master').boundingBox();return cart&&composer?composer.y-(cart.y+cart.height):999;}).toBeLessThanOrEqual(8);
  // On an iPhone viewport, jumping deep into the single-page inventory must
  // preserve both compact shop controls without covering the DM composer.
- await shop.getByRole('navigation',{name:'Jump to merchandise section'}).getByRole('button',{name:/Melee weapons/}).click();
+ await shop.getByRole('navigation',{name:'Jump to merchandise section'}).getByRole('button',{name:/Simple melee weapons/}).click();
  await expect.poll(async()=>{
   const nav=await persistentNav.boundingBox();
   const cart=await compactCart.boundingBox();
@@ -726,7 +714,7 @@ test('new Rogue starts at Frontier Village, buys supplies, and sees persisted Pl
   const cart=await compactCart.boundingBox();
   const composer=await page.getByLabel('Message the Dungeon Master').boundingBox();
   if(!main||!nav||!cart||!composer)return false;
-  return nav.y>=main.y-2&&nav.y+nav.height<cart.y&&cart.y+cart.height<=composer.y+2;
+  return nav.y>=0&&nav.y+nav.height<cart.y&&cart.y+cart.height<=composer.y+2;
  }).toBe(true);
  await page.screenshot({path:'test-results/v19-merchant-viewport-compact-iphone.png',fullPage:false});
  await page.setViewportSize({width:390,height:844});
