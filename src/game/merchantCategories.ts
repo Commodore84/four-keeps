@@ -8,27 +8,27 @@ export function merchantCategory(item:Item):string {
  if(equipmentPackContents(item.id))return 'Equipment packs';
  if(c==='ammunition')return 'Ammunition';
  if(c==='weapon'){
-  if(/musket|pistol/.test(n))return 'Firearms';
-  if(/crossbow|bow|sling|blowgun|dart|net|javelin/.test(n))return 'Ranged weapons';
-  if(/great|glaive|halberd|pike|lance|maul|warhammer|battleaxe|greataxe|flail|morningstar|trident/.test(n))return 'Martial melee weapons';
-  return 'Simple melee weapons';
+  const group=item.weaponGroup==='martial'?'Martial':'Simple';
+  const ranged=/^(?:Dart|Light Crossbow|Shortbow|Sling|Blowgun|Hand Crossbow|Heavy Crossbow|Longbow|Musket|Pistol)$/.test(item.name);
+  return group+' '+(ranged?'ranged':'melee')+' weapons';
  }
  if(c==='shield')return 'Shields';
- if(c==='armor')return /padded|leather|studded/.test(n)?'Light armor':/hide|chain shirt|scale mail|breastplate|half plate/.test(n)?'Medium armor':'Heavy armor';
+ if(c==='armor')return 'Armor';
  if(/spell scroll/.test(n))return 'Spell scrolls';
  if(/arcane focus|druidic focus|holy symbol|component pouch/.test(n))return 'Spellcasting equipment';
  if(/potion|antitoxin|acid|alchemist.s fire|holy water|poison, basic/.test(n))return 'Potions and alchemy';
- if(/rations|waterskin|\bwine\b|^ale$/.test(n))return 'Food and provisions';
+ if(/pot, iron|rations|waterskin|\bwine\b|^ale$/.test(n))return 'Camping and provisions';
  if(/torch|candle|lantern|lamp|tinderbox|^oil$/.test(n))return 'Lighting and fire';
- if(/rope|grappling hook|climber|piton|ladder|block and tackle/.test(n))return 'Climbing and rope';
- if(/tent|bedroll|blanket/.test(n))return 'Camping and travel';
+ if(/spikes, iron|^string$|rope|grappling hook|climber|piton|ladder|block and tackle/.test(n))return 'Climbing and rope';
+ if(/tent|bedroll|blanket/.test(n))return 'Camping and provisions';
+ if(/quiver|case, crossbow bolt/.test(n))return 'Ammunition';
  if(/backpack|pouch|sack|chest|barrel|basket|bottle|case|flask|vial|bucket|jug|quiver/.test(n))return 'Containers';
  if(/musical instrument/.test(n))return 'Musical instruments';
  if(/gaming set/.test(n))return 'Gaming sets';
  if(/supplies|tools|kit|utensils/.test(n)||c==='tool')return /herbal|healer|poison|disguise|forgery|thieves|navigator/.test(n)?'Specialist kits':'Artisan tools';
- if(/ball bearing|caltrop|trap|manacles|chain|lock/.test(n))return 'Traps and restraints';
- if(/ink|paper|parchment|book|pen|chalk|map|scroll/.test(n))return 'Writing and navigation';
- if(/magnifying|spyglass|mirror|signal whistle|bell/.test(n))return 'Observation and signals';
+ if(/^net$|ball bearing|caltrop|trap|manacles|chain|lock/.test(n))return 'Traps and restraints';
+ if(/ink|paper|parchment|book|pen|chalk|map|scroll/.test(n))return 'Exploration and information';
+ if(/magnifying|spyglass|mirror|signal whistle|bell/.test(n))return 'Exploration and information';
  if(/clothes|costume|robe|perfume/.test(n))return 'Clothing and personal';
- return 'General supplies';
+ return 'Utility equipment';
 }
