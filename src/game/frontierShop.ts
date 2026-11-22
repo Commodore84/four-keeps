@@ -97,8 +97,8 @@ export function merchantInitialStock(tier:SettlementTier,itemId:string,type:Merc
  if(tier==='city')return cost>=5000?2:cost>=1000?8:
   item.category==='ammunition'?60:
   ['weapon','armor','shield','tool'].includes(item.category.toLowerCase())?12:40;
- if(tier==='traveling'||type==='trader')return itemId==='potion-of-healing'?1:Math.min(5,FRONTIER_INITIAL_STOCK[itemId]??0);
- if(tier==='village')return Math.min(8,FRONTIER_INITIAL_STOCK[itemId]??0);
+ if(tier==='traveling'||type==='trader')return itemId==='arrows'?20:itemId==='potion-of-healing'?1:Math.min(5,FRONTIER_INITIAL_STOCK[itemId]??0);
+ if(tier==='village')return itemId==='arrows'?40:Math.min(8,FRONTIER_INITIAL_STOCK[itemId]??0);
  return Math.min(20,FRONTIER_INITIAL_STOCK[itemId]??0);
 }
 export function remainingMerchantStock(campaign:Campaign,itemId:string,type?:MerchantType):number {
