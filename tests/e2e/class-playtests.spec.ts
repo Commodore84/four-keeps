@@ -657,7 +657,7 @@ test('new Rogue starts at Frontier Village, buys supplies, and sees persisted Pl
  await expect(shop.getByLabel('Current merchant')).not.toContainText('Prices from the rules engine');
 
  await expect(shop.getByLabel('Merchant inventory')).toContainText('Dagger');
- await expect(shop.getByRole('region',{name:'Camping and travel',exact:true})).toBeVisible();
+ await expect(shop.getByRole('region',{name:'Camping and provisions',exact:true})).toBeVisible();
  await expect(shop.getByRole('region',{name:'Artisan tools',exact:true})).toBeVisible();
  await expect(shop.getByRole('region',{name:'Lighting and fire',exact:true})).toBeVisible();
  const sectionNav=shop.getByRole('navigation',{name:'Jump to merchandise section'});
@@ -1558,7 +1558,16 @@ test('Dasahi merchant offer opens catalog on affirmative reply without a Shop bu
  await expect(page.getByRole('region',{name:'Adventure storefront'})).toBeVisible();
  await expect(page.getByPlaceholder('Search items')).toBeVisible();
  await expect(page.getByLabel('Compact purchase summary')).toBeVisible();
- expect(dmCalls).toBe(calls);
+  await expect(page.getByRole('region',{name:'Merchant inventory'}).getByRole('region',{name:'Armor'})).toBeVisible();
+  await expect(page.getByLabel('Plate Armor armor classification')).toContainText('HEAVY ARMOR');
+  await page.getByLabel('Sort items within categories').selectOption('price-up');
+  await expect(page.getByLabel('Sort items within categories')).toHaveValue('price-up');
+  await page.getByPlaceholder('Search items').fill('healing potion');
+  await expect(page.getByLabel('Potion of Healing description')).toBeVisible();
+  await page.getByPlaceholder('Search items').fill('plate');
+  await expect(page.getByLabel('Plate Armor armor classification')).toContainText('STR 15');
+  await page.getByPlaceholder('Search items').clear();
+  expect(dmCalls).toBe(calls);
  const after=await saved(page);
  expect(after.inventoryLedger).toEqual(before.inventoryLedger);
  expect(after.merchantShopOpen).toBe(true);
