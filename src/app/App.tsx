@@ -876,7 +876,7 @@ export function App() {
       const lastDmTurn=[...campaign.journal].reverse().find(entry=>entry.kind==='dm')?.text??'';
       const establishedMerchant=isEstablishedMerchantConversation(campaign);
       const acceptingBrowseInvitation=establishedMerchant&&acceptsMerchantBrowseInvitation(draft,lastDmTurn);
-      if((establishedMerchant&&classifyMerchantIntent(draft)==='browse')||(campaign.characterBuild&&isSupplierBrowseRequest(draft))||acceptingBrowseInvitation){
+      if(classifyMerchantIntent(draft)==='browse'||(campaign.characterBuild&&isSupplierBrowseRequest(draft))||acceptingBrowseInvitation){
         setSaving(true);
         try{
           const mentionedMerchant=/\b(?:blacksmith|weaponsmith|smithy)\b/i.test(draft)?'weaponsmith':/\b(?:armorer|armourer)\b/i.test(draft)?'armorer':/\b(?:alchemist|apothecary)\b/i.test(draft)?'apothecary':/\b(?:outfitter)\b/i.test(draft)?'outfitter':/\b(?:general store|shopkeeper)\b/i.test(draft)?'general':campaign.merchantShopType??'general';
