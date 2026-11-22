@@ -56,7 +56,7 @@ describe('single-level merchant categories',()=>{
   expect(categories.has('Light armor')).toBe(false);
   expect(categories.has('Medium armor')).toBe(false);
   expect(categories.has('Heavy armor')).toBe(false);
-  expect(categories.get('Armor')).toHaveLength(12);
+  expect(categories.get('Armor and shields')).toHaveLength(13);
   expect(categories.get('Musical instruments')).toHaveLength(10);
   expect(categories.get('Gaming sets')).toHaveLength(4);
  });
