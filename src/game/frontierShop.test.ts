@@ -4,6 +4,16 @@ import {newCampaign,addExchange} from './campaign';
 import {beginAdventureSession} from './adventureSession';
 import {buyFrontierItem,frontierShopStock,frontierMerchantContext,formatFrontierPrice,parseFrontierPurchase,prepareMerchantPurchase,prepareMerchantCart,settleMerchantPurchase,cityShopStock,merchantCatalogFor,availableMerchants,merchantStockKey,merchantStockKeyForCampaign,merchantInitialStock,merchantRestockIntervalMinutes,walletCopper,remainingMerchantStock,merchantCatalog,isMerchantBrowseRequest,isEstablishedMerchantConversation,merchantInvitationIsCurrent,trackMerchantConversation,acceptsMerchantBrowseInvitation,approveMerchantDiscount,isMerchantPurchaseRequest,classifyMerchantIntent,merchantNegotiationTarget,beginMerchantNegotiation,resolveMerchantNegotiation,merchantDiscountDC,beginCartNegotiation,resolveCartNegotiation} from './frontierShop';
 function fixture(){const c=newCampaign('Shop','shop-test');return beginAdventureSession({...c,merchantSettlementTier:'town',characterIdentity:{name:'Test',speciesId:'elf',backgroundId:'sage',classId:'rogue',draftId:'draft',pronouns:'',appearance:'',personality:'',backstory:''},inventoryLedger:{currency:{GP:10,SP:0,CP:0,EP:0,PP:0},gear:[]}})}
+describe('merchant purchases use actual stock rather than an arbitrary 20-unit limit',()=>{
+ it('purchases 60 individual arrows as three packs of 20 without losing ammunition accounting',()=>{
+  const c={...fixture(),merchantShopType:'weaponsmith' as const};
+  const order=prepareMerchantCart(c,[{itemId:'arrows',quantity:60}],'arrows-60');
+  const purchased=settleMerchantPurchase(order,'arrows-60',true);
+  expect(purchased.inventoryLedger?.gear.find(x=>x.name==='Arrows')?.quantity).toBe(60);
+  expect(walletCopper(purchased.inventoryLedger?.currency)).toBe(700);
+  expect(remainingMerchantStock(purchased,'arrows','weaponsmith')).toBe(40);
+ });
+});
 describe('deterministic merchant negotiation check lifecycle',()=>{
  const pending=(token='social-1')=>({...fixture(),pendingCheck:{token,skill:'Persuasion' as const,mode:'normal' as const,reason:'Negotiate the dagger price'}});
  it('requires an authoritative matching social check before any discount',()=>{
@@ -81,7 +91,7 @@ describe('conversational merchant transaction lifecycle',()=>{
  it('recognizes a single listed item and refuses ambiguous or invalid requests',()=>{
   expect(parseFrontierPurchase('I will buy 2 daggers')).toEqual({itemId:'dagger',quantity:2});
   expect(parseFrontierPurchase('What do you sell?')).toBeNull();
-  expect(parseFrontierPurchase('Buy 30 daggers')).toBeNull();
+  expect(parseFrontierPurchase('Buy 30 daggers')).toEqual({itemId:'dagger',quantity:30});
   expect(parseFrontierPurchase('Buy a greatsword')).toBeNull();
  });
  it('requires confirmation, survives serialization and rejects duplicate settlement',()=>{
