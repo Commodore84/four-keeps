@@ -43,20 +43,24 @@ export function CatalogJumpNavigation({title,groups,subgroups,embedded=false,con
    const current=preceding.at(-1)??available[0];
    setActiveGroup(previous=>previous===current.id?previous:current.id);
   };
-  const onScroll=()=>{if(!frame)frame=requestAnimationFrame(update);};
+  const onScroll=(event:Event)=>{
+   const target=event.target;
+   if(target instanceof Node&&(groupNav.current?.contains(target)||subgroupNav.current?.contains(target)))return;
+   if(!frame)frame=requestAnimationFrame(update);
+  };
   update();
   window.addEventListener('scroll',onScroll,true);
   window.addEventListener('resize',onScroll);
   return ()=>{window.removeEventListener('scroll',onScroll,true);window.removeEventListener('resize',onScroll);if(frame)cancelAnimationFrame(frame);};
  },[contextualSubgroups,groups.map(group=>group.id).join('|')]);
- const renderRow=(items:CatalogJump[],kind:'group'|'subgroup')=><nav ref={kind==='group'?groupNav:subgroupNav} aria-label={'Jump to '+title.toLowerCase()+' '+(kind==='group'?'section':'subgroup')} className="flex gap-2 overflow-x-auto pb-1" style={{scrollbarWidth:'thin'}}>
+ const renderRow=(items:CatalogJump[],kind:'group'|'subgroup')=><nav ref={kind==='group'?groupNav:subgroupNav} aria-label={'Jump to '+title.toLowerCase()+' '+(kind==='group'?'section':'subgroup')} className="flex gap-2 overflow-x-auto pb-0" style={{scrollbarWidth:'thin'}}>
   {items.map(item=>{
    const selected=(kind==='group'?activeGroup:activeSubgroup)===item.id;
-   return <button key={item.id} data-jump-id={item.id} type="button" aria-label={kind==='subgroup'?item.label:undefined} onClick={()=>jump(item.id,kind)} aria-current={selected?'location':undefined} className={'shrink-0 rounded-lg border px-3 py-2 text-xs focus-visible:outline focus-visible:outline-2 focus-visible:outline-gold '+(selected?'border-gold bg-gold/20 text-gold':kind==='group'?'border-gold/40 text-gold':'border-white/30')}>{kind==='group'?item.label:item.label.split(' — ').at(-1)}</button>;
+   return <button key={item.id} data-jump-id={item.id} type="button" aria-label={kind==='subgroup'?item.label:undefined} onClick={()=>jump(item.id,kind)} aria-current={selected?'location':undefined} className={'shrink-0 rounded-lg border px-2.5 py-1.5 text-xs focus-visible:outline focus-visible:outline-2 focus-visible:outline-gold '+(selected?'border-gold bg-gold/20 text-gold':kind==='group'?'border-gold/40 text-gold':'border-white/30')}>{kind==='group'?item.label:item.label.split(' — ').at(-1)}</button>;
   })}
  </nav>;
- return <div aria-label={title+' section navigation'} className={(embedded?'':'sticky top-0 z-20 ')+'space-y-1 rounded-lg border border-gold/30 bg-ink/95 p-2 shadow-lg backdrop-blur'}>
+ return <div aria-label={title+' section navigation'} className={(embedded?'':'sticky top-0 z-20 ')+'space-y-0.5 rounded-md border border-gold/30 bg-ink/95 p-1 shadow-lg backdrop-blur'}>
   {groups.length>0&&renderRow(groups,'group')}
-  {(!contextualSubgroups||activeGroup)&&renderRow(contextualSubgroups?subgroups.filter(item=>item.parentId===activeGroup):subgroups,'subgroup')}
+  {subgroups.length>0&&(!contextualSubgroups||activeGroup)&&renderRow(contextualSubgroups?subgroups.filter(item=>item.parentId===activeGroup):subgroups,'subgroup')}
  </div>;
 }
