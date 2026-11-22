@@ -162,7 +162,7 @@ describe('multi-item merchant cart',()=>{
   expect(classifyMerchantIntent("I'd like to browse")).toBe('browse');
   expect(classifyMerchantIntent('Can I take a look at your goods?')).toBe('browse');
   expect(classifyMerchantIntent('Let me have a look at the merchandise.')).toBe('browse');
-  expect(classifyMerchantIntent('Can I see the merchandise?')).toBe('information');
+  expect(classifyMerchantIntent('Can I see the merchandise?')).toBe('browse');
   expect(classifyMerchantIntent('Show me the inventory at this store.')).toBe('browse');
   expect(classifyMerchantIntent('What do you stock in your shop?')).toBe('browse');
   expect(classifyMerchantIntent('Where can I find a leatherworker?')).toBe('find-service');
@@ -411,5 +411,10 @@ describe('Dasahi merchant handoff',()=>{
  it('does not expose the shop in an unrelated scene',()=>{
   expect(isEstablishedMerchantConversation(fixture())).toBe(false);
   expect(acceptsMerchantBrowseInvitation('yes','The guard asks if you will follow him.')).toBe(false);
+  for(const reply of ['yes','yes please','sure','okay','of course',"I'd love to","let's do it",'go ahead']) {
+   expect(acceptsMerchantBrowseInvitation(reply,'Would you like to see what I have for sale in my shop?')).toBe(true);
+  }
+  expect(acceptsMerchantBrowseInvitation('yes','Do you want to shop here?')).toBe(true);
+  expect(acceptsMerchantBrowseInvitation('no thanks','Would you like to see my shop?')).toBe(false);
  });
 });

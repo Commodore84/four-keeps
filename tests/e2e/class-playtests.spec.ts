@@ -1532,7 +1532,7 @@ test('Four Keeps uses its approved castle for menu, opening screen and Home Scre
  await page.screenshot({path:'test-results/v19-four-keeps-approved-logo-iphone.png',fullPage:false});
 });
 
-test('Dasahi merchant narration offers Browse Shop and opens the full catalog without another DM request',async({page})=>{
+test('Dasahi merchant offer opens catalog on affirmative reply without a Shop button',async({page})=>{
  test.setTimeout(90000);
  await createAndImport(page,'rogue');
  await navigate(page,'Adventure');
@@ -1540,16 +1540,17 @@ test('Dasahi merchant narration offers Browse Shop and opens the full catalog wi
  let dmCalls=0;
  await page.route('**/api/dm',async route=>{
   dmCalls++;
-  await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({narration:'The merchant nods. Weapons and common supplies I have got. Armor, no. Not here. He indicates the stocked weapons available at the Dasahi general store.',worldUpdates:{},newFacts:[]})});
+  await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({narration:'The merchant nods. Weapons and common supplies I have got. Armor, no. Not here. Would you like to see the wares available at the Dasahi general store.',worldUpdates:{},newFacts:[]})});
  });
  await page.reload();
  await page.getByRole('button',{name:'Campaigns',exact:true}).click();
  await page.getByRole('button',{name:'Continue Adventure'}).click();
  await expect.poll(async()=> (await saved(page))?.journal?.some((entry:any)=>entry.id?.endsWith('-dm-opening'))).toBe(true);
- await expect(page.getByRole('button',{name:'Browse Shop'})).toBeVisible();
+ await expect(page.getByRole('button',{name:'Browse Shop'})).toHaveCount(0);
  const before=await saved(page);
  const calls=dmCalls;
- await page.getByRole('button',{name:'Browse Shop'}).click();
+ await page.getByLabel('Message the Dungeon Master').fill('Yes please');
+ await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
  await expect(page.getByRole('region',{name:'Adventure storefront'})).toBeVisible();
  await expect(page.getByPlaceholder('Search items')).toBeVisible();
  await expect(page.getByLabel('Compact purchase summary')).toBeVisible();
