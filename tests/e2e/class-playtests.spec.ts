@@ -656,6 +656,17 @@ test('new Rogue starts at Frontier Village, buys supplies, and sees persisted Pl
  await expect(shop.getByLabel('Current merchant')).not.toContainText('Only this merchant');
  await expect(shop.getByLabel('Current merchant')).not.toContainText('Prices from the rules engine');
 
+ await expect(shop.getByLabel('Shield description')).toContainText('+2 AC');
+ const arrowRow=shop.getByLabel('Arrows',{exact:true});
+ await expect(arrowRow).toContainText('1 GP / 20');
+ await arrowRow.getByRole('button',{name:'Add Arrows'}).click();
+ await expect(arrowRow.getByLabel('Arrows quantity')).toHaveText('1');
+ await page.reload();
+ await page.getByRole('button',{name:'Campaigns',exact:true}).click();
+ await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await expect(shop.getByLabel('Arrows quantity')).toHaveText('1');
+ await shop.getByRole('button',{name:'Remove Arrows'}).click();
+ await expect(shop.getByLabel('Arrows quantity')).toHaveText('0');
  await expect(shop.getByLabel('Merchant inventory')).toContainText('Dagger');
  await expect(shop.getByRole('region',{name:'Camping and provisions',exact:true})).toBeVisible();
  await expect(shop.getByRole('region',{name:'Artisan tools',exact:true})).toBeVisible();
