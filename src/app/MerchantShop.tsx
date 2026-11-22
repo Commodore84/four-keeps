@@ -17,6 +17,7 @@ export function MerchantShop({campaign,saving,onClose,onPrepare,onSettle,onDiscu
  const merchant=campaign.merchantShopType??'general';
  const [search,setSearch]=useState('');
  const [sort,setSort]=useState<'name'|'price-up'|'price-down'>('name');
+ const [activeCategory,setActiveCategory]=useState<string|null>(null);
 
  const pending=campaign.pendingMerchantPurchase;
  const funds=walletCopper(campaign.inventoryLedger?.currency);
@@ -51,7 +52,7 @@ export function MerchantShop({campaign,saving,onClose,onPrepare,onSettle,onDiscu
    <select aria-label="Sort items within categories" value={sort} onChange={e=>setSort(e.target.value as typeof sort)} className="w-24 shrink-0 rounded-md border border-white/25 bg-ink px-1 py-1 text-xs"><option value="name">A–Z</option><option value="price-up">Price ↑</option><option value="price-down">Price ↓</option></select>
   </div>
   <nav aria-label="Jump to merchandise sections" className="flex min-w-0 gap-1 overflow-x-auto pb-0.5" style={{scrollbarWidth:'thin'}}>
-   {grouped.map(([group,entries],index)=><button key={group} type="button" onClick={()=>document.getElementById('merchant-group-'+index)?.scrollIntoView({behavior:'smooth',block:'start'})} className="shrink-0 rounded-md border border-gold/40 px-2 py-1 text-xs text-gold">{group} ({entries.length})</button>)}
+   {grouped.map(([group,entries],index)=><button key={group} type="button" onClick={()=>{setActiveCategory(group);document.getElementById('merchant-group-'+index)?.scrollIntoView({behavior:'smooth',block:'start'});}} aria-current={activeCategory===group?'location':undefined} className={'shrink-0 rounded-md border px-2 py-1 text-xs '+(activeCategory===group?'border-gold bg-gold/20 text-gold':'border-gold/40 text-gold')}>{group} ({entries.length})</button>)}
   </nav></div>
   <div className="rounded-lg border border-white/20 bg-[#242a30] focus-visible:outline focus-visible:outline-2 focus-visible:outline-gold" role="region" aria-label="Merchant inventory" tabIndex={0}>
    {grouped.map(([group,entries])=><section key={group} id={"merchant-group-"+grouped.findIndex(([name])=>name===group)} aria-label={group} className="scroll-mt-36 border-b border-white/20"><h4 className={'border-l-4 px-3 py-2 font-semibold '+(/ammunition/i.test(group)?'border-[#7094b2] bg-[#273744] text-[#b8d6ed]':/armor|shield/i.test(group)?'border-[#8d9eb4] bg-[#303a47] text-[#d3dfef]':/weapon/i.test(group)?'border-[#ba866d] bg-[#3a302f] text-[#f0c6b3]':/potion|alchem|food|drink/i.test(group)?'border-[#ac9870] bg-[#38362d] text-[#e8d8a9]':/climb|camp|travel|container|lighting/i.test(group)?'border-[#7d9e87] bg-[#293a34] text-[#c2e2cb]':'border-[#9684ae] bg-[#34303e] text-[#ddd0ed]')}>{group} ({entries?.length??0})</h4>
