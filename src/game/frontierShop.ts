@@ -147,8 +147,12 @@ export function isEstablishedMerchantConversation(campaign:Campaign):boolean {
  return recent.some(entry=>merchantWords.test(entry.text));
 }
 export function acceptsMerchantBrowseInvitation(message:string,lastDmTurn:string):boolean {
- return /^(?:yes|yeah|yep|sure|okay|ok|please|absolutely|sounds good|let(?:'s| us) (?:start|browse|look)|show me)(?:[,.! ]|$)/i.test(message.trim())
- && /\b(?:browse|look (?:at|through)|show (?:you|me)|see|view)\b[\s\S]{0,110}\b(?:wares|stock|goods|inventory|merchandise|store|shop|weapons|armor|supplies)\b/i.test(lastDmTurn);
+ const reply=message.trim().toLowerCase().replace(/[.!?]+$/,'').trim();
+ const affirmative=/^(?:yes|yeah|yep|yup|sure|okay|ok|please|absolutely|certainly|definitely|of course|sounds good|sounds great|i'd love to|i would love to|let's do it|let's browse|let's look|go ahead|why not|show me|yes please|sure thing)(?:[,! ]+.*)?$/i.test(reply);
+ const offered=/\b(?:browse|look (?:at|through)|show (?:you|me)|see|view|interested in|want to|like to)\b[\s\S]{0,130}\b(?:wares|stock|goods|inventory|merchandise|store|shop|weapons|armor|supplies|items|catalog)\b/i.test(lastDmTurn)
+ || /\b(?:shop|store|merchant|shopkeeper)\b[\s\S]{0,100}\b(?:browse|buy|purchase|see what|look at)\b/i.test(lastDmTurn)
+ || /\b(?:do|would) you (?:want|like) to (?:shop|browse|buy|see what(?: i| we)? (?:have|sell))\b/i.test(lastDmTurn);
+ return affirmative && offered;
 }
 export function isMerchantBrowseRequest(message:string):boolean {return /\b(what (?:do you|have you|are you) (?:sell|stock|carry|have)|show (?:me )?(?:your )?(?:wares|inventory|stock)|(?:list|catalog|inventory|price list|prices|wares|for sale)|brows(?:e|ing)|(?:take|have) a look at (?:your |the )?(?:goods|wares|stock|merchandise)|look (?:at|through) (?:your |the )?(?:goods|wares|stock|merchandise))\b/i.test(message);}
 export function merchantNegotiationTarget(message:string):string|null {
@@ -168,7 +172,7 @@ export function classifyMerchantIntent(message:string):MerchantIntent {
  const service=/\b(?:made|make (?:me |a |an |some |custom )|custom|commission|crafted|craft|repair|alter|fit(?:ted)?|tailor|workshop|leatherwork)\b/i;
  const informational=/^(?:can|could|would|should|where|who|what|how|do|does|is|are|tell|explain)\b/i;
  const explicitBuy=/\b(?:i\s+(?:want|wish|need|intend|plan)\s+to\s+(?:buy|purchase)|i(?:'d| would)\s+like\s+to\s+(?:buy|purchase)|i(?:'ll| will| am going to)\s+(?:buy|purchase|take|have)|(?:buy|purchase)\s+(?:me\s+)?(?:a\s+|an\s+|the\s+|some\s+|\d+\s+)?\S+|i(?:'ll| will)\s+have\b)/i;
- if(isMerchantBrowseRequest(text))return 'browse';
+ if(isMerchantBrowseRequest(text)||/^(?:can|could|may) i (?:see|view|look at) (?:your |the )?(?:merchandise|goods|wares|stock|inventory|items|catalog)\??$/i.test(text))return 'browse';
  if(seeking.test(text)&&(!explicitBuy.test(text)||/\b(?:where|who|which|how|find|look(?:ing)?|search|ask around|directions|recommend|know (?:of|where)|anywhere|someone|somewhere|go to|head to|visit)\b/i.test(text)))return 'find-service';
  if(service.test(text))return 'commission';
  if(isMerchantBrowseRequest(text))return 'browse';
