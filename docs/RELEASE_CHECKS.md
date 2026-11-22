@@ -1,5 +1,7 @@
 # Four Keeps release checks
 
+For new-chat handoffs and recovery from GitHub clone/DNS failures, first read [CONTINUATION.md](CONTINUATION.md). A failed clone alone does not establish that GitHub connector access or another executable environment is unavailable.
+
 GitHub Actions minutes are limited. The full CI workflow in `.github/workflows/ci.yml` runs **only when explicitly requested**, not on development commits or foundation fast-forwards. A one-time `verify/*` branch push triggers the full suite; `workflow_dispatch` is also available once the workflow is registered on GitHub's default branch (`main`).
 
 ## During development
