@@ -4,6 +4,7 @@ import {merchantItemDescription,merchantItemFacts} from '../game/merchantItemDet
 import {equipmentPackContents,equipmentPackIndividualValue} from '../game/equipmentPacks';
 import {prepareCitySupplyOrder,confirmCitySupplyOrder,collectCitySupplyOrder} from '../game/merchantSupply';
 import {useState} from 'react';
+import {classSummary} from '../game/creationClasses';
 import {ADVENTURE_SITES,beginTravelingMerchantRoute} from '../game/adventureSession';
 import type {Campaign} from '../game/campaign';
 import {merchantStock,remainingMerchantStock,formatFrontierPrice,walletCopper,availableMerchants,settlementTier,MERCHANT_LABELS,merchantCatalogFor} from '../game/frontierShop';
@@ -16,6 +17,7 @@ export function MerchantShop({campaign,saving,onClose,onPrepare,onSettle,onDiscu
  const tier=settlementTier(campaign);
  const merchant=campaign.merchantShopType??'general';
  const [search,setSearch]=useState('');
+ const [sort,setSort]=useState<'name'|'price-up'|'price-down'>('name');
 
  const pending=campaign.pendingMerchantPurchase;
  const funds=walletCopper(campaign.inventoryLedger?.currency);
@@ -28,8 +30,13 @@ export function MerchantShop({campaign,saving,onClose,onPrepare,onSettle,onDiscu
   return {item,quantity,unit,stock,owned};
  });
  const selected=lines.filter(line=>line.quantity>0);
- const visible=lines.filter(line=>line.item.name.toLowerCase().includes(search.toLowerCase()));
- const grouped=Object.entries(visible.reduce<Record<string,typeof visible>>((groups,line)=>{const name=merchantCategory(line.item);(groups[name]??=[]).push(line);return groups;},{})).map(([group,entries])=>[group,entries.sort((a,b)=>a.item.name.localeCompare(b.item.name))] as [string,typeof visible]).sort(([a],[b])=>a.localeCompare(b));
+ const query=search.trim().toLowerCase();
+ const visible=lines.filter(line=>{
+  const item=line.item;
+  const aliases=item.name==='Potion of Healing'?'healing potion':item.name==='Plate Armor'?'plate':'';
+  return [item.name,aliases,merchantCategory(item),...(item.properties??[]),...(item.armorGroup?[item.armorGroup+' armor']:[])].join(' ').toLowerCase().includes(query);
+ });
+ const grouped=Object.entries(visible.reduce<Record<string,typeof visible>>((groups,line)=>{const name=merchantCategory(line.item);(groups[name]??=[]).push(line);return groups;},{})).map(([group,entries])=>[group,entries.sort((a,b)=>sort==='name'?a.item.name.localeCompare(b.item.name):((a.unit-b.unit)*(sort==='price-up'?1:-1)||a.item.name.localeCompare(b.item.name)))] as [string,typeof visible]).sort(([a],[b])=>a.localeCompare(b));
  const total=selected.reduce((sum,line)=>sum+line.unit*line.quantity,0);
  const eligible=selected.length>0&&total<=funds&&selected.every(line=>line.quantity<=line.stock&&line.quantity<=20);
  const pendingLines=pending?.lines??(pending?[{itemId:pending.itemId,quantity:pending.quantity,unitCostCp:pending.unitCostCp}]:[]);
@@ -42,7 +49,8 @@ export function MerchantShop({campaign,saving,onClose,onPrepare,onSettle,onDiscu
   </div>
   <div className="space-y-1"><div className="space-y-0.5 rounded-md bg-panel/98 px-1" aria-label="Persistent merchandise navigation">
   <input aria-label="Search merchandise" placeholder="Search items" value={search} onChange={e=>setSearch(e.target.value)} className="w-full rounded-md border border-white/25 bg-ink px-2 py-1 text-sm"/>
-  <CatalogJumpNavigation embedded contextualSubgroups title="Merchandise" groups={grouped.length>1?grouped.map(([group,entries],index)=>({id:'merchant-group-'+index,label:group+' ('+entries.length+')'})):[]} subgroups={[]}/></div></div></div>
+  <div className="flex items-center justify-end gap-2 px-1"><label htmlFor="merchant-sort" className="text-xs text-parchment/70">Within category</label><select id="merchant-sort" aria-label="Sort items within categories" value={sort} onChange={e=>setSort(e.target.value as typeof sort)} className="max-w-40 rounded border border-white/25 bg-ink px-1 py-0.5 text-xs"><option value="name">Name A–Z</option><option value="price-up">Price: low first</option><option value="price-down">Price: high first</option></select></div>
+   <CatalogJumpNavigation embedded contextualSubgroups title="Merchandise" groups={grouped.length>1?grouped.map(([group,entries],index)=>({id:'merchant-group-'+index,label:group+' ('+entries.length+')'})):[]} subgroups={[]}/></div></div></div>
   <div className="rounded-lg border border-white/20 bg-[#242a30] focus-visible:outline focus-visible:outline-2 focus-visible:outline-gold" role="region" aria-label="Merchant inventory" tabIndex={0}>
    {grouped.map(([group,entries])=><section key={group} id={"merchant-group-"+grouped.findIndex(([name])=>name===group)} aria-label={group} className="scroll-mt-32 border-b border-white/20"><h4 className={'border-l-4 px-3 py-2 font-semibold '+(/ammunition/i.test(group)?'border-[#7094b2] bg-[#273744] text-[#b8d6ed]':/armor|shield/i.test(group)?'border-[#8d9eb4] bg-[#303a47] text-[#d3dfef]':/weapon/i.test(group)?'border-[#ba866d] bg-[#3a302f] text-[#f0c6b3]':/potion|alchem|food|drink/i.test(group)?'border-[#ac9870] bg-[#38362d] text-[#e8d8a9]':/climb|camp|travel|container|lighting/i.test(group)?'border-[#7d9e87] bg-[#293a34] text-[#c2e2cb]':'border-[#9684ae] bg-[#34303e] text-[#ddd0ed]')}>{group} ({entries?.length??0})</h4>
    {entries?.map(({item,quantity,unit,stock,owned})=><div key={item.id} id={'merchant-item-'+item.id} className="scroll-mt-14 space-y-1 border-t border-white/10 bg-[#272c32] px-3 py-2" aria-label={item.name}>
@@ -53,7 +61,12 @@ export function MerchantShop({campaign,saving,onClose,onPrepare,onSettle,onDiscu
      </div>
      <span className="shrink-0 tabular-nums text-gold">{formatFrontierPrice(unit)}</span>
     </div>
-    <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-parchment/90" aria-label={item.name+' description'}>{merchantItemDescription(item)}</p>
+    {item.armorGroup&&<div className="space-y-0.5 text-xs" aria-label={item.name+' armor classification'}>
+      <p className="font-bold tracking-wide text-gold">{item.armorGroup.toUpperCase()} ARMOR · AC {item.baseAC}{item.armorGroup==='Light'?' + DEX':item.armorGroup==='Medium'?' + DEX (max 2)':''}{item.strength?' · STR '+item.strength:''}{item.stealthDisadvantage?' · Stealth Disadvantage':''}</p>
+      {campaign.character?.classId&&(()=>{const cls=classSummary(campaign.character.classId);if(!cls)return null;const trained=cls.armor.some(a=>a.toLowerCase()===item.armorGroup!.toLowerCase()||a.toLowerCase()==='all armor');return !trained?<p className="text-amber-200" role="note">Your class does not have {item.armorGroup} Armor training. Check other features or training before equipping.</p>:<p className="text-parchment/70">Your class has {item.armorGroup} Armor training.</p>;})()}
+     </div>}
+     {item.weaponGroup&&<p className="text-xs font-semibold tracking-wide text-parchment/80">{item.weaponGroup.toUpperCase()} WEAPON{campaign.character?.weaponProficiencies?.length?' · '+(campaign.character.weaponProficiencies.some(p=>p.toLowerCase()===item.weaponGroup)?'Class weapon training':'Check weapon training'):''}</p>}
+     <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-parchment/90" aria-label={item.name+' description'}>{merchantItemDescription(item)}</p>
     {equipmentPackContents(item.id)&&<div className="rounded-md border border-white/15 bg-[#222b31] p-2 text-xs" aria-label={item.name+' bundle contents'}>
       <p className="mb-1 font-semibold text-parchment">Included equipment · added individually to inventory</p>
       <ul className="grid grid-cols-2 gap-x-3 gap-y-1">{equipmentPackContents(item.id)!.map(({item:component,quantity})=><li key={component.id} className="flex justify-between gap-2"><span>{component.name}</span><span className="shrink-0 text-gold">×{quantity}</span></li>)}</ul>
