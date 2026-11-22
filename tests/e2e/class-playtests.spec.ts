@@ -1559,13 +1559,13 @@ test('Dasahi merchant offer opens catalog on affirmative reply without a Shop bu
  await expect(page.getByPlaceholder('Search items')).toBeVisible();
  await expect(page.getByLabel('Compact purchase summary')).toBeVisible();
   await expect(page.getByRole('region',{name:'Merchant inventory'}).getByRole('region',{name:'Armor'})).toBeVisible();
-  await expect(page.getByLabel('Plate Armor armor classification')).toContainText('HEAVY ARMOR');
+  await expect(page.getByLabel('Plate Armor armor classification',{exact:true})).toContainText('HEAVY ARMOR');
   await page.getByLabel('Sort items within categories').selectOption('price-up');
   await expect(page.getByLabel('Sort items within categories')).toHaveValue('price-up');
   await page.getByPlaceholder('Search items').fill('healing potion');
   await expect(page.getByLabel('Potion of Healing description')).toBeVisible();
   await page.getByPlaceholder('Search items').fill('plate');
-  await expect(page.getByLabel('Plate Armor armor classification')).toContainText('STR 15');
+  await expect(page.getByLabel('Plate Armor armor classification',{exact:true})).toContainText('STR 15');
   await page.getByPlaceholder('Search items').clear();
   expect(dmCalls).toBe(calls);
  const after=await saved(page);
