@@ -157,6 +157,7 @@ export function classifyMerchantIntent(message:string):MerchantIntent {
  const service=/\b(?:made|make (?:me |a |an |some |custom )|custom|commission|crafted|craft|repair|alter|fit(?:ted)?|tailor|workshop|leatherwork)\b/i;
  const informational=/^(?:can|could|would|should|where|who|what|how|do|does|is|are|tell|explain)\b/i;
  const explicitBuy=/\b(?:i\s+(?:want|wish|need|intend|plan)\s+to\s+(?:buy|purchase)|i(?:'d| would)\s+like\s+to\s+(?:buy|purchase)|i(?:'ll| will| am going to)\s+(?:buy|purchase|take|have)|(?:buy|purchase)\s+(?:me\s+)?(?:a\s+|an\s+|the\s+|some\s+|\d+\s+)?\S+|i(?:'ll| will)\s+have\b)/i;
+ if(isMerchantBrowseRequest(text))return 'browse';
  if(seeking.test(text)&&(!explicitBuy.test(text)||/\b(?:where|who|which|how|find|look(?:ing)?|search|ask around|directions|recommend|know (?:of|where)|anywhere|someone|somewhere|go to|head to|visit)\b/i.test(text)))return 'find-service';
  if(service.test(text))return 'commission';
  if(isMerchantBrowseRequest(text))return 'browse';
