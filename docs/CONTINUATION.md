@@ -7,6 +7,13 @@ Read this document **before starting any continuation task**. Also read [RELEASE
 2. Check existing isolated development branches, open PRs, relevant CI runs, and deployment status before creating new work. Distinguish the latest **published/verified foundation** from the latest **unfinished candidate**. Do not overwrite unfinished work.
 3. Read the requested feature's existing code, tests, and relevant docs before editing. Preserve campaigns, rules, merchants, persistence, and Anchamida canon unless specifically requested otherwise.
 
+## Verified executable recovery route (2026-11-22)
+- The persistent Vercel sandbox **four-keeps-m1-b2** belongs to the Vercel **four-keeps** project. It was successfully resumed through the Vercel connection with `get_named_sandbox(resume:true)`, then commands ran through `run_session_command`.
+- The sandbox's `/vercel/four-keeps` checkout can resolve and fetch from `github.com`, even when the separate ChatGPT local container cannot. **Do not treat the local container DNS failure as a blocker until this route is checked.**
+- The original checkout can contain unfinished changes. Preserve it. Create a separate worktree from the exact verified candidate SHA (for example `/vercel/four-keeps-v20`), then run `npm ci`, TypeScript, Vitest, and Playwright there.
+- Read command output with `get_session_command_logs`; a command response alone may omit stdout/stderr. If a long command returns a tool error, check for an already-running process before retrying, to avoid accidentally starting duplicate browser suites.
+- This route is a recovery method, not a permanent guarantee of sandbox availability; check its live status and snapshots every time. Never claim execution without evidence.
+
 ## Recover execution when GitHub cloning fails
 A `Could not resolve host: github.com` error from one shell is **not** proof that all development is blocked.
 1. Check whether the environment already has a repository checkout, and verify its remote, branch, clean/dirty state, and HEAD.
