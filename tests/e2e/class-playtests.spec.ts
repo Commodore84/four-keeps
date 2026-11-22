@@ -1552,7 +1552,7 @@ test('Dasahi merchant narration offers Browse Shop and opens the full catalog wi
  await page.getByRole('button',{name:'Browse Shop'}).click();
  await expect(page.getByRole('region',{name:'Adventure storefront'})).toBeVisible();
  await expect(page.getByPlaceholder('Search items')).toBeVisible();
- await expect(page.getByRole('region',{name:'Compact purchase summary'})).toBeVisible();
+ await expect(page.getByLabel('Compact purchase summary')).toBeVisible();
  expect(dmCalls).toBe(calls);
  const after=await saved(page);
  expect(after.inventoryLedger).toEqual(before.inventoryLedger);
