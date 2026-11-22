@@ -97,9 +97,9 @@ export function merchantInitialStock(tier:SettlementTier,itemId:string,type:Merc
  if(tier==='city')return cost>=5000?2:cost>=1000?8:
   item.category==='ammunition'?60:
   ['weapon','armor','shield','tool'].includes(item.category.toLowerCase())?12:40;
- if(tier==='traveling'||type==='trader')return itemId==='arrows'?20:itemId==='potion-of-healing'?1:Math.min(5,FRONTIER_INITIAL_STOCK[itemId]??0);
- if(tier==='village')return itemId==='arrows'?40:Math.min(8,FRONTIER_INITIAL_STOCK[itemId]??0);
- return Math.min(20,FRONTIER_INITIAL_STOCK[itemId]??0);
+ if(tier==='traveling'||type==='trader')return itemId==='arrows'?100:itemId==='potion-of-healing'?1:Math.min(5,FRONTIER_INITIAL_STOCK[itemId]??0);
+ if(tier==='village')return itemId==='arrows'?100:Math.min(8,FRONTIER_INITIAL_STOCK[itemId]??0);
+ return itemId==='arrows'?100:Math.min(20,FRONTIER_INITIAL_STOCK[itemId]??0);
 }
 export function remainingMerchantStock(campaign:Campaign,itemId:string,type?:MerchantType):number {
  const tier=settlementTier(campaign),merchant=type??campaign.merchantShopType??merchantForItem(campaign,itemId);
@@ -227,7 +227,7 @@ export function frontierMerchantContext(campaign:Campaign){
 }
 export function buyFrontierItem(campaign:Campaign,itemId:string,quantity=1,now=new Date().toISOString()):Campaign{
  if(!campaign.characterIdentity||campaign.adventureSession?.site!=='frontier'||campaign.adventureSession.status!=='exploring')throw Error('The merchant is not available here.');
- if(!Number.isSafeInteger(quantity)||quantity<1||quantity>20)throw Error('Purchase quantity must be 1–20.');
+ if(!Number.isSafeInteger(quantity)||quantity<1)throw Error('Invalid purchase quantity.');
  const item=merchantStock(campaign).find(i=>i.id===itemId);if(!item)throw Error('Item is not sold at this shop.');
  if(quantity>remainingMerchantStock(campaign,itemId))throw Error('The merchant does not have enough stock.');
  const ledger=campaign.inventoryLedger;if(!ledger)throw Error('Campaign inventory is missing.');
@@ -263,13 +263,13 @@ export function parseFrontierPurchase(message:string):{itemId:string;quantity:nu
  if(matches.length!==1)return null;
  const match=/\b(\d{1,3})\s*(?:x|×|of)?\s*/i.exec(message);
  const quantity=match?Number(match[1]):1;
- if(!Number.isSafeInteger(quantity)||quantity<1||quantity>20)return null;
+ if(!Number.isSafeInteger(quantity)||quantity<1)return null;
  return {itemId:matches[0].id,quantity};
 }
 
 export function prepareMerchantPurchase(campaign:Campaign,itemId:string,quantity:number,id:string):Campaign {
  if(campaign.pendingMerchantPurchase)throw Error('Confirm or cancel the existing purchase first.');
- if(!Number.isSafeInteger(quantity)||quantity<1||quantity>20)throw Error('Quantity must be between 1 and 20.');
+ if(!Number.isSafeInteger(quantity)||quantity<1)throw Error('Invalid purchase quantity.');
  const item=merchantStock(campaign).find(i=>i.id===itemId);
  if(!item)throw Error('The merchant does not stock that item.');
  if(campaign.adventureSession?.site!=='frontier'||campaign.adventureSession.status!=='exploring')throw Error('You are not at the general store.');
@@ -290,6 +290,7 @@ export function prepareMerchantCart(campaign:Campaign,items:{itemId:string;quant
   const pending=prepared.pendingMerchantPurchase!;
   lines.push({itemId,quantity,unitCostCp:pending.unitCostCp});
  }
+ if(lines.some(line=>!Number.isSafeInteger(line.unitCostCp*line.quantity))||!Number.isSafeInteger(lines.reduce((sum,line)=>sum+line.unitCostCp*line.quantity,0)))throw Error('Invalid purchase total.');
  if(lines.reduce((sum,line)=>sum+line.unitCostCp*line.quantity,0)>walletCopper(campaign.inventoryLedger?.currency))throw Error('Insufficient money.');
  return {...campaign,pendingMerchantPurchase:{id,itemId:lines[0].itemId,quantity:lines[0].quantity,unitCostCp:lines[0].unitCostCp,lines}};
 }
@@ -332,7 +333,7 @@ export function settleMerchantPurchase(campaign:Campaign,id:string,confirmed:boo
  if(!lines.length||new Set(lines.map(line=>line.itemId)).size!==lines.length)throw Error('Invalid pending cart.');
  let total=0;
  for(const line of lines){
-  if(!Number.isSafeInteger(line.quantity)||line.quantity<1||line.quantity>20)throw Error('Invalid purchase quantity.');
+  if(!Number.isSafeInteger(line.quantity)||line.quantity<1)throw Error('Invalid purchase quantity.');
   const listed=merchantStock(campaign).find(item=>item.id===line.itemId);
   const discount=campaign.merchantCartNegotiation?.purchaseId===pending.id&&campaign.merchantCartNegotiation.success?campaign.merchantCartNegotiation.percent:campaign.merchantDiscount?.itemId===line.itemId?campaign.merchantDiscount.percent:0;
   if(!listed||listed.costCp-Math.floor(listed.costCp*discount/100)!==line.unitCostCp)throw Error('Merchant price changed; request a new quote.');
