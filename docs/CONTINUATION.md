@@ -1,0 +1,35 @@
+# Four Keeps continuation and environment recovery
+
+Read this document **before starting any continuation task**. Also read [RELEASE_CHECKS.md](RELEASE_CHECKS.md).
+
+## Recover the actual state
+1. Query GitHub for the current HEAD of `feat/clean-app-shell`; never assume a SHA copied from an earlier chat is still current.
+2. Check existing isolated development branches, open PRs, relevant CI runs, and deployment status before creating new work. Distinguish the latest **published/verified foundation** from the latest **unfinished candidate**. Do not overwrite unfinished work.
+3. Read the requested feature's existing code, tests, and relevant docs before editing. Preserve campaigns, rules, merchants, persistence, and Anchamida canon unless specifically requested otherwise.
+
+## Recover execution when GitHub cloning fails
+A `Could not resolve host: github.com` error from one shell is **not** proof that all development is blocked.
+1. Check whether the environment already has a repository checkout, and verify its remote, branch, clean/dirty state, and HEAD.
+2. Try another available executable environment, including an existing development sandbox when accessible. Verify that it can run the project's tests before relying on it.
+3. Use the connected GitHub API/connector for branch discovery, file reads, isolated branch creation, and Git object writes if direct clone/network access fails. Connector access is **not** a substitute for actually running tests.
+4. Check whether an authorized GitHub Actions runner can execute the exact candidate commit and produce browser artifacts. Never assert local tests or screenshot inspection occurred unless they actually did.
+5. Do not claim a Vercel sandbox, GitHub Actions run, or cloud computer is accessible without checking. If no executable test environment exists, report the specific blocker and leave the foundation untouched.
+
+## Development and publication
+- Work on an isolated branch; batch coherent changes.
+- For behavior changes, run focused tests while iterating and the **full exact-SHA release gate** described in RELEASE_CHECKS.md before publication.
+- Create only one fresh `verify/*` ref from the finished candidate SHA for a release attempt; inspect full CI, including iPhone Playwright artifacts.
+- Publish by protected, non-forced fast-forward only after successful verification; confirm exact-SHA Vercel READY.
+- Never use a documentation-only GitHub API edit as evidence that runtime behavior has been implemented.
+- If any required check is unavailable or fails, keep changes isolated and report what is done, unverified, and blocked.
+
+## Continuation handoff format
+Every new-chat handoff should include:
+- Repository, foundation branch, last **verified** foundation SHA (as a reference, not assumed current), and any unfinished branch/SHA.
+- The exact user-requested behavior and acceptance tests.
+- A directive to read this file and RELEASE_CHECKS.md.
+- The environment-recovery sequence above; do **not** stop after the first GitHub DNS failure.
+- The release gates and requirement to report actual execution evidence, SHA, deployment, and remaining blockers.
+
+## Current merchant UX intent (v20)
+Shopping is conversational: no dedicated Shop/Browse Shop button. Natural browse requests and affirmative replies to merchant offers should open the existing catalog immediately in the same DM turn, without lengthy inventory narration or redundant confirmation. Ordinary conversation must remain ordinary conversation. Preserve the existing catalog, subgroups, full descriptions, magic item rules, cart, checkout, persistence, and campaigns. Validate the Dasahi merchant flow with deterministic tests and iPhone-emulated Playwright before claiming implementation.
