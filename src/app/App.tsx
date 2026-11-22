@@ -1597,7 +1597,7 @@ export function App() {
       {hideToast&&<div role="status" aria-live="polite" className={`fixed left-4 right-4 top-28 z-50 mx-auto max-w-lg rounded-xl border-2 p-3 shadow-xl text-sm ${hideToast.hidden?'border-emerald-400 bg-emerald-950 text-emerald-100':'border-red-400 bg-red-950 text-red-100'}`}>
         <div className="flex items-start justify-between gap-3"><div><p className="font-bold">{hideToast.hidden?'Hide succeeded — Hidden':'Hide failed — Spotted'}</p><p className="mt-1 text-xs">{hideToast.detail}</p></div><button type="button" aria-label="Dismiss hide notification" onClick={()=>setHideToast(null)}>×</button></div>
       </div>}
-      <main ref={mainScrollRef} className={activeView==='map'?"min-h-0 flex-1 overflow-hidden px-3 py-3":"min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-6 pb-6 [-webkit-overflow-scrolling:touch]"} id="main-content">
+      <main ref={mainScrollRef} className={activeView==='map'?"min-h-0 flex-1 overflow-hidden px-3 py-3":activeView==='adventure'&&campaign?.merchantShopOpen?"min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-0 [-webkit-overflow-scrolling:touch]":"min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-6 pb-6 [-webkit-overflow-scrolling:touch]"} id="main-content">
         {activeView === 'settings' && <>
         <section aria-label="App controls" className="mb-5 rounded-xl border border-white/15 bg-panel p-4 space-y-3">
           <h2 className="font-serif text-lg">App controls</h2>
