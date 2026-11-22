@@ -139,6 +139,17 @@ export function refreshMerchantStock(campaign:Campaign):Campaign {
  return changed?{...campaign,merchantStockRemaining:remaining,merchantStockRestockedAt:restocked}:campaign;
 }
 export function merchantCatalog(campaign:Campaign):string {return merchantStock(campaign).map(item=>item.name+": "+formatFrontierPrice(item.costCp)+(item.packQuantity?" per pack of "+item.packQuantity:" each")+" ("+remainingMerchantStock(campaign,item.id)+" available)").join("; ");}
+/** Detect a merchant conversation without treating every city scene as a storefront. */
+export function isEstablishedMerchantConversation(campaign:Campaign):boolean {
+ if(!campaign.characterIdentity || campaign.adventureSession?.site!=='frontier' || campaign.adventureSession.status!=='exploring')return false;
+ const recent=campaign.journal.filter(entry=>entry.kind==='dm'||entry.kind==='player').slice(-5);
+ const merchantWords=/\b(?:merchant|shopkeeper|general store|weaponsmith|blacksmith|armorer|armourer|apothecary|outfitter|shop|store|wares|stocked weapons|inventory|shelves)\b/i;
+ return recent.some(entry=>merchantWords.test(entry.text));
+}
+export function acceptsMerchantBrowseInvitation(message:string,lastDmTurn:string):boolean {
+ return /^(?:yes|yeah|yep|sure|okay|ok|please|absolutely|sounds good|let(?:'s| us) (?:start|browse|look)|show me)(?:[,.! ]|$)/i.test(message.trim())
+ && /\b(?:browse|look (?:at|through)|show (?:you|me)|see|view)\b[\s\S]{0,110}\b(?:wares|stock|goods|inventory|merchandise|store|shop|weapons|armor|supplies)\b/i.test(lastDmTurn);
+}
 export function isMerchantBrowseRequest(message:string):boolean {return /\b(what (?:do you|have you|are you) (?:sell|stock|carry|have)|show (?:me )?(?:your )?(?:wares|inventory|stock)|(?:list|catalog|inventory|price list|prices|wares|for sale)|brows(?:e|ing)|(?:take|have) a look at (?:your |the )?(?:goods|wares|stock|merchandise)|look (?:at|through) (?:your |the )?(?:goods|wares|stock|merchandise))\b/i.test(message);}
 export function merchantNegotiationTarget(message:string):string|null {
  if(!isMerchantNegotiationRequest(message))return null;
