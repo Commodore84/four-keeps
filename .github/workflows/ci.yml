@@ -1,0 +1,52 @@
+name: Full release verification
+
+# Full CI is deliberately opt-in. A development push does not spend Actions minutes.
+# Before publishing gameplay or UI commits to feat/clean-app-shell, run this
+# workflow against the exact candidate branch/SHA and require a green result.
+on:
+  # A one-time push of a verify/* ref to an already finished candidate SHA
+  # starts the release gate even while main lacks workflow_dispatch support.
+  push:
+    branches: ['verify/**']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Repeated requests for the same branch replace obsolete runs, but never cancel
+# a release check for a different branch.
+concurrency:
+  group: full-release-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Build, Vitest and iPhone Chromium Playwright
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Production build and TypeScript
+        run: npm run build
+      - name: Full Vitest suite
+        run: npm test
+      - name: Install Chromium for iPhone-emulated browser tests
+        run: npx playwright install --with-deps chromium
+      - name: Full iPhone-emulated Playwright suite
+        run: npm run test:e2e
+      - name: Upload browser evidence
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-iphone-evidence
+          path: |
+            test-results/
+            playwright-report/
+            screenshots/
+          if-no-files-found: ignore
