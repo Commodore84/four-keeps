@@ -653,12 +653,17 @@ test('new Rogue starts at Frontier Village, buys supplies, and sees persisted Pl
  await expect(page.getByLabel('Adventure',{exact:true})).toHaveCount(0);
  await expect(shop.getByLabel('Merchant specialties')).toHaveCount(0);
  await expect(shop.getByLabel('Current merchant')).toContainText('General');
+ await expect(shop.getByLabel('Current merchant')).not.toContainText('Only this merchant');
+ await expect(shop.getByLabel('Current merchant')).not.toContainText('Prices from the rules engine');
+
  await expect(shop.getByLabel('Merchant inventory')).toContainText('Dagger');
  await expect(shop.getByRole('region',{name:'Camping and travel',exact:true})).toBeVisible();
  await expect(shop.getByRole('region',{name:'Kits and tools',exact:true})).toBeVisible();
  await expect(shop.getByRole('region',{name:'Lighting and fuel',exact:true})).toBeVisible();
  const sectionNav=shop.getByRole('navigation',{name:'Jump to merchandise section'});
  await expect(sectionNav).toBeVisible();
+ const subgroupBefore=shop.getByRole('navigation',{name:'Jump to merchandise subgroup'});
+ await expect(subgroupBefore.getByRole('button',{name:/Melee weapons — Blades/})).toHaveCount(0);
  await sectionNav.getByRole('button',{name:/Melee weapons/}).click();
  const selectedGroup=sectionNav.getByRole('button',{name:/Melee weapons/});
  await expect(selectedGroup).toHaveAttribute('aria-current','location');
@@ -669,6 +674,7 @@ test('new Rogue starts at Frontier Village, buys supplies, and sees persisted Pl
   return tab.left>=bounds.left-2&&tab.right<=bounds.right+2;
  })).toBe(true);
  const subgroupNav=shop.getByRole('navigation',{name:'Jump to merchandise subgroup'});
+ await expect(subgroupNav.getByRole('button',{name:/Ammunition — Arrows/})).toHaveCount(0);
  const daggerSubgroup=subgroupNav.getByRole('button',{name:/Melee weapons — Blades/});
  await daggerSubgroup.click();
  await expect(daggerSubgroup).toHaveAttribute('aria-current','location');
@@ -692,6 +698,15 @@ test('new Rogue starts at Frontier Village, buys supplies, and sees persisted Pl
  const compactCart=shop.getByLabel('Compact purchase summary');
  await expect(persistentNav).toBeVisible();
  await expect(compactCart).toBeVisible();
+ const merchantHeader=shop.getByLabel('Current merchant');
+ expect((await merchantHeader.boundingBox())!.height).toBeLessThan(70);
+ const mainNav=shop.getByRole('navigation',{name:'Jump to merchandise section'});
+ await mainNav.getByRole('button',{name:/Ammunition/}).click();
+ await expect(subgroupNav.getByRole('button',{name:/Ammunition — Arrows/})).toBeVisible();
+ await expect(subgroupNav.getByRole('button',{name:/Melee weapons — Blades/})).toHaveCount(0);
+ await page.setViewportSize({width:390,height:844});
+ await page.screenshot({path:'test-results/compact-storefront-iphone.png',fullPage:false});
+
  expect(await persistentNav.evaluate(element=>getComputedStyle(element).position)).toBe('sticky');
  expect(await compactCart.evaluate(element=>getComputedStyle(element).position)).toBe('sticky');
  // On an iPhone viewport, jumping deep into the single-page inventory must
@@ -1225,7 +1240,7 @@ test('iPhone Dasahi opening offers a voluntary waterfront store with readable di
  const inventory=page.getByRole('region',{name:'Merchant inventory'});
  await expect(inventory).toHaveCSS('overflow-y','visible');
  expect(await inventory.evaluate(list=>list.scrollTop)).toBe(0);
- await expect(inventory).toHaveCSS('background-color','rgb(50, 44, 36)');
+ await expect(inventory).toHaveCSS('background-color','rgb(36, 42, 48)');
  expect(await inventory.evaluate(list=>list.scrollHeight-list.clientHeight)).toBeLessThanOrEqual(1);
  await inventory.focus();
  await expect(inventory).toBeFocused();

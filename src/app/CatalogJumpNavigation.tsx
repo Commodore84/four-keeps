@@ -1,9 +1,9 @@
 import {useEffect,useRef,useState} from 'react';
 
-type CatalogJump = {id:string;label:string};
+type CatalogJump = {id:string;label:string;parentId?:string};
 /** Horizontal catalog navigation that retains the selected tab on narrow screens. */
-export function CatalogJumpNavigation({title,groups,subgroups,embedded=false}:{title:string;groups:CatalogJump[];subgroups:CatalogJump[];embedded?:boolean}){
- const [activeGroup,setActiveGroup]=useState<string|null>(null);
+export function CatalogJumpNavigation({title,groups,subgroups,embedded=false,contextualSubgroups=false}:{title:string;groups:CatalogJump[];subgroups:CatalogJump[];embedded?:boolean;contextualSubgroups?:boolean}){
+ const [activeGroup,setActiveGroup]=useState<string|null>(contextualSubgroups?groups[0]?.id??null:null);
  const [activeSubgroup,setActiveSubgroup]=useState<string|null>(null);
  const groupNav=useRef<HTMLElement>(null);
  const subgroupNav=useRef<HTMLElement>(null);
@@ -11,7 +11,7 @@ export function CatalogJumpNavigation({title,groups,subgroups,embedded=false}:{t
   const target=document.getElementById(id);
   if(!target)return;
   target.scrollIntoView({behavior:'smooth',block:'start'});
-  if(kind==='group')setActiveGroup(id);
+  if(kind==='group'){setActiveGroup(id);setActiveSubgroup(null);}
   else{
    setActiveSubgroup(id);
    const parent=target.closest('section[id]');
@@ -34,7 +34,7 @@ export function CatalogJumpNavigation({title,groups,subgroups,embedded=false}:{t
   })}
  </nav>;
  return <div aria-label={title+' section navigation'} className={(embedded?'':'sticky top-0 z-20 ')+'space-y-1 rounded-lg border border-gold/30 bg-ink/95 p-2 shadow-lg backdrop-blur'}>
-  {renderRow(groups,'group')}
-  {renderRow(subgroups,'subgroup')}
+  {groups.length>0&&renderRow(groups,'group')}
+  {(!contextualSubgroups||activeGroup)&&renderRow(contextualSubgroups?subgroups.filter(item=>item.parentId===activeGroup):subgroups,'subgroup')}
  </div>;
 }
