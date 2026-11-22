@@ -14,7 +14,7 @@ import {MagicItemCompendium} from './MagicItemCompendium';
 import {magicWishlistNames} from '../game/magicWishlist';
 import {confirmCitySupplyOrder,isSupplierBrowseRequest} from '../game/merchantSupply';
 import {DMNarration,type NarrationSpeed} from './DMNarration';
-import {parseFrontierPurchase,prepareMerchantPurchase,prepareMerchantCart,settleMerchantPurchase,frontierShopStock,merchantStock,merchantCatalogFor,settlementTier,remainingMerchantStock,formatFrontierPrice,isMerchantNegotiationRequest,isMerchantPurchaseRequest,classifyMerchantIntent,isEstablishedMerchantConversation,acceptsMerchantBrowseInvitation,merchantNegotiationTarget,beginMerchantNegotiation,resolveMerchantNegotiation,beginCartNegotiation,resolveCartNegotiation} from '../game/frontierShop';
+import {parseFrontierPurchase,prepareMerchantPurchase,prepareMerchantCart,settleMerchantPurchase,frontierShopStock,merchantStock,merchantCatalogFor,settlementTier,remainingMerchantStock,formatFrontierPrice,isMerchantNegotiationRequest,isMerchantPurchaseRequest,classifyMerchantIntent,isEstablishedMerchantConversation,merchantInvitationIsCurrent,trackMerchantConversation,acceptsMerchantBrowseInvitation,merchantNegotiationTarget,beginMerchantNegotiation,resolveMerchantNegotiation,beginCartNegotiation,resolveCartNegotiation} from '../game/frontierShop';
 import {classSummary} from '../game/creationClasses';
 import {completePlayerRest,playerLongRestWaitMinutes} from '../game/playerRecovery';
 import {frontierMerchantContext} from '../game/frontierShop';
@@ -871,12 +871,12 @@ export function App() {
     if(campaign?.characterIdentity && campaign.adventureSession?.site==='frontier' && campaign.adventureSession.status==='exploring'){
       const lastDmTurn=[...campaign.journal].reverse().find(entry=>entry.kind==='dm')?.text??'';
       const establishedMerchant=isEstablishedMerchantConversation(campaign);
-      const acceptingBrowseInvitation=establishedMerchant&&acceptsMerchantBrowseInvitation(draft,lastDmTurn);
+      const acceptingBrowseInvitation=establishedMerchant&&(merchantInvitationIsCurrent(campaign)||!campaign.merchantConversation)&&acceptsMerchantBrowseInvitation(draft,lastDmTurn);
       if(classifyMerchantIntent(draft)==='browse'||(campaign.characterBuild&&isSupplierBrowseRequest(draft))||acceptingBrowseInvitation){
         setSaving(true);
         try{
           const mentionedMerchant=/\b(?:blacksmith|weaponsmith|smithy)\b/i.test(draft)?'weaponsmith':/\b(?:armorer|armourer)\b/i.test(draft)?'armorer':/\b(?:alchemist|apothecary)\b/i.test(draft)?'apothecary':/\b(?:outfitter)\b/i.test(draft)?'outfitter':/\b(?:general store|shopkeeper)\b/i.test(draft)?'general':campaign.merchantShopType??'general';
-          const saved=addExchange({...campaign,merchantShopOpen:true,merchantShopType:mentionedMerchant as import('../game/frontierShop').MerchantType},draft,campaign.characterBuild?'The city merchant opens the equipment catalog. If something is sold out, the supplier-order section lets you request it. Nothing is charged until you confirm.':'Mara Vell opens her ledger and shows you the goods available today. You can browse the shop catalog, choose a quantity, or ask her about anything on the shelves.');
+          const saved=addExchange({...campaign,merchantShopOpen:true,merchantShopType:mentionedMerchant as import('../game/frontierShop').MerchantType,merchantConversation:{location:campaign.location,site:'frontier',active:true,shopType:mentionedMerchant as import('../game/frontierShop').MerchantType}},draft,campaign.characterBuild?'The city merchant opens the equipment catalog. If something is sold out, the supplier-order section lets you request it. Nothing is charged until you confirm.':'Mara Vell opens her ledger and shows you the goods available today. You can browse the shop catalog, choose a quantity, or ask her about anything on the shelves.');
           await localCampaignStorage.save(saved);setCampaign(saved);setCampaigns(items=>items.map(c=>c.id===saved.id?saved:c));setDraft('');
         }catch(error){setNotice('Shopkeeper: '+String(error));}finally{setSaving(false);}
         return;
@@ -1092,6 +1092,7 @@ export function App() {
         try {mapped=applyAnchamidaActions(next,result.mapActions);}
         catch(error) {console.warn('Rejected invalid DM map action batch',error);}
       }
+      mapped=trackMerchantConversation(mapped,message,result.narration);
       await localCampaignStorage.save(mapped);
       setCampaign(mapped);
       setCampaigns((items) => items.map((item) => item.id === mapped.id ? mapped : item));

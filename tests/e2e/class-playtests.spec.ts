@@ -1561,3 +1561,36 @@ test('Dasahi merchant offer opens catalog on affirmative reply without a Shop bu
  expect(after.merchantShopOpen).toBe(true);
  await page.screenshot({path:'test-results/dasahi-browse-shop.png',fullPage:true});
 });
+
+test('iPhone persistent Dasahi merchant dialogue opens catalog after long chat and reload',async({page})=>{
+ test.setTimeout(120000);
+ await createAndImport(page,'rogue');
+ await navigate(page,'Adventure');
+ await page.evaluate(()=>{localStorage.setItem('four-keeps-access-code','browser-test-code');localStorage.setItem('four-keeps-dm-mode','on');});
+ let dmCalls=0;
+ await page.route('**/api/dm',async route=>{
+  dmCalls++;
+  await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({narration:dmCalls===1?'The merchant invites you to browse her goods.':'The merchant tells you about the harbor and its visitors.',worldUpdates:{},newFacts:[]})});
+ });
+ await page.reload();
+ await page.getByRole('button',{name:'Campaigns',exact:true}).click();
+ await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await expect.poll(async()=> (await saved(page))?.journal?.some((entry:any)=>entry.id?.endsWith('-dm-opening'))).toBe(true);
+ for(let i=0;i<7;i++){
+  await page.getByLabel('Message the Dungeon Master').fill('How is the harbor today?');
+  await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
+  await expect.poll(async()=> (await saved(page)).journal.filter((e:any)=>e.kind==='player'&&e.text==='How is the harbor today?').length).toBe(i+1);
+ }
+ const before=await saved(page);
+ expect(before.merchantConversation?.active).toBe(true);
+ await page.reload();
+ await page.getByRole('button',{name:'Campaigns',exact:true}).click();
+ await page.getByRole('button',{name:'Continue Adventure'}).click();
+ const calls=dmCalls;
+ await page.getByLabel('Message the Dungeon Master').fill('Not sure, what do you have?');
+ await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
+ await expect(page.getByRole('region',{name:'Adventure storefront'})).toBeVisible();
+ expect(dmCalls).toBe(calls);
+ expect((await saved(page)).inventoryLedger).toEqual(before.inventoryLedger);
+ await page.screenshot({path:'test-results/persistent-dasahi-merchant-iphone.png',fullPage:true});
+});

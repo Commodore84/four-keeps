@@ -1,8 +1,8 @@
 import {describe,it,expect} from 'vitest';
 import {merchantItemDescription,merchantItemFacts} from './merchantItemDetails';
-import {newCampaign} from './campaign';
+import {newCampaign,addExchange} from './campaign';
 import {beginAdventureSession} from './adventureSession';
-import {buyFrontierItem,frontierShopStock,frontierMerchantContext,formatFrontierPrice,parseFrontierPurchase,prepareMerchantPurchase,prepareMerchantCart,settleMerchantPurchase,cityShopStock,merchantCatalogFor,availableMerchants,merchantStockKey,merchantStockKeyForCampaign,merchantInitialStock,merchantRestockIntervalMinutes,walletCopper,remainingMerchantStock,merchantCatalog,isMerchantBrowseRequest,isEstablishedMerchantConversation,acceptsMerchantBrowseInvitation,approveMerchantDiscount,isMerchantPurchaseRequest,classifyMerchantIntent,merchantNegotiationTarget,beginMerchantNegotiation,resolveMerchantNegotiation,merchantDiscountDC,beginCartNegotiation,resolveCartNegotiation} from './frontierShop';
+import {buyFrontierItem,frontierShopStock,frontierMerchantContext,formatFrontierPrice,parseFrontierPurchase,prepareMerchantPurchase,prepareMerchantCart,settleMerchantPurchase,cityShopStock,merchantCatalogFor,availableMerchants,merchantStockKey,merchantStockKeyForCampaign,merchantInitialStock,merchantRestockIntervalMinutes,walletCopper,remainingMerchantStock,merchantCatalog,isMerchantBrowseRequest,isEstablishedMerchantConversation,merchantInvitationIsCurrent,trackMerchantConversation,acceptsMerchantBrowseInvitation,approveMerchantDiscount,isMerchantPurchaseRequest,classifyMerchantIntent,merchantNegotiationTarget,beginMerchantNegotiation,resolveMerchantNegotiation,merchantDiscountDC,beginCartNegotiation,resolveCartNegotiation} from './frontierShop';
 function fixture(){const c=newCampaign('Shop','shop-test');return beginAdventureSession({...c,merchantSettlementTier:'town',characterIdentity:{name:'Test',speciesId:'elf',backgroundId:'sage',classId:'rogue',draftId:'draft',pronouns:'',appearance:'',personality:'',backstory:''},inventoryLedger:{currency:{GP:10,SP:0,CP:0,EP:0,PP:0},gear:[]}})}
 describe('deterministic merchant negotiation check lifecycle',()=>{
  const pending=(token='social-1')=>({...fixture(),pendingCheck:{token,skill:'Persuasion' as const,mode:'normal' as const,reason:'Negotiate the dagger price'}});
@@ -423,5 +423,39 @@ describe('Dasahi merchant handoff',()=>{
   }
   expect(acceptsMerchantBrowseInvitation('yes','Do you want to shop here?')).toBe(true);
   expect(acceptsMerchantBrowseInvitation('no thanks','Would you like to see my shop?')).toBe(false);
+ });
+});
+
+describe('persisted merchant conversation context',()=>{
+ it('survives many intervening turns and JSON reload without opening a shop on ordinary conversation',()=>{
+  const start=fixture();
+  const offer=addExchange(start,'Hello','The merchant smiles. Come have a look at my goods.');
+  const tracked=trackMerchantConversation(offer,'Hello','The merchant smiles. Come have a look at my goods.');
+  expect(isEstablishedMerchantConversation(tracked)).toBe(true);
+  expect(merchantInvitationIsCurrent(tracked)).toBe(true);
+  let current=tracked;
+  for(let i=0;i<8;i++){
+   current=addExchange(current,'How is business?','The merchant tells you about the harbor.');
+   current=trackMerchantConversation(current,'How is business?','The merchant tells you about the harbor.');
+  }
+  const reloaded=JSON.parse(JSON.stringify(current)) as typeof current;
+  expect(isEstablishedMerchantConversation(reloaded)).toBe(true);
+  expect(merchantInvitationIsCurrent(reloaded)).toBe(false);
+  expect(classifyMerchantIntent('Not sure, what do you have?')).toBe('browse');
+  expect(reloaded.merchantShopOpen).not.toBe(true);
+  expect(reloaded.merchantConversation?.shopType).toBeUndefined();
+ });
+ it('invalidates merchant context on travel or leaving and does not infer it from unrelated dialogue',()=>{
+  const base=fixture();
+  expect(isEstablishedMerchantConversation(trackMerchantConversation(base,'Hello','A guard waves at the city gate.'))).toBe(false);
+  expect(isEstablishedMerchantConversation(trackMerchantConversation(base,'I walk down the quay','A merchant passes on the other side of the street.'))).toBe(false);
+  const c=trackMerchantConversation(addExchange(base,'Hello','The shopkeeper shows her wares.'),'Hello','The shopkeeper shows her wares.');
+  expect(isEstablishedMerchantConversation(c)).toBe(true);
+  expect(isEstablishedMerchantConversation({...c,location:'Another town'})).toBe(false);
+  const travelled=trackMerchantConversation({...c,adventureSession:{...c.adventureSession!,site:'crossroads'}},'I travel away','The road stretches on.');
+  expect(travelled.merchantConversation?.active).toBe(false);
+  expect(isEstablishedMerchantConversation({...travelled,adventureSession:c.adventureSession})).toBe(false);
+  const departed=trackMerchantConversation(addExchange(c,'I leave the shop','You walk outside.'),'I leave the shop','You walk outside.');
+  expect(isEstablishedMerchantConversation(departed)).toBe(false);
  });
 });

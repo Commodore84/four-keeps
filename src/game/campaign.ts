@@ -33,6 +33,8 @@ export interface Campaign {
   companionEncounter?:CompanionEncounter;
   adventureSession?:AdventureSession;
   merchantShopOpen?:boolean;
+  /** Persisted merchant dialogue context; bound to the scene to avoid opening shops after travel. */
+  merchantConversation?:{location:string;site:string;active:boolean;lastOfferDmId?:string;shopType?:Campaign['merchantShopType']};
   merchantSettlementTier?:'city'|'town'|'village'|'traveling';
   merchantShopType?:'general'|'weaponsmith'|'armorer'|'apothecary'|'arcanist'|'outfitter'|'stable'|'trader';
   merchantCartNegotiation?:{purchaseId:string;percent:number;dc:number;attempted:boolean;checkToken?:string;resolved?:boolean;success?:boolean};

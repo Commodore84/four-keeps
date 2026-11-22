@@ -140,11 +140,42 @@ export function refreshMerchantStock(campaign:Campaign):Campaign {
 }
 export function merchantCatalog(campaign:Campaign):string {return merchantStock(campaign).map(item=>item.name+": "+formatFrontierPrice(item.costCp)+(item.packQuantity?" per pack of "+item.packQuantity:" each")+" ("+remainingMerchantStock(campaign,item.id)+" available)").join("; ");}
 /** Detect a merchant conversation without treating every city scene as a storefront. */
+const merchantDialogue=/\b(?:merchant|shopkeeper|weaponsmith|blacksmith|armorer|armourer|apothecary|outfitter|trader|shop owner|shopkeeper|shop|store|wares|stocked weapons|inventory|shelves)\b/i;
+const merchantExit=/\b(?:leave|left|walk away|head away|depart|goodbye|farewell|exit the (?:shop|store)|step outside)\b/i;
+const merchantOffer=/\b(?:browse|look (?:at|through)|show (?:you|me)|see (?:what|the)|view|take a look|have a look|wares|stock|goods|inventory|merchandise|supplies|catalog)\b/i;
+/** Track the merchant scene in campaign state instead of depending on the last five messages. */
+export function trackMerchantConversation(campaign:Campaign,playerMessage:string,dmNarration:string):Campaign {
+ if(!campaign.characterIdentity)return campaign;
+ if(campaign.adventureSession?.status!=='exploring'||campaign.adventureSession.site!=='frontier'){
+  return campaign.merchantConversation?.active?{...campaign,merchantConversation:{...campaign.merchantConversation,active:false,lastOfferDmId:undefined}}:campaign;
+ }
+ const location=campaign.location;
+ const previous=campaign.merchantConversation;
+ const sameScene=previous?.active&&previous.location===location&&previous.site===campaign.adventureSession.site;
+ const playerLeaving=merchantExit.test(playerMessage)&&!/(?:don't|do not|not going to)\s+(?:leave|walk away)/i.test(playerMessage);
+ if(playerLeaving)return {...campaign,merchantConversation:{location,site:'frontier',active:false}};
+ const merchantPresent=merchantDialogue.test(dmNarration)&&(
+  merchantOffer.test(dmNarration)
+  || /\b(?:merchant|shopkeeper|weaponsmith|blacksmith|armorer|armourer|apothecary|outfitter|trader)\b[\s\S]{0,75}\b(?:says|asks|replies|nods|tells|smiles|greets|shows|offers|invites|answers|gestures)\b/i.test(dmNarration)
+ );
+ if(!sameScene&&!merchantPresent)return campaign;
+ const lastDm=[...campaign.journal].reverse().find(entry=>entry.kind==='dm');
+ const offerId=merchantPresent&&merchantOffer.test(dmNarration)?lastDm?.id:undefined;
+ return {...campaign,merchantConversation:{location,site:'frontier',active:true,shopType:campaign.merchantShopType,lastOfferDmId:offerId}};
+}
 export function isEstablishedMerchantConversation(campaign:Campaign):boolean {
- if(!campaign.characterIdentity || campaign.adventureSession?.site!=='frontier' || campaign.adventureSession.status!=='exploring')return false;
+ if(!campaign.characterIdentity||campaign.adventureSession?.site!=='frontier'||campaign.adventureSession.status!=='exploring')return false;
+ const context=campaign.merchantConversation;
+ if(context&&context.location===campaign.location&&context.site===campaign.adventureSession.site)return context.active;
+ if(context&&context.location!==campaign.location)return false;
+ // Backwards compatibility for campaigns saved before merchant context existed.
  const recent=campaign.journal.filter(entry=>entry.kind==='dm'||entry.kind==='player').slice(-5);
- const merchantWords=/\b(?:merchant|shopkeeper|general store|weaponsmith|blacksmith|armorer|armourer|apothecary|outfitter|shop|store|wares|stocked weapons|inventory|shelves)\b/i;
- return recent.some(entry=>merchantWords.test(entry.text));
+ return recent.some(entry=>merchantDialogue.test(entry.text));
+}
+export function merchantInvitationIsCurrent(campaign:Campaign):boolean {
+ const context=campaign.merchantConversation;
+ const latestDm=[...campaign.journal].reverse().find(entry=>entry.kind==='dm');
+ return Boolean(isEstablishedMerchantConversation(campaign)&&latestDm&&context?.lastOfferDmId===latestDm.id);
 }
 export function acceptsMerchantBrowseInvitation(message:string,lastDmTurn:string):boolean {
  const reply=message.trim().toLowerCase().replace(/[.!?]+$/,'').trim();
