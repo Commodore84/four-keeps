@@ -11,7 +11,7 @@ import {merchantStock,remainingMerchantStock,formatFrontierPrice,walletCopper,av
 export function MerchantShop({campaign,saving,onClose,onPrepare,onSettle,onDiscuss,onSupplyChange}:{campaign:Campaign;saving:boolean;onClose:()=>void;onPrepare:(items:{itemId:string;quantity:number}[],merchant:ReturnType<typeof availableMerchants>[number])=>Promise<void>;onSettle:(confirmed:boolean)=>Promise<void>;onDiscuss:(items:{itemId:string;quantity:number}[],merchant:ReturnType<typeof availableMerchants>[number])=>Promise<void>;onSupplyChange:(next:Campaign,message:string)=>Promise<boolean>|boolean|void}){
  const merchantKey='four-keeps:cart:v1:'+campaign.id+':'+(campaign.location??'')+':'+(campaign.merchantShopType??'general');
  const [cart,setCart]=useState<Record<string,number>>(()=>{
-  try{const raw=localStorage.getItem(merchantKey);if(!raw)return {};const parsed:unknown=JSON.parse(raw);if(!parsed||typeof parsed!=='object'||Array.isArray(parsed))return {};return Object.fromEntries(Object.entries(parsed).filter(([id,n])=>/^[a-z0-9-]+$/.test(id)&&typeof n==='number'&&Number.isSafeInteger(n)&&n>=0&&n<=20));}catch{return {};}
+  try{const raw=localStorage.getItem(merchantKey);if(!raw)return {};const parsed:unknown=JSON.parse(raw);if(!parsed||typeof parsed!=='object'||Array.isArray(parsed))return {};return Object.fromEntries(Object.entries(parsed).filter(([id,n])=>/^[a-z0-9-]+$/.test(id)&&typeof n==='number'&&Number.isSafeInteger(n)&&n>=0&&n<=1000000));}catch{return {};}
  });
  useEffect(()=>{try{localStorage.setItem(merchantKey,JSON.stringify(cart));}catch{/* Storage may be disabled; shopping still works in memory. */}},[cart,merchantKey]);
  const [orderQuantity,setOrderQuantity]=useState<Record<string,number>>({});
@@ -42,7 +42,7 @@ export function MerchantShop({campaign,saving,onClose,onPrepare,onSettle,onDiscu
  });
  const grouped=Object.entries(visible.reduce<Record<string,typeof visible>>((groups,line)=>{const name=merchantCategory(line.item);(groups[name]??=[]).push(line);return groups;},{})).map(([group,entries])=>[group,entries.sort((a,b)=>sort==='name'?a.item.name.localeCompare(b.item.name):((a.unit-b.unit)*(sort==='price-up'?1:-1)||a.item.name.localeCompare(b.item.name)))] as [string,typeof visible]).sort(([a],[b])=>a.localeCompare(b));
  const total=selected.reduce((sum,line)=>sum+line.unit*line.quantity,0);
- const eligible=selected.length>0&&total<=funds&&selected.every(line=>line.quantity<=line.stock&&line.quantity<=20);
+ const eligible=selected.length>0&&total<=funds&&selected.every(line=>line.quantity<=line.stock);
  const pendingLines=pending?.lines??(pending?[{itemId:pending.itemId,quantity:pending.quantity,unitCostCp:pending.unitCostCp}]:[]);
  const pendingTotal=pendingLines.reduce((sum,line)=>sum+line.quantity*line.unitCostCp,0);
  return <section aria-label={tier==='city'?(campaign.location||'City')+' marketplace':tier==='traveling'?'Traveling merchant':'Frontier Village general store'} className="rounded-xl border border-gold/35 bg-panel p-1 space-y-1 pb-0">
@@ -85,7 +85,7 @@ export function MerchantShop({campaign,saving,onClose,onPrepare,onSettle,onDiscu
       {quantity>1&&<span className="text-xs tabular-nums text-parchment/70" aria-label={item.name+' subtotal'}>{formatFrontierPrice(unit*quantity)}</span>}
       <button type="button" aria-label={'Remove '+item.name} disabled={saving||!!pending||quantity===0} onClick={()=>setCart(old=>({...old,[item.id]:Math.max(0,quantity-(item.id==='arrows'?20:1))}))} className="h-11 w-11 rounded-lg border border-white/30 text-lg disabled:opacity-40">−</button>
       <span className="min-w-4 text-center tabular-nums" aria-label={item.name+' quantity'}>{item.id==='arrows'?quantity/20:quantity}</span>
-      <button type="button" aria-label={'Add '+item.name} disabled={saving||!!pending||quantity+(item.id==='arrows'?20:1)>Math.min(stock,20)} onClick={()=>setCart(old=>({...old,[item.id]:quantity+(item.id==='arrows'?20:1)}))} className="h-11 w-11 rounded-lg border border-white/30 text-lg disabled:opacity-40">+</button>
+      <button type="button" aria-label={'Add '+item.name} disabled={saving||!!pending||quantity+(item.id==='arrows'?20:1)>stock} onClick={()=>setCart(old=>({...old,[item.id]:quantity+(item.id==='arrows'?20:1)}))} className="h-11 w-11 rounded-lg border border-white/30 text-lg disabled:opacity-40">+</button>
      </div>
     </div>
    </div>)}</section>)}
