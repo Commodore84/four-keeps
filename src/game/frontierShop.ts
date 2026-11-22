@@ -149,10 +149,13 @@ export function isEstablishedMerchantConversation(campaign:Campaign):boolean {
 export function acceptsMerchantBrowseInvitation(message:string,lastDmTurn:string):boolean {
  const reply=message.trim().toLowerCase().replace(/[.!?]+$/,'').trim();
  const affirmative=/^(?:yes|yeah|yep|yup|sure|okay|ok|please|absolutely|certainly|definitely|of course|sounds good|sounds great|i'd love to|i would love to|let's do it|let's browse|let's look|go ahead|why not|show me|yes please|sure thing)(?:[,! ]+.*)?$/i.test(reply);
+ const shoppingAcceptance=/^(?:sure|yes|yeah|yep|okay|ok|absolutely|certainly|sounds good|of course)[,! ]+(?:i (?:could|can|would|might|do) (?:use|need|want|like)|i'm (?:looking|shopping)|let me (?:look|see)|i'll (?:take|have) a look)\b/i.test(reply);
  const offered=/\b(?:browse|look (?:at|through)|show (?:you|me)|see|view|interested in|want to|like to)\b[\s\S]{0,130}\b(?:wares|stock|goods|inventory|merchandise|store|shop|weapons|armor|supplies|items|catalog)\b/i.test(lastDmTurn)
  || /\b(?:shop|store|merchant|shopkeeper)\b[\s\S]{0,100}\b(?:browse|buy|purchase|see what|look at)\b/i.test(lastDmTurn)
- || /\b(?:do|would) you (?:want|like) to (?:shop|browse|buy|see what(?: i| we)? (?:have|sell))\b/i.test(lastDmTurn);
- return affirmative && offered;
+ || /\b(?:do|would) you (?:want|like) to (?:shop|browse|buy|see what(?: i| we)? (?:have|sell))\b/i.test(lastDmTurn)
+ || /\b(?:come|step|stop|feel free to)\s+(?:on\s+)?(?:in\s+and\s+)?(?:have|take|for)\s+a\s+look\b/i.test(lastDmTurn)
+ || /\b(?:merchant|shopkeeper)\b[\s\S]{0,260}\b(?:come have a look|take a look|dry goods|trail bits|supplies|wares)\b/i.test(lastDmTurn);
+ return (affirmative || shoppingAcceptance) && offered;
 }
 export function isMerchantBrowseRequest(message:string):boolean {return /\b(what (?:do you|have you|are you) (?:sell|stock|carry|have)|show (?:me )?(?:your )?(?:wares|inventory|stock)|(?:list|catalog|inventory|price list|prices|wares|for sale)|brows(?:e|ing)|(?:take|have) a look at (?:your |the )?(?:goods|wares|stock|merchandise)|look (?:at|through) (?:your |the )?(?:goods|wares|stock|merchandise))\b/i.test(message);}
 export function merchantNegotiationTarget(message:string):string|null {

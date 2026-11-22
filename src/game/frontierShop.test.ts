@@ -159,6 +159,10 @@ describe('natural DM intent does not become a transaction',()=>{
 
 describe('multi-item merchant cart',()=>{
  it('opens browsing directly but does not misclassify finding a craftsperson',()=>{
+  const docksideOffer='Merchant: “Off the water and in need of the usual, are you? Come have a look—dry goods, trail bits, and other practical mercies.”';
+  expect(acceptsMerchantBrowseInvitation('Sure, I could use a couple of things',docksideOffer)).toBe(true);
+  expect(acceptsMerchantBrowseInvitation('Sure, I could use a couple of things','The guard points down the road.')).toBe(false);
+  expect(acceptsMerchantBrowseInvitation('No thanks',docksideOffer)).toBe(false);
   expect(classifyMerchantIntent("I'd like to browse")).toBe('browse');
   expect(classifyMerchantIntent('Can I take a look at your goods?')).toBe('browse');
   expect(classifyMerchantIntent('Let me have a look at the merchandise.')).toBe('browse');
