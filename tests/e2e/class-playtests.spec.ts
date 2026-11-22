@@ -1531,3 +1531,31 @@ test('Four Keeps uses its approved castle for menu, opening screen and Home Scre
  await expect(page.locator('img[src="/four-keeps-emblem.svg"]').first()).toBeVisible();
  await page.screenshot({path:'test-results/v19-four-keeps-approved-logo-iphone.png',fullPage:false});
 });
+
+test('Dasahi merchant narration offers Browse Shop and opens the full catalog without another DM request',async({page})=>{
+ test.setTimeout(90000);
+ await createAndImport(page,'rogue');
+ await navigate(page,'Adventure');
+ await page.evaluate(()=>{localStorage.setItem('four-keeps-access-code','browser-test-code');localStorage.setItem('four-keeps-dm-mode','on');});
+ let dmCalls=0;
+ await page.route('**/api/dm',async route=>{
+  dmCalls++;
+  await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({narration:'The merchant nods. Weapons and common supplies I have got. Armor, no. Not here. He indicates the stocked weapons available at the Dasahi general store.',worldUpdates:{},newFacts:[]})});
+ });
+ await page.reload();
+ await page.getByRole('button',{name:'Campaigns',exact:true}).click();
+ await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await expect.poll(async()=> (await saved(page))?.journal?.some((entry:any)=>entry.id?.endsWith('-dm-opening'))).toBe(true);
+ await expect(page.getByRole('button',{name:'Browse Shop'})).toBeVisible();
+ const before=await saved(page);
+ const calls=dmCalls;
+ await page.getByRole('button',{name:'Browse Shop'}).click();
+ await expect(page.getByRole('region',{name:'Adventure storefront'})).toBeVisible();
+ await expect(page.getByPlaceholder('Search items')).toBeVisible();
+ await expect(page.getByRole('region',{name:'Compact purchase summary'})).toBeVisible();
+ expect(dmCalls).toBe(calls);
+ const after=await saved(page);
+ expect(after.inventoryLedger).toEqual(before.inventoryLedger);
+ expect(after.merchantShopOpen).toBe(true);
+ await page.screenshot({path:'test-results/dasahi-browse-shop.png',fullPage:true});
+});
