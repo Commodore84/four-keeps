@@ -83,7 +83,7 @@ const gear:Record<string,string>={
  torch:'Burns for 1 hour, with Bright Light out to 20 feet and Dim Light for 20 feet beyond it. The SRD permits a Simple Melee attack that deals 1 Fire damage on a hit.',
  vial:'Holds up to 4 ounces.',
  waterskin:'Holds up to 4 pints of water. Drink or refill from a confirmed source. Daily water needs depend on creature size.',
- arrows:'Ammunition for Shortbows and Longbows. Store in a Quiver.',
+ arrows:'Sold in bundles of 20 arrows (1 GP per bundle). Each arrow is tracked and consumed individually in combat. Ammunition for Shortbows and Longbows. Store in a Quiver.',
  bolts:'Ammunition for crossbows. Store in a Crossbow Bolt Case.',
  'bullets-firearm':'Ammunition for firearms. Store in a Pouch.',
  'bullets-sling':'Ammunition for a Sling. Store in a Pouch.',
@@ -122,7 +122,7 @@ const toolUses:Record<string,string>={
 export function merchantItemDescription(item:Item):string{
  if(item.category==='weapon')return `Use with the Attack action. ${item.weaponGroup==='simple'?'Simple':'Martial'} weapon proficiency adds your proficiency bonus to its attack roll.${item.mastery?' Its mastery requires a feature that unlocks it.':''}`;
  if(item.category==='armor')return `${item.armorGroup??'Worn'} armor sets your base AC while equipped. You need training in its armor category to wear it without penalties.`;
- if(item.category==='shield')return 'Wield in one hand for its AC bonus. You need Shield training to gain that bonus.';
+ if(item.category==='shield')return 'Wield in one hand to gain +2 AC. You need Shield training to gain this bonus. The bonus applies while wielding the Shield.';
  if(item.id.startsWith('arcane-focus-'))return 'A spellcasting focus for Sorcerers, Warlocks, and Wizards. Can replace Material components that have no listed cost and are not consumed.'+(item.id.endsWith('-staff')?' Also serves as a Quarterstaff.':'');
  if(item.id.startsWith('druidic-focus-'))return 'A spellcasting focus for Druids and Rangers. Can replace Material components that have no listed cost and are not consumed.'+(item.id.endsWith('-staff')?' Also serves as a Quarterstaff.':'');
  if(item.id.startsWith('gaming-set-'))return 'Wisdom. Utilize to detect cheating (DC 10) or win the game (DC 20).';
@@ -135,6 +135,7 @@ export function merchantItemFacts(item:Item):string[]{
  if(item.damage)facts.push(item.damage+' damage');
  if(item.properties?.length)facts.push(item.properties.join(', '));
  if(item.mastery)facts.push(item.mastery+' mastery');
+ if(item.category==='shield')facts.push('AC +2');
  if(item.baseAC!==undefined){
   const dex=item.armorGroup==='Light'?' + Dex modifier':item.armorGroup==='Medium'?` + Dex modifier (max ${item.dexCap??2})`:'';
   facts.push(`AC ${item.category==='shield'&&item.baseAC>0?'+':''}${item.baseAC}${dex}`);
