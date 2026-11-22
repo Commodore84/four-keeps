@@ -2,7 +2,7 @@ import {describe,it,expect} from 'vitest';
 import {merchantItemDescription,merchantItemFacts} from './merchantItemDetails';
 import {newCampaign} from './campaign';
 import {beginAdventureSession} from './adventureSession';
-import {buyFrontierItem,frontierShopStock,frontierMerchantContext,formatFrontierPrice,parseFrontierPurchase,prepareMerchantPurchase,prepareMerchantCart,settleMerchantPurchase,cityShopStock,merchantCatalogFor,availableMerchants,merchantStockKey,merchantStockKeyForCampaign,merchantInitialStock,merchantRestockIntervalMinutes,walletCopper,remainingMerchantStock,merchantCatalog,isMerchantBrowseRequest,approveMerchantDiscount,isMerchantPurchaseRequest,classifyMerchantIntent,merchantNegotiationTarget,beginMerchantNegotiation,resolveMerchantNegotiation,merchantDiscountDC,beginCartNegotiation,resolveCartNegotiation} from './frontierShop';
+import {buyFrontierItem,frontierShopStock,frontierMerchantContext,formatFrontierPrice,parseFrontierPurchase,prepareMerchantPurchase,prepareMerchantCart,settleMerchantPurchase,cityShopStock,merchantCatalogFor,availableMerchants,merchantStockKey,merchantStockKeyForCampaign,merchantInitialStock,merchantRestockIntervalMinutes,walletCopper,remainingMerchantStock,merchantCatalog,isMerchantBrowseRequest,isEstablishedMerchantConversation,acceptsMerchantBrowseInvitation,approveMerchantDiscount,isMerchantPurchaseRequest,classifyMerchantIntent,merchantNegotiationTarget,beginMerchantNegotiation,resolveMerchantNegotiation,merchantDiscountDC,beginCartNegotiation,resolveCartNegotiation} from './frontierShop';
 function fixture(){const c=newCampaign('Shop','shop-test');return beginAdventureSession({...c,merchantSettlementTier:'town',characterIdentity:{name:'Test',speciesId:'elf',backgroundId:'sage',classId:'rogue',draftId:'draft',pronouns:'',appearance:'',personality:'',backstory:''},inventoryLedger:{currency:{GP:10,SP:0,CP:0,EP:0,PP:0},gear:[]}})}
 describe('deterministic merchant negotiation check lifecycle',()=>{
  const pending=(token='social-1')=>({...fixture(),pendingCheck:{token,skill:'Persuasion' as const,mode:'normal' as const,reason:'Negotiate the dagger price'}});
@@ -398,5 +398,18 @@ describe('shop item details',()=>{
   const torch=cityShopStock.find(item=>item.id==='torch')!;
   expect(merchantItemDescription(torch)).toContain('Bright Light out to 20 feet');
   expect(merchantItemFacts(torch)).toContain('1 lb.');
+ });
+});
+
+describe('Dasahi merchant handoff',()=>{
+ it('recognizes a merchant discussing weapons and general supplies',()=>{
+  const c={...fixture(),journal:[{id:'merchant-scene',kind:'dm',text:'The merchant at the Dasahi general store says: Weapons and common supplies I have got. Armor, no. Not here.',at:new Date().toISOString()}]} as unknown as ReturnType<typeof fixture>;
+  expect(isEstablishedMerchantConversation(c)).toBe(true);
+  expect(acceptsMerchantBrowseInvitation("sure, let's start here",'Do you want to browse this dockside general store’s wares?')).toBe(true);
+  expect(classifyMerchantIntent('Show me the inventory at this store.')).toBe('browse');
+ });
+ it('does not expose the shop in an unrelated scene',()=>{
+  expect(isEstablishedMerchantConversation(fixture())).toBe(false);
+  expect(acceptsMerchantBrowseInvitation('yes','The guard asks if you will follow him.')).toBe(false);
  });
 });
