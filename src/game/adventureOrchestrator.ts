@@ -57,7 +57,7 @@ export function prepareAdventureAction(campaign:Campaign,message:string,actionId
 }
 
 export function commitAdventureAction(campaign:Campaign,actionId:string,narration:string,now=new Date().toISOString(),newFacts:string[]=[],worldUpdates?:unknown):Campaign {
-  if(campaign.journal.some(e=>e.id===actionId+'-player'))return campaign;
+  if(campaign.journal.some(e=>e.id===actionId+'-dm'))return campaign;
   const pending=campaign.pendingAdventureAction;
   if(!pending||pending.id!==actionId)throw Error('The response is stale or belongs to another action.');
   if(!narration.trim())throw Error('The DM response is empty.');
@@ -68,8 +68,9 @@ export function commitAdventureAction(campaign:Campaign,actionId:string,narratio
     const fact=item.trim().slice(0,220);
     if(fact&&!facts.some(x=>x.toLowerCase()===fact.toLowerCase()))facts.push(fact);
   }
+  const originalAlreadyVisible=campaign.journal.some(entry=>entry.id===actionId+'-clarify-original');
   return recordEncounter({...rest,worldFacts:facts.slice(-60),world:mergeWorld(campaign.world,worldUpdates),updatedAt:now,journal:[...campaign.journal,
-    {id:actionId+'-player',kind:'player' as const,text:pending.message,createdAt:pending.createdAt},
+    ...(!originalAlreadyVisible?[{id:actionId+'-player',kind:'player' as const,text:pending.message,createdAt:pending.createdAt}]:[]),
     {id:actionId+'-dm',kind:'dm' as const,text:narration.trim(),createdAt:now}
   ]},actionId,pending.message,narration,now);
 }
@@ -80,11 +81,23 @@ export function pauseAdventureForClarification(campaign:Campaign,actionId:string
  if(!campaign.pendingAdventureAction||campaign.pendingAdventureAction.id!==actionId)throw Error('Clarification does not match the pending action.');
  if(!question.trim())throw Error('Clarification question is required.');
  if(campaign.pendingClarification?.answer)throw Error('The DM cannot repeat a clarification already answered.');
- return {...campaign,pendingClarification:{actionId,question:question.trim()}};
+ const originalId=actionId+'-clarify-original';
+ const originalVisible=campaign.journal.some(entry=>entry.id===originalId);
+ const count=campaign.journal.filter(entry=>entry.id.startsWith(actionId+'-clarify-question-')).length+1;
+ const now=new Date().toISOString();
+ return {...campaign,updatedAt:now,journal:[...campaign.journal,
+  ...(!originalVisible?[{id:originalId,kind:'player' as const,text:campaign.pendingAdventureAction.message,createdAt:campaign.pendingAdventureAction.createdAt}]:[]),
+  {id:actionId+'-clarify-question-'+count,kind:'dm' as const,text:question.trim(),createdAt:now}
+ ],pendingClarification:{actionId,question:question.trim()}};
 }
 export function answerAdventureClarification(campaign:Campaign,answer:string):Campaign {
  if(!campaign.pendingClarification||!campaign.pendingAdventureAction||campaign.pendingClarification.actionId!==campaign.pendingAdventureAction.id)throw Error('No pending clarification.');
  if(!answer.trim())throw Error('Clarification answer is required.');
  if(campaign.pendingClarification.answer)return campaign;
- return {...campaign,pendingClarification:{...campaign.pendingClarification,answer:answer.trim()}};
+ const count=campaign.journal.filter(entry=>entry.id.startsWith(campaign.pendingClarification!.actionId+'-clarify-question-')).length;
+ const now=new Date().toISOString();
+ return {...campaign,updatedAt:now,journal:[...campaign.journal,{
+  id:campaign.pendingClarification.actionId+'-clarify-answer-'+count,
+  kind:'player' as const,text:answer.trim(),createdAt:now
+ }],pendingClarification:{...campaign.pendingClarification,answer:answer.trim()}};
 }

@@ -32,7 +32,7 @@ describe('persistent adventure session',()=>{
   const initial=beginAdventureSession(base());
   const pending=prepareAdventureAction(initial,'Attack the dragon with my dagger','dragon-action');
   const asked=pauseAdventureForClarification(pending,'dragon-action','Are you sure?');
-  expect(asked.journal).toEqual(pending.journal);
+  expect(asked.journal.slice(-2).map(e=>e.text)).toEqual(['Attack the dragon with my dagger','Are you sure?']);
   expect(asked.world).toEqual(pending.world);
   expect(asked.adventureSession).toEqual(pending.adventureSession);
   expect(()=>pauseAdventureForClarification(pending,'wrong','Question')).toThrow();

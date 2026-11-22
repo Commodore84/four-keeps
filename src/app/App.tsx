@@ -185,11 +185,7 @@ function Adventure({ campaign, fullHistory, onToggleHistory, onAdventureChange, 
       <p className="eyebrow">{entry.kind === 'player' ? (campaign?.characterIdentity?.name??'Nighthawk') : 'Dungeon Master'}</p>
       {entry.kind==='dm'?<DMNarration key={entry.id} id={entry.id} text={entry.text} speed={narrationSpeed} animate={!seen.includes(entry.id)} onComplete={()=>markSeen(entry.id)}/>:<p className="mt-2 whitespace-pre-wrap leading-7 text-parchment/90">{entry.text}</p>}
     </article>)}
-    {campaign?.pendingClarification && <article aria-label="Dungeon Master clarification" className="mr-3 rounded-xl border border-white/10 bg-panel p-5">
-      <p className="eyebrow">Dungeon Master · Question</p>
-      <p className="mt-3 whitespace-pre-wrap leading-7 text-parchment/90">{campaign.pendingClarification.question}</p>
-      {campaign.pendingClarification.answer && <><p aria-label="Your clarification reply" className="mt-4 ml-6 rounded-xl border border-gold/30 bg-gold/10 p-3 whitespace-pre-wrap">{campaign.pendingClarification.answer}</p><button type="button" disabled={saving} className="mt-3 text-sm text-gold underline" onClick={()=>void onRetryAction()}>Continue conversation</button></>}
-    </article>}
+    {campaign?.pendingClarification?.answer && <p role="status" className="text-xs text-gold">Your reply is saved. <button type="button" disabled={saving} className="underline" onClick={()=>void onRetryAction()}>Retry DM response</button></p>}
     {campaign?.pendingMerchantPurchase && <section aria-label="Pending merchant order" className="rounded-xl border border-gold/40 bg-panel p-4 space-y-3">
       <h3 className="font-semibold">Pending merchant order</h3>
       <p className="text-sm">{(campaign.pendingMerchantPurchase.lines??[{itemId:campaign.pendingMerchantPurchase.itemId,quantity:campaign.pendingMerchantPurchase.quantity,unitCostCp:campaign.pendingMerchantPurchase.unitCostCp}]).map(line=>line.quantity+' × '+(frontierShopStock.find(item=>item.id===line.itemId)?.name??line.itemId)).join(', ')}</p>

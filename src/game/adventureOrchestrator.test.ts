@@ -74,7 +74,9 @@ describe('persistent AI adventure actions',()=>{
     expect(followup.pendingAdventureAction?.id).toBe('turn-clarify');
     const resolved=commitAdventureAction(answerAdventureClarification(followup,'Yes'),'turn-clarify','The merchant opens the shelves.');
     expect(resolved.pendingAdventureAction).toBeUndefined();
-    expect(resolved.journal.filter(e=>e.id.startsWith('turn-clarify'))).toHaveLength(2);
+    expect(resolved.journal.filter(e=>e.id.startsWith('turn-clarify'))).toHaveLength(6);
+    expect(resolved.journal.filter(e=>e.id.startsWith('turn-clarify')).map(e=>e.text)).toEqual(['I look at the store','Which store?','The dockside general store','Do you want to browse?','Yes','The merchant opens the shelves.']);
+    expect(resolved.journal.filter(e=>e.text==='I look at the store')).toHaveLength(1);
   });
   it('remembers structured NPCs and reported clues without upgrading their certainty',()=>{
     const pending=prepareAdventureAction(campaign(),'Who was here?','turn-3');
