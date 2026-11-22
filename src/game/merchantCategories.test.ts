@@ -18,7 +18,13 @@ describe('single-level merchant categories',()=>{
  });
  it('uses official weapon groups and keeps thrown melee weapons in melee',()=>{
   for(const [name,category] of [['Greatclub','Simple melee weapons'],['Longsword','Martial melee weapons'],['Rapier','Martial melee weapons'],['Javelin','Simple melee weapons'],['Dart','Simple ranged weapons'],['Pistol','Martial ranged weapons']] as const)expect(merchantCategory(byName(name))).toBe(category);
-  expect(merchantCategory(byName('Plate Armor'))).toBe('Armor');
+  expect(merchantCategory(byName('Plate Armor'))).toBe('Armor and shields');
+  expect(merchantCategory(byName('Shield'))).toBe('Armor and shields');
+  expect(merchantCategory(byName('Case, Crossbow Bolt'))).toBe('Ammunition');
+  expect(merchantCategory(byName('Quiver'))).toBe('Ammunition');
+  expect(merchantCategory(byName('Climber’s Kit'))).toBe('Climbing and rope');
+  expect(merchantCategory(byName('Navigator’s Tools'))).toBe('Specialist kits');
+  expect(merchantCategory(byName('Ink Pen'))).toBe('Exploration and information');
   expect(merchantCategory(byName('Musical Instrument (Lute)'))).toBe('Musical instruments');
   expect(merchantCategory(byName('Gaming Set (Dice)'))).toBe('Gaming sets');
   expect(merchantCategory(byName('Quiver'))).toBe('Ammunition');
@@ -31,6 +37,10 @@ describe('single-level merchant categories',()=>{
    groups.set(category,(groups.get(category)??0)+1);
   }
   expect(groups.get('Utility equipment')??0).toBeLessThan(16);
+  expect(groups.size).toBe(22);
+  expect(groups.has('Shields')).toBe(false);
+  expect(groups.has('Armor')).toBe(false);
+  expect(groups.get('Armor and shields')).toBe(13);
   expect(Math.max(...groups.values())).toBeLessThan(25);
  });
  it('audits the full catalog without losing any equipment',()=>{
