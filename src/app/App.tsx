@@ -873,7 +873,10 @@ export function App() {
       return;
     }
     if(campaign?.characterIdentity && campaign.adventureSession?.site==='frontier' && campaign.adventureSession.status==='exploring'){
-      if(classifyMerchantIntent(draft)==='browse'||(campaign.characterBuild&&isSupplierBrowseRequest(draft))){
+      const lastDmTurn=[...campaign.journal].reverse().find(entry=>entry.kind==='dm')?.text??'';
+      const acceptingBrowseInvitation=/^(?:yes|yeah|yep|sure|okay|ok|please|absolutely|sounds good|let(?:'s| us) (?:start|browse|look)|show me)(?:[,.! ]|$)/i.test(draft.trim())
+        && /\b(?:browse|look (?:at|through)|show (?:you|me)|see|view)\b[\s\S]{0,110}\b(?:wares|stock|goods|inventory|merchandise|store|shop|weapons|armor|supplies)\b/i.test(lastDmTurn);
+      if(classifyMerchantIntent(draft)==='browse'||(campaign.characterBuild&&isSupplierBrowseRequest(draft))||acceptingBrowseInvitation){
         setSaving(true);
         try{
           const mentionedMerchant=/\b(?:blacksmith|weaponsmith|smithy)\b/i.test(draft)?'weaponsmith':/\b(?:armorer|armourer)\b/i.test(draft)?'armorer':/\b(?:alchemist|apothecary)\b/i.test(draft)?'apothecary':/\b(?:outfitter)\b/i.test(draft)?'outfitter':/\b(?:general store|shopkeeper)\b/i.test(draft)?'general':campaign.merchantShopType??'general';
