@@ -2,6 +2,14 @@
 
 Read this document **before starting any continuation task**. Also read [RELEASE_CHECKS.md](RELEASE_CHECKS.md).
 
+## Mandatory continuation prompt preamble
+
+**Copy this block verbatim into every new Four Keeps continuation prompt or Proceed button, before the feature request:**
+
+> Continue Four Keeps in `Commodore84/four-keeps`. FIRST use the GitHub connection to read `docs/CONTINUATION.md` and `docs/RELEASE_CHECKS.md` from the current working branch. Recover the existing Vercel sandbox `four-keeps-m1-b2` using `get_named_sandbox(resume:true)`; verify its `/vercel/four-keeps` checkout, GitHub connectivity, and available test runner. A local container error such as `Could not resolve host: github.com` is NOT a reason to stop or demand another chat. Preserve dirty work; create an isolated worktree from the verified candidate SHA. If the sandbox is unavailable, investigate alternate Vercel sessions and GitHub-connected execution before reporting a specific blocker. Verify current foundation/candidate SHAs rather than assuming old ones. Run the full required release checks and only publish after exact-SHA CI and Vercel READY. Do not ask me to start another chat because one execution environment failed.
+
+**Handoff generator rule:** Never produce a Four Keeps Proceed button or new-chat continuation prompt that omits the preamble above. Keep the exact feature requirements after it. This file is a repository convention; it cannot automatically inject text into ChatGPT messages, so the continuation author must include it explicitly.
+
 ## Recover the actual state
 1. Query GitHub for the current HEAD of `feat/clean-app-shell`; never assume a SHA copied from an earlier chat is still current.
 2. Check existing isolated development branches, open PRs, relevant CI runs, and deployment status before creating new work. Distinguish the latest **published/verified foundation** from the latest **unfinished candidate**. Do not overwrite unfinished work.
