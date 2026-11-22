@@ -459,3 +459,25 @@ describe('persisted merchant conversation context',()=>{
   expect(isEstablishedMerchantConversation(departed)).toBe(false);
  });
 });
+
+describe('equipment packs as independent inventory components',()=>{
+ it('unpacks a purchased Explorer pack without creating a pack inventory entry',()=>{
+  const base=fixture();
+  const campaign={...base,inventoryLedger:{...base.inventoryLedger!,currency:{GP:150,SP:0,CP:0,EP:0,PP:0}}};
+  const bought=buyFrontierItem(campaign,'explorer-s-pack');
+  const gear=bought.inventoryLedger!.gear;
+  expect(gear.find(x=>x.name==='Explorer’s Pack')).toBeUndefined();
+  expect(gear.find(x=>x.name==='Backpack')?.quantity).toBe(1);
+  expect(gear.find(x=>x.name==='Torch')?.quantity).toBe(10);
+  expect(gear.find(x=>x.name==='Rations')?.quantity).toBe(10);
+  expect(gear.find(x=>x.name==='Oil')?.quantity).toBe(2);
+  expect(walletCopper(bought.inventoryLedger!.currency)).toBe(walletCopper(campaign.inventoryLedger.currency)-1000);
+ });
+ it('stacks components from multiple bundles without losing individual quantities',()=>{
+  const base=fixture();
+  const campaign={...base,inventoryLedger:{...base.inventoryLedger!,currency:{GP:150,SP:0,CP:0,EP:0,PP:0}}};
+  const bought=buyFrontierItem(campaign,'explorer-s-pack',2);
+  expect(bought.inventoryLedger!.gear.find(x=>x.name==='Backpack')?.quantity).toBe(2);
+  expect(bought.inventoryLedger!.gear.find(x=>x.name==='Torch')?.quantity).toBe(20);
+ });
+});

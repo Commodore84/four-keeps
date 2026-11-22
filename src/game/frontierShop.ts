@@ -1,6 +1,7 @@
 import type {Campaign} from './campaign';
 import {ITEM_BY_ID} from './creationEquipment';
 import {OFFICIAL_EQUIPMENT_2024} from './officialEquipment2024';
+import {equipmentPackContents} from './equipmentPacks';
 
 export function formatFrontierPrice(copper:number):string {
  if(!Number.isSafeInteger(copper)||copper<0)throw Error('Invalid copper amount.');
@@ -238,9 +239,14 @@ export function buyFrontierItem(campaign:Campaign,itemId:string,quantity=1,now=n
  const cost=unitCost*quantity;if(!Number.isSafeInteger(cost)||cost>funds)throw Error('Not enough money for this purchase.');
  let remaining=funds-cost;
  const currency={...ledger.currency};for(const [coin,cp] of denominations){currency[coin]=Math.floor(remaining/cp);remaining%=cp;}
- const gear=ledger.gear.map(i=>({...i}));const owned=gear.find(i=>i.name===item.name);
- const granted=quantity*(item.packQuantity??1);
- if(owned)owned.quantity+=granted;else gear.push({name:item.name,quantity:granted});
+ const gear=ledger.gear.map(i=>({...i}));
+ const pack=equipmentPackContents(itemId);
+ const additions=pack??[{item,quantity:item.packQuantity??1}];
+ for(const entry of additions){
+  const owned=gear.find(i=>i.name===entry.item.name);
+  const granted=quantity*entry.quantity;
+  if(owned)owned.quantity+=granted;else gear.push({name:entry.item.name,quantity:granted});
+ }
  return {...campaign,merchantStockRemaining:{...campaign.merchantStockRemaining,[merchantStockKeyForCampaign(campaign,campaign.merchantShopType??merchantForItem(campaign,itemId)??'general',itemId)]:remainingMerchantStock(campaign,itemId)-quantity},merchantStockRestockedAt:{...campaign.merchantStockRestockedAt,[merchantStockKeyForCampaign(campaign,campaign.merchantShopType??merchantForItem(campaign,itemId)??'general',itemId)]:(()=>{const key=merchantStockKeyForCampaign(campaign,campaign.merchantShopType??merchantForItem(campaign,itemId)??'general',itemId);const legacy=merchantStockKey(settlementTier(campaign),campaign.merchantShopType??merchantForItem(campaign,itemId)??'general',itemId);const interval=merchantRestockIntervalMinutes(settlementTier(campaign),itemId);const last=campaign.merchantStockRestockedAt?.[key]??campaign.merchantStockRestockedAt?.[legacy]??0;const elapsed=Math.max(0,campaign.elapsedMinutes??0);return settlementTier(campaign)==='traveling'||elapsed<last+interval?last:last+Math.floor((elapsed-last)/interval)*interval;})()},merchantDiscount:undefined,inventoryLedger:{currency,gear},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:`Purchased ${quantity} × ${item.name} at the Frontier Village shop for ${formatFrontierPrice(cost)}.`,createdAt:now}]};
 }
 

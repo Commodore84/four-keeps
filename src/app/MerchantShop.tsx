@@ -1,5 +1,6 @@
 import {CatalogJumpNavigation} from './CatalogJumpNavigation';
 import {merchantItemDescription,merchantItemFacts} from '../game/merchantItemDetails';
+import {equipmentPackContents,equipmentPackIndividualValue} from '../game/equipmentPacks';
 import {prepareCitySupplyOrder,confirmCitySupplyOrder,collectCitySupplyOrder} from '../game/merchantSupply';
 import {useState} from 'react';
 import {ADVENTURE_SITES,beginTravelingMerchantRoute} from '../game/adventureSession';
@@ -32,6 +33,7 @@ export function MerchantShop({campaign,saving,onClose,onPrepare,onSettle,onDiscu
   if(item.category==='weapon')return name.includes('crossbow')||name.includes('bow')||name.includes('sling')||name.includes('blowgun')?'Ranged weapons':'Melee weapons';
   if(item.category==='armor'||item.category==='shield')return 'Armor and shields';
   if(item.category==='ammunition')return 'Ammunition';
+  if(equipmentPackContents(item.id))return 'Equipment Packs';
   if(name.includes('potion')||name.includes('antitoxin')||name.includes('acid')||name.includes('alchemist')||name.includes('holy water')||name.includes('poison'))return 'Potions and alchemical supplies';
   if(name.includes('rations')||name.includes('waterskin')||name.includes('wine')||name.includes('ale'))return 'Food and drink';
   if(name.includes('torch')||name.includes('candle')||name.includes('lantern')||name.includes('lamp')||name.includes('tinderbox')||name.includes('oil'))return 'Lighting and fuel';
@@ -47,6 +49,7 @@ export function MerchantShop({campaign,saving,onClose,onPrepare,onSettle,onDiscu
   if(item.category==='weapon')return /crossbow|bow|sling|blowgun/.test(n)?'Bows and ranged weapons':/dagger|rapier|shortsword|scimitar|sword/.test(n)?'Blades':'Other melee weapons';
   if(item.category==='armor'||item.category==='shield')return item.category==='shield'?'Shields':/plate|splint|chain mail/.test(n)?'Heavy armor':/leather|hide|studded/.test(n)?'Light and medium armor':'Other armor';
   if(item.category==='ammunition')return /arrow/.test(n)?'Arrows':/bolt/.test(n)?'Bolts':'Other ammunition';
+  if(equipmentPackContents(item.id))return 'Equipment bundles';
   if(/potion|antitoxin|acid|alchemist|holy water|poison/.test(n))return /healing|antitoxin/.test(n)?'Healing and protection':'Alchemical supplies';
   if(/rope|grappling|climber|piton|ladder/.test(n))return 'Climbing equipment';
   if(/torch|candle|lantern|lamp|tinderbox|oil/.test(n))return /oil|tinderbox/.test(n)?'Fuel and fire starting':'Light sources';
@@ -84,6 +87,11 @@ export function MerchantShop({campaign,saving,onClose,onPrepare,onSettle,onDiscu
      <span className="shrink-0 tabular-nums text-gold">{formatFrontierPrice(unit)}</span>
     </div>
     <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-parchment/90" aria-label={item.name+' description'}>{merchantItemDescription(item)}</p>
+    {equipmentPackContents(item.id)&&<div className="rounded-md border border-white/15 bg-[#222b31] p-2 text-xs" aria-label={item.name+' bundle contents'}>
+      <p className="mb-1 font-semibold text-parchment">Included equipment · added individually to inventory</p>
+      <ul className="grid grid-cols-2 gap-x-3 gap-y-1">{equipmentPackContents(item.id)!.map(({item:component,quantity})=><li key={component.id} className="flex justify-between gap-2"><span>{component.name}</span><span className="shrink-0 text-gold">×{quantity}</span></li>)}</ul>
+      {equipmentPackIndividualValue(item.id)!==null&&<p className="mt-2 border-t border-white/15 pt-1 text-parchment/75">Individual item value: {formatFrontierPrice(equipmentPackIndividualValue(item.id)!)}{equipmentPackIndividualValue(item.id)!>item.costCp?' · Bundle savings: '+formatFrontierPrice(equipmentPackIndividualValue(item.id)!-item.costCp):''}</p>}
+    </div>}
     <div className="flex items-center justify-between gap-2">
      <p className="min-w-0 text-xs leading-snug text-parchment/75">{merchantItemFacts(item).join(' · ')}</p>
      <div className="flex shrink-0 items-center gap-1">
