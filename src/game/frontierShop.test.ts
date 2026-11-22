@@ -163,6 +163,8 @@ describe('multi-item merchant cart',()=>{
   expect(classifyMerchantIntent('Can I take a look at your goods?')).toBe('browse');
   expect(classifyMerchantIntent('Let me have a look at the merchandise.')).toBe('browse');
   expect(classifyMerchantIntent('Can I see the merchandise?')).toBe('information');
+  expect(classifyMerchantIntent('Show me the inventory at this store.')).toBe('browse');
+  expect(classifyMerchantIntent('What do you stock in your shop?')).toBe('browse');
   expect(classifyMerchantIntent('Where can I find a leatherworker?')).toBe('find-service');
  });
  it('quotes multiple items, persists, confirms once and updates exact inventory and currency',()=>{
