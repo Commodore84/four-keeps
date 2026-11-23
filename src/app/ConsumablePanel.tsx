@@ -124,7 +124,7 @@ export function ConsumablePanel({campaign,saving,onUse,onEncounterChange}:{campa
  {name==='Holy Water'&&<label className="block">DM-verified creature type<select className="w-full bg-slate-900" value={creatureType} onChange={e=>{setCreatureType(e.target.value as HolyWaterTargetType|'');setAcidDamage('');pending.current=null}}><option value="">Choose type</option><option>Fiend</option><option>Undead</option><option>Other</option></select></label>}
  {needsDamage&&<label className="block">{name==='Acid'?'Rolled acid damage':name==='Holy Water'?'Rolled 2d8 radiant damage':'Rolled 1d4 fire damage'}<input className="w-full bg-slate-900" type="number" min={name==='Alchemist’s Fire'?1:2} max={name==='Acid'?12:name==='Holy Water'?16:4} value={acidDamage} onChange={e=>{setAcidDamage(e.target.value);pending.current=null}}/></label>}
  </fieldset>}
- {item&&!ready&&<p role="status" className="text-xs text-amber-200">Choose the required target, roll, location, or confirmation before using {item.name}. During combat, check that the correct turn and action are available.</p>}
+ {item&&!ready&&<p aria-label="Consumable requirements" className="text-xs text-amber-200">Choose the required target, roll, location, or confirmation before using {item.name}. During combat, check that the correct turn and action are available.</p>}
  {item&&<div className="flex gap-2"><button type="button" disabled={saving||busy||!ready} onClick={async()=>{
   if(!pending.current)pending.current=crypto.randomUUID();
   setBusy(true);setError('');
