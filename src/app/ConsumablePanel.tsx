@@ -60,7 +60,7 @@ export function ConsumablePanel({campaign,saving,onUse,onEncounterChange}:{campa
  return <section aria-label="Adventuring consumables" className="rounded-xl border border-white/20 p-3 space-y-2">
  <h3 className="font-semibold">Adventuring consumables</h3>
  {owned.length>0&&<p aria-label="Owned consumable supplies" className="text-xs text-parchment/70">Available: {owned.map(g=>g.name+' ×'+g.quantity).join(' · ')}</p>}
- {battle?.status==='active'&&<p role="status" className="text-xs text-parchment/70">Combat round {battle.round} · Current turn: {currentActor??'none'}{actor?' · Action '+(actor.actionUsed?'spent':'available')+' · Bonus Action '+(actor.bonusActionUsed?'spent':'available'):''}. Consumables require an eligible action and a confirmed target.</p>}
+ {battle?.status==='active'&&<p aria-label="Consumable combat readiness" className="text-xs text-parchment/70">Combat round {battle.round} · Current turn: {currentActor??'none'}{actor?' · Action '+(actor.actionUsed?'spent':'available')+' · Bonus Action '+(actor.bonusActionUsed?'spent':'available'):''}. Consumables require an eligible action and a confirmed target.</p>}
  {scrolls.length>0&&<details className="rounded border border-gold/30 p-2 space-y-2" aria-label="Spell scroll casting">
  <summary>Cast an owned spell scroll (DM-confirmed)</summary>
  <p className="text-xs text-parchment/70">Choose the scroll and spell. Only spells verified in your character's prepared spells or cantrips are supported here. The DM must confirm casting requirements, action, and any spell effects. Combat casting is not yet supported in this panel. No spell slot is spent.</p>
