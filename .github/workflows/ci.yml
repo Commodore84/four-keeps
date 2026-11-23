@@ -12,7 +12,6 @@ on:
 
 permissions:
   contents: read
-  statuses: write
 
 # Repeated requests for the same branch replace obsolete runs, but never cancel
 # a release check for a different branch.
@@ -26,12 +25,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
-      - name: Mark exact SHA release verification pending
-        env:
-          GH_TOKEN: ${{ github.token }}
-          SHA: ${{ github.sha }}
-        run: |
-          gh api "repos/${{ github.repository }}/statuses/$SHA" -f state=pending -f context=Four-Keeps/full-release -f description="Full release checks running"
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
@@ -56,4 +49,4 @@ jobs:
             test-results/
             playwright-report/
             screenshots/
-    ...[truncated]
+          if-no-files-found: ignore
