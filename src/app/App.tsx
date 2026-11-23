@@ -34,7 +34,7 @@ import { cloneElement, useEffect, useRef, useState } from 'react';
 import { createBackup, parseBackup } from '../game/backup';
 import { BookOpen, Bird, Blocks, Compass, Droplet, Map, RefreshCw, Send, Settings, Shield, Swords, UserRound, Users, Search, ChevronDown, MessageCircle, MapPin, GitBranch, Sparkles } from 'lucide-react';
 import { addExchange, addNote, addRoll, beginDuel, adjustEquipment, rollDuelInitiative, takeDuelTurnAction, utilizeCombatItem, takeCombatSkillAction, readyCombatAction, readyCombatMindSliver, resolveReadiedSpellReaction, resolveReadiedCombatReaction, resolveReadiedWeaponAttack, moveDuelToken, moveOwl, owlHelp, owlTurnAction, tacticalRoute, tacticalOpportunityEnemies, publicCombatText, resolveEnemyOpportunity, moveTrainingDummy, resolveTrainingReaction, rollTrainingReaction, advanceDuelTestEnemyTurn, resolveDuelEnemyTurn, beginEnemyShove, beginEnemyGrapple, rollPlayerGrappleSave, beginPlayerGrappleEscape, rollPlayerGrappleEscape, rollPlayerShoveSave, standNighthawk, rollDuelAttack, shoveTrainingEnemy, hideNighthawk, searchForNighthawk, trainingMapSize, isTrainingPillar, trainingTerrain, trainingRouteCost, trainingCoverBlocksSight, canNighthawkHide, addSecondTrainingEnemy, selectTrainingTarget, grappleTrainingEnemy, escapeTrainingGrapple, concludeDuel, quitTrainingEncounter, newCampaign, awardExperience, levelUpRogue, levelUpArcaneTrickster, tricksterCantrips, tricksterSpells, isRitualSpell, castNighthawkSpell, castCombatMagicAction, resolveCombatSpellSave, resolveLaughterRepeatSave, availableCombatSpells, takeNighthawkRest, applyNighthawkDamage, minutesUntilLongRestEligible, advanceToLongRestEligibility, endNighthawkConcentration, spellRequiresConcentration, reconcileNighthawkScores, undoNighthawkScoreReconciliation, xpThresholds, type Campaign } from '../game/campaign';
-import { localCampaignStorage } from '../game/storage';
+import { localCampaignStorage,subscribeCampaignSaveStatus,type CampaignSaveStatus } from '../game/storage';
 import { availableCombatMovement, combatHideStatus, combatAttackRollPreview } from '../game/combat-ui';
 import type { View } from '../game/types';
 import { emptyWorld } from '../game/world';
@@ -507,6 +507,8 @@ export function App() {
   const [newTitle, setNewTitle] = useState('The Forgotten Keep');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [saveStatus,setSaveStatus]=useState<CampaignSaveStatus|null>(null);
+  useEffect(()=>subscribeCampaignSaveStatus(setSaveStatus),[]);
   const adventureRequestRef=useRef(false);
   const [accessCode, setAccessCode] = useState(() => { try { return localStorage.getItem('four-keeps-access-code') ?? sessionStorage.getItem('four-keeps-access-code') ?? ''; } catch { return ''; } });
   const [dmConnection,setDmConnection] = useState('');
@@ -1576,6 +1578,7 @@ export function App() {
       </section>}
       {portalScreen==='help'&&<section className="space-y-3"><h2 className="font-serif text-2xl">Help</h2><p className="text-sm text-parchment/75">Create a character in My Characters. Start or resume a saved campaign through New Adventure or My Campaigns. Campaigns and character drafts are saved locally on this device; export campaign backups from Settings.</p><p className="text-sm text-parchment/60">Additional rules reference and tutorials are planned.</p></section>}
       {notice&&<p role="status" className="text-sm text-gold">{notice}</p>}
+      {saveStatus&&saveStatus.campaignId===campaign?.id&&<p aria-label="Campaign save status" className={saveStatus.state==='failed'?'text-sm text-red-300':'text-xs text-parchment/70'}>{saveStatus.state==='saving'?'Saving adventure…':saveStatus.state==='saved'?'Adventure saved on this device.':'Adventure save failed: '+saveStatus.message+' Your changes may not be saved. Do not close this tab; resolve the issue before continuing.'}</p>}
     </div>
   </div>;
   return <div className="h-dvh overflow-hidden bg-ink text-parchment">
@@ -1957,6 +1960,7 @@ export function App() {
           <button type="submit" disabled={!draft.trim() || !campaign || saving || !!campaign.pendingClarification?.answer || (!!campaign.characterIdentity && !campaign.journal.some(entry=>entry.kind==='dm')) || !!campaign.pendingCheck || !!pendingAdventureSpell || !!campaign.characterIdentity && (campaign.adventureSession?.status==='encounter'||!!campaign.adventureSession?.pendingEncounter)} aria-label="Send message to Dungeon Master" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gold text-ink disabled:opacity-40"><Send size={19}/></button>
         </form>}
         {notice && <p role="status" className="px-5 pb-2 text-xs text-gold">{notice}</p>}
+        {saveStatus&&saveStatus.campaignId===campaign?.id&&<p aria-label="Campaign save status" className="px-5 pb-2 text-xs">{saveStatus.state==='saving'?'Saving adventure…':saveStatus.state==='saved'?'Adventure saved on this device.':'Save failed: '+saveStatus.message+'. Do not close this tab until resolved.'}</p>}
       </div>
     </div>
   </div>;
