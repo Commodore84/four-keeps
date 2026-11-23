@@ -1494,7 +1494,7 @@ export function App() {
       const restored = parseBackup(await file.text());
       const existing = await localCampaignStorage.get(restored.id);
       if (existing && !window.confirm('This campaign already exists. Replace its local save with the backup?')) return;
-      await localCampaignStorage.save(restored);
+      await localCampaignStorage.save(restored,{replaceExisting:true});
       setCampaigns(await localCampaignStorage.list());
       setCampaign(restored);
       setNotice('Campaign restored from backup.');
