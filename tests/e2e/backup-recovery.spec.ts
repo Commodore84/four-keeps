@@ -40,6 +40,8 @@ test('two iPhone tabs reject a stale save without erasing the newer journal',asy
  await legacy.getByRole('button',{name:'New',exact:true}).click();
  const other=await context.newPage();
  await other.goto('/four-keeps/');
+ await navigate(page,'Settings');
+ await navigate(other,'Settings');
  await navigate(page,'Adventure');
  await navigate(other,'Adventure');
  await page.getByLabel('Message the Dungeon Master').fill('Newer progress from first tab');
