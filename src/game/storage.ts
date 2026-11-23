@@ -17,6 +17,12 @@ const STORE = 'campaigns';
 const observedSaves = new Map<string,string>();
 const snapshot = (campaign: Campaign) => JSON.stringify(campaign);
 const observe = (campaign: Campaign) => { observedSaves.set(campaign.id,snapshot(campaign)); return campaign; };
+export type CampaignSaveStatus={state:'saving'|'saved'|'failed';campaignId:string;message?:string};
+const saveStatusListeners=new Set<(status:CampaignSaveStatus)=>void>();
+export function subscribeCampaignSaveStatus(listener:(status:CampaignSaveStatus)=>void):()=>void{
+ saveStatusListeners.add(listener);return ()=>{saveStatusListeners.delete(listener)};
+}
+function publishSaveStatus(status:CampaignSaveStatus){for(const listener of saveStatusListeners)listener(status)}
 export class StaleCampaignSaveError extends Error {
   constructor(){super('This adventure changed in another tab. Reload the app before saving to avoid overwriting newer progress.');this.name='StaleCampaignSaveError';}
 }
@@ -83,6 +89,8 @@ export const localCampaignStorage: CampaignStorage = {
   },
   async save(campaign, options) {
     if (!isCampaign(campaign)) throw new Error('Invalid campaign data');
+    publishSaveStatus({state:'saving',campaignId:campaign.id});
+    try {
     const expected = observedSaves.get(campaign.id);
     await transact<void>('readwrite', (store, resolve, reject) => {
       const read=store.get(campaign.id);
@@ -99,6 +107,11 @@ export const localCampaignStorage: CampaignStorage = {
       };
     });
     observe(campaign);
+    publishSaveStatus({state:'saved',campaignId:campaign.id});
+    } catch(error) {
+      publishSaveStatus({state:'failed',campaignId:campaign.id,message:error instanceof Error?error.message:String(error)});
+      throw error;
+    }
   },
   async remove(id) {
     await transact<void>('readwrite', (store, resolve, reject) => requestResult(store.delete(id), () => resolve(), reject));
