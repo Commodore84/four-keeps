@@ -39,3 +39,18 @@ export function packCartContents(cart:Readonly<Record<string,number>>):Map<strin
  }
  return result;
 }
+
+/** Idempotent migration of historical pack entries into their individual items. */
+export function expandInventoryPacks(gear:readonly {name:string;quantity:number}[]):{name:string;quantity:number}[]{
+ const result:{name:string;quantity:number}[]=[];
+ for(const entry of gear){
+  const pack=OFFICIAL_EQUIPMENT_2024.find(item=>item.name.toLowerCase()===entry.name.toLowerCase());
+  const contents=pack?equipmentPackContents(pack.id):null;
+  for(const part of contents??[{item:{name:entry.name},quantity:1}]){
+   const name=part.item.name,quantity=entry.quantity*part.quantity;
+   const owned=result.find(item=>item.name.toLowerCase()===name.toLowerCase());
+   if(owned)owned.quantity+=quantity;else result.push({name,quantity});
+  }
+ }
+ return result;
+}
