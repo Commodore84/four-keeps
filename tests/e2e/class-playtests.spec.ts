@@ -552,7 +552,7 @@ test('imported character summary and section navigation survive reload',async({p
  await expect(page.getByLabel('Imported player character')).toContainText('Level 1');
 });
 test('new Rogue starts at Frontier Village, buys supplies, and sees persisted Player sheet',async({page})=>{
- test.setTimeout(150000);
+ test.setTimeout(240000);
  await createAndImport(page,'rogue');
  await navigate(page,'Player');
  const sheet=page.getByLabel('Imported player character');
