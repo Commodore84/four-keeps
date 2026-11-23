@@ -15,7 +15,7 @@ import {MagicItemCompendium} from './MagicItemCompendium';
 import {magicWishlistNames} from '../game/magicWishlist';
 import {confirmCitySupplyOrder,isSupplierBrowseRequest} from '../game/merchantSupply';
 import {DMNarration,type NarrationSpeed} from './DMNarration';
-import {parseFrontierPurchase,prepareMerchantPurchase,prepareMerchantCart,settleMerchantPurchase,frontierShopStock,merchantStock,merchantCatalogFor,settlementTier,remainingMerchantStock,formatFrontierPrice,isMerchantNegotiationRequest,isMerchantPurchaseRequest,classifyMerchantIntent,isEstablishedMerchantConversation,merchantInvitationIsCurrent,trackMerchantConversation,acceptsMerchantBrowseInvitation,merchantNegotiationTarget,beginMerchantNegotiation,resolveMerchantNegotiation,beginCartNegotiation,resolveCartNegotiation} from '../game/frontierShop';
+import {authorizeQuestMagicSale,parseFrontierPurchase,prepareMerchantPurchase,prepareMerchantCart,settleMerchantPurchase,frontierShopStock,merchantStock,merchantCatalogFor,settlementTier,remainingMerchantStock,formatFrontierPrice,isMerchantNegotiationRequest,isMerchantPurchaseRequest,classifyMerchantIntent,isEstablishedMerchantConversation,merchantInvitationIsCurrent,trackMerchantConversation,acceptsMerchantBrowseInvitation,merchantNegotiationTarget,beginMerchantNegotiation,resolveMerchantNegotiation,beginCartNegotiation,resolveCartNegotiation} from '../game/frontierShop';
 import {classSummary} from '../game/creationClasses';
 import {completePlayerRest,playerLongRestWaitMinutes} from '../game/playerRecovery';
 import {frontierMerchantContext} from '../game/frontierShop';
@@ -1054,8 +1054,8 @@ export function App() {
       const memory=adventureMemory(prepared);
       const history=memory.recentConversation;
       const response = await fetch('/api/dm', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-four-keeps-access': accessCode },
-        body: JSON.stringify({ message:aiSession?prepared.pendingAdventureAction!.message:message, clarification:prepared.pendingClarification??null, actionId, character:current.character ?? prototypeNighthawk, gameState:{ magicWishlist:magicWishlistNames(current.id), ...campaignPlayerContext(current), adventureSession:current.adventureSession??null, merchant:frontierMerchantContext(current), characterIdentity:current.characterIdentity??null, location:current.location, combat:current.combat??null, familiar:current.familiar ?? null, elapsedMinutes:current.elapsedMinutes ?? 0, concentration:current.concentration??null, spellEffects:(current.spellEffects??[]).slice(-12), recentEvents:current.journal.filter(e=>e.kind==='system').slice(-8).map(e=>e.text) }, history, worldFacts: memory.establishedFacts, world: current.world ?? emptyWorld(), anchamida:current.characterBuild?{predefined:anchamidaLocations.map(s=>({id:s.id,name:s.name,x:s.x,y:s.y,notes:s.notes})),discovered:current.mapDiscovered??[],dynamic:current.mapDynamicSites??[]}:null, adventureMemory:memory }) });
-      const result: { narration?: string; newFacts?: string[]; worldUpdates?: unknown; checkRequest?: { skill:string; mode:'normal'|'advantage'|'disadvantage'; reason:string; token:string } | null; combatStart?:{enemyName:string}|null; merchantDiscount?:{itemId:string;percent:number}|null; clarificationRequest?:{question:string}|null; travelDestination?:string|null; mapActions?:unknown; error?: string } = await response.json();
+        body: JSON.stringify({ message:aiSession?prepared.pendingAdventureAction!.message:message, clarification:prepared.pendingClarification??null, actionId, character:current.character ?? prototypeNighthawk, gameState:{ magicWishlist:magicWishlistNames(current.id),magicSaleInventory:(current.inventoryLedger?.gear??[]).filter(item=>item.quantity>0).slice(0,40).map(item=>({name:item.name,quantity:item.quantity})), ...campaignPlayerContext(current), adventureSession:current.adventureSession??null, merchant:frontierMerchantContext(current), characterIdentity:current.characterIdentity??null, location:current.location, combat:current.combat??null, familiar:current.familiar ?? null, elapsedMinutes:current.elapsedMinutes ?? 0, concentration:current.concentration??null, spellEffects:(current.spellEffects??[]).slice(-12), recentEvents:current.journal.filter(e=>e.kind==='system').slice(-8).map(e=>e.text) }, history, worldFacts: memory.establishedFacts, world: current.world ?? emptyWorld(), anchamida:current.characterBuild?{predefined:anchamidaLocations.map(s=>({id:s.id,name:s.name,x:s.x,y:s.y,notes:s.notes})),discovered:current.mapDiscovered??[],dynamic:current.mapDynamicSites??[]}:null, adventureMemory:memory }) });
+      const result: { narration?: string; newFacts?: string[]; worldUpdates?: unknown; checkRequest?: { skill:string; mode:'normal'|'advantage'|'disadvantage'; reason:string; token:string } | null; combatStart?:{enemyName:string}|null; magicSaleOffer?:{buyer:string;questId:string;itemName:string;quantity:number;proceedsCp:number}|null; merchantDiscount?:{itemId:string;percent:number}|null; clarificationRequest?:{question:string}|null; travelDestination?:string|null; mapActions?:unknown; error?: string } = await response.json();
       if (!response.ok || !result.narration) throw new Error(result.error || 'DM request failed');
       // Do not trust the network boundary to enforce mutually exclusive gameplay transitions.
       // A rejected response leaves the persisted pending action available for an exact-ID retry.
@@ -1094,6 +1094,16 @@ export function App() {
         catch(error) {console.warn('Rejected invalid DM map action batch',error);}
       }
       mapped=trackMerchantConversation(mapped,message,result.narration);
+      if(aiSession&&result.magicSaleOffer&&!result.clarificationRequest&&!result.checkRequest&&!result.combatStart&&!result.travelDestination) {
+        try {
+          const offer=result.magicSaleOffer;
+          const approvalId='quest-sale-'+actionId;
+          const note='Magic-item buyer: '+offer.buyer+'; quest: '+offer.questId+'; item: '+offer.itemName+'; quantity: '+offer.quantity+'; offer: '+offer.proceedsCp+' CP';
+          const journal=[...mapped.journal,{id:approvalId,kind:'dm' as const,text:note,createdAt:new Date().toISOString()}];
+          const authorized=authorizeQuestMagicSale({...mapped,journal},{...offer,approvalId});
+          mapped={...authorized,merchantShopOpen:true,merchantShopType:'general'};
+        }catch(error){console.warn('DM magic sale offer rejected',error);}
+      }
       await localCampaignStorage.save(mapped);
       setCampaign(mapped);
       setCampaigns((items) => items.map((item) => item.id === mapped.id ? mapped : item));

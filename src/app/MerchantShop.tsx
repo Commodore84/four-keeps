@@ -20,7 +20,7 @@ export function MerchantShop({campaign,saving,onClose,onPrepare,onSettle,onDiscu
  const orderAction=(action:()=>Campaign,message:string)=>{try{setOrderError('');void Promise.resolve(onSupplyChange(action(),message)).catch(e=>setOrderError(String(e)));}catch(e){setOrderError(String(e));}};
  const tier=settlementTier(campaign);
  const merchant=campaign.merchantShopType??'general';
- const [mode,setMode]=useState<'buy'|'sell'>('buy');
+ const [mode,setMode]=useState<'buy'|'sell'>(campaign.magicSaleAuthorization?'sell':'buy');
  const [sellQuantities,setSellQuantities]=useState<Record<string,number>>({});
  const [sellConfirmation,setSellConfirmation]=useState<{name:string;quantity:number;proceeds:number;equipped:boolean}|null>(null);
  const [sellError,setSellError]=useState('');
