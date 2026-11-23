@@ -96,3 +96,34 @@ describe('higher-rank persisted spell slots',()=>{
   expect(()=>completePlayerRest(c,'long',{confirmedSafe:true,waitMinutes:playerLongRestWaitMinutes(c)})).toThrow('Invalid level-3 spell slots');
  });
 });
+
+
+describe('Rogue rest recovery across levels 1–20',()=>{
+ it.each(Array.from({length:20},(_,i)=>i+1))('Rogue level %i recovers Hit Dice and HP without duplicating recovery',level=>{
+  const c=player('rogue');c.character!.level=level;c.character!.maxHitPoints=10+5*(level-1);c.character!.currentHitPoints=2;
+  c.hitDiceRemaining=level;
+  const short=completePlayerRest(c,'short',{...safe,hitDieRolls:[8]});
+  expect(short.character?.currentHitPoints).toBe(Math.min(c.character!.maxHitPoints!,12));
+  expect(short.hitDiceRemaining).toBe(level-1);
+  expect(c.hitDiceRemaining).toBe(level);
+  const long=completePlayerRest(short,'long',{...safe});
+  expect(long.character?.currentHitPoints).toBe(c.character!.maxHitPoints);
+  expect(long.hitDiceRemaining).toBe(level);
+  expect(()=>completePlayerRest(long,'long',{...safe})).toThrow('Long Rest requires');
+ });
+ it('Rogue short-rest resources recover by recorded recovery policy, long rest restores all',()=>{
+  const c=player('rogue');c.character!.level=20;c.character!.maxHitPoints=110;
+  c.character!.resources={'Stroke of Luck':{maximum:1,used:1,recovery:'short'},'Long Rest Feature':{maximum:2,used:2,recovery:'long'}};
+  const short=completePlayerRest(c,'short',{...safe});
+  expect(short.character?.resources?.['Stroke of Luck'].used).toBe(0);
+  expect(short.character?.resources?.['Long Rest Feature'].used).toBe(2);
+  const long=completePlayerRest(short,'long',{...safe});
+  expect(long.character?.resources?.['Long Rest Feature'].used).toBe(0);
+ });
+ it('does not permit Rogue level 21 or unsupported Fighter level 2',()=>{
+  const c=player('rogue');c.character!.level=21;
+  expect(()=>completePlayerRest(c,'short',safe)).toThrow('Rogue level');
+  const f=player('fighter');f.character!.level=2;
+  expect(()=>completePlayerRest(f,'short',safe)).toThrow('supports level-one');
+ });
+});
