@@ -1635,6 +1635,9 @@ test('iPhone shop sells ordinary gear with confirmation and persists gold and we
  });
  await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();await page.getByRole('button',{name:'Continue Adventure'}).click();
  const shop=page.getByLabel('Frontier Village general store',{exact:true});await expect(shop).toBeVisible();
+ // Compact but finger-friendly shop controls on narrow iPhone viewports.
+ for(const label of ['Buy','Sell'])expect(await shop.getByRole('tab',{name:label}).evaluate(el=>el.getBoundingClientRect().height)).toBeGreaterThanOrEqual(36);
+ expect(await shop.getByRole('button',{name:'Leave shop'}).evaluate(el=>el.getBoundingClientRect().height)).toBeGreaterThanOrEqual(36);
  await expect(shop.getByRole('button',{name:'Add five Rope'})).toBeVisible();
  await expect(shop.getByRole('button',{name:'Maximum affordable Rope'})).toBeVisible();
  await shop.getByRole('button',{name:'Add Rope',exact:true}).click();
