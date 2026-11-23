@@ -1,3 +1,4 @@
+import {expandInventoryPacks} from './equipmentPacks';
 import {useOwnedConsumable,type ConsumableRequest} from './consumables';
 import {useOwnedHealingPotion,type HealingPotionRequest} from './healingPotions';
 import {hydratePlayerState} from './playerState';
@@ -53,14 +54,22 @@ function requestResult<T>(request: IDBRequest<T>, resolve: (value: T) => void, r
   request.onsuccess = () => resolve(request.result);
   request.onerror = () => reject(request.error ?? new Error('Local save request failed'));
 }
+/** Reconcile legacy saved pack entries on read; preserve the original save until its next write. */
+function reconcileSavedPacks(campaign:Campaign):Campaign{
+ const ledger=campaign.inventoryLedger;
+ if(!ledger)return campaign;
+ const gear=expandInventoryPacks(ledger.gear);
+ if(gear.length===ledger.gear.length&&gear.every((entry,i)=>entry.name===ledger.gear[i].name&&entry.quantity===ledger.gear[i].quantity))return campaign;
+ return {...campaign,inventoryLedger:{...ledger,gear}};
+}
 export const localCampaignStorage: CampaignStorage = {
   async list() {
     const values = await transact<unknown[]>('readonly', (store, resolve, reject) => requestResult(store.getAll(), resolve, reject));
-    return values.filter(isCampaign).map(hydratePlayerState).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+    return values.filter(isCampaign).map(reconcileSavedPacks).map(hydratePlayerState).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   },
   async get(id) {
     const value = await transact<unknown>('readonly', (store, resolve, reject) => requestResult(store.get(id), resolve, reject));
-    return isCampaign(value) ? hydratePlayerState(value) : undefined;
+    return isCampaign(value) ? hydratePlayerState(reconcileSavedPacks(value)) : undefined;
   },
   async save(campaign) {
     if (!isCampaign(campaign)) throw new Error('Invalid campaign data');
