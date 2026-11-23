@@ -1,3 +1,4 @@
+import {castOwnedSpellScroll,scrollTier} from '../game/spellScrolls';
 import {useRef,useState} from 'react';
 import type {Campaign} from '../game/campaign';
 import {antitoxinSecondsRemaining,eligibleKitTargets,equipmentLightRemaining,equipmentLightRules,provisionsToday,type EquipmentLight,type ConsumableName,type ConsumableRequest} from '../game/consumables';
@@ -10,6 +11,8 @@ export function ConsumablePanel({campaign,saving,onUse,onEncounterChange}:{campa
   const [ropeCheck,setRopeCheck]=useState(''),[waterChoice,setWaterChoice]=useState<'drink'|'refill'>('drink');
  const [groundX,setGroundX]=useState(''),[groundY,setGroundY]=useState(''),[level,setLevel]=useState(false),[spillOil,setSpillOil]=useState(false);
  const [poisonQuantity,setPoisonQuantity]=useState('3');
+ const [scrollName,setScrollName]=useState(''),[scrollSpell,setScrollSpell]=useState(''),[scrollConfirmed,setScrollConfirmed]=useState(false);
+ const scrolls=(campaign.inventoryLedger?.gear??[]).filter(g=>g.quantity>0&&scrollTier(g.name)!==null);
  const [combatTarget,setCombatTarget]=useState(''),[recoveryAmmoName,setRecoveryAmmoName]=useState(''),[combatD20,setCombatD20]=useState(''),[combatDamage,setCombatDamage]=useState(''),[combatRange,setCombatRange]=useState(''),[recoverAmmo,setRecoverAmmo]=useState('1');
  const [recoveryId,setRecoveryId]=useState(''),[recoveryAccess,setRecoveryAccess]=useState(false);
  const pending=useRef<string|null>(null);
@@ -56,6 +59,14 @@ export function ConsumablePanel({campaign,saving,onUse,onEncounterChange}:{campa
  const clear=()=>{setName(null);setTarget('');setAcidSave('');setAcidDamage('');setCreatureType('');setRopeCheck('');setWaterChoice('drink');setGroundX('');setGroundY('');setLevel(false);setSpillOil(false);pending.current=null;setError('')};
  return <section aria-label="Adventuring consumables" className="rounded-xl border border-white/20 p-3 space-y-2">
  <h3 className="font-semibold">Adventuring consumables</h3>
+ {scrolls.length>0&&<details className="rounded border border-gold/30 p-2 space-y-2" aria-label="Spell scroll casting">
+ <summary>Cast an owned spell scroll (DM-confirmed)</summary>
+ <p className="text-xs text-parchment/70">Choose the scroll and spell. Only spells verified in your character's prepared spells or cantrips are supported here. The DM must confirm casting requirements, action, and any spell effects. Combat casting is not yet supported in this panel. No spell slot is spent.</p>
+ <label className="block text-sm">Owned scroll<select aria-label="Owned spell scroll" className="block w-full bg-slate-900" value={scrollName} onChange={e=>{setScrollName(e.target.value);setScrollConfirmed(false)}}><option value="">Choose scroll</option>{scrolls.map(g=><option key={g.name} value={g.name}>{g.name} ({g.quantity})</option>)}</select></label>
+ <label className="block text-sm">Spell on scroll<input aria-label="Spell on scroll" className="block w-full bg-slate-900" value={scrollSpell} onChange={e=>{setScrollSpell(e.target.value);setScrollConfirmed(false)}} placeholder="Exact spell name"/></label>
+ <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={scrollConfirmed} onChange={e=>setScrollConfirmed(e.target.checked)}/>DM confirms this scroll can be cast now</label>
+ <button type="button" className="rounded border border-gold px-3 py-2" disabled={saving||busy||!scrollName||!scrollSpell.trim()||!scrollConfirmed||!onEncounterChange} onClick={async()=>{setBusy(true);setError('');try{const next=castOwnedSpellScroll(campaign,{itemName:scrollName,spell:scrollSpell,requestId:crypto.randomUUID(),dmConfirmed:scrollConfirmed});if(await onEncounterChange?.(next,'DM confirmed casting '+scrollSpell+' from '+scrollName)===false)throw Error('Scroll action could not be saved');setScrollName('');setScrollSpell('');setScrollConfirmed(false)}catch(e){setError(String(e))}finally{setBusy(false)}}}>Consume scroll and request spell adjudication</button>
+ </details>}
  <p className="text-xs text-parchment/70">Antitoxin: Bonus Action, advantage against Poisoned for 1 in-game hour. Healer's Kit: Action, stabilize an adjacent unconscious ally at 0 HP; 10 uses per kit.</p>
  {antitoxinRemaining>0&&<p role="status">Antitoxin active: {Math.floor(antitoxinRemaining/60)} in-game minutes remaining{antitoxinRemaining%60>0?' ('+antitoxinRemaining%60+' additional seconds)':''}</p>}
  {lights.map(source=>{
