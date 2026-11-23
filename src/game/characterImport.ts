@@ -4,6 +4,7 @@ import {reviewCharacter,reviewErrors} from './creationReview';
 import {newCampaign,type Campaign} from './campaign';
 import type {CharacterStats,Skill} from './checks';
 import {ITEM_BY_ID} from './creationEquipment';
+import {equipmentPackContents} from './equipmentPacks';
 import {SPELL_BY_ID} from './creationMagic';
 import {classSummary,spellcastingAtLevel} from './creationClasses';
 const skillNames=new Set<Skill>(['Acrobatics','Animal Handling','Arcana','Athletics','Deception','History','Insight','Intimidation','Investigation','Medicine','Nature','Perception','Performance','Persuasion','Religion','Sleight of Hand','Stealth','Survival']);
@@ -23,7 +24,19 @@ export function campaignFromCharacterDraft(draft:CharacterDraft,title:string,id:
  preparedSpells:[...new Set([...review.spells.prepared,...(review.spells.originSpell?[review.spells.originSpell]:[])])]};
  const eq=draft.selections.equipment!;
  const items=review.equipment;
- const gear=items.map(item=>({name:item.name,quantity:item.quantity}));
+ // Starting packs are shop bundles, not weightless objects or additional containers.
+ // Expand them once into the authoritative inventory ledger at character import.
+ const gear:{name:string;quantity:number}[]=[];
+ for(const item of items){
+  const packId=Object.entries(ITEM_BY_ID).find(([,definition])=>definition.name===item.name)?.[0];
+  const contents=packId?equipmentPackContents(packId):null;
+  for(const part of contents??[{item,quantity:1}]){
+   const name=part.item.name;
+   const quantity=item.quantity*part.quantity;
+   const existing=gear.find(entry=>entry.name===name);
+   if(existing)existing.quantity+=quantity;else gear.push({name,quantity});
+  }
+ }
  const ledger={currency:{CP:Math.round(review.remainingGold*100),SP:0,EP:0,GP:0,PP:0},gear};
  const counted=(id:string)=>items.find(item=>item.name===ITEM_BY_ID[id]?.name)?.quantity??0;
  const base=newCampaign(title,id,now);
