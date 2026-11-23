@@ -753,6 +753,7 @@ test('new Rogue starts at Frontier Village, buys supplies, and sees persisted Pl
  await expect(page.getByLabel('Dasahi marketplace')).toBeVisible();
  expect((await saved(page)).inventoryLedger).toEqual(before);
  const shopAfterCancel=page.getByLabel('Dasahi marketplace');
+ await shopAfterCancel.getByRole('button',{name:'Add Rope'}).evaluate(el=>el.scrollIntoView({block:'center'}));
  await shopAfterCancel.getByRole('button',{name:'Add Rope'}).click();
  await shopAfterCancel.getByRole('button',{name:'Add Rope'}).click();
  await shopAfterCancel.getByRole('button',{name:'Add Torch'}).click();
