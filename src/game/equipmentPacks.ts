@@ -23,3 +23,19 @@ export function equipmentPackIndividualValue(id:string):number|null{
  const contents=equipmentPackContents(id);
  return contents?contents.reduce((total,{item,quantity})=>total+item.costCp*quantity,0):null;
 }
+
+/** Summarize items contributed by packs in a cart without adding them as separate purchases. */
+export function packCartContents(cart:Readonly<Record<string,number>>):Map<string,{quantity:number;packs:string[]}>{
+ const result=new Map<string,{quantity:number;packs:string[]}>();
+ for(const [packId,count] of Object.entries(cart)){
+  if(!Number.isSafeInteger(count)||count<=0)continue;
+  const contents=equipmentPackContents(packId);
+  if(!contents)continue;
+  const pack=OFFICIAL_EQUIPMENT_2024.find(item=>item.id===packId);
+  for(const {item,quantity} of contents){
+   const previous=result.get(item.id);
+   result.set(item.id,{quantity:(previous?.quantity??0)+quantity*count,packs:[...(previous?.packs??[]),`${pack?.name??packId}${count>1?' ×'+count:''}`]});
+  }
+ }
+ return result;
+}
