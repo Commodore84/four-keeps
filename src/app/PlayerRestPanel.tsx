@@ -6,7 +6,7 @@ export function PlayerRestPanel({campaign,saving,onChange}:{campaign:Campaign;sa
  const [recoveryDetail,setRecoveryDetail]=useState('');const [safe,setSafe]=useState(false),[die,setDie]=useState(''),[arcane,setArcane]=useState(false),[arcaneRank,setArcaneRank]=useState<1|2>(1),[arcaneCount,setArcaneCount]=useState<1|2>(1),[portentRolls,setPortentRolls]=useState(['','']),[wait,setWait]=useState(false),[trance,setTrance]=useState(false),[feedback,setFeedback]=useState('');
  const cls=classSummary(campaign.characterIdentity?.classId??''),c=campaign.character;
  if(!cls||!c)return null;
- const supportedLevel=(c.level??1)===1||(['warlock','wizard'].includes(cls.id)&&(c.level??1)<=4);
+ const supportedLevel=(c.level??1)===1||(cls.id==='rogue'&&(c.level??1)<=20)||(['warlock','wizard'].includes(cls.id)&&(c.level??1)<=4);
  const required=playerLongRestWaitMinutes(campaign),blocked=!!campaign.pendingCheck||campaign.companionEncounter?.status==='active'||campaign.adventureSession?.status==='encounter'||(c.currentHitPoints??0)<1;
  async function finish(kind:'short'|'long'){
   setRecoveryDetail('');try{const next=completePlayerRest(campaign,kind,{confirmedSafe:safe,hitDieRolls:kind==='short'&&die.trim()?[Number(die)]:[],arcaneRecovery:kind==='short'&&arcane,arcaneRecoveryLevel:arcaneRank,arcaneRecoveryCount:arcaneCount,portentRolls:kind==='long'&&campaign.importedSubclassId==='wizard-diviner'?portentRolls.map(Number):undefined,waitMinutes:kind==='long'&&wait?required:0,useTrance:kind==='long'&&trance});const hpBefore=c!.currentHitPoints??0,hpAfter=next.character?.currentHitPoints??hpBefore;const diceBefore=campaign.hitDiceRemaining??(c!.level??1),diceAfter=next.hitDiceRemaining??diceBefore;
