@@ -491,3 +491,20 @@ describe('equipment packs as independent inventory components',()=>{
   expect(bought.inventoryLedger!.gear.find(x=>x.name==='Torch')?.quantity).toBe(20);
  });
 });
+
+describe('authoritative carrying capacity checkout enforcement',()=>{
+ const overloaded=()=>({...fixture(),character:{...fixture().character!,scores:{...fixture().character!.scores,str:1}},inventoryLedger:{currency:{GP:10,SP:0,CP:0,EP:0,PP:0},gear:[{name:'Rope',quantity:2}]}});
+ it('rejects an overweight single purchase before modifying inventory',()=>{
+  const c=overloaded();expect(()=>prepareMerchantPurchase(c,'rope',1,'overweight')).toThrow(/carrying capacity/i);
+  expect(()=>buyFrontierItem(c,'rope',1)).toThrow(/carrying capacity/i);
+ });
+ it('rejects a combined cart even if each item separately fits',()=>{
+  const c={...overloaded(),inventoryLedger:{...overloaded().inventoryLedger,gear:[]}};
+  expect(()=>prepareMerchantCart(c,[{itemId:'rope',quantity:2},{itemId:'backpack',quantity:1}],'too-heavy')).toThrow(/carrying capacity/i);
+ });
+ it('revalidates capacity at confirmation when the load changes after quote',()=>{
+  const c=fixture();const quoted=prepareMerchantPurchase(c,'rope',1,'weight-changed');
+  const changed={...quoted,character:{...quoted.character!,scores:{...quoted.character!.scores,str:1}},inventoryLedger:{...quoted.inventoryLedger!,gear:[{name:'Rope',quantity:2}]}};
+  expect(()=>settleMerchantPurchase(changed,'weight-changed',true)).toThrow(/carrying capacity/i);
+ });
+});
