@@ -6,12 +6,21 @@ import { isCampaign, type Campaign } from './campaign';
 
 export interface CampaignStorage {
   list(): Promise<Campaign[]>;
-  save(campaign: Campaign): Promise<void>;
+  save(campaign: Campaign, options?: {replaceExisting?: boolean}): Promise<void>;
   get(id: string): Promise<Campaign | undefined>;
   remove(id: string): Promise<void>;
 }
 const DATABASE = 'four-keeps-local';
 const STORE = 'campaigns';
+// Remember the exact persisted state observed by this browser tab. Compare
+// inside the IndexedDB readwrite transaction to prevent cross-tab lost updates.
+const observedSaves = new Map<string,string>();
+const snapshot = (campaign: Campaign) => JSON.stringify(campaign);
+const observe = (campaign: Campaign) => { observedSaves.set(campaign.id,snapshot(campaign)); return campaign; };
+export class StaleCampaignSaveError extends Error {
+  constructor(){super('This adventure changed in another tab. Reload the app before saving to avoid overwriting newer progress.');this.name='StaleCampaignSaveError';}
+}
+
 function openDatabase(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open(DATABASE, 1);
@@ -36,6 +45,7 @@ async function transact<T>(mode: IDBTransactionMode, execute: (store: IDBObjectS
       if (!settled && resultReady && transactionComplete) {
         settled = true;
         db.close();
+        if(mode==='readwrite' && isCampaign(result))observe(result);
         resolve(result);
       }
     };
@@ -65,21 +75,34 @@ function reconcileSavedPacks(campaign:Campaign):Campaign{
 export const localCampaignStorage: CampaignStorage = {
   async list() {
     const values = await transact<unknown[]>('readonly', (store, resolve, reject) => requestResult(store.getAll(), resolve, reject));
-    return values.filter(isCampaign).map(reconcileSavedPacks).map(hydratePlayerState).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+    return values.filter(isCampaign).map(observe).map(reconcileSavedPacks).map(hydratePlayerState).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   },
   async get(id) {
     const value = await transact<unknown>('readonly', (store, resolve, reject) => requestResult(store.get(id), resolve, reject));
-    return isCampaign(value) ? hydratePlayerState(reconcileSavedPacks(value)) : undefined;
+    return isCampaign(value) ? hydratePlayerState(reconcileSavedPacks(observe(value))) : undefined;
   },
-  async save(campaign) {
+  async save(campaign, options) {
     if (!isCampaign(campaign)) throw new Error('Invalid campaign data');
+    const expected = observedSaves.get(campaign.id);
     await transact<void>('readwrite', (store, resolve, reject) => {
-      const request = store.put(campaign);
-      requestResult(request, () => resolve(), reject);
+      const read=store.get(campaign.id);
+      read.onerror=()=>reject(read.error??new Error('Campaign lookup failed'));
+      read.onsuccess=()=>{
+        try {
+          const persisted=read.result;
+          if(!options?.replaceExisting && persisted !== undefined &&
+            (expected === undefined || !isCampaign(persisted) || snapshot(persisted)!==expected)) {
+            throw new StaleCampaignSaveError();
+          }
+          requestResult(store.put(campaign),()=>resolve(),reject);
+        }catch(error){reject(error instanceof Error?error:new Error(String(error)))}
+      };
     });
+    observe(campaign);
   },
   async remove(id) {
     await transact<void>('readwrite', (store, resolve, reject) => requestResult(store.delete(id), () => resolve(), reject));
+    observedSaves.delete(id);
   },
 };
 
