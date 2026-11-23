@@ -7,7 +7,7 @@ import {useEffect,useState} from 'react';
 import {classSummary} from '../game/creationClasses';
 import {ADVENTURE_SITES,beginTravelingMerchantRoute} from '../game/adventureSession';
 import type {Campaign} from '../game/campaign';
-import {merchantStock,remainingMerchantStock,formatFrontierPrice,walletCopper,availableMerchants,settlementTier,MERCHANT_LABELS,merchantCatalogFor} from '../game/frontierShop';
+import {merchantStock,remainingMerchantStock,formatFrontierPrice,walletCopper,availableMerchants,settlementTier,MERCHANT_LABELS,merchantCatalogFor,merchantResaleOffer,sellMerchantEquipment} from '../game/frontierShop';
 
 export function MerchantShop({campaign,saving,onClose,onPrepare,onSettle,onDiscuss,onSupplyChange}:{campaign:Campaign;saving:boolean;onClose:()=>void;onPrepare:(items:{itemId:string;quantity:number}[],merchant:ReturnType<typeof availableMerchants>[number])=>Promise<void>;onSettle:(confirmed:boolean)=>Promise<void>;onDiscuss:(items:{itemId:string;quantity:number}[],merchant:ReturnType<typeof availableMerchants>[number])=>Promise<void>;onSupplyChange:(next:Campaign,message:string)=>Promise<boolean>|boolean|void}){
  const merchantKey='four-keeps:cart:v1:'+campaign.id+':'+(campaign.location??'')+':'+(campaign.merchantShopType??'general');
@@ -20,6 +20,10 @@ export function MerchantShop({campaign,saving,onClose,onPrepare,onSettle,onDiscu
  const orderAction=(action:()=>Campaign,message:string)=>{try{setOrderError('');void Promise.resolve(onSupplyChange(action(),message)).catch(e=>setOrderError(String(e)));}catch(e){setOrderError(String(e));}};
  const tier=settlementTier(campaign);
  const merchant=campaign.merchantShopType??'general';
+ const [mode,setMode]=useState<'buy'|'sell'>('buy');
+ const [sellQuantities,setSellQuantities]=useState<Record<string,number>>({});
+ const [sellConfirmation,setSellConfirmation]=useState<{name:string;quantity:number;proceeds:number;equipped:boolean}|null>(null);
+ const [sellError,setSellError]=useState('');
  const [search,setSearch]=useState('');
  const [sort,setSort]=useState<'name'|'price-up'|'price-down'>('name');
  const [activeCategory,setActiveCategory]=useState<string|null>(null);
@@ -55,6 +59,19 @@ export function MerchantShop({campaign,saving,onClose,onPrepare,onSettle,onDiscu
  const pendingLines=pending?.lines??(pending?[{itemId:pending.itemId,quantity:pending.quantity,unitCostCp:pending.unitCostCp}]:[]);
  const pendingTotal=pendingLines.reduce((sum,line)=>sum+line.quantity*line.unitCostCp,0);
  return <section aria-label={tier==='city'?(campaign.location||'City')+' marketplace':tier==='traveling'?'Traveling merchant':'Frontier Village general store'} className="rounded-xl border border-gold/35 bg-panel p-1 space-y-1 pb-0">
+  <div className="flex gap-1 px-1" role="tablist" aria-label="Shop transaction type"><button type="button" role="tab" aria-selected={mode==='buy'} className={'rounded border px-3 py-1 text-sm '+(mode==='buy'?'border-gold text-gold':'border-white/25')} onClick={()=>setMode('buy')}>Buy</button><button type="button" role="tab" aria-selected={mode==='sell'} className={'rounded border px-3 py-1 text-sm '+(mode==='sell'?'border-gold text-gold':'border-white/25')} onClick={()=>setMode('sell')}>Sell</button></div>
+  {mode==='sell'?<div role="tabpanel" aria-label="Sell equipment" className="space-y-2 p-2"><h3 className="font-semibold">Sell ordinary equipment</h3><p className="text-xs text-parchment/70">Undamaged ordinary gear: half listed price. Magic items require a DM-led buyer or quest. Equipped items require confirmation.</p>
+  <p className="text-xs text-parchment/70">Current load: {currentLoad.weight.toFixed(1)} / {maxLoad??'?'} lb · Selling reduces item weight but adds coin weight.</p>
+  {sellError&&<p role="alert" className="text-xs text-red-300">{sellError}</p>}
+  {campaign.inventoryLedger?.gear.map(gear=>{
+   let offer:ReturnType<typeof merchantResaleOffer>|null=null;
+   try{offer=merchantResaleOffer(campaign,gear.name,1,merchant);}catch{return null;}
+   const quantity=Math.min(gear.quantity,Math.max(1,sellQuantities[gear.name]??1));
+   let total:ReturnType<typeof merchantResaleOffer>;
+   try{total=merchantResaleOffer(campaign,gear.name,quantity,merchant);}catch{return null;}
+   return <div key={gear.name} className="flex flex-wrap items-center gap-2 rounded border border-white/20 p-2 text-sm"><span className="min-w-0 flex-1">{gear.name} · Owned {gear.quantity}{offer.equipped?' · Equipped':''}</span><label className="text-xs">Sell <input aria-label={'Sell quantity for '+gear.name} type="number" min={1} max={gear.quantity} value={quantity} onChange={e=>setSellQuantities(prev=>({...prev,[gear.name]:Math.min(gear.quantity,Math.max(1,Number(e.target.value)||1))}))} className="w-16 rounded border border-white/30 bg-ink p-1"/></label><button type="button" disabled={saving||!!pending||!!sellConfirmation} className="rounded border border-gold/60 px-2 py-1 text-gold" onClick={()=>{setSellError('');setSellConfirmation({name:gear.name,quantity,proceeds:total.proceedsCp,equipped:total.equipped});}}>Sell · {formatFrontierPrice(total.proceedsCp)}</button></div>;
+  })}
+  {sellConfirmation&&<div role="alertdialog" aria-label="Confirm equipment sale" className="sticky bottom-0 z-50 rounded border border-gold bg-panel p-3 space-y-2"><p>Sell {sellConfirmation.quantity} × {sellConfirmation.name} for {formatFrontierPrice(sellConfirmation.proceeds)}?</p>{sellConfirmation.equipped&&<p className="text-sm text-amber-200">This item is equipped. Selling it will unequip it.</p>}<div className="flex gap-2"><button type="button" className="rounded border p-2" onClick={()=>setSellConfirmation(null)}>Cancel</button><button type="button" disabled={saving} className="rounded border border-gold p-2 text-gold" onClick={()=>{try{const next=sellMerchantEquipment(campaign,sellConfirmation.name,sellConfirmation.quantity,merchant,sellConfirmation.equipped);const label=sellConfirmation.name;setSellError('');void Promise.resolve(onSupplyChange(next,'Sold '+sellConfirmation.quantity+' × '+label+' for '+formatFrontierPrice(sellConfirmation.proceeds)+'.')).then(()=>setSellConfirmation(null)).catch(e=>setSellError(String(e)));}catch(e){setSellError(String(e));}}}>Confirm sale</button></div></div>}</div>:<>
   <div className={(pending?"relative ":"sticky top-0 ")+"z-40 -mx-1 space-y-1 rounded-md border border-gold/25 bg-panel px-1 py-1 shadow-lg"} aria-label="Persistent shopping toolbar">
   <div className="flex items-center justify-between gap-2 px-1" aria-label="Current merchant">
    <div className="min-w-0"><h2 className="truncate text-xs font-semibold">{tier==='city'?(campaign.location||'City')+' · '+MERCHANT_LABELS[merchant]:tier==='traveling'?'Traveling · '+MERCHANT_LABELS[merchant]:'Frontier Village · '+MERCHANT_LABELS[merchant]}</h2><p className="text-[11px] text-parchment/65">Equipment & provisions · {formatFrontierPrice(funds)} available</p></div>
@@ -73,7 +90,7 @@ export function MerchantShop({campaign,saving,onClose,onPrepare,onSettle,onDiscu
     <div className="flex items-baseline justify-between gap-x-2 text-sm" aria-label={item.name+' availability'}>
      <div className="flex min-w-0 flex-wrap items-baseline gap-x-2">
       <strong>{item.name}</strong>
-      <span className="whitespace-nowrap text-xs tabular-nums text-parchment/70">{owned} owned · {item.id==='arrows'?Math.floor(stock/20)+' packs in stock':stock+' in stock'}</span>
+      <span className="whitespace-nowrap text-xs tabular-nums text-parchment/70">{owned} owned · {item.id==='arrows'?Math.floor(stock/20)+' packs in stock':stock+' in stock'} · {item.weight*(item.id==='arrows'?20:1)} lb{item.id==='arrows'?' / 20':''}</span>
      </div>
      <span className="shrink-0 tabular-nums text-gold">{formatFrontierPrice(unit*(item.id==='arrows'?20:1))}{item.id==='arrows'?' / 20':''}</span>
     </div>
@@ -120,5 +137,6 @@ export function MerchantShop({campaign,saving,onClose,onPrepare,onSettle,onDiscu
    {(campaign.merchantSupplyOrders??[]).filter(o=>o.settlement===(campaign.location||'unknown').trim().toLowerCase()).map(o=><div key={o.id} className="flex justify-between items-center gap-2 text-xs"><span>{o.quantity} × {merchantCatalogFor('city',o.merchant as typeof merchant).find(x=>x.id===o.itemId)?.name??o.itemId} · {o.status==='collected'?'Collected':'Ready at minute '+o.readyAtMinutes}</span>{o.status==='ordered'&&<button className="rounded border p-2" disabled={saving||(campaign.elapsedMinutes??0)<o.readyAtMinutes} onClick={()=>orderAction(()=>collectCitySupplyOrder(campaign,o.id),'Collected supplier order.')}>Collect</button>}</div>)}
   </section>}
 
+ </>}
  </section>;
 }
