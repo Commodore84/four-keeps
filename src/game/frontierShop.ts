@@ -386,3 +386,37 @@ export function approveMerchantDiscount(campaign:Campaign,itemId:string,percent:
  if(campaign.adventureSession?.site!=='frontier'||campaign.adventureSession.status!=='exploring')throw Error('Merchant not available.');
  return {...campaign,merchantDiscount:{itemId,percent,approvalId}};
 }
+
+/** Mundane resale uses the 2024 half-price equipment rule, rounded down to copper. */
+export function merchantResaleOffer(campaign:Campaign,itemName:string,quantity:number,merchant:MerchantType=campaign.merchantShopType??'general'):{itemId:string;quantity:number;proceedsCp:number;equipped:boolean}{
+ if(!campaign.characterIdentity||campaign.adventureSession?.site!=='frontier'||campaign.adventureSession.status!=='exploring'||!campaign.merchantShopOpen)throw Error('A merchant must be open to sell equipment.');
+ if(!availableMerchants(settlementTier(campaign)).includes(merchant))throw Error('That merchant is not available here.');
+ if(!Number.isSafeInteger(quantity)||quantity<1)throw Error('Invalid sale quantity.');
+ const item=OFFICIAL_EQUIPMENT_2024.find(i=>i.name.toLowerCase()===itemName.toLowerCase());
+ if(!item||isMagic(item)||item.id==='potion-of-healing'||equipmentPackContents(item.id))throw Error('This item cannot be sold as ordinary equipment. Magic items require a DM-led buyer or quest.');
+ if(merchant!=='general'&&merchant!=='trader'&&merchantTypeForItem(item)!==merchant)throw Error('This merchant does not buy that kind of equipment.');
+ const owned=campaign.inventoryLedger?.gear.find(i=>i.name.toLowerCase()===item.name.toLowerCase());
+ if(!owned||owned.quantity<quantity)throw Error('Not enough items in inventory to sell.');
+ const equipped=Object.values(campaign.encounterLoadout??{}).includes(item.id);
+ const proceedsCp=Math.floor(item.costCp*quantity/2);
+ if(!Number.isSafeInteger(proceedsCp)||proceedsCp<0)throw Error('Invalid resale value.');
+ return {itemId:item.id,quantity,proceedsCp,equipped};
+}
+/** Pure transaction: all validation precedes changes; caller persists the resulting campaign atomically. */
+export function sellMerchantEquipment(campaign:Campaign,itemName:string,quantity:number,merchant:MerchantType=campaign.merchantShopType??'general',confirmEquipped=false):Campaign{
+ const offer=merchantResaleOffer(campaign,itemName,quantity,merchant);
+ if(offer.equipped&&!confirmEquipped)throw Error('Equipped item: confirm unequipping and selling it first.');
+ const ledger=campaign.inventoryLedger!;
+ const funds=walletCopper(ledger.currency)+offer.proceedsCp;
+ if(!Number.isSafeInteger(funds))throw Error('Wallet would overflow.');
+ let remaining=funds;
+ const currency={...ledger.currency};
+ for(const [denomination,value] of [['PP',1000],['GP',100],['EP',50],['SP',10],['CP',1]] as const){currency[denomination]=Math.floor(remaining/value);remaining%=value;}
+ const gear=ledger.gear.map(g=>({...g}));
+ const existing=gear.find(g=>g.name.toLowerCase()===itemName.toLowerCase())!;
+ existing.quantity-=quantity;
+ if(existing.quantity===0)gear.splice(gear.indexOf(existing),1);
+ const encounterLoadout={...campaign.encounterLoadout};
+ if(offer.equipped){for(const key of ['weaponId','armorId','shieldId'] as const){if(encounterLoadout[key]===offer.itemId)delete encounterLoadout[key];}}
+ return {...campaign,inventoryLedger:{...ledger,currency,gear},encounterLoadout};
+}
