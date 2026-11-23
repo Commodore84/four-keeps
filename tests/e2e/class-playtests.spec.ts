@@ -767,7 +767,15 @@ test('new Rogue starts at Frontier Village, buys supplies, and sees persisted Pl
  await expect(shopAfterCancel.getByLabel('Confirm merchant purchase')).toContainText('2 × Rope');
  await expect(shopAfterCancel.getByLabel('Confirm merchant purchase')).toContainText('Unit weight');
  await expect(shopAfterCancel.getByLabel('Confirm merchant purchase')).toContainText('Line weight');
- await expect(shopAfterCancel.getByLabel('Confirm merchant purchase')).toContainText('Select Cancel to return to your cart');
+ await shopAfterCancel.getByRole('button',{name:'Remove one rope from review'}).click();
+ await expect(shopAfterCancel.getByLabel('Confirm merchant purchase')).toContainText('1 × Rope');
+ await expect(shopAfterCancel.getByLabel('Confirm merchant purchase')).toContainText('Line weight');
+ await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await expect(page.getByLabel('Confirm merchant purchase')).toContainText('1 × Rope');
+ await page.getByLabel('Confirm merchant purchase').getByRole('button',{name:'Add one rope to review'}).click();
+ await expect(page.getByLabel('Confirm merchant purchase')).toContainText('2 × Rope');
+
+ await expect(shopAfterCancel.getByLabel('Confirm merchant purchase')).toContainText('Adjust quantities here');
  await shopAfterCancel.getByLabel('Confirm merchant purchase').getByRole('button',{name:'Confirm purchase'}).click();
  await expect.poll(async()=> (await saved(page)).merchantStockRemaining?.['location:dasahi:city:general:rope']).toBe(38);
  await expect.poll(async()=> (await saved(page)).inventoryLedger.gear.find((item:any)=>item.name==='Rope')?.quantity).toBeGreaterThan(0);
