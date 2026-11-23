@@ -3,6 +3,7 @@ import {createCharacterDraft} from '../app/CharacterCreator';
 import {reviewErrors} from './creationReview';
 import {campaignFromCharacterDraft,characterDraftImportOptions} from './characterImport';
 import {beginAdventureSession} from './adventureSession';
+import {carriedWeight} from './carryingCapacity';
 import {isCampaign,newCampaign} from './campaign';
 function validRogue(){
  const d=createCharacterDraft();
@@ -50,4 +51,13 @@ it('imports Wizard slots and class saving throws without Rogue proficiency',()=>
 
 describe('future forecast import persistence',()=>{
  it('keeps planned subclass, legacy feat and ASIs in imported character snapshot',async()=>{const {emptyForecast,updateLevelPlan}=await import('./creationForecast');const d=validRogue();d.rules.allowCompatibleLegacy=true;let f=emptyForecast();f=updateLevelPlan(f,3,{subclassId:'rogue-arcane-trickster'});f=updateLevelPlan(f,4,{featPlan:'Elven Accuracy',featAbility:'Dex'});f=updateLevelPlan(f,8,{featPlan:'Ability Score Improvement',abilityIncreases:{Dex:2}});d.forecast=f;const c=campaignFromCharacterDraft(d,'Forecast adventure');expect(c.characterBuild?.forecast).toEqual(f);d.forecast.levels[0].subclassId='rogue-assassin';expect(c.characterBuild?.forecast?.levels.find(x=>x.level===3)?.subclassId).toBe('rogue-arcane-trickster')});
+});
+
+describe('starting inventory canonicalization',()=>{
+ it('expands starting equipment packs into individual gear',()=>{
+  const campaign=campaignFromCharacterDraft(validRogue(),'Starting gear');
+  const gear=campaign.inventoryLedger!.gear;
+  expect(gear.some(item=>item.name==='Backpack')).toBe(true);
+  expect(carriedWeight(campaign).unknown).toEqual([]);
+ });
 });
