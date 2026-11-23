@@ -36,4 +36,11 @@ export function purchaseWeight(itemId:string,quantity:number):number|null {
 export function purchaseWeightAfter(campaign:Campaign,items:{itemId:string;quantity:number}[],costCp:number):{weight:number;capacity:number|null;unknown:string[]}|null {
  const current=carriedWeight(campaign);
  let added=0;
- for(const item of items){const weight=purchaseWeight(item.itemId,item.quantity);if(w...[truncated]
+ for(const item of items){const weight=purchaseWeight(item.itemId,item.quantity);if(weight===null)return null;added+=weight;}
+ // Merchant checkout normalizes currency into the fewest denominations; account for changed coin weight.
+ const ledger=campaign.inventoryLedger;
+ const copper=ledger?ledger.currency.PP*1000+ledger.currency.GP*100+ledger.currency.EP*50+ledger.currency.SP*10+ledger.currency.CP:0;
+ let remaining=Math.max(0,copper-costCp),coinCount=0;
+ for(const denomination of [1000,100,50,10,1]){coinCount+=Math.floor(remaining/denomination);remaining%=denomination;}
+ return {weight:current.weight+added-coinWeight(campaign)+coinCount/50,capacity:carryingCapacity(campaign),unknown:current.unknown};
+}
