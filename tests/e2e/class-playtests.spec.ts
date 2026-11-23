@@ -765,6 +765,9 @@ test('new Rogue starts at Frontier Village, buys supplies, and sees persisted Pl
  expect(reviewBounds!.y+reviewBounds!.height).toBeLessThanOrEqual(composerBounds!.y);
  await reviewButton.click();
  await expect(shopAfterCancel.getByLabel('Confirm merchant purchase')).toContainText('2 × Rope');
+ await expect(shopAfterCancel.getByLabel('Confirm merchant purchase')).toContainText('Unit weight');
+ await expect(shopAfterCancel.getByLabel('Confirm merchant purchase')).toContainText('Line weight');
+ await expect(shopAfterCancel.getByLabel('Confirm merchant purchase')).toContainText('Select Cancel to return to your cart');
  await shopAfterCancel.getByLabel('Confirm merchant purchase').getByRole('button',{name:'Confirm purchase'}).click();
  await expect.poll(async()=> (await saved(page)).merchantStockRemaining?.['location:dasahi:city:general:rope']).toBe(38);
  await expect.poll(async()=> (await saved(page)).inventoryLedger.gear.find((item:any)=>item.name==='Rope')?.quantity).toBeGreaterThan(0);
