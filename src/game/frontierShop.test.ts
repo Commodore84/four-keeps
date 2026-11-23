@@ -521,6 +521,8 @@ describe('2024 mundane equipment resale',()=>{
   expect(c.inventoryLedger.gear.find(x=>x.name==='Dagger')?.quantity).toBe(2);
   expect(carriedWeight(sold).weight).toBeLessThan(carriedWeight(c).weight);
   expect(remainingMerchantStock(sold,'dagger')).toBe(remainingMerchantStock(c,'dagger'));
+  const legacy={...c,equipment:{daggers:2,arrows:20,caltrops:0,ballBearings:0}};
+  expect(sellMerchantEquipment(legacy,'Dagger',1).equipment?.daggers).toBe(1);
  });
  it('rejects magic resale and missing quantities without changing state',()=>{
   const c=seller();expect(()=>sellMerchantEquipment(c,'Potion of Healing',1)).toThrow(/magic items/i);
