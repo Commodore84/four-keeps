@@ -23,7 +23,8 @@ function importedCharacter(campaign:Campaign){
  const c=campaign.character,cls=classSummary(campaign.characterIdentity?.classId??c?.classId??'');
  if(!c||!cls)throw Error('Imported class statistics are required; legacy Nighthawk uses its existing rest controls');
  if(!validPlayerState(c))throw Error('Invalid player resource state');
- if((c.level??1)!==1&&!(['warlock','wizard'].includes(cls.id)&&(c.level??1)<=4))throw Error('Player recovery currently supports level-one characters or Warlocks through level four');
+ if((c.level??1)!==1&&cls.id!=='rogue'&&!(['warlock','wizard'].includes(cls.id)&&(c.level??1)<=4))throw Error('Player recovery currently supports level-one characters, Rogues through level twenty, or Warlocks and Wizards through level four');
+ if(cls.id==='rogue'&&(!Number.isInteger(c.level)||c.level!<1||c.level!>20))throw Error('Rogue level must be between 1 and 20');
  if(campaign.pendingCheck||campaign.companionEncounter?.status==='active'||campaign.combat&&campaign.combat.status!=='completed'||campaign.adventureSession?.status==='encounter')throw Error('Finish the encounter and resume exploration before resting');
  if(!Number.isInteger(c.maxHitPoints)||!Number.isInteger(c.currentHitPoints)||c.currentHitPoints!<1||c.currentHitPoints!>c.maxHitPoints!||c.deathSaves?.dead||c.exhaustionLevel===6)throw Error('Start a rest with at least 1 HP and valid living character statistics');
  return {c,cls};
