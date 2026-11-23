@@ -687,7 +687,7 @@ test('new Rogue starts at Frontier Village, buys supplies, and sees persisted Pl
  await expect(page.getByRole('button',{name:'Open navigation menu'}).locator('img[src="/four-keeps-emblem.svg"]')).toHaveCount(1);
  await expect(shop.getByRole('region',{name:'Simple melee weapons',exact:true})).toBeVisible();
  const dagger=shop.getByLabel('Dagger',{exact:true});
- await expect(dagger.getByLabel('Dagger availability')).toContainText(/Dagger.*\d+ owned · \d+ in stock/);
+ await expect(dagger.getByLabel('Dagger availability')).toContainText(/Dagger.*\d+ owned(?: · Equipped)? · \d+ in stock/);
  await expect(dagger.getByLabel('Dagger description')).toBeVisible();
  await expect(dagger.getByText('Simple weapon proficiency',{exact:false})).toBeVisible();
  await expect(dagger.getByText('1d4 Piercing damage',{exact:false}).first()).toBeVisible();
