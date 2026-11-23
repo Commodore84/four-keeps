@@ -22,7 +22,7 @@ export function ConsumablePanel({campaign,saving,onUse,onEncounterChange}:{campa
   campaign.companionEncounter.groundSupplies??[]:[];
  const recoverable=recovery.find(supply=>supply.id===recoveryId);
  const canTrack=!!campaign.characterIdentity&&campaign.companionEncounter?.status!=='active'&&!campaign.provisionTracking;
- if(!canTrack&&!campaign.provisionTracking&&!recovery.length&&!owned.length&&!antitoxinRemaining&&!campaign.companionEncounter?.basicPoison&&!campaign.companionEncounter?.poisonedAmmunition&&!Object.values(campaign.companionEncounter?.ammunitionPendingRecovery??{}).some(n=>n>0)&&!campaign.companionEncounter?.groundOil?.length&&!lights.length)return null;
+ if(!canTrack&&!campaign.provisionTracking&&!recovery.length&&!owned.length&&!antitoxinRemaining&&!campaign.companionEncounter?.basicPoison&&!campaign.companionEncounter?.poisonedAmmunition&&!Object.values(campaign.companionEncounter?.ammunitionPendingRecovery??{}).some(n=>n>0)&&!campaign.companionEncounter?.groundOil?.length&&!lights.length&&!scrolls.length)return null;
  const item=owned.find(g=>g.name===name),battle=campaign.companionEncounter,actor=battle?.participants.nighthawk,targets=eligibleKitTargets(campaign);
  const currentActor=battle?.status==='active'?battle.order[battle.turnIndex]:undefined;
  const lastAttack=battle?.log?.filter(line=>/ attack d20 /.test(line)).at(-1);
@@ -59,6 +59,8 @@ export function ConsumablePanel({campaign,saving,onUse,onEncounterChange}:{campa
  const clear=()=>{setName(null);setTarget('');setAcidSave('');setAcidDamage('');setCreatureType('');setRopeCheck('');setWaterChoice('drink');setGroundX('');setGroundY('');setLevel(false);setSpillOil(false);pending.current=null;setError('')};
  return <section aria-label="Adventuring consumables" className="rounded-xl border border-white/20 p-3 space-y-2">
  <h3 className="font-semibold">Adventuring consumables</h3>
+ {owned.length>0&&<p aria-label="Owned consumable supplies" className="text-xs text-parchment/70">Available: {owned.map(g=>g.name+' ×'+g.quantity).join(' · ')}</p>}
+ {battle?.status==='active'&&<p role="status" className="text-xs text-parchment/70">Combat round {battle.round} · Current turn: {currentActor??'none'}{actor?' · Action '+(actor.actionUsed?'spent':'available')+' · Bonus Action '+(actor.bonusActionUsed?'spent':'available'):''}. Consumables require an eligible action and a confirmed target.</p>}
  {scrolls.length>0&&<details className="rounded border border-gold/30 p-2 space-y-2" aria-label="Spell scroll casting">
  <summary>Cast an owned spell scroll (DM-confirmed)</summary>
  <p className="text-xs text-parchment/70">Choose the scroll and spell. Only spells verified in your character's prepared spells or cantrips are supported here. The DM must confirm casting requirements, action, and any spell effects. Combat casting is not yet supported in this panel. No spell slot is spent.</p>
@@ -122,6 +124,7 @@ export function ConsumablePanel({campaign,saving,onUse,onEncounterChange}:{campa
  {name==='Holy Water'&&<label className="block">DM-verified creature type<select className="w-full bg-slate-900" value={creatureType} onChange={e=>{setCreatureType(e.target.value as HolyWaterTargetType|'');setAcidDamage('');pending.current=null}}><option value="">Choose type</option><option>Fiend</option><option>Undead</option><option>Other</option></select></label>}
  {needsDamage&&<label className="block">{name==='Acid'?'Rolled acid damage':name==='Holy Water'?'Rolled 2d8 radiant damage':'Rolled 1d4 fire damage'}<input className="w-full bg-slate-900" type="number" min={name==='Alchemist’s Fire'?1:2} max={name==='Acid'?12:name==='Holy Water'?16:4} value={acidDamage} onChange={e=>{setAcidDamage(e.target.value);pending.current=null}}/></label>}
  </fieldset>}
+ {item&&!ready&&<p role="status" className="text-xs text-amber-200">Choose the required target, roll, location, or confirmation before using {item.name}. During combat, check that the correct turn and action are available.</p>}
  {item&&<div className="flex gap-2"><button type="button" disabled={saving||busy||!ready} onClick={async()=>{
   if(!pending.current)pending.current=crypto.randomUUID();
   setBusy(true);setError('');
