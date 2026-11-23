@@ -16,3 +16,14 @@ describe('pack contents in shop cart',()=>{
   expect(packCartContents({'dungeoneer-s-pack':0,'explorer-s-pack':-2,backpack:5}).size).toBe(0);
  });
 });
+
+describe('saved inventory pack migration',()=>{
+ it('expands historical pack records and remains idempotent',async()=>{
+  const {expandInventoryPacks}=await import('./equipmentPacks');
+  const once=expandInventoryPacks([{name:'Dungeoneer’s Pack',quantity:2},{name:'Backpack',quantity:1}]);
+  expect(once.find(x=>x.name==='Backpack')?.quantity).toBe(3);
+  expect(once.find(x=>x.name==='Torch')?.quantity).toBe(20);
+  expect(once.some(x=>x.name==='Dungeoneer’s Pack')).toBe(false);
+  expect(expandInventoryPacks(once)).toEqual(once);
+ });
+});
