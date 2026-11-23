@@ -7,7 +7,7 @@ import {useEffect,useState} from 'react';
 import {classSummary} from '../game/creationClasses';
 import {ADVENTURE_SITES,beginTravelingMerchantRoute} from '../game/adventureSession';
 import type {Campaign} from '../game/campaign';
-import {merchantStock,remainingMerchantStock,formatFrontierPrice,walletCopper,availableMerchants,settlementTier,MERCHANT_LABELS,merchantCatalogFor,merchantResaleOffer,sellMerchantEquipment} from '../game/frontierShop';
+import {merchantStock,remainingMerchantStock,walletCopper,availableMerchants,settlementTier,MERCHANT_LABELS,merchantCatalogFor,merchantResaleOffer,sellMerchantEquipment,completeQuestMagicSale,pendingQuestMagicOffer,authorizeQuestMagicSale,formatFrontierPrice} from '../game/frontierShop';
 
 export function MerchantShop({campaign,saving,onClose,onPrepare,onSettle,onDiscuss,onSupplyChange}:{campaign:Campaign;saving:boolean;onClose:()=>void;onPrepare:(items:{itemId:string;quantity:number}[],merchant:ReturnType<typeof availableMerchants>[number])=>Promise<void>;onSettle:(confirmed:boolean)=>Promise<void>;onDiscuss:(items:{itemId:string;quantity:number}[],merchant:ReturnType<typeof availableMerchants>[number])=>Promise<void>;onSupplyChange:(next:Campaign,message:string)=>Promise<boolean>|boolean|void}){
  const merchantKey='four-keeps:cart:v1:'+campaign.id+':'+(campaign.location??'')+':'+(campaign.merchantShopType??'general');
@@ -24,6 +24,7 @@ export function MerchantShop({campaign,saving,onClose,onPrepare,onSettle,onDiscu
  const [sellQuantities,setSellQuantities]=useState<Record<string,number>>({});
  const [sellConfirmation,setSellConfirmation]=useState<{name:string;quantity:number;proceeds:number;equipped:boolean}|null>(null);
  const [sellError,setSellError]=useState('');
+ const questOffer=pendingQuestMagicOffer(campaign);
  const [search,setSearch]=useState('');
  const [sort,setSort]=useState<'name'|'price-up'|'price-down'>('name');
  const [activeCategory,setActiveCategory]=useState<string|null>(null);
@@ -75,6 +76,12 @@ export function MerchantShop({campaign,saving,onClose,onPrepare,onSettle,onDiscu
   <div className="flex items-center gap-1 px-1" role="tablist" aria-label="Shop transaction type"><button type="button" role="tab" aria-selected={mode==='buy'} className={'rounded border px-3 py-1 text-sm '+(mode==='buy'?'border-gold text-gold':'border-white/25')} onClick={()=>setMode('buy')}>Buy</button><button type="button" role="tab" aria-selected={mode==='sell'} className={'rounded border px-3 py-1 text-sm '+(mode==='sell'?'border-gold text-gold':'border-white/25')} onClick={()=>setMode('sell')}>Sell</button><button type="button" onClick={onClose} disabled={saving||!!pending||!!campaign.pendingMerchantSupplyOrder||!!sellConfirmation} className="ml-auto rounded border border-white/25 px-2 py-1 text-xs">Leave shop</button></div>
   {mode==='sell'?<div role="tabpanel" aria-label="Sell equipment" className="space-y-2 p-2"><h3 className="font-semibold">Sell ordinary equipment</h3><p className="text-xs text-parchment/70">Undamaged ordinary gear: half listed price. Magic items require a DM-led buyer or quest. Equipped items require confirmation.</p>
   <p className="text-xs text-parchment/70">Current load: {currentLoad.weight.toFixed(1)} / {maxLoad??'?'} lb · Selling reduces item weight but adds coin weight.</p>
+  {questOffer&&<section aria-label="Quest magic-item sale" className="rounded border border-gold p-3 space-y-2 text-sm">
+    <p className="font-semibold">Quest buyer: {questOffer.buyer}</p>
+    <p>{questOffer.quantity} × {questOffer.itemName} — {formatFrontierPrice(questOffer.proceedsCp)}</p>
+    <p>Quest: {questOffer.questId}. This sale is final and removes the item from inventory.</p>
+    <button type="button" disabled={saving} className="rounded border border-gold px-3 py-2" onClick={()=>{try{setSellError('');const authorized=campaign.magicSaleAuthorization?campaign:authorizeQuestMagicSale(campaign,questOffer);const updated=completeQuestMagicSale(authorized,questOffer.approvalId);void Promise.resolve(onSupplyChange(updated,'Completed quest-authorized magic-item sale.')).catch(e=>setSellError(String(e)));}catch(e){setSellError(String(e));}}}>Confirm quest sale</button>
+  </section>}
   {sellError&&<p role="alert" className="text-xs text-red-300">{sellError}</p>}
   {campaign.inventoryLedger?.gear.map(gear=>{
    let offer:ReturnType<typeof merchantResaleOffer>|null=null;

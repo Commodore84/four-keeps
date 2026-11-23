@@ -1,4 +1,5 @@
 import type {Campaign} from './campaign';
+import {MAGIC_ITEMS} from './magicWishlist';
 import {ITEM_BY_ID} from './creationEquipment';
 import {OFFICIAL_EQUIPMENT_2024} from './officialEquipment2024';
 import {equipmentPackContents} from './equipmentPacks';
@@ -422,4 +423,50 @@ export function sellMerchantEquipment(campaign:Campaign,itemName:string,quantity
  const equipment=campaign.equipment?{...campaign.equipment}:undefined;
  if(equipment&&combatKey)equipment[combatKey]=Math.max(0,equipment[combatKey]-quantity);
  return {...campaign,inventoryLedger:{...ledger,currency,gear},encounterLoadout,...(equipment?{equipment}:{})};
+}
+
+/** A DM/quest grants a single-use, item-specific buyer authorization. No open-market magic resale. */
+export function authorizeQuestMagicSale(campaign:Campaign, approval:{buyer:string;questId:string;itemName:string;quantity:number;proceedsCp:number;approvalId:string}):Campaign {
+ if(!campaign.characterIdentity || !campaign.inventoryLedger)throw Error('An active character and inventory are required.');
+ if(campaign.adventureSession?.site!=='frontier'||campaign.adventureSession.status!=='exploring')throw Error('A live adventure buyer is required.');
+ if(campaign.magicSaleAuthorization)throw Error('Resolve the existing magic sale first.');
+ if(!approval.buyer.trim()||!approval.questId.trim()||!approval.approvalId.trim())throw Error('A named buyer, quest and DM approval are required.');
+ if(!campaign.journal?.some(entry=>entry.kind==='dm'&&entry.id===approval.approvalId&&entry.text.includes(approval.questId)&&entry.text.includes(approval.buyer)&&entry.text.includes(approval.itemName)))throw Error('The DM must establish this quest buyer and exact sale in the adventure journal.');
+ if(campaign.completedMagicSales?.includes(approval.approvalId))throw Error('This approval has already been used.');
+ if(!Number.isSafeInteger(approval.quantity)||approval.quantity<1||!Number.isSafeInteger(approval.proceedsCp)||approval.proceedsCp<0)throw Error('Invalid magic sale terms.');
+ if(!MAGIC_ITEMS.some(item=>item.name.toLowerCase()===approval.itemName.toLowerCase()))throw Error('Not a recognized magic item.');
+ const owned=campaign.inventoryLedger.gear.find(item=>item.name.toLowerCase()===approval.itemName.toLowerCase());
+ if(!owned||owned.quantity<approval.quantity)throw Error('Not enough magic items in inventory.');
+ return {...campaign,magicSaleAuthorization:{...approval}};
+}
+export function completeQuestMagicSale(campaign:Campaign,approvalId:string):Campaign {
+ const approval=campaign.magicSaleAuthorization;
+ if(!approval||approval.approvalId!==approvalId||campaign.completedMagicSales?.includes(approvalId))throw Error('No valid unused DM-approved magic sale.');
+ const ledger=campaign.inventoryLedger;
+ if(!ledger)throw Error('Inventory missing.');
+ const owned=ledger.gear.find(item=>item.name.toLowerCase()===approval.itemName.toLowerCase());
+ if(!owned||owned.quantity<approval.quantity)throw Error('Not enough magic items in inventory.');
+ const funds=walletCopper(ledger.currency)+approval.proceedsCp;
+ if(!Number.isSafeInteger(funds))throw Error('Wallet would overflow.');
+ let remaining=funds;
+ const currency={...ledger.currency};
+ for(const [denomination,value] of [['PP',1000],['GP',100],['EP',50],['SP',10],['CP',1]] as const){currency[denomination]=Math.floor(remaining/value);remaining%=value;}
+ const gear=ledger.gear.map(item=>({...item}));
+ const entry=gear.find(item=>item.name.toLowerCase()===approval.itemName.toLowerCase())!;
+ entry.quantity-=approval.quantity;
+ if(entry.quantity===0)gear.splice(gear.indexOf(entry),1);
+ return {...campaign,inventoryLedger:{...ledger,currency,gear},magicSaleAuthorization:undefined,completedMagicSales:[...(campaign.completedMagicSales??[]),approvalId]};
+}
+
+/** Explicit DM journal offer. No price inference or player-authored messages. */
+export function pendingQuestMagicOffer(campaign:Campaign):Campaign['magicSaleAuthorization'] {
+ if(campaign.magicSaleAuthorization)return campaign.magicSaleAuthorization;
+ for(const entry of [...(campaign.journal??[])].reverse()){
+  if(entry.kind!=='dm'||campaign.completedMagicSales?.includes(entry.id))continue;
+  const match=entry.text.match(/Magic-item buyer:\s*([^;\n]+);\s*quest:\s*([^;\n]+);\s*item:\s*([^;\n]+);\s*quantity:\s*(\d+);\s*offer:\s*(\d+)\s*CP\b/i);
+  if(!match)continue;
+  const [,buyer,questId,itemName,quantity,proceedsCp]=match;
+  try{return authorizeQuestMagicSale(campaign,{buyer:buyer.trim(),questId:questId.trim(),itemName:itemName.trim(),quantity:Number(quantity),proceedsCp:Number(proceedsCp),approvalId:entry.id}).magicSaleAuthorization;}catch{continue;}
+ }
+ return undefined;
 }

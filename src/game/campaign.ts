@@ -83,6 +83,8 @@ export interface Campaign {
   familiar?: { form: 'Owl'; summonedAt: string; status?: 'active'|'dismissed'|'destroyed'; hp?: number };
   equipment?: {daggers:number;arrows:number;caltrops:number;ballBearings:number};
   inventoryLedger?: {currency:{CP:number;SP:number;EP:number;GP:number;PP:number};gear:{name:string;quantity:number}[]};
+  magicSaleAuthorization?: {buyer:string;questId:string;itemName:string;quantity:number;proceedsCp:number;approvalId:string};
+  completedMagicSales?: string[];
   xp?: number;
   xpAwards?: { id: string; amount: number; reason: string }[];
   levelOneSnapshot?: { character: CharacterStats; xp: number; xpAwards: { id: string; amount: number; reason: string }[] };
