@@ -1617,3 +1617,30 @@ test('iPhone persistent Dasahi merchant dialogue opens catalog after long chat a
  expect((await saved(page)).inventoryLedger).toEqual(before.inventoryLedger);
  await page.screenshot({path:'test-results/persistent-dasahi-merchant-iphone.png',fullPage:true});
 });
+
+test('iPhone shop sells ordinary gear with confirmation and persists gold and weight',async({page})=>{
+ test.setTimeout(120000);
+ await page.setViewportSize({width:390,height:844});
+ await createAndImport(page,'rogue');await navigate(page,'Adventure');
+ await page.evaluate(()=>{localStorage.setItem('four-keeps-access-code','browser-test-code');localStorage.setItem('four-keeps-dm-mode','on');});
+ await page.route('**/api/dm',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({narration:'The general store is open.',worldUpdates:{},newFacts:[]})}));
+ await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await expect.poll(async()=> (await saved(page))?.journal?.some((entry:any)=>entry.id?.endsWith('-dm-opening'))).toBe(true);
+ await page.evaluate(async()=>{
+  const db=await new Promise<IDBDatabase>((resolve,reject)=>{const req=indexedDB.open('four-keeps-local',1);req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error)});
+  const tx=db.transaction('campaigns','readwrite'),store=tx.objectStore('campaigns');
+  const all=await new Promise<any[]>((resolve,reject)=>{const req=store.getAll();req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error)});
+  const c=all[0];c.merchantSettlementTier='village';c.merchantShopType='general';c.merchantShopOpen=true;c.inventoryLedger.gear=[{name:'Dagger',quantity:2},{name:'Rope',quantity:1}];c.encounterLoadout={};store.put(c);
+  await new Promise<void>((resolve,reject)=>{tx.oncomplete=()=>resolve();tx.onerror=()=>reject(tx.error)});db.close();
+ });
+ await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();await page.getByRole('button',{name:'Continue Adventure'}).click();
+ const shop=page.getByLabel('Frontier Village general store',{exact:true});await expect(shop).toBeVisible();
+ await shop.getByRole('tab',{name:'Sell'}).click();
+ await expect(shop.getByRole('tabpanel',{name:'Sell equipment'}).getByText(/Dagger · Owned 2/)).toBeVisible();
+ await shop.getByRole('button',{name:'Sell · 1 GP'}).first().click();
+ await expect(shop.getByRole('alertdialog',{name:'Confirm equipment sale'})).toBeVisible();
+ await shop.getByRole('button',{name:'Confirm sale'}).click();
+ await expect.poll(async()=> (await saved(page)).inventoryLedger.gear.find((x:any)=>x.name==='Dagger')?.quantity).toBe(1);
+ await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();await page.getByRole('button',{name:'Continue Adventure'}).click();
+ expect((await saved(page)).inventoryLedger.gear.find((x:any)=>x.name==='Dagger')?.quantity).toBe(1);
+});
