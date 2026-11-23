@@ -58,7 +58,7 @@ export function MerchantShop({campaign,saving,onClose,onPrepare,onSettle,onDiscu
  const eligible=selected.length>0&&total<=funds&&selected.every(line=>line.quantity<=line.stock);
  const pendingLines=pending?.lines??(pending?[{itemId:pending.itemId,quantity:pending.quantity,unitCostCp:pending.unitCostCp}]:[]);
  const pendingTotal=pendingLines.reduce((sum,line)=>sum+line.quantity*line.unitCostCp,0);
- const packSummary=(id:string,quantity:number)=>{const contents=equipmentPackContents(id);return contents?contents.map(part=>({name:merchantCatalogFor(tier,merchant).find(x=>x.id===part.itemId)?.name??part.itemId,quantity:part.quantity*quantity})):[];};
+ const packSummary=(id:string,quantity:number)=>{const contents=equipmentPackContents(id);return contents?contents.map(part=>({name:merchantCatalogFor(tier,merchant).find(x=>x.id===part.item.id)?.name??part.item.id,quantity:part.quantity*quantity})):[];};
  const maxAffordable=(itemId:string,unit:number,stock:number,quantity:number)=>{
   const step=itemId==='arrows'?20:1;
   if(unit<=0||stock<step)return quantity;
