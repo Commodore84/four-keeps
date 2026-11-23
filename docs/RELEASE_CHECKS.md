@@ -28,3 +28,14 @@ Batch coherent changes on an isolated feature branch. Run targeted Vitest/Playwr
 - A newer run for the **same branch** cancels an older one, preventing overlapping obsolete full runs.
 - A 60-minute job timeout caps a hung runner. The full browser suite remains intact.
 - GitHub's **Actions budget** is a separate account setting; a $0 overage budget can block charges, but may also prevent new runs after included minutes are exhausted.
+
+## Vercel BLOCKED deployments: pre-build gate
+
+A deployment marked `BLOCKED` immediately, with no build events, has not reached Vite, TypeScript or application tests. Do not retry unchanged deployments or claim a release is READY.
+
+1. Inspect exact deployment ID, project/team, commit SHA and build events. Compare with the last READY SHA. Check the dashboard error overlay, account notices, email, plan/quota status, policy restrictions, Git contributor permissions and Vercel status.
+2. If authorized, try one exact-SHA deployment via Vercel API. If it is also BLOCKED, do not assume that changing application code will resolve the platform gate. Try a project-linked, authenticated Vercel CLI only if credentials are available.
+3. Preserve the candidate on its isolated branch. If Vercel exposes no reason, escalate with deployment IDs and the absence of build events; the account owner may need to act.
+4. Once the gate clears, recheck the exact SHA and full GitHub CI, then require an exact-SHA Vercel READY before protected fast-forward or announcing a release.
+
+2026-11-23 incident: project `prj_PRQK3pVlCo8qWquhwJ94zOiGzZQc`, team `team_sUlSKPlHlLYM9o1eS7GG4H7p`. Deployments `dpl_22zAR28ckreH1k34aVobshz3UPxt` and `dpl_E9eP6iXXpLVGqpzFsrxD5NuEnNVN` were BLOCKED before build. Direct Git-source API deployment was also BLOCKED. Last confirmed READY: `dpl_EkXL9KUThfYRDmzxbG4ZJLrDKPoU`, SHA `79a9ad3ab64d709272956b61249d7ece7d34623d`. Root cause is unconfirmed.
