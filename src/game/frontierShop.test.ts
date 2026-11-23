@@ -2,7 +2,8 @@ import {describe,it,expect} from 'vitest';
 import {merchantItemDescription,merchantItemFacts} from './merchantItemDetails';
 import {newCampaign,addExchange} from './campaign';
 import {beginAdventureSession} from './adventureSession';
-import {buyFrontierItem,frontierShopStock,frontierMerchantContext,formatFrontierPrice,parseFrontierPurchase,prepareMerchantPurchase,prepareMerchantCart,settleMerchantPurchase,cityShopStock,merchantCatalogFor,availableMerchants,merchantStockKey,merchantStockKeyForCampaign,merchantInitialStock,merchantRestockIntervalMinutes,walletCopper,remainingMerchantStock,merchantCatalog,isMerchantBrowseRequest,isEstablishedMerchantConversation,merchantInvitationIsCurrent,trackMerchantConversation,acceptsMerchantBrowseInvitation,approveMerchantDiscount,isMerchantPurchaseRequest,classifyMerchantIntent,merchantNegotiationTarget,beginMerchantNegotiation,resolveMerchantNegotiation,merchantDiscountDC,beginCartNegotiation,resolveCartNegotiation} from './frontierShop';
+import {carriedWeight} from './carryingCapacity';
+import {buyFrontierItem,frontierShopStock,frontierMerchantContext,formatFrontierPrice,parseFrontierPurchase,prepareMerchantPurchase,prepareMerchantCart,settleMerchantPurchase,cityShopStock,merchantCatalogFor,availableMerchants,merchantStockKey,merchantStockKeyForCampaign,merchantInitialStock,merchantRestockIntervalMinutes,walletCopper,remainingMerchantStock,merchantCatalog,isMerchantBrowseRequest,isEstablishedMerchantConversation,merchantInvitationIsCurrent,trackMerchantConversation,acceptsMerchantBrowseInvitation,approveMerchantDiscount,isMerchantPurchaseRequest,classifyMerchantIntent,merchantNegotiationTarget,beginMerchantNegotiation,resolveMerchantNegotiation,merchantDiscountDC,beginCartNegotiation,resolveCartNegotiation,merchantResaleOffer,sellMerchantEquipment} from './frontierShop';
 function fixture(){const c=newCampaign('Shop','shop-test');return beginAdventureSession({...c,merchantSettlementTier:'town',characterIdentity:{name:'Test',speciesId:'elf',backgroundId:'sage',classId:'rogue',draftId:'draft',pronouns:'',appearance:'',personality:'',backstory:''},inventoryLedger:{currency:{GP:10,SP:0,CP:0,EP:0,PP:0},gear:[]}})}
 describe('merchant purchases use actual stock rather than an arbitrary 20-unit limit',()=>{
  it('purchases 60 individual arrows as three packs of 20 without losing ammunition accounting',()=>{
@@ -506,5 +507,36 @@ describe('authoritative carrying capacity checkout enforcement',()=>{
   const c=fixture();const quoted=prepareMerchantPurchase(c,'rope',1,'weight-changed');
   const changed={...quoted,character:{...quoted.character!,scores:{...quoted.character!.scores,str:1}},inventoryLedger:{...quoted.inventoryLedger!,gear:[{name:'Rope',quantity:2}]}};
   expect(()=>settleMerchantPurchase(changed,'weight-changed',true)).toThrow(/carrying capacity/i);
+ });
+});
+
+describe('2024 mundane equipment resale',()=>{
+ const seller=()=>({...fixture(),merchantShopOpen:true,merchantShopType:'general' as const,inventoryLedger:{currency:{GP:10,SP:0,CP:0,EP:0,PP:0},gear:[{name:'Dagger',quantity:2},{name:'Rope',quantity:1},{name:'Potion of Healing',quantity:1}]}});
+ it('sells a partial stack for half listed value, removes only sold gear, and credits wallet',()=>{
+  const c=seller();const offer=merchantResaleOffer(c,'Dagger',1);
+  expect(offer.proceedsCp).toBe(100);
+  const sold=sellMerchantEquipment(c,'Dagger',1);
+  expect(sold.inventoryLedger!.gear.find(x=>x.name==='Dagger')?.quantity).toBe(1);
+  expect(walletCopper(sold.inventoryLedger?.currency)).toBe(1100);
+  expect(c.inventoryLedger.gear.find(x=>x.name==='Dagger')?.quantity).toBe(2);
+  expect(carriedWeight(sold).weight).toBeLessThan(carriedWeight(c).weight);
+  expect(remainingMerchantStock(sold,'dagger')).toBe(remainingMerchantStock(c,'dagger'));
+ });
+ it('rejects magic resale and missing quantities without changing state',()=>{
+  const c=seller();expect(()=>sellMerchantEquipment(c,'Potion of Healing',1)).toThrow(/magic items/i);
+  expect(()=>sellMerchantEquipment(c,'Dagger',3)).toThrow(/not enough/i);
+ });
+ it('requires confirmation before selling equipped items and unequips on confirmation',()=>{
+  const c={...seller(),encounterLoadout:{weaponId:'dagger'}};
+  expect(()=>sellMerchantEquipment(c,'Dagger',1)).toThrow(/equipped/i);
+  expect(sellMerchantEquipment(c,'Dagger',1,'general',true).encounterLoadout?.weaponId).toBeUndefined();
+ });
+ it('limits specialized merchants to appropriate merchandise',()=>{
+  const c={...seller(),merchantSettlementTier:'city' as const,merchantShopType:'weaponsmith' as const};
+  expect(()=>merchantResaleOffer(c,'Rope',1,'weaponsmith')).toThrow(/does not buy/i);
+  expect(merchantResaleOffer(c,'Dagger',1,'weaponsmith').proceedsCp).toBe(100);
+ });
+ it('refuses sale when merchant is not open',()=>{
+  expect(()=>merchantResaleOffer({...seller(),merchantShopOpen:false},'Dagger',1)).toThrow(/open/i);
  });
 });
