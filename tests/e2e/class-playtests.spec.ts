@@ -1635,6 +1635,12 @@ test('iPhone shop sells ordinary gear with confirmation and persists gold and we
  });
  await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();await page.getByRole('button',{name:'Continue Adventure'}).click();
  const shop=page.getByLabel('Frontier Village general store',{exact:true});await expect(shop).toBeVisible();
+ await expect(shop.getByRole('button',{name:'Add five Dagger'})).toBeVisible();
+ await expect(shop.getByRole('button',{name:'Maximum affordable Dagger'})).toBeVisible();
+ await shop.getByRole('button',{name:'Add Dagger',exact:true}).click();
+ await shop.getByText(/Cart details/).click();
+ await expect(shop.getByLabel('Cart item details')).toContainText('Dagger');
+ await expect(shop.getByLabel('Projected wallet')).toBeVisible();
  await shop.getByRole('tab',{name:'Sell'}).click();
  await expect(shop.getByRole('tabpanel',{name:'Sell equipment'}).getByText(/Dagger · Owned 2/)).toBeVisible();
  await shop.getByRole('button',{name:'Sell · 1 GP'}).first().click();
