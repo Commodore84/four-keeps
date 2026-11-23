@@ -2,6 +2,7 @@ import type {Campaign} from './campaign';
 import {ITEM_BY_ID} from './creationEquipment';
 import {OFFICIAL_EQUIPMENT_2024} from './officialEquipment2024';
 import {equipmentPackContents} from './equipmentPacks';
+import {purchaseWeightAfter,carriedWeight} from './carryingCapacity';
 
 export function formatFrontierPrice(copper:number):string {
  if(!Number.isSafeInteger(copper)||copper<0)throw Error('Invalid copper amount.');
@@ -225,6 +226,14 @@ export function frontierMerchantContext(campaign:Campaign){
  if(campaign.adventureSession?.site!=='frontier'||campaign.adventureSession.status!=='exploring'||!campaign.characterIdentity)return null;
  return {location:campaign.location,shop:campaign.merchantShopType?MERCHANT_LABELS[campaign.merchantShopType]:settlementTier(campaign)==='city'?'City marketplace':'General store',merchants:availableMerchants(settlementTier(campaign)).map(type=>({type,name:MERCHANT_LABELS[type]})),keeper:{name:settlementTier(campaign)==='city'?'City merchant':'Mara Vell',temperament:'Practical and friendly but firm on stock and fair prices; threats damage trust.'},items:merchantStock(campaign).map(item=>({id:item.id,name:item.name,costCp:item.costCp,packQuantity:item.packQuantity??1,remaining:remainingMerchantStock(campaign,item.id)})),walletCp:walletCopper(campaign.inventoryLedger?.currency),supplierOrders:(campaign.merchantSupplyOrders??[]).filter(order=>order.settlement===(campaign.location||'unknown').trim().toLowerCase()).map(order=>({id:order.id,itemId:order.itemId,quantity:order.quantity,status:order.status,readyAtMinutes:order.readyAtMinutes,ready:(campaign.elapsedMinutes??0)>=order.readyAtMinutes})),pendingSupplierQuote:campaign.pendingMerchantSupplyOrder?{itemId:campaign.pendingMerchantSupplyOrder.itemId,quantity:campaign.pendingMerchantSupplyOrder.quantity,unitCostCp:campaign.pendingMerchantSupplyOrder.unitCostCp,readyAtMinutes:campaign.pendingMerchantSupplyOrder.readyAtMinutes}:null,supplierRule:'In a city, if a standard item is sold out, direct the player to the shop supplier-order controls. The player must confirm payment and later collect the order. Describe delivery in game time; never claim items were ordered, paid for, delivered or collected from narration alone.',purchaseRule:'Refer players to the correct specialist for each item; a general store does not sell weapons or armor. Offer an itemized list with exact prices on request. Player purchase requests require explicit confirmation; narration never grants items or spends money. Discounts require a resolved, successful social skill check for one stocked item; the rules engine caps the discount at 20 percent.'};
 }
+/** Enforce capacity against the authoritative campaign snapshot, not only the shop UI. */
+function requireCarryingCapacity(campaign:Campaign,items:{itemId:string;quantity:number}[],costCp:number):void {
+ const current=carriedWeight(campaign);
+ const projected=purchaseWeightAfter(campaign,items,costCp);
+ if(!projected||projected.capacity===null)throw Error('Cannot verify carrying capacity for this character.');
+ if(current.unknown.length||projected.unknown.length)throw Error('Resolve unknown equipment weights before purchasing: '+projected.unknown.join(', '));
+ if(projected.weight>projected.capacity+1e-8&&projected.weight>current.weight+1e-8)throw Error(`Purchase exceeds carrying capacity (${projected.weight.toFixed(1)} / ${projected.capacity} lb).`);
+}
 export function buyFrontierItem(campaign:Campaign,itemId:string,quantity=1,now=new Date().toISOString()):Campaign{
  if(!campaign.characterIdentity||campaign.adventureSession?.site!=='frontier'||campaign.adventureSession.status!=='exploring')throw Error('The merchant is not available here.');
  if(!Number.isSafeInteger(quantity)||quantity<1)throw Error('Invalid purchase quantity.');
@@ -237,6 +246,7 @@ export function buyFrontierItem(campaign:Campaign,itemId:string,quantity=1,now=n
  if(!Number.isInteger(approved)||approved<0||approved>20)throw Error('Invalid merchant discount.');
  const unitCost=item.costCp-Math.floor(item.costCp*approved/100);
  const cost=unitCost*quantity;if(!Number.isSafeInteger(cost)||cost>funds)throw Error('Not enough money for this purchase.');
+ requireCarryingCapacity(campaign,[{itemId,quantity}],cost);
  let remaining=funds-cost;
  const currency={...ledger.currency};for(const [coin,cp] of denominations){currency[coin]=Math.floor(remaining/cp);remaining%=cp;}
  const gear=ledger.gear.map(i=>({...i}));
@@ -278,6 +288,7 @@ export function prepareMerchantPurchase(campaign:Campaign,itemId:string,quantity
  if(!Number.isInteger(discount)||discount<0||discount>20)throw Error('Invalid merchant discount.');
  const unitCost=item.costCp-Math.floor(item.costCp*discount/100);
  if(walletCopper(campaign.inventoryLedger?.currency)<unitCost*quantity)throw Error('Insufficient gold.');
+ requireCarryingCapacity(campaign,[{itemId,quantity}],unitCost*quantity);
  return {...campaign,pendingMerchantPurchase:{id,itemId,quantity,unitCostCp:unitCost}};
 }
 export type MerchantCartLine={itemId:string;quantity:number;unitCostCp:number};
@@ -292,6 +303,7 @@ export function prepareMerchantCart(campaign:Campaign,items:{itemId:string;quant
  }
  if(lines.some(line=>!Number.isSafeInteger(line.unitCostCp*line.quantity))||!Number.isSafeInteger(lines.reduce((sum,line)=>sum+line.unitCostCp*line.quantity,0)))throw Error('Invalid purchase total.');
  if(lines.reduce((sum,line)=>sum+line.unitCostCp*line.quantity,0)>walletCopper(campaign.inventoryLedger?.currency))throw Error('Insufficient money.');
+ requireCarryingCapacity(campaign,lines.map(({itemId,quantity})=>({itemId,quantity})),lines.reduce((sum,line)=>sum+line.unitCostCp*line.quantity,0));
  return {...campaign,pendingMerchantPurchase:{id,itemId:lines[0].itemId,quantity:lines[0].quantity,unitCostCp:lines[0].unitCostCp,lines}};
 }
 /** Four Keeps house-rule negotiation: DCs are authoritative and never narrated. */
@@ -342,6 +354,7 @@ export function settleMerchantPurchase(campaign:Campaign,id:string,confirmed:boo
   if(!Number.isSafeInteger(total))throw Error('Invalid purchase total.');
  }
  if(total>walletCopper(campaign.inventoryLedger?.currency))throw Error('Insufficient money.');
+ requireCarryingCapacity(campaign,lines.map(({itemId,quantity})=>({itemId,quantity})),total);
  let bought=campaign;
  for(const line of lines){
   const item=merchantStock(campaign).find(i=>i.id===line.itemId);
