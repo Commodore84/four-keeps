@@ -1626,6 +1626,7 @@ export function App() {
       </div>}
       <main ref={mainScrollRef} className={activeView==='map'?"min-h-0 flex-1 overflow-hidden px-3 py-3":activeView==='adventure'&&campaign?.merchantShopOpen?"min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-0 [-webkit-overflow-scrolling:touch]":"min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-6 pb-6 [-webkit-overflow-scrolling:touch]"} id="main-content">
         {activeView === 'settings' && <>
+        <div className="sticky top-0 z-40 mb-3 flex items-center justify-between gap-2 rounded-lg border border-white/15 bg-ink px-3 py-2"><h2 className="font-semibold">Settings</h2><button type="button" onClick={()=>{setNavigationOpen(false);setActiveView("adventure");if(!campaign)setPortalScreen("home");}} className="min-h-11 rounded-lg border border-gold/40 px-3 text-sm font-semibold text-gold">{campaign?"Back to adventure":"Back to home"}</button></div>
         <section aria-label="App controls" className="mb-5 rounded-xl border border-white/15 bg-panel p-4 space-y-3">
           <h2 className="font-serif text-lg">App controls</h2>
           <button type="button" onClick={() => window.location.reload()} className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-gold/40 px-4 py-3 text-sm font-semibold text-gold focus-visible:outline focus-visible:outline-2 focus-visible:outline-gold"><RefreshCw size={18}/>Reload App</button>
