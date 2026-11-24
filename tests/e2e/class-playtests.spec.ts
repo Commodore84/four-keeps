@@ -1249,10 +1249,10 @@ test('iPhone Dasahi opening offers a voluntary waterfront store with readable di
  await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
  await expect(page.getByLabel('Dasahi marketplace')).toBeVisible();
  const inventory=page.getByRole('region',{name:'Merchant inventory'});
- await expect(inventory).toHaveCSS('overflow-y','visible');
+ await expect(inventory).toHaveCSS('overflow-y','auto');
  expect(await inventory.evaluate(list=>list.scrollTop)).toBe(0);
  await expect(inventory).toHaveCSS('background-color','rgb(36, 42, 48)');
- expect(await inventory.evaluate(list=>list.scrollHeight-list.clientHeight)).toBeLessThanOrEqual(1);
+ expect(await inventory.evaluate(list=>list.scrollHeight-list.clientHeight)).toBeGreaterThan(1);
  await inventory.focus();
  await expect(inventory).toBeFocused();
  await page.getByLabel('Search merchandise').fill('Torch');
