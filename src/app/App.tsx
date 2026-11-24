@@ -28,7 +28,7 @@ import {classSummary} from '../game/creationClasses';
 import {completePlayerRest,playerLongRestWaitMinutes} from '../game/playerRecovery';
 import {frontierMerchantContext} from '../game/frontierShop';
 import {mergeWorld} from '../game/world';
-import {travelAdventure,proposeAdventureEncounter,type AdventureSite} from '../game/adventureSession';
+import {travelAdventure,proposeAdventureEncounter,recoverWarehouseRatEncounter,type AdventureSite} from '../game/adventureSession';
 import {openingIntentForCampaign,prepareAdventureOpening,commitAdventureOpening,needsAdventureOpening,adventureMemory,prepareAdventureAction, pauseAdventureForClarification, answerAdventureClarification,commitAdventureAction} from '../game/adventureOrchestrator';
 import {campaignPlayerContext} from '../game/campaignContext';
 import {ImportedCharacterSheet} from './ImportedCharacterSheet';
@@ -176,8 +176,9 @@ function Adventure({ campaign, fullHistory, onToggleHistory, onAdventureChange, 
   const allTurns = campaign?.journal.filter((entry) => entry.kind === 'player' || entry.kind === 'dm') ?? [];
   const turns = fullHistory ? allTurns : allTurns.slice(-6);
   if(development)return <section className="space-y-4" aria-label="Classic adventure testing">{campaign&&<details className="rounded-xl border border-white/10 p-3" open><summary className="cursor-pointer text-sm text-gold">Classic adventure and encounter tools</summary><AdventureSessionPanel campaign={campaign} saving={saving} onChange={onAdventureChange}/></details>}</section>;
-  if(campaign&&(campaign.adventureSession?.pendingEncounter?.scenario||campaign.adventureSession?.status==='encounter'&&campaign.companionEncounter?.phaseThree)){
-    return <TacticalBattlefield key={campaign.id} campaign={campaign} saving={saving} onChange={onAdventureChange} onDm={onTacticalDm}/>;
+  const encounterCampaign=campaign?recoverWarehouseRatEncounter(campaign):null;
+  if(encounterCampaign&&(encounterCampaign.adventureSession?.pendingEncounter?.scenario||encounterCampaign.adventureSession?.status==='encounter'&&encounterCampaign.companionEncounter?.phaseThree)){
+    return <TacticalBattlefield key={encounterCampaign.id} campaign={encounterCampaign} saving={saving} onChange={onAdventureChange} onDm={onTacticalDm}/>;
   }
   if(campaign?.merchantShopOpen && campaign.adventureSession?.site==='frontier' && campaign.adventureSession.status==='exploring')return <section aria-label="Adventure storefront" className="h-full min-h-0 pb-0"><MerchantShop showDmRecommendations={showDmRecommendations} campaign={campaign} saving={saving} onClose={onShopClose} onPrepare={onShopPrepare} onRevise={onShopRevise} onSettle={onShopSettle} onDiscuss={onShopDiscuss} onSupplyChange={onAdventureChange}/></section>;
   return <section className="space-y-5" aria-label="Adventure">
