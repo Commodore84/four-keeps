@@ -1,0 +1,32 @@
+name: One-time Four Keeps Phase 3 candidate import
+on:
+  push:
+    branches:
+      - transfer/v23-phase3-combat
+    paths:
+      - .github/workflows/v23-import.yml
+permissions:
+  contents: write
+jobs:
+  import-candidate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+          fetch-depth: 0
+      - name: Verify base and reconstruct tested candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git merge-base HEAD 4f748fd06f2f77718735f0a772a0af18b9e07952)" = "4f748fd06f2f77718735f0a772a0af18b9e07952"
+          cat .phase3-transfer/part-0{0,1,2,3}.txt | base64 --decode | gzip --decompress > /tmp/fk-phase3.patch
+          git apply --check /tmp/fk-phase3.patch
+          git apply /tmp/fk-phase3.patch
+          rm -rf .phase3-transfer .github/workflows/v23-import.yml
+          git add -A
+          test "$(git write-tree)" = "1b97dd3d4056c9c007c2d28a54b6f0a013170109"
+          git config user.name "Four Keeps release automation"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Import verified Phase 3 tactical battlefield candidate"
+          git push origin HEAD:refs/heads/transfer/v23-phase3-combat
