@@ -1889,6 +1889,39 @@ test('iPhone existing mapless warehouse rat combat opens the tactical board and 
  await page.getByRole('button',{name:'Continue Adventure'}).click();
  await expect(page.getByRole('region',{name:'Tactical battlefield'})).toBeVisible();
 });
+test('iPhone combat setup has visible start position, selectable alternatives and usable initiative',async({page})=>{
+ test.setTimeout(90000);
+ await createAndImport(page,'rogue');
+ await page.evaluate(()=>{
+  localStorage.setItem('four-keeps-access-code','browser-test-code');
+  localStorage.setItem('four-keeps-dm-mode','on');
+ });
+ await page.route('**/api/dm',async route=>{
+  const request=route.request().postDataJSON();
+  const shared={worldUpdates:{},newFacts:[]};
+  if(request.opening){await route.fulfill({json:{...shared,narration:'Dasahi welcomes you.'}});return;}
+  await route.fulfill({json:{...shared,narration:'Two giant rats lunge from warehouse cargo.',
+   combatStart:{enemyName:'Warehouse rats',templateId:'warehouse-vermin'}}});
+ });
+ await page.reload();
+ await page.getByRole('button',{name:'Campaigns',exact:true}).click();
+ await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await expect.poll(async()=> (await saved(page))?.journal?.some((entry:any)=>entry.id?.endsWith('-dm-opening'))).toBe(true);
+ await page.getByLabel('Message the Dungeon Master').fill('I draw my bow as the rats charge.');
+ await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
+ const panel=page.getByRole('region',{name:'Tactical battlefield'});
+ await expect(panel).toBeVisible();
+ await expect(panel.getByText('Nighthawk versus Giant Rat and Giant Rat.')).toBeVisible();
+ await expect(panel.getByRole('button',{name:'Position 1 · Selected'})).toBeVisible();
+ await expect(panel.getByRole('button',{name:'Roll initiative and begin combat'})).toBeEnabled();
+ await expect(panel.getByText('You', {exact:true})).toBeVisible();
+ await panel.getByRole('button',{name:'Position 2'}).click();
+ await expect(panel.getByRole('button',{name:'Position 2 · Selected'})).toHaveAttribute('aria-pressed','true');
+ await panel.getByRole('button',{name:'Roll initiative and begin combat'}).click();
+ await expect.poll(async()=> (await saved(page))?.companionEncounter?.phaseThree?.scenario?.size).toBe(8);
+ await expect(panel.getByText('Choose your starting square')).toHaveCount(0);
+ await expect(panel.getByLabel('Combat resources')).toBeVisible();
+});
 test('iPhone tactical combat opens from Adventure, previews movement, runs NPC turns and persists escape',async({page})=>{
  test.setTimeout(90000);
  await page.addInitScript(()=>{Math.random=()=>0.5;});
@@ -1928,7 +1961,8 @@ test('iPhone tactical combat opens from Adventure, previews movement, runs NPC t
  const map=panel.getByRole('group',{name:'Battle map',exact:true});
  const square=(x:number,y:number)=>map.getByRole('button',{name:new RegExp('^Square '+x+', '+y+'(?:,|$)')});
  await expect(map).toBeVisible();
- await expect(panel.getByRole('button',{name:'Roll initiative'})).toBeDisabled();
+ await expect(panel.getByRole('button',{name:'Roll initiative'})).toBeEnabled();
+ await expect(panel.getByRole('button',{name:'Position 1 · Selected'})).toBeVisible();
  await square(1,1).click();
  await panel.getByRole('button',{name:'Roll initiative'}).click();
  await expect(panel.getByLabel('Initiative order')).toContainText('You:');
