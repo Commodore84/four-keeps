@@ -1,3 +1,4 @@
+import {forgetSoldMagicEquipment} from './magicEquipment';
 import type {Campaign} from './campaign';
 import {MAGIC_ITEMS} from './magicWishlist';
 import {ITEM_BY_ID} from './creationEquipment';
@@ -473,7 +474,8 @@ export function completeQuestMagicSale(campaign:Campaign,approvalId:string):Camp
  const entry=gear.find(item=>item.name.toLowerCase()===approval.itemName.toLowerCase())!;
  entry.quantity-=approval.quantity;
  if(entry.quantity===0)gear.splice(gear.indexOf(entry),1);
- return {...campaign,inventoryLedger:{...ledger,currency,gear},magicSaleAuthorization:undefined,completedMagicSales:[...(campaign.completedMagicSales??[]),approvalId]};
+ const magicEquipment=entry.quantity===0?forgetSoldMagicEquipment(campaign,entry.name):campaign.magicEquipment;
+ return {...campaign,inventoryLedger:{...ledger,currency,gear},...(magicEquipment?{magicEquipment}:{}),magicSaleAuthorization:undefined,completedMagicSales:[...(campaign.completedMagicSales??[]),approvalId]};
 }
 
 /** Explicit DM journal offer. No price inference or player-authored messages. */

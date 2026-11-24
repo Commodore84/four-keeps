@@ -1,3 +1,5 @@
+import {magicProtectionBonus,ownedMagicWearables,wearMagicItem,magicWandStatus,rechargeMagicWand,spendMagicWand} from '../game/magicEquipment';
+import {MAGIC_ITEMS} from '../game/magicWishlist';
 import {armorEffects} from '../game/armorEffects';
 import {formatFrontierPrice,walletCopper} from '../game/frontierShop';
 import {SPELLS,SPELL_BY_ID,WIZARD_LEVEL2_SPELLS} from '../game/creationMagic';
@@ -176,26 +178,67 @@ const MORE_CLASS_FEATURES:Record<string,{description:string;activation:string}>=
 const resourceRecoveryLabel=(pool:{recovery:'short'|'long';shortRecovery?:number})=>pool.recovery==='short'?'Short or Long Rest':pool.shortRecovery!==undefined?`Long Rest; ${pool.shortRecovery} use${pool.shortRecovery===1?'':'s'} on a Short Rest`:'Long Rest';
 const FEATURE_ACTIONS:Record<string,string>={'Sneak Attack':'On hit','Cunning Action':'Bonus Action','Cunning Strike':'On hit','Uncanny Dodge':'Reaction','Second Wind':'Bonus Action','Action Surge':'On your turn','Rage':'Bonus Action','Reckless Attack':'On attack','Arcane Recovery':'Short Rest','Lay on Hands':'Bonus Action','Bardic Inspiration':'Bonus Action','Wild Shape':'Bonus Action','Channel Divinity':'Varies by option'};
 const earnedTraitName=(name:string)=>name.replace(/\s*\(level \d+\)/i,'');
+function WandControls({campaign,name,disabled,onChange}:{campaign:Campaign;name:string;disabled:boolean;onChange:(next:Campaign,message:string)=>Promise<boolean>|boolean|void}){
+ const item=ownedMagicWearables(campaign).find(entry=>entry.name===name);
+ const wand=item?magicWandStatus(campaign,item.id):null;
+ const [target,setTarget]=useState('');
+ const [spent,setSpent]=useState(1);
+ const [roll,setRoll]=useState('');
+ const [confirmed,setConfirmed]=useState(false);
+ const [rechargeRoll,setRechargeRoll]=useState('');
+ const [error,setError]=useState('');
+ if(!wand)return null;
+ async function save(action:()=>Campaign,message:string){
+  setError('');
+  try {
+   if(await onChange(action(),message)===false)throw Error('Wand action could not be saved.');
+   setTarget('');setRoll('');setRechargeRoll('');setConfirmed(false);setSpent(1);
+  } catch(error){setError(error instanceof Error?error.message:'Wand action failed.');}
+ }
+ return <details className="text-xs" aria-label={name+' charges'}>
+  <summary className="cursor-pointer text-gold">{wand.charges} / 7 charges</summary>
+  {wand.multiple&&<p>Ask the DM to identify individual copies before tracking their charges.</p>}
+  {wand.ready&&wand.charges>0&&<div className="grid gap-1 py-1">
+   <label>Charges <select className="rounded border bg-ink px-2 py-1" aria-label="Charges to spend" value={spent} onChange={event=>setSpent(Number(event.target.value))}>{Array.from({length:Math.min(wand.charges,wand.maxSpend)},(_,index)=><option key={index} value={index+1}>{index+1}</option>)}</select></label>
+   <label>Target or area <input className="w-full rounded border bg-ink px-2 py-1" value={target} maxLength={100} onChange={event=>setTarget(event.target.value)}/></label>
+   {spent===wand.charges&&<label>Last-charge d20 <input className="w-16 rounded border bg-ink px-2 py-1" type="number" min={1} max={20} value={roll} onChange={event=>setRoll(event.target.value)}/></label>}
+   <label className="flex items-center gap-2"><input type="checkbox" checked={confirmed} onChange={event=>setConfirmed(event.target.checked)}/> DM confirmed the use and target</label>
+   <button type="button" className="min-h-8 rounded border border-gold/35 px-2" disabled={disabled||!target.trim()||!confirmed} onClick={()=>void save(()=>spendMagicWand(campaign,wand.id,{id:crypto.randomUUID(),spent,target,confirmed,lastChargeRoll:roll?Number(roll):undefined}),'Wand use saved for DM adjudication.')}>Spend charges for {wand.spell}</button>
+  </div>}
+  {wand.canRecharge&&<div className="flex flex-wrap items-center gap-2 py-1">
+   <label>Dawn recharge d6 <input className="w-16 rounded border bg-ink px-2 py-1" type="number" min={1} max={6} value={rechargeRoll} onChange={event=>setRechargeRoll(event.target.value)}/></label>
+   <button type="button" className="min-h-8 rounded border border-gold/35 px-2" disabled={disabled||!rechargeRoll} onClick={()=>void save(()=>rechargeMagicWand(campaign,wand.id,Number(rechargeRoll)),'Dawn recharge saved.')}>Recharge</button>
+  </div>}
+  {error&&<p role="alert" className="text-red-300">{error}</p>}
+ </details>;
+}
+
 function InventoryEquipment({campaign,saving,onChange}:{campaign:Campaign;saving:boolean;onChange:(next:Campaign,message:string)=>Promise<boolean>|boolean|void}){
  const [error,setError]=useState('');
  const itemRows=(campaign.inventoryLedger?.gear??[]).filter(row=>row.quantity>0).map(row=>({row,item:ITEMS.find(entry=>entry.name.toLowerCase()===row.name.toLowerCase())}));
- const categories=[...new Set(itemRows.map(({item})=>item?.category??'other'))];
+ const wearables=ownedMagicWearables(campaign);
+ const categories=[...new Set(itemRows.map(({item,row})=>item?.category??(MAGIC_ITEMS.some(magic=>magic.name===row.name)?'magic items':'other')))];
  const armor=armorEffects(campaign);
+ const load=carriedWeight(campaign),capacity=carryingCapacity(campaign);
  const inCombat=campaign.companionEncounter?.status==='active'||!!campaign.combat&&campaign.combat.status!=='completed';
  return <>
   {error&&<p className="text-xs text-red-300" role="alert">{error}</p>}
+  {capacity!==null&&load.weight>capacity+1e-8&&<p className="text-xs text-red-300" role="alert">Over carrying capacity. Reduce your load to move.</p>}
+  {load.unknown.length>0&&<p className="text-xs text-amber-300">Weight needs DM confirmation for {load.unknown.join(', ')}.</p>}
   {armor.untrainedArmor&&<p className="text-xs text-amber-300">Untrained armor: disadvantage on Strength and Dexterity tests. Spellcasting unavailable.</p>}
   {armor.untrainedShield&&<p className="text-xs text-amber-300">Untrained shield: no AC bonus.</p>}
   {armor.speedPenalty>0&&<p className="text-xs text-amber-300">Armor Strength requirement: speed reduced by {armor.speedPenalty} ft.</p>}
   {armor.stealthDisadvantage&&<p className="text-xs text-amber-300">Armor imposes disadvantage on Stealth.</p>}
   {categories.map(category=><div key={category} className="rounded border border-white/15 text-sm">
    <h4 className="bg-white/5 px-2 py-1 font-semibold capitalize">{category}</h4>
-   {itemRows.filter(({item})=>(item?.category??'other')===category).map(({row,item})=>{
+   {itemRows.filter(({item,row})=>(item?.category??(MAGIC_ITEMS.some(magic=>magic.name===row.name)?'magic items':'other'))===category).map(({row,item})=>{
     const slot=category==='weapon'?'weaponId':category==='armor'?'armorId':category==='shield'?'shieldId':null;
     const equipped=!!slot&&campaign.encounterLoadout?.[slot]===item?.id;
+    const magic=category==='magic items'?MAGIC_ITEMS.find(magic=>magic.name===row.name):undefined;
+    const wearable=wearables.find(item=>item.name===row.name);
     return <div key={row.name} className="space-y-1 border-t border-white/10 px-2 py-1.5">
      <div className="flex items-center justify-between gap-2">
-      <p><strong>{row.name}</strong> ×{row.quantity}{equipped&&<span className="ml-1 text-gold">Equipped</span>}</p>
+      <p><strong>{row.name}</strong> ×{row.quantity}{wearable?.attuned&&<span className="ml-1 text-gold">Attuned</span>}{(equipped||wearable?.worn)&&<span className="ml-1 text-gold">Equipped</span>}</p>
       {slot&&item&&<button type="button" disabled={saving||inCombat} className="min-h-8 rounded border border-gold/35 px-2 disabled:opacity-50" aria-label={(equipped?'Unequip ':'Equip ')+row.name} onClick={async()=>{
        setError('');
        try {
@@ -203,8 +246,18 @@ function InventoryEquipment({campaign,saving,onChange}:{campaign:Campaign;saving
         if(await onChange(setPlayerLoadout(campaign,slot,equipped?'':item.id),message)===false)setError('Equipment change could not be saved.');
        } catch(error){setError(error instanceof Error?error.message:'Equipment change failed.');}
       }}>{equipped?'Unequip':'Equip'}</button>}
+      {wearable&&<button type="button" disabled={saving||inCombat} className="min-h-8 rounded border border-gold/35 px-2" onClick={async()=>{
+       setError('');
+       try {
+        if(await onChange(wearMagicItem(campaign,wearable.id,!wearable.worn),wearable.worn?'Removed '+row.name:'Equipped '+row.name)===false)setError('Equipment change could not be saved.');
+       } catch(error){setError(error instanceof Error?error.message:'Equipment change failed.');}
+      }}>{wearable.worn?'Unequip':'Equip'}</button>}
      </div>
      {item&&<p className="text-xs text-parchment/75">{(item.weight/(item.packQuantity??1))*row.quantity} lb · {merchantItemDescription(item)}</p>}
+     {magic&&<p className="text-xs text-parchment/75">{magic.description}</p>}
+     {wearable&&<WandControls campaign={campaign} name={row.name} disabled={saving||inCombat} onChange={onChange}/>}
+     {magic&&(!wearable||!wearable.protection)&&<p className="text-xs text-amber-300">Item effects require DM adjudication.</p>}
+     {wearable?.attunement&&!wearable.attuned&&<p className="text-xs text-amber-300">Requires attunement during a Short Rest.</p>}
     </div>;
    })}
   </div>)}
@@ -266,7 +319,7 @@ export function ImportedCharacterSheet({campaign,saving,onChange,consumables,dev
  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
  {abilities.map(a=><div key={a} aria-label={a.toUpperCase()+' ability group'} className="rounded-xl border border-gold/30 bg-panel p-3">
  <div className="flex items-center justify-between gap-3 border-b border-white/10 pb-2"><h4 className="text-sm font-semibold uppercase tracking-wide">{({str:'Strength',dex:'Dexterity',con:'Constitution',int:'Intelligence',wis:'Wisdom',cha:'Charisma'} as const)[a]}</h4><div className="text-center"><strong className="block text-2xl leading-none">{c.scores[a]}</strong><span className="text-xs text-parchment/70">{signed(abilityModifier(c.scores[a]))}</span></div></div>
- <div className="mt-2 text-sm" aria-label={a.toUpperCase()+' saving throw'}><span className="text-gold">{c.savingThrowProficiencies?.includes(a)?'●':'○'}</span> Saving throw <strong className="float-right">{signed(savingThrowModifier(c,a))}</strong></div>
+ <div className="mt-2 text-sm" aria-label={a.toUpperCase()+' saving throw'}><span className="text-gold">{c.savingThrowProficiencies?.includes(a)?'●':'○'}</span> Saving throw <strong className="float-right">{signed(savingThrowModifier(c,a)+magicProtectionBonus(campaign))}</strong></div>
  <div className="mt-2 space-y-1" aria-label={a.toUpperCase()+' skills'}>{(Object.keys(skillAbility) as Skill[]).filter(skill=>skillAbility[skill]===a).map(skill=><div key={skill} className="flex justify-between gap-2 text-sm"><span><span className="text-gold">{c.expertiseSkills?.includes(skill)?'◆':c.proficientSkills.includes(skill)?'●':'○'}</span> {skill}</span><strong>{signed(skillModifier(c,skill))}</strong></div>)}</div>
  </div>)}</div>
  <p className="text-xs text-parchment/60">○ Not proficient · ● Proficient · ◆ Expertise</p>

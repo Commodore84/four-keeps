@@ -1690,3 +1690,26 @@ test('iPhone equipment changes survive a campaign reload',async({page},testInfo)
  await expect(equip).toBeVisible();
  expect((await saved(page)).encounterLoadout.armorId).toBe('');
 });
+
+test('iPhone adventure equipment confirmation consumes a candle once and persists it',async({page})=>{
+ await createAndImport(page,'rogue');
+ await navigate(page,'Adventure');
+ await page.evaluate(()=>{localStorage.setItem('four-keeps-access-code','browser-test-code');localStorage.setItem('four-keeps-dm-mode','on');});
+ await page.route('**/api/dm',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({narration:'The room is dark.',worldUpdates:{},newFacts:[]})}));
+ await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await expect.poll(async()=> (await saved(page))?.journal?.some((entry:any)=>entry.id?.endsWith('-dm-opening'))).toBe(true);
+ const count=async()=> (await saved(page)).inventoryLedger.gear.find((row:any)=>row.name==='Candle')?.quantity;
+ const starting=await count();
+ expect(starting).toBeGreaterThan(0);
+ const input=page.getByLabel('Message the Dungeon Master');
+ await input.fill('I light a candle');
+ await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
+ const confirm=page.getByLabel('Confirm equipment use');
+ await expect(confirm).toBeVisible();
+ expect(await count()).toBe(starting);
+ await confirm.getByRole('button',{name:'Use equipment'}).click();
+ await expect.poll(count).toBe(starting-1);
+ await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();await page.getByRole('button',{name:'Continue Adventure'}).click();
+ expect(await count()).toBe(starting-1);
+ expect((await saved(page)).equipmentLights.Candle.remainingSeconds).toBe(3600);
+});

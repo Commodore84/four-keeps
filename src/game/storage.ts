@@ -139,16 +139,17 @@ export async function commitHealingPotionUse(id:string,request:HealingPotionRequ
 }
 
 export async function commitConsumableUse(id:string,request:ConsumableRequest):Promise<Campaign>{
- return transact<Campaign>('readwrite',(store,resolve,reject)=>{
+ const committed=await transact<Campaign>('readwrite',(store,resolve,reject)=>{
   const read=store.get(id);
   read.onerror=()=>reject(read.error??new Error('Campaign lookup failed'));
   read.onsuccess=()=>{
    try{
     if(!isCampaign(read.result))throw Error('Campaign not found');
-    const current=hydratePlayerState(reconcileStartingCurrency(read.result)),next=useOwnedConsumable(current,request);
+    const current=hydratePlayerState(reconcileStartingCurrency(reconcileSavedPacks(read.result))),next=useOwnedConsumable(current,request);
     if(next===current){resolve(current);return}
     requestResult(store.put(next),()=>resolve(next),reject);
    }catch(error){reject(error instanceof Error?error:new Error(String(error)))}
   };
  });
+ return observe(committed);
 }

@@ -1,3 +1,4 @@
+import {collectSpentAmmunition} from './companionEncounter';
 import {useOwnedConsumable} from './consumables';
 import {describe,it,expect} from 'vitest';
 import {newCampaign,registerSubclassActor,chooseSubclassResistance} from './campaign';
@@ -117,6 +118,19 @@ describe('isolated companion encounter vertical slice',()=>{
   expect(result.inventoryLedger?.gear).toContainEqual({name:ammo,quantity:0});
   expect(result.companionEncounter?.ammunitionPendingRecovery).toMatchObject({[ammo]:1});
   expect(c.inventoryLedger?.gear).toContainEqual({name:ammo,quantity:1});
+ });
+ it('allows an imported character to search once after combat and recover half the spent ammunition',()=>{
+  const base=build();
+  const identity={name:'Raven',speciesId:'elf',backgroundId:'sage',classId:'rogue',draftId:'draft',pronouns:'',appearance:'',personality:'',backstory:''};
+  const inventoryLedger={currency:{CP:0,SP:0,EP:0,GP:0,PP:0},gear:[{name:'Arrows',quantity:2}]};
+  let campaign=startUnifiedEncounter({...base,characterIdentity:identity,inventoryLedger},{nighthawk:20,paladin:10},{nighthawk:{x:0,y:2},paladin:{x:0,y:0}},{paladin:20});
+  campaign={...campaign,companionEncounter:{...campaign.companionEncounter!,ammunitionPendingRecovery:{Arrows:5}}};
+  expect(()=>collectSpentAmmunition(campaign)).toThrow('Complete the encounter');
+  const completed=finishCompanionEncounter(campaign);
+  const searched=collectSpentAmmunition(JSON.parse(JSON.stringify(completed)));
+  expect(searched.inventoryLedger?.gear).toContainEqual({name:'Arrows',quantity:4});
+  expect(searched.elapsedMinutes).toBe((completed.elapsedMinutes??0)+1);
+  expect(()=>collectSpentAmmunition(searched)).toThrow('No spent ammunition');
  });
  it('reconciles expended ammunition after completing an encounter without changing legacy combat',()=>{
   const base=build();

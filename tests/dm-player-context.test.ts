@@ -102,3 +102,23 @@ it('rejects incorrect access code on the token-free configuration check',async()
  await handler({method:'GET',headers:{'x-four-keeps-access':'incorrect'},body:{}},res);
  expect(res.code).toBe(401);expect(fetch).not.toHaveBeenCalled();
 });
+
+it('applies owned tool proficiency with skill expertise, and rejects an unowned tool',async()=>{
+ const tool="Thieves' Tools";
+ const gear={owned:[{name:tool,quantity:1}],tools:[tool],toolProficiencies:[tool]};
+ const caster={...character,level:7};
+ const scene={characterIdentity:{name:'Raven',classId:'rogue'},equipment:gear,adventureSession:{site:'frontier',status:'exploring'}};
+ const checkRequest={skill:'Stealth',tool,difficulty:'moderate',mode:'normal'};
+ setup({narration:'The mechanism might draw attention.',checkRequest});
+ const first=response();
+ await handler(req({message:'I work quietly with my thieves’ tools.',character:caster,gameState:scene}),first);
+ expect(first.body.checkRequest).toMatchObject({skill:'Stealth',tool,mode:'advantage'});
+ setup({narration:'You stay quiet.'});
+ const second=response();
+ await handler(req({checkToken:first.body.checkRequest.token,dice:[1,2]}),second);
+ expect(second.body.checkResult).toMatchObject({tool,modifier:7,total:17,success:true});
+ setup({narration:'The mechanism might draw attention.',checkRequest});
+ const absent=response();
+ await handler(req({message:'I work with thieves’ tools.',character:caster,gameState:{...scene,equipment:{...gear,owned:[]}}}),absent);
+ expect(absent.body).toMatchObject({checkRequest:null,narration:expect.stringContaining('not in your inventory')});
+});

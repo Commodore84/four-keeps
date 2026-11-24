@@ -1,3 +1,5 @@
+import {ammunitionNamesForWeapon,type AmmunitionName} from './weaponAttackProfile';
+import {ITEM_BY_ID} from './creationEquipment';
 import {advanceProvisionsClock} from './provisionsClock';
 import type {Campaign} from './campaign';
 import {basicPoisonWeapon,igniteGroundOil,throwConsumable,type HolyWaterTargetType} from './companionEncounter';
@@ -45,7 +47,7 @@ export interface ConsumableRequest {
  ground?:{x:number;y:number;level:boolean};
  igniteOilId?:string;
  supplyOperation?:'drink'|'refill'|'track';expectedSupplyState?:string;ropeCheck?:number;
- expectedWeaponId?:string;poisonAmmunition?:{name:'Arrows'|'Crossbow Bolts'|'Sling Bullets';quantity:number};
+ expectedWeaponId?:string;poisonAmmunition?:{name:AmmunitionName;quantity:number};
  expectedTargetPosition?:{x:number;y:number};
 }
 export function eligibleKitTargets(c:Campaign){
@@ -187,11 +189,10 @@ export function useOwnedConsumable(c:Campaign,r:ConsumableRequest):Campaign{
   if(r.poisonAmmunition){
    const {name:ammoName,quantity}=r.poisonAmmunition;
    const weaponId=c.encounterLoadout?.weaponId;
-   const compatible=ammoName==='Arrows'?['shortbow','longbow']:ammoName==='Crossbow Bolts'?['light-crossbow','heavy-crossbow','hand-crossbow']:ammoName==='Sling Bullets'?['sling']:[];
-   const weaponItem=basicPoisonWeapon(c);
-   const ownedWeapon=c.inventoryLedger?.gear.some(g=>g.quantity>0&&g.name===({shortbow:'Shortbow',longbow:'Longbow','light-crossbow':'Light Crossbow','heavy-crossbow':'Heavy Crossbow','hand-crossbow':'Hand Crossbow',sling:'Sling'} as Record<string,string>)[weaponId??'']);
+   const weapon=ITEM_BY_ID[weaponId??''];
+   const ownedWeapon=weapon&&c.inventoryLedger?.gear.some(g=>g.quantity>0&&g.name===weapon.name);
    const available=(c.inventoryLedger?.gear.find(g=>g.name===ammoName)?.quantity??0)+(ammoName==='Arrows'&&!c.characterIdentity?c.equipment?.arrows??0:0);
-   if(!active||!b||!actor||!compatible.includes(weaponId??'')||!ownedWeapon||weaponItem||b.poisonedAmmunition||b.basicPoison||!Number.isInteger(quantity)||quantity<1||quantity>3||available<quantity)
+   if(!active||!b||!actor||!weapon||!ammunitionNamesForWeapon(weapon).includes(ammoName)||!ownedWeapon||b.poisonedAmmunition||b.basicPoison||!Number.isInteger(quantity)||quantity<1||quantity>3||available<quantity)
     throw Error('Basic Poison ammunition requires 1–3 verified owned compatible pieces');
    return {...c,consumableUseIds:[...(c.consumableUseIds??[]),r.requestId],
     companionEncounter:{...b,poisonedAmmunition:{name:ammoName,remaining:quantity,expiresRound:b.round+10},

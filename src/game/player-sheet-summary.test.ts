@@ -1,3 +1,6 @@
+import {magicProtectionBonus,magicWandStatus,rechargeMagicWand,spendMagicWand,wearMagicItem} from './magicEquipment';
+import {completePlayerRest} from './playerRecovery';
+import {campaignPlayerContext} from './campaignContext';
 import {armorEffects,equipmentRollMode,requireArmorSpellcasting} from './armorEffects';
 import {setPlayerLoadout} from './companionEncounter';
 import {describe,it,expect} from 'vitest';
@@ -27,7 +30,7 @@ describe('authoritative Player sheet summary',()=>{
  });
  it('applies heavy armor AC, untrained penalties and the Strength speed penalty',()=>{
   const c=rogue();
-  c.inventoryLedger?.gear.push({name:'Chain Mail',quantity:1});
+  c.inventoryLedger!.gear=[{name:'Chain Mail',quantity:1}];
   const armored=setPlayerLoadout(c,'armorId','chain-mail');
   expect(playerSheetSummary(armored)?.armorClass).toBe(16);
   expect(playerSheetSummary(armored)?.speed).toBe((c.character?.speed??0)-10);
@@ -43,6 +46,46 @@ describe('authoritative Player sheet summary',()=>{
   const shielded=setPlayerLoadout(c,'shieldId','shield');
   expect(()=>setPlayerLoadout(shielded,'weaponId','shortbow')).toThrow('two-handed weapon');
   expect(setPlayerLoadout(setPlayerLoadout(shielded,'shieldId',''),'weaponId','shortbow').encounterLoadout?.weaponId).toBe('shortbow');
+ });
+ it('requires a completed Short Rest and equipped ownership for protection bonuses',()=>{
+  const c=rogue();
+  c.inventoryLedger?.gear.push({name:'Ring of Protection',quantity:1});
+  const worn=wearMagicItem(c,'ring-of-protection',true);
+  const baseAC=playerSheetSummary(worn)?.armorClass??0;
+  const options={confirmedSafe:true,attunement:{itemId:'ring-of-protection' as const}};
+  expect(magicProtectionBonus(worn)).toBe(0);
+  expect(()=>completePlayerRest(worn,'long',options)).toThrow('Short Rest');
+  const attuned=completePlayerRest(worn,'short',options);
+  const restored=JSON.parse(JSON.stringify(attuned));
+  expect(playerSheetSummary(restored)?.armorClass).toBe(baseAC+1);
+  expect(campaignPlayerContext(restored).equipment).toMatchObject({equipped:['Ring of Protection'],attuned:['Ring of Protection']});
+  expect(magicProtectionBonus(wearMagicItem(restored,'ring-of-protection',false))).toBe(0);
+  expect(()=>completePlayerRest(attuned,'short',options)).toThrow('already set');
+  const ended=completePlayerRest(attuned,'short',{...options,attunement:{...options.attunement,end:true}});
+  expect(playerSheetSummary(ended)?.armorClass).toBe(baseAC);
+ });
+ it('tracks wand expenditure, dawn recharge and last-charge destruction without applying spell effects',()=>{
+  const c=rogue();
+  c.inventoryLedger?.gear.push({name:'Wand of Magic Missiles',quantity:1},{name:'Wand of Web',quantity:1});
+  const noncaster={...c,character:{...c.character!,cantrips:[],preparedSpells:[]}};
+  expect(()=>completePlayerRest(noncaster,'short',{confirmedSafe:true,attunement:{itemId:'wand-of-web'}})).toThrow('Spellcaster');
+  const held=wearMagicItem(c,'wand-of-magic-missiles',true);
+  const request={id:'wand-1',spent:3,target:'guard',confirmed:true};
+  const first=spendMagicWand(held,'wand-of-magic-missiles',request);
+  expect(magicWandStatus(first,'wand-of-magic-missiles')?.charges).toBe(4);
+  expect(first.spellEffects?.at(-1)).toMatchObject({id:'wand-1',spell:'Magic Missile',status:'awaiting-adjudication'});
+  expect(()=>spendMagicWand(first,'wand-of-magic-missiles',request)).toThrow('already recorded');
+  expect(()=>rechargeMagicWand(first,'wand-of-magic-missiles',2)).toThrow('No dawn');
+  const dawn=JSON.parse(JSON.stringify({...first,elapsedMinutes:1440}));
+  const recharged=rechargeMagicWand(dawn,'wand-of-magic-missiles',1);
+  expect(magicWandStatus(recharged,'wand-of-magic-missiles')?.charges).toBe(6);
+  expect(()=>rechargeMagicWand(recharged,'wand-of-magic-missiles',6)).toThrow('No dawn');
+  const nearlySpent=spendMagicWand(recharged,'wand-of-magic-missiles',{...request,id:'wand-2'});
+  const final={...request,id:'wand-3'};
+  expect(()=>spendMagicWand(nearlySpent,'wand-of-magic-missiles',final)).toThrow('last-charge');
+  const destroyed=spendMagicWand(nearlySpent,'wand-of-magic-missiles',{...final,lastChargeRoll:1});
+  expect(magicWandStatus(destroyed,'wand-of-magic-missiles')).toBeNull();
+  expect(destroyed.inventoryLedger?.gear.find(row=>row.name==='Wand of Magic Missiles')).toBeUndefined();
  });
  it('uses imported origin tool replacement without granting duplicate tool proficiency',()=>{
   const c=rogue(),s=playerSheetSummary(c)!;

@@ -1,3 +1,4 @@
+import {completeMagicAttunement,type MagicAttunementChoice} from './magicEquipment';
 import {advanceProvisionsClock,recoverProvisionExhaustion} from './provisionsClock';
 import {validPlayerState} from './playerState';
 import type {Campaign} from './campaign';
@@ -34,7 +35,7 @@ export function playerLongRestWaitMinutes(campaign:Campaign):number{
  return campaign.lastLongRestCompletedAt===undefined?0:Math.max(0,960-((campaign.elapsedMinutes??0)-campaign.lastLongRestCompletedAt));
 }
 export interface PlayerRestOptions {
- confirmedSafe:boolean;hitDieRolls?:number[];arcaneRecovery?:boolean;arcaneRecoveryLevel?:1|2;arcaneRecoveryCount?:1|2;portentRolls?:number[];waitMinutes?:number;useTrance?:boolean;
+ confirmedSafe:boolean;attunement?:MagicAttunementChoice;hitDieRolls?:number[];arcaneRecovery?:boolean;arcaneRecoveryLevel?:1|2;arcaneRecoveryCount?:1|2;portentRolls?:number[];waitMinutes?:number;useTrance?:boolean;
 }
 /** Record a DM-confirmed completed rest; never simulates safety, rolls or interruptions.
  * Rules: D&D Beyond 2024 Rules Glossary + Character Classes (see RULES_IMPLEMENTATION.md).
@@ -82,7 +83,9 @@ export function completePlayerRest(campaign:Campaign,kind:'short'|'long',options
  const exhaustion=kind==='long'&&c.exhaustionLevel!==undefined?recoverProvisionExhaustion(campaign,c.exhaustionLevel):c.exhaustionLevel;
  const conditions=kind==='long'&&exhaustion===0?c.conditions?.filter(s=>s!=='Exhaustion'):c.conditions;
  const character={...c,currentHitPoints:hp,spellSlots:slots,resources,conditions,exhaustionLevel:exhaustion};
- return advanceProvisionsClock(campaign,{...campaign,...(cls.id==='wizard'&&campaign.importedSubclassId==='wizard-diviner'&&kind==='long'?{importedWizardPortents:[...(options.portentRolls??[])]}:{}),character,hitDiceRemaining:kind==='long'?Math.min(level,available+Math.max(1,Math.ceil(level/2))):available-rolls.length,elapsedMinutes:end,lastLongRestCompletedAt:kind==='long'?end:campaign.lastLongRestCompletedAt,concentration:kind==='long'&&!options.useTrance?undefined:campaign.concentration,updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',createdAt:now,text:(campaign.characterIdentity?.name??'Player')+' completes a '+kind+' rest ('+duration+' minutes'+(wait?', after '+wait+' minutes approved waiting':'')+'). HP '+c.currentHitPoints+' → '+hp+'. Hit Dice '+(kind==='long'?Math.min(level,available+Math.max(1,Math.ceil(level/2))):available-rolls.length)+'/'+level+'.'+(options.arcaneRecovery?' Arcane Recovery restored '+(options.arcaneRecoveryCount??1)+' level-'+(options.arcaneRecoveryLevel??1)+' slot(s).':'')}]});
+ if(options.attunement&&kind!=='short')throw Error('Attunement requires a Short Rest.');
+ const magicEquipment=options.attunement?completeMagicAttunement(campaign,options.attunement):campaign.magicEquipment;
+ return advanceProvisionsClock(campaign,{...campaign,...(magicEquipment?{magicEquipment}:{}),...(cls.id==='wizard'&&campaign.importedSubclassId==='wizard-diviner'&&kind==='long'?{importedWizardPortents:[...(options.portentRolls??[])]}:{}),character,hitDiceRemaining:kind==='long'?Math.min(level,available+Math.max(1,Math.ceil(level/2))):available-rolls.length,elapsedMinutes:end,lastLongRestCompletedAt:kind==='long'?end:campaign.lastLongRestCompletedAt,concentration:kind==='long'&&!options.useTrance?undefined:campaign.concentration,updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',createdAt:now,text:(campaign.characterIdentity?.name??'Player')+' completes a '+kind+' rest ('+duration+' minutes'+(wait?', after '+wait+' minutes approved waiting':'')+'). HP '+c.currentHitPoints+' → '+hp+'. Hit Dice '+(kind==='long'?Math.min(level,available+Math.max(1,Math.ceil(level/2))):available-rolls.length)+'/'+level+'.'+(options.arcaneRecovery?' Arcane Recovery restored '+(options.arcaneRecoveryCount??1)+' level-'+(options.arcaneRecoveryLevel??1)+' slot(s).':'')}]});
 }
 /** Magical Cunning: 1-minute ritual, once per long rest, recover half Pact slots (rounded up). */
 export function performWarlockMagicalCunning(campaign:Campaign):Campaign{

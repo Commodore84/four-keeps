@@ -1,3 +1,4 @@
+import {carriedWeight,carryingCapacity} from './carryingCapacity';
 import type {Campaign} from './campaign';
 import type {Ability, RollMode} from './checks';
 import {armorTrained, ITEM_BY_ID} from './creationEquipment';
@@ -30,5 +31,8 @@ export function requireArmorSpellcasting(campaign:Campaign):void {
 
 export function effectiveEquipmentSpeed(campaign:Campaign):number|undefined {
  const speed=campaign.character?.speed;
- return speed===undefined?undefined:Math.max(0,speed-armorEffects(campaign).speedPenalty);
+ if(speed===undefined)return undefined;
+ const capacity=campaign.characterIdentity?carryingCapacity(campaign):null;
+ if(capacity!==null&&carriedWeight(campaign).weight>capacity+1e-8)return 0;
+ return Math.max(0,speed-armorEffects(campaign).speedPenalty);
 }

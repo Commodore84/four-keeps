@@ -1,5 +1,7 @@
+import {equipmentPackContents} from './equipmentPacks';
+import {carriedWeight,carryingCapacity,purchaseWeight} from './carryingCapacity';
 import type {Campaign} from './campaign';
-import {merchantCatalogFor,merchantTypeForItem,settlementTier,walletCopper,merchantStockKeyForCampaign,merchantInitialStock} from './frontierShop';
+import {merchantCatalogFor,merchantTypeForItem,settlementTier,walletCopper,merchantStockKeyForCampaign,merchantInitialStock,merchantPurchaseStep} from './frontierShop';
 import {OFFICIAL_EQUIPMENT_2024} from './officialEquipment2024';
 
 const nowMinutes=(c:Campaign)=>Math.max(0,c.elapsedMinutes??0);
@@ -17,7 +19,9 @@ function debit(c:Campaign,cost:number):Campaign{
 export function prepareCitySupplyOrder(c:Campaign,itemId:string,quantity:number,id:string):Campaign{
  if(settlementTier(c)!=='city'||!c.characterIdentity||c.adventureSession?.status!=='exploring')throw Error('City supplier unavailable.');
  if(c.pendingMerchantSupplyOrder||c.pendingMerchantPurchase)throw Error('Finish the existing merchant transaction.');
- if(!id||!Number.isSafeInteger(quantity)||quantity<1||quantity>20)throw Error('Invalid supplier order.');
+ const step=merchantPurchaseStep(itemId);
+ if(!id||!Number.isSafeInteger(quantity)||quantity<1||quantity>20*step)throw Error('Invalid supplier order.');
+ if(quantity%step!==0)throw Error(`This ammunition is ordered in packs of ${step}.`);
  if((c.merchantSupplyOrders??[]).some(o=>o.id===id))throw Error('Supplier order already exists.');
  const item=OFFICIAL_EQUIPMENT_2024.find(i=>i.id===itemId);
  if(!item||/magic item|spell scroll/i.test(item.category))throw Error('Item cannot be ordered from this supplier.');
@@ -36,7 +40,7 @@ export function confirmCitySupplyOrder(c:Campaign,id:string,confirmed:boolean):C
  if(pending.settlement!==locationKey(c)||settlementTier(c)!=='city')throw Error('Return to the ordering city.');
  if((c.merchantSupplyOrders??[]).some(o=>o.id===id))throw Error('Supplier order already exists.');
  const item=OFFICIAL_EQUIPMENT_2024.find(i=>i.id===pending.itemId);
- if(!item||item.costCp!==pending.unitCostCp||!Number.isSafeInteger(pending.quantity)||pending.quantity<1||pending.quantity>20||!Number.isSafeInteger(pending.readyAtMinutes)||pending.readyAtMinutes<nowMinutes(c))throw Error('Supplier quote invalid or expired.');
+ if(!item||item.costCp!==pending.unitCostCp||!Number.isSafeInteger(pending.quantity)||pending.quantity<1||pending.quantity>20*merchantPurchaseStep(pending.itemId)||!Number.isSafeInteger(pending.readyAtMinutes)||pending.readyAtMinutes<nowMinutes(c))throw Error('Supplier quote invalid or expired.');
  const charged=debit(c,pending.quantity*pending.unitCostCp);
  return {...charged,pendingMerchantSupplyOrder:undefined,merchantSupplyOrders:[...(c.merchantSupplyOrders??[]),{...pending,placedAtMinutes:nowMinutes(c),status:'ordered'}]};
 }
@@ -49,9 +53,15 @@ export function collectCitySupplyOrder(c:Campaign,id:string):Campaign{
  const item=OFFICIAL_EQUIPMENT_2024.find(i=>i.id===order.itemId);
  if(!item||!c.inventoryLedger)throw Error('Invalid order inventory.');
  const gear=c.inventoryLedger.gear.map(x=>({...x}));
- const owned=gear.find(x=>x.name===item.name);
- const amount=order.quantity*(item.packQuantity??1);
- if(owned)owned.quantity+=amount;else gear.push({name:item.name,quantity:amount});
+ const capacity=carryingCapacity(c);
+ const added=purchaseWeight(item.id,order.quantity);
+ if(capacity!==null&&added!==null&&carriedWeight(c).weight+added>capacity)throw Error('Collecting this order would exceed carrying capacity.');
+ const additions=equipmentPackContents(item.id)??[{item,quantity:item.packQuantity??1}];
+ for(const {item:part,quantity} of additions){
+  const owned=gear.find(x=>x.name===part.name);
+  const amount=order.quantity*quantity;
+  if(owned)owned.quantity+=amount;else gear.push({name:part.name,quantity:amount});
+ }
  return {...c,inventoryLedger:{...c.inventoryLedger,gear},merchantSupplyOrders:c.merchantSupplyOrders!.map(o=>o.id===id?{...o,status:'collected' as const}:o)};
 }
 /** Trader stock changes only when an authoritative route-arrival action invokes this. */

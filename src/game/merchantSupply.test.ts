@@ -1,3 +1,4 @@
+import {equipmentPackContents} from './equipmentPacks';
 import {describe,it,expect} from 'vitest';
 import {newCampaign} from './campaign';
 import {beginAdventureSession,beginTravelingMerchantRoute,travelAdventure} from './adventureSession';
@@ -5,6 +6,19 @@ import {prepareCitySupplyOrder,confirmCitySupplyOrder,collectCitySupplyOrder,res
 import {remainingMerchantStock,merchantStockKeyForCampaign,walletCopper} from './frontierShop';
 const fixture=()=>beginAdventureSession({...newCampaign('Supplier','supplier-test'),location:'Dasahi',merchantSettlementTier:'city' as const,characterIdentity:{name:'Tester',speciesId:'elf',backgroundId:'sage',classId:'rogue',draftId:'draft',pronouns:'',appearance:'',personality:'',backstory:''},inventoryLedger:{currency:{GP:100,SP:0,CP:0,EP:0,PP:0},gear:[]}});
 describe('city supplier order lifecycle',()=>{
+ it('orders ammunition in full packs and expands equipment at collection',()=>{
+  const base=fixture();
+  expect(()=>prepareCitySupplyOrder(base,'bolts',5,'partial')).toThrow('packs of 20');
+  const ammo=confirmCitySupplyOrder(prepareCitySupplyOrder(base,'bolts',20,'bolts'), 'bolts',true);
+  const arrived={...ammo,elapsedMinutes:ammo.merchantSupplyOrders![0].readyAtMinutes};
+  const collected=collectCitySupplyOrder(arrived,'bolts');
+  expect(collected.inventoryLedger?.gear).toContainEqual({name:'Bolts',quantity:20});
+  const packId='burglar-s-pack';
+  const order=confirmCitySupplyOrder(prepareCitySupplyOrder(collected,packId,1,'pack'),'pack',true);
+  const received=collectCitySupplyOrder({...order,elapsedMinutes:order.merchantSupplyOrders![1].readyAtMinutes},'pack');
+  for(const part of equipmentPackContents(packId)??[])expect(received.inventoryLedger?.gear).toContainEqual({name:part.item.name,quantity:part.quantity});
+  expect(received.inventoryLedger?.gear).not.toContainEqual({name:'Burglar’s Pack',quantity:1});
+ });
  it('requires confirmation, charges once, and grants only at collection',()=>{
   const c=fixture();
   const quote=prepareCitySupplyOrder(c,'dagger',2,'order-1');

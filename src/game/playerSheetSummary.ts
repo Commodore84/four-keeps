@@ -6,15 +6,22 @@ import {resolveBackground} from './creationOrigins';
 import {abilityModifier} from './checks';
 import {playerEquippedAttack,playerEquippedDefense} from './companionEncounter';
 
+export function playerToolTraining(campaign:Campaign){
+ const classId=campaign.characterIdentity?.classId;
+ const cls=classId?classSummary(classId):undefined;
+ const background=campaign.characterBuild?resolveBackground(campaign.characterBuild.selections,campaign.characterBuild.rules.allowCompatibleLegacy):undefined;
+ const toolReplacement=campaign.characterBuild?.selections.toolReplacement;
+ const classTools=cls?.tools??[];
+ const toolNames=[...new Set([...classTools,...(background?.tool?[toolReplacement||background.tool]:[])])];
+ return {toolNames,background};
+}
+
 /** Read-only derived sheet data. Never mutate or infer unconfirmed equipment or proficiencies. */
 export function playerSheetSummary(campaign:Campaign){
  const c=campaign.character, identity=campaign.characterIdentity;
  if(!c||!identity)return null;
  const cls=classSummary(identity.classId);
- const background=campaign.characterBuild?resolveBackground(campaign.characterBuild.selections,campaign.characterBuild.rules.allowCompatibleLegacy):undefined;
- const toolReplacement=campaign.characterBuild?.selections.toolReplacement;
- const classTools=cls?.tools??[];
- const toolNames=[...new Set([...classTools,...(background?.tool?[toolReplacement||background.tool]:[])])];
+ const {toolNames,background}=playerToolTraining(campaign);
  const owned=(campaign.inventoryLedger?.gear??[]).filter(g=>g.quantity>0);
  const weapons=owned.flatMap(g=>ITEMS.filter(i=>i.category==='weapon'&&i.name.toLowerCase()===g.name.toLowerCase()).map(i=>({item:i,quantity:g.quantity})));
  const equipped=playerEquippedAttack(campaign);

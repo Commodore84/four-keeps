@@ -1,3 +1,5 @@
+import {adventureEquipmentRequest} from '../game/adventureEquipment';
+import {magicProtectionBonus} from '../game/magicEquipment';
 import {equipmentRollMode} from '../game/armorEffects';
 import {carriedWeight,carryingCapacity} from '../game/carryingCapacity';
 import {ConsumablePanel} from './ConsumablePanel';
@@ -490,6 +492,7 @@ export function App() {
   const [draft, setDraft] = useState('');
   const [askDMOpen, setAskDMOpen] = useState(false);
   const [askDMDraft, setAskDMDraft] = useState('');
+  const [pendingEquipmentUse,setPendingEquipmentUse]=useState<{campaignId:string;request:ConsumableRequest}|null>(null);
   const [pendingAdventureSpell, setPendingAdventureSpell] = useState<{spell:string;ritual:boolean;intent:string}|null>(null);
   const [adventureComponentsConfirmed,setAdventureComponentsConfirmed] = useState(false);
   const [pendingRest,setPendingRest] = useState<'short'|'long'|null>(null);
@@ -607,7 +610,7 @@ export function App() {
       const count = mode === 'normal' ? 1 : 2;
       const dice = Array.from({ length: count }, () => Math.floor(Math.random() * 20) + 1);
       const selected = mode === 'advantage' ? Math.max(...dice) : mode === 'disadvantage' ? Math.min(...dice) : dice[0];
-      const modifier = savingThrowModifier(campaign.character ?? prototypeNighthawk, ability);
+      const modifier = savingThrowModifier(campaign.character ?? prototypeNighthawk, ability)+magicProtectionBonus(campaign);
       const result = 'Nighthawk · ' + ability.toUpperCase() + ' saving throw: ' + (dice.length === 1 ? String(selected) : dice.join(' / ') + ' (' + mode + ': ' + selected + ')') + ' ' + (modifier >= 0 ? '+' : '') + modifier + ' = ' + (selected + modifier) + '. Outcome awaits DM adjudication.';
       const next = addRoll(campaign, result);
       await localCampaignStorage.save(next);
@@ -705,10 +708,10 @@ export function App() {
         .map(entry => ({ role: entry.kind === 'player' ? 'user' : 'assistant', content: entry.text }));
       const response = await fetch('/api/dm', { method:'POST', headers:{ 'Content-Type':'application/json','x-four-keeps-access':accessCode },
         body:JSON.stringify({ checkToken:pending.token, dice, character:locked.character ?? prototypeNighthawk, gameState:{ magicWishlist:magicWishlistNames(locked.id), ...campaignPlayerContext(locked), familiar:locked.familiar ?? null, elapsedMinutes:locked.elapsedMinutes ?? 0, concentration:locked.concentration??null, spellEffects:(locked.spellEffects??[]).slice(-12), recentEvents:locked.journal.filter(e=>e.kind==='system').slice(-8).map(e=>e.text) }, history, worldFacts:locked.worldFacts ?? [], world:locked.world ?? emptyWorld() }) });
-      const result: { narration?:string; newFacts?:string[]; worldUpdates?:unknown; checkResult?:{skill:string;dice:number[];kept:number;modifier:number;total:number;success:boolean}; error?:string } = await response.json();
+      const result: { narration?:string; newFacts?:string[]; worldUpdates?:unknown; checkResult?:{skill:string;tool?:string;dice:number[];kept:number;modifier:number;total:number;success:boolean}; error?:string } = await response.json();
       if (!response.ok || !result.narration || !result.checkResult) throw new Error(result.error || 'Check resolution failed');
       const r = result.checkResult;
-      const rollText = 'Nighthawk · '+r.skill+': '+(r.dice.length === 1 ? String(r.dice[0]) : r.dice.join(' / ')+' ('+pending.mode+': '+r.kept+')')+' '+(r.modifier >= 0 ? '+' : '−')+Math.abs(r.modifier)+' = '+r.total+'.';
+      const rollText = 'Nighthawk · '+r.skill+(r.tool?' with '+r.tool:'')+': '+(r.dice.length === 1 ? String(r.dice[0]) : r.dice.join(' / ')+' ('+pending.mode+': '+r.kept+')')+' '+(r.modifier >= 0 ? '+' : '−')+Math.abs(r.modifier)+' = '+r.total+'.';
       const narrated = addExchange(locked, rollText, result.narration, new Date().toISOString(), result.newFacts ?? [], result.worldUpdates);
       const next = locked.pendingMerchantNegotiation?.checkToken===pending.token
         ? resolveMerchantNegotiation(narrated,pending.token,r.success,r.total) : narrated;
@@ -805,7 +808,7 @@ export function App() {
     finally{setSaving(false);}
   }
   async function submitAdventure() {
-    if(pendingAdventureSpell || pendingRest || pendingTestDamage!==null || saving)return;
+    if(pendingAdventureSpell || pendingRest || pendingTestDamage!==null || saving || pendingEquipmentUse?.campaignId===campaign?.id&&pendingEquipmentUse!==null)return;
     if(campaign?.characterIdentity && (campaign.adventureSession?.status==='encounter'||campaign.adventureSession?.pendingEncounter)){setNotice('Resolve the current encounter before continuing the Dungeon Master conversation.');return;}
     if(campaign?.combat?.status==='awaiting-initiative'){setNotice('Roll initiative using the highlighted button before taking your turn.');return;}
     if(campaign?.combat?.status==='initiative-set'){setNotice('Use the inline combat action buttons to take your turn.');return;}
@@ -931,7 +934,13 @@ export function App() {
       await requestRestApproval(kind);
       return;
     }
-    if(campaign?.characterIdentity){await sendToDM();return;}
+    if(campaign?.characterIdentity){
+      try {
+        const request=adventureEquipmentRequest(campaign,draft,crypto.randomUUID());
+        if(request){setPendingEquipmentUse({campaignId:campaign.id,request});return;}
+      } catch(error){setNotice(error instanceof Error?error.message:'Equipment use is unavailable.');return;}
+      await sendToDM();return;
+    }
     const found=detectAdventureSpell(draft);
     if(found){setPendingAdventureSpell(found);setAdventureComponentsConfirmed(false);return;}
     await sendToDM();
@@ -1072,7 +1081,7 @@ export function App() {
       const history=memory.recentConversation;
       const response = await fetch('/api/dm', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-four-keeps-access': accessCode },
         body: JSON.stringify({ message:aiSession?prepared.pendingAdventureAction!.message:message, clarification:prepared.pendingClarification??null, actionId, character:current.character ?? prototypeNighthawk, gameState:{ magicWishlist:magicWishlistNames(current.id),magicSaleInventory:(current.inventoryLedger?.gear??[]).filter(item=>item.quantity>0).slice(0,40).map(item=>({name:item.name,quantity:item.quantity})), ...campaignPlayerContext(current), adventureSession:current.adventureSession??null, merchant:frontierMerchantContext(current), characterIdentity:current.characterIdentity??null, location:current.location, combat:current.combat??null, familiar:current.familiar ?? null, elapsedMinutes:current.elapsedMinutes ?? 0, concentration:current.concentration??null, spellEffects:(current.spellEffects??[]).slice(-12), recentEvents:current.journal.filter(e=>e.kind==='system').slice(-8).map(e=>e.text) }, history, worldFacts: memory.establishedFacts, world: current.world ?? emptyWorld(), anchamida:current.characterBuild?{predefined:anchamidaLocations.map(s=>({id:s.id,name:s.name,x:s.x,y:s.y,notes:s.notes})),discovered:current.mapDiscovered??[],dynamic:current.mapDynamicSites??[]}:null, adventureMemory:memory }) });
-      const result: { narration?: string; newFacts?: string[]; worldUpdates?: unknown; checkRequest?: { skill:string; mode:'normal'|'advantage'|'disadvantage'; reason:string; token:string } | null; combatStart?:{enemyName:string}|null; magicSaleOffer?:{buyer:string;questId:string;itemName:string;quantity:number;proceedsCp:number}|null; merchantDiscount?:{itemId:string;percent:number}|null; clarificationRequest?:{question:string}|null; travelDestination?:string|null; mapActions?:unknown; error?: string } = await response.json();
+      const result: { narration?: string; newFacts?: string[]; worldUpdates?: unknown; checkRequest?: { skill:string; tool?:string; mode:'normal'|'advantage'|'disadvantage'; reason:string; token:string } | null; combatStart?:{enemyName:string}|null; magicSaleOffer?:{buyer:string;questId:string;itemName:string;quantity:number;proceedsCp:number}|null; merchantDiscount?:{itemId:string;percent:number}|null; clarificationRequest?:{question:string}|null; travelDestination?:string|null; mapActions?:unknown; error?: string } = await response.json();
       if (!response.ok || !result.narration) throw new Error(result.error || 'DM request failed');
       // Do not trust the network boundary to enforce mutually exclusive gameplay transitions.
       // A rejected response leaves the persisted pending action available for an exact-ID retry.
@@ -1707,7 +1716,7 @@ export function App() {
         {content[activeView]}
         {activeView==='adventure' && campaign?.pendingCheck && <div className="mt-4 rounded-xl border border-gold/40 bg-panel p-4 space-y-2" role="group" aria-label="Pending skill check">
           <p className="eyebrow">Dungeon Master requests a check</p>
-          <p className="font-serif text-xl">{campaign.pendingCheck.skill} · {campaign.pendingCheck.mode}</p>
+          <p className="font-serif text-xl">{campaign.pendingCheck.skill}{campaign.pendingCheck.tool?' · '+campaign.pendingCheck.tool:''} · {campaign.pendingCheck.mode}</p>
           <p className="text-sm text-parchment/70">{campaign.pendingCheck.reason}</p>
           <button type="button" disabled={saving || !dmMode} onClick={() => void resolvePendingCheck()} className="w-full rounded-lg bg-gold px-4 py-3 font-semibold text-ink disabled:opacity-40">{campaign.pendingCheck.dice ? (saving ? 'DM is resolving…' : 'Retry DM response') : 'Roll '+campaign.pendingCheck.skill}</button>
            {campaign.pendingCheck.dice && (() => { const dice = campaign.pendingCheck.dice; const used = dice.length === 1 ? dice[0] : campaign.pendingCheck.mode === 'advantage' ? Math.max(...dice) : Math.min(...dice); const modifier = skillModifier(campaign.character ?? prototypeNighthawk, campaign.pendingCheck.skill as Parameters<typeof skillModifier>[1]); return <div role="status" aria-live="polite" className="rounded-lg border border-gold/30 bg-ink/60 p-3"><p className="text-xs uppercase tracking-widest text-gold">Nighthawk · {campaign.pendingCheck.skill} check</p><p className="mt-2 text-xl font-semibold">{dice.length === 1 ? String(dice[0]) : dice.join(' / ')+' ('+campaign.pendingCheck.mode+': '+used+')'} <span className="text-parchment/70">{modifier >= 0 ? '+' : '−'}{Math.abs(modifier)} =</span> {used + modifier}</p><p className="mt-1 text-xs text-parchment/65">{saving ? 'Waiting for the Dungeon Master. Your roll is saved.' : 'Roll saved. Retry the DM response without rerolling.'}</p></div>; })()}
@@ -1967,6 +1976,17 @@ export function App() {
             <button type="button" disabled={saving} className="flex-1 rounded-lg bg-gold p-3 font-semibold text-ink disabled:opacity-40" onClick={()=>void confirmRest()}>{pendingRest==='short'?'Finish Short Rest':'Finish Long Rest'}</button>
           </div>
           <p className="text-xs text-parchment/60">Changes are saved when you finish the rest. You may spend zero Hit Dice.</p>
+        </div>}
+        {pendingEquipmentUse&&pendingEquipmentUse.campaignId===campaign?.id&&<div className="mx-4 mt-3 space-y-2 rounded-lg border border-gold/40 bg-panel p-2" role="group" aria-label="Confirm equipment use">
+          <p className="text-sm">Use {pendingEquipmentUse.request.name}?</p>
+          <div className="flex gap-2">
+            <button type="button" disabled={saving} className="min-h-9 rounded border border-white/25 px-3" onClick={()=>setPendingEquipmentUse(null)}>Cancel</button>
+            <button type="button" disabled={saving} className="min-h-9 rounded bg-gold px-3 font-semibold text-ink" onClick={async()=>{
+              const used=await useConsumable({...pendingEquipmentUse.request,confirmed:true});
+              setPendingEquipmentUse(null);
+              if(used)setDraft('');
+            }}>Use equipment</button>
+          </div>
         </div>}
         {pendingAdventureSpell && <div className="mx-4 mt-3 rounded-xl border border-gold/50 bg-panel p-4 space-y-3" role="group" aria-label="Confirm spell cast"><p className="eyebrow">Confirm Adventure spell</p><h3 className="font-serif text-xl">{pendingAdventureSpell.spell}{pendingAdventureSpell.ritual?' · Ritual':''}</h3><p className="text-sm text-parchment/80">{pendingAdventureSpell.intent}</p><p className="text-xs text-parchment/70">{pendingAdventureSpell.ritual?'No spell slot spent.':campaign?.character?.cantrips?.includes(pendingAdventureSpell.spell)?'Cantrip · no spell slot spent.':'Consumes one Level 1 spell slot.'}</p>{pendingAdventureSpell.spell==='Find Familiar' && <label className="flex gap-2 text-xs"><input type="checkbox" checked={adventureComponentsConfirmed} onChange={e=>setAdventureComponentsConfirmed(e.target.checked)}/> I have and consume the required 10 gp material components (inventory is not yet tracked).</label>}<div className="flex gap-2"><button type="button" className="flex-1 rounded-lg border border-white/30 p-3" onClick={()=>setPendingAdventureSpell(null)}>Edit action</button><button type="button" disabled={saving || (pendingAdventureSpell.spell==='Find Familiar'&&!adventureComponentsConfirmed)} className="flex-1 rounded-lg bg-gold p-3 font-semibold text-ink disabled:opacity-40" onClick={()=>void confirmAdventureSpell()}>Cast and continue</button></div></div>}
         {activeView !== "settings" && activeView !== "map" && !(activeView==="adventure"&&campaign?.combat) && <form className={"relative z-20 flex shrink-0 items-end gap-2 border-t border-white/10 bg-ink px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] "+(activeView==="adventure"&&campaign?.merchantShopOpen?"pt-0":"pt-3")} onSubmit={(event) => { event.preventDefault(); void (campaign?.pendingClarification ? submitClarification() : dmMode ? submitAdventure() : saveNote()); }}>
