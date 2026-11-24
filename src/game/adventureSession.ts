@@ -1,4 +1,5 @@
-import {validateCombatScenario,type CombatScenario} from './combatScenario';
+import type {CombatScenario} from './combatScenario';
+import {resolveDmBattlefield} from './encounterDirector';
 import type {Campaign} from './campaign';
 import {startUnifiedEncounter,addCompanionEnemy} from './companionEncounter';
 import {resupplyTravelingMerchant} from './merchantSupply';
@@ -86,13 +87,13 @@ export function resumeAdventureExploration(campaign:Campaign,now=new Date().toIS
 }
 
 /** Persist an AI-proposed encounter; never invent combat statistics or initiative. */
-export function proposeAdventureEncounter(campaign:Campaign,enemyName:unknown,actionId:string,now=new Date().toISOString(),battlefield?:unknown):Campaign{
+export function proposeAdventureEncounter(campaign:Campaign,enemyName:unknown,actionId:string,now=new Date().toISOString(),battlefield?:unknown,templateId?:unknown):Campaign{
  const session=campaign.adventureSession;
  if(!campaign.characterIdentity||!session||session.status!=='exploring'||campaign.companionEncounter?.status==='active')return campaign;
  if(session.pendingEncounter)return campaign;
  if(typeof enemyName!=='string'||!enemyName.trim()||enemyName.trim().length>80||!actionId.trim())return campaign;
  const locationKey=(campaign.location??session.site).trim().toLowerCase();
- const scenario=battlefield===undefined?undefined:validateCombatScenario(battlefield,locationKey);
+ const scenario=templateId!==undefined||battlefield!==undefined?resolveDmBattlefield(templateId!==undefined?{templateId}: {battlefield},locationKey):undefined;
  if(scenario&&!scenario.artwork&&campaign.tacticalArtwork?.[locationKey])scenario.artwork=campaign.tacticalArtwork[locationKey];
  return {...campaign,updatedAt:now,adventureSession:{...session,pendingEncounter:{enemyName:enemyName.trim(),actionId,...(scenario?{scenario}:{})}}};
 }

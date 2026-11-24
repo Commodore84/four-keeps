@@ -1793,6 +1793,36 @@ test('iPhone consumable use updates healing, resistance and individual wand copi
   expect(record.inventoryLedger.gear.filter((row:any)=>row.name===name).reduce((sum:number,row:any)=>sum+row.quantity,0)).toBe(0);
 });
 
+test('iPhone DM template handoff opens verified solo battlefield without requiring a generated map',async({page})=>{
+ test.setTimeout(90000);
+ await createAndImport(page,'rogue');
+ await page.evaluate(()=>{
+  localStorage.setItem('four-keeps-access-code','browser-test-code');
+  localStorage.setItem('four-keeps-dm-mode','on');
+ });
+ await page.route('**/api/dm',async route=>{
+  const request=route.request().postDataJSON();
+  const shared={worldUpdates:{},newFacts:[]};
+  if(request.opening){await route.fulfill({json:{...shared,narration:'The city of Dasahi wakes around you.'}});return;}
+  await route.fulfill({json:{...shared,narration:'Two giant rats emerge from the warehouse crates.',
+   combatStart:{enemyName:'Warehouse rats',templateId:'warehouse-vermin'}}});
+ });
+ await page.reload();
+ await page.getByRole('button',{name:'Campaigns',exact:true}).click();
+ await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await expect.poll(async()=> (await saved(page))?.journal?.some((entry:any)=>entry.id?.endsWith('-dm-opening'))).toBe(true);
+ const composer=page.getByLabel('Message the Dungeon Master');
+ await composer.fill('I step into the warehouse and the rats attack me.');
+ await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
+ const panel=page.getByRole('region',{name:'Tactical battlefield'});
+ await expect(panel).toBeVisible();
+ const scenario=await saved(page);
+ expect(scenario?.adventureSession?.pendingEncounter?.scenario?.actors.map((actor:any)=>actor.profile)).toEqual(['giant-rat','giant-rat']);
+ await expect(panel.getByRole('button',{name:'Roll initiative'})).toBeVisible();
+ await navigate(page,'Journal');
+ await page.getByRole('button',{name:'Bestiary'}).click();
+ await expect(page.getByLabel('Bestiary')).toContainText('Creatures you encounter');
+});
 test('iPhone tactical combat opens from Adventure, previews movement, runs NPC turns and persists escape',async({page})=>{
  test.setTimeout(90000);
  await page.addInitScript(()=>{Math.random=()=>0.5;});

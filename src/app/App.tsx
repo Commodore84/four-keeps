@@ -1,3 +1,4 @@
+import {resolveDmBattlefield} from '../game/encounterDirector';
 import {knownMonsterFacts} from '../game/monsterKnowledge';
 import {TacticalBattlefield} from './TacticalBattlefield';
 import {executeDmTactics} from '../game/tacticalCombat';
@@ -1129,7 +1130,7 @@ export function App() {
       const history=memory.recentConversation;
       const response = await fetch('/api/dm', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-four-keeps-access': accessCode },
         body: JSON.stringify({ message:aiSession?prepared.pendingAdventureAction!.message:message, clarification:prepared.pendingClarification??null, actionId, character:statsWithTemporaryEffects(current) ?? prototypeNighthawk, gameState:{ magicWishlist:magicWishlistNames(current.id),magicSaleInventory:(current.inventoryLedger?.gear??[]).filter(item=>item.quantity>0).slice(0,40).map(item=>({name:item.name,quantity:item.quantity})), ...campaignPlayerContext(current), adventureSession:current.adventureSession??null, merchant:frontierMerchantContext(current), characterIdentity:current.characterIdentity??null, location:current.location, combat:current.combat??null, familiar:current.familiar ?? null, elapsedMinutes:current.elapsedMinutes ?? 0, concentration:current.concentration??null, spellEffects:(current.spellEffects??[]).slice(-12), recentEvents:current.journal.filter(e=>e.kind==='system').slice(-8).map(e=>e.text) }, history, worldFacts: memory.establishedFacts, world: current.world ?? emptyWorld(), anchamida:current.characterBuild?{predefined:anchamidaLocations.map(s=>({id:s.id,name:s.name,x:s.x,y:s.y,notes:s.notes})),discovered:current.mapDiscovered??[],dynamic:current.mapDynamicSites??[]}:null, adventureMemory:memory }) });
-      const result: { narration?: string; newFacts?: string[]; worldUpdates?: unknown; checkRequest?: { skill:string; tool?:string; mode:'normal'|'advantage'|'disadvantage'; reason:string; token:string } | null; combatStart?:{enemyName:string;battlefield?:unknown}|null; magicSaleOffer?:{buyer:string;questId:string;itemName:string;quantity:number;proceedsCp:number}|null; merchantDiscount?:{itemId:string;percent:number}|null; clarificationRequest?:{question:string}|null; travelDestination?:string|null; mapActions?:unknown; error?: string } = await response.json();
+      const result: { narration?: string; newFacts?: string[]; worldUpdates?: unknown; checkRequest?: { skill:string; tool?:string; mode:'normal'|'advantage'|'disadvantage'; reason:string; token:string } | null; combatStart?:{enemyName:string;battlefield?:unknown;templateId?:string}|null; magicSaleOffer?:{buyer:string;questId:string;itemName:string;quantity:number;proceedsCp:number}|null; merchantDiscount?:{itemId:string;percent:number}|null; clarificationRequest?:{question:string}|null; travelDestination?:string|null; mapActions?:unknown; error?: string } = await response.json();
       if (!response.ok || !result.narration) throw new Error(result.error || 'DM request failed');
       // Do not trust the network boundary to enforce mutually exclusive gameplay transitions.
       // A rejected response leaves the persisted pending action available for an exact-ID retry.
@@ -1150,6 +1151,14 @@ export function App() {
         setNotice('');
         return;
       }
+      // Never commit narrated combat if the DM forgot the tactical map or invented
+      // unsupported combatants. The pending action is retained for an exact-ID retry.
+      if(aiSession&&result.combatStart){
+        const key=(current.location??current.adventureSession?.site??'frontier').trim().toLowerCase();
+        resolveDmBattlefield(result.combatStart.templateId!==undefined?
+          {templateId:result.combatStart.templateId,...(result.combatStart.battlefield!==undefined?{battlefield:result.combatStart.battlefield}:{})}:
+          {battlefield:result.combatStart.battlefield},key);
+      }
       const narrated = aiSession
         ? {...commitAdventureAction(prepared,actionId!,result.narration,new Date().toISOString(),result.newFacts??[],result.worldUpdates),pendingClarification:undefined,pendingCheck:result.checkRequest??undefined}
         : addExchange(current, message, result.narration, new Date().toISOString(), result.newFacts ?? [], result.worldUpdates, result.checkRequest ?? undefined);
@@ -1160,7 +1169,7 @@ export function App() {
         ? (()=>{try{return travelAdventure(negotiated,result.travelDestination as AdventureSite)}catch{return negotiated}})()
         : negotiated;
       const next = current.characterIdentity && current.adventureSession && result.combatStart
-        ? proposeAdventureEncounter(travelled,result.combatStart.enemyName,actionId!,undefined,result.combatStart.battlefield)
+        ? proposeAdventureEncounter(travelled,result.combatStart.enemyName,actionId!,undefined,result.combatStart.battlefield,result.combatStart.templateId)
         : result.combatStart && !current.adventureSession && !current.characterIdentity && !current.combat && !current.pendingAftermath ? beginDuel(travelled,result.combatStart.enemyName) : current.pendingAftermath ? {...travelled,pendingAftermath:undefined} : travelled;
       let mapped=next;
       if(current.characterBuild && !result.clarificationRequest && !result.checkRequest) {

@@ -1,6 +1,6 @@
 import {describe,it,expect} from 'vitest';
 import {getMonster,monsterIds} from './monsterCompendium';
-import {buildSoloEncounter,levelOneEncounterBudget,SOLO_ROGUE_ENCOUNTERS} from './encounterDirector';
+import {buildSoloEncounter,levelOneEncounterBudget,resolveDmBattlefield,SOLO_ROGUE_ENCOUNTERS} from './encounterDirector';
 import {TACTICAL_PROFILES,validateCombatScenario} from './combatScenario';
 describe('SRD 5.2.1 monster compendium and solo encounter director',()=>{
  it('uses documented full stats rather than invented enemy HP and attacks',()=>{
@@ -44,6 +44,17 @@ describe('SRD 5.2.1 monster compendium and solo encounter director',()=>{
    expect(SOLO_ROGUE_ENCOUNTERS[id].alternatives).toContain('withdraw');
    expect(scenario.exits).not.toHaveLength(0);
   }
+ });
+ it('converts a DM template ID to a verified battlefield without invented combat stats',()=>{
+  for(const id of ['warehouse-vermin','roadside-bandit','ruins-goblin-scouts'] as const){
+   const scenario=resolveDmBattlefield({templateId:id},'dasahi');
+   expect(scenario.actors).toHaveLength(SOLO_ROGUE_ENCOUNTERS[id].monsterIds.length);
+   expect(scenario.locationKey).toBe('dasahi');
+  }
+  expect(()=>resolveDmBattlefield({},'dasahi')).toThrow('complete battlefield');
+  expect(()=>resolveDmBattlefield({templateId:'unapproved'},'dasahi')).toThrow('Unknown');
+  expect(()=>resolveDmBattlefield({templateId:'warehouse-vermin',battlefield:{}},'dasahi')).toThrow('either');
+  expect(()=>resolveDmBattlefield({battlefield:{size:8,actors:[{id:'dragon',profile:'ancient-dragon'}]}},'dasahi')).toThrow();
  });
  it('rejects unknown profiles or arbitrary combat abilities',()=>{
   expect(()=>validateCombatScenario({size:8,starts:[{x:1,y:1}],actors:[
