@@ -1102,7 +1102,8 @@ test('fresh iPhone campaign Journal records encounters, people, places and read-
  const before=JSON.stringify(await saved(page));
  await navigate(page,'Journal');
  const nav=page.getByRole('navigation',{name:'Journal sections'});
- await expect(nav.getByRole('button')).toHaveCount(3);
+ await expect(nav.getByRole('button')).toHaveCount(4);
+ await expect(nav.getByRole('button',{name:'Bestiary'})).toBeVisible();
  await expect(page.getByText('Level 1',{exact:true})).toBeVisible();
  const encounter=page.locator('article').filter({hasText:'Mira points toward the old bridge'}).first();
  await encounter.getByRole('button').click();
