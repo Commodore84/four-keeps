@@ -20,7 +20,8 @@ export function TacticalBattlefield({campaign,saving,onChange,onDm}:Props){
  const scenario=setup??tactical?.scenario;
  const player=battle?.participants.nighthawk;
  const active=battle?.order[battle.turnIndex];
- const [destination,setDestination]=useState<Square>();
+ const [destination,setDestination]=useState<Square|undefined>(()=>setup?.starts[0]);
+ const activeStart=setup&&(destination===undefined||!setup.starts.some(tile=>squareKey(tile)===squareKey(destination)))?setup.starts[0]:destination;
  const [target,setTarget]=useState('');
  const [selectedAction,setSelectedAction]=useState<TacticalAction>('Dash');
  const [mode,setMode]=useState('weapon');
@@ -77,7 +78,7 @@ export function TacticalBattlefield({campaign,saving,onChange,onDm}:Props){
  function pick(square:Square){
   if(saving)return;
   if(setup){
-   if(setup.starts.some(cell=>squareKey(cell)===squareKey(square)))setDestination(square);
+   if(setup.starts.some(cell=>squareKey(cell)===squareKey(square))){setDestination(square);setError('');}
    return;
   }
   const id=occupied.get(squareKey(square));
@@ -107,10 +108,10 @@ export function TacticalBattlefield({campaign,saving,onChange,onDm}:Props){
  return <section aria-label="Tactical battlefield" className="space-y-2" data-encounter={battle?.id}>
   <header className="sticky top-0 z-10 rounded-lg border border-white/15 bg-ink/95 px-2 py-1.5 text-xs">
    <div className="flex items-center justify-between gap-2">
-    <strong className="text-sm text-gold">{setup?'Choose your starting square':awaitingPlayer?'Reaction available':active?label(active)+' · Round '+battle?.round:'Combat'}</strong>
+    <strong className="text-sm text-gold">{setup?'Prepare for combat':awaitingPlayer?'Reaction available':active?label(active)+' · Round '+battle?.round:'Combat'}</strong>
     {!setup&&player&&<span>{player.hp}/{player.maxHp} HP</span>}
    </div>
-   {setup?<p className="mt-1 text-parchment/75">{scenario.objective||lastNarration}</p>:<>
+   {setup?<><p className="mt-1 text-parchment/85">{scenario.objective||lastNarration}</p><p className="mt-1 text-parchment/75">Nighthawk versus {setup.actors.filter(actor=>actor.side==='enemies').map(actor=>actor.label).join(' and ')}. Your starting position is selected below.</p></>:<>
     <p aria-label="Combat resources">{Math.max(0,(player?.speedFeet??0)+(player?.dashFeet??0)-(player?.movementSpentFeet??0))} ft · Action {player?.actionUsed?'spent':'ready'} · Bonus {player?.bonusActionUsed?'spent':'ready'} · Reaction {player?.reactionUsed?'spent':'ready'}</p>
     {!!player?.conditions.length&&<p>{player.conditions.join(' · ')}</p>}
     <p aria-label="Initiative order" className="truncate text-parchment/65">{visibleOrder?.map(label).join(' → ')}{initiative?' · You: '+initiative.dice.join('/')+' + '+initiative.modifier+' = '+initiative.total:''}</p>
@@ -134,10 +135,11 @@ export function TacticalBattlefield({campaign,saving,onChange,onDm}:Props){
       const selected=id!==undefined&&id===target||!!destination&&squareKey(destination)===key;
       const ally=id==='nighthawk'||scenario.actors.some(actor=>actor.id===id&&actor.side==='allies');
       const decoration=obstacle?'bg-black/75':selected?'bg-amber-500/70':path.has(key)?'bg-emerald-400/60':start?'bg-teal-600/65':rough?'bg-emerald-950/55':dark?'bg-slate-950/60':reachable.has(key)?'bg-emerald-600/20':'bg-transparent';
-      const summary=[id?label(id):'',obstacle?'obstacle':'',rough?'difficult terrain':'',dark?'darkness':'',height?height+' ft elevation':'',cover?'cover':'',hazard?'hazard':'',exit?'exit':'',start?'starting square':''].filter(Boolean).join(', ');
+      const playerStart=!!setup&&!!activeStart&&start&&squareKey(activeStart)===key;
+      const summary=[playerStart?'Nighthawk selected starting position':'',id?label(id):'',obstacle?'obstacle':'',rough?'difficult terrain':'',dark?'darkness':'',height?height+' ft elevation':'',cover?'cover':'',hazard?'hazard':'',exit?'exit':'',start?'starting square':''].filter(Boolean).join(', ');
       return <button key={key} type="button" aria-label={'Square '+cell.x+', '+cell.y+(summary?', '+summary:'')} aria-pressed={selected}
-       onClick={()=>pick(cell)} disabled={saving||obstacle} className={'relative aspect-square min-w-0 border border-white/15 text-xs '+decoration}>
-       {id?<span className={'absolute inset-[12%] grid place-items-center rounded-full text-xs font-bold text-white ring-1 ring-white/50 '+(ally?'bg-sky-800':'bg-red-900')}>{id==='nighthawk'?'You':label(id).slice(0,2)}</span>:
+       onClick={()=>pick(cell)} disabled={saving||obstacle||(!!setup&&!start)} className={'relative aspect-square min-w-0 border border-white/15 text-xs '+(start?'touch-manipulation ':'')+decoration}>
+       {playerStart?<span className="absolute inset-[10%] grid place-items-center rounded-full bg-sky-700 text-[11px] font-bold text-white ring-2 ring-gold shadow-lg">You</span>:id?<span className={'absolute inset-[12%] grid place-items-center rounded-full text-xs font-bold text-white ring-1 ring-white/50 '+(ally?'bg-sky-800':'bg-red-900')}>{id==='nighthawk'?'You':setup&&id.startsWith('giant-rat-')?'Rat '+id.slice(-1):label(id).slice(0,2)}</span>:
         <span aria-hidden="true" className="text-[10px] text-parchment/70">{obstacle?'▧':hazard?'!':exit?'↗':cover?'◢':rough?'≈':start?'•':''}</span>}
       </button>;
      })}
@@ -149,7 +151,17 @@ export function TacticalBattlefield({campaign,saving,onChange,onDm}:Props){
    </div>
   </div>
   {error&&<p role="alert" className="text-sm text-orange-200">{error}</p>}
-  {setup?<button className={button} disabled={saving||!destination} onClick={()=>destination&&void apply(()=>startTacticalEncounter(campaign,destination),'Initiative rolled.')}>Roll initiative</button>:<>
+  {setup?<div className="space-y-2 rounded-lg border border-gold/25 bg-panel/70 p-3" aria-label="Combat setup controls">
+    <p className="text-sm font-semibold text-gold">Nighthawk's starting position</p>
+    <p className="text-xs text-parchment/75">A blue You token marks your selected square. Choose a different starting square on the map or with these controls. No initiative has been rolled yet.</p>
+    <div className="flex flex-wrap gap-2" role="group" aria-label="Starting positions">
+     {setup.starts.map((cell,index)=><button key={squareKey(cell)} type="button" aria-pressed={!!activeStart&&squareKey(activeStart)===squareKey(cell)} disabled={saving}
+      onClick={()=>{setDestination(cell);setError('');}} className={button+(activeStart&&squareKey(activeStart)===squareKey(cell)?' border-gold bg-gold/20 text-gold':'')}>Position {index+1}{activeStart&&squareKey(activeStart)===squareKey(cell)?' · Selected':''}</button>)}
+    </div>
+    <button type="button" className="min-h-12 w-full rounded-lg bg-gold px-4 py-3 font-semibold text-ink disabled:opacity-45" disabled={saving||!activeStart}
+     onClick={()=>activeStart&&void apply(()=>startTacticalEncounter(campaign,activeStart),'Initiative rolled.')}>Roll initiative and begin combat</button>
+    <p className="text-xs text-parchment/60">Red tokens are enemies · ◢ cover · ▧ obstacle · ≈ difficult terrain · ↗ exit</p>
+   </div>:<>
    {tactical?.note&&<p className="text-sm" aria-label="DM combat narration">{tactical.note}</p>}
    {rollout&&<p role="status" className="text-sm">{rollout.actor==='nighthawk'?'d20 '+rollout.dice.join('/')+(rollout.mode?' ('+rollout.mode+')':'')+' '+(rollout.modifier>=0?'+ ':'− ')+Math.abs(rollout.modifier)+' · ':''}{label(rollout.actor)} {rollout.critical?'critically hits':rollout.hit?'hits':'misses'} {label(rollout.target)}{rollout.hit?' · '+rollout.damage+' damage':''}</p>}
    {preview&&<div className="flex items-center gap-2 text-xs"><p aria-label="Movement preview">{preview.error??preview.costFeet+' ft · '+preview.remainingFeet+' ft left'+(preview.opportunityAttackerIds.length?' · Opportunity attack risk':'')}</p>
