@@ -1153,7 +1153,7 @@ export function App() {
       }
       // Never commit narrated combat if the DM forgot the tactical map or invented
       // unsupported combatants. The pending action is retained for an exact-ID retry.
-      if(aiSession&&result.combatStart){
+      if(aiSession&&result.combatStart&&(result.combatStart.templateId!==undefined||result.combatStart.battlefield!==undefined)){
         const key=(current.location??current.adventureSession?.site??'frontier').trim().toLowerCase();
         resolveDmBattlefield(result.combatStart.templateId!==undefined?
           {templateId:result.combatStart.templateId,...(result.combatStart.battlefield!==undefined?{battlefield:result.combatStart.battlefield}:{})}:
