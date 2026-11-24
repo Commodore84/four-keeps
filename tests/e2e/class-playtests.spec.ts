@@ -778,7 +778,9 @@ test('new Rogue starts at Frontier Village, buys supplies, and sees persisted Pl
  await page.getByLabel('Confirm merchant purchase').getByRole('button',{name:'Add one rope to review'}).click();
  await expect(page.getByLabel('Confirm merchant purchase')).toContainText('2 × Rope');
 
- await expect(shopAfterCancel.getByLabel('Confirm merchant purchase')).toContainText('Adjust quantities here');
+ await expect(shopAfterCancel.getByLabel('Confirm merchant purchase').getByRole('button',{name:'Add one rope to review'})).toBeVisible();
+ await expect(shopAfterCancel.getByLabel('Merchant inventory')).toHaveCount(0);
+ await expect(shopAfterCancel.getByRole('tablist',{name:'Shop transaction type'})).toHaveCount(0);
  await shopAfterCancel.getByLabel('Confirm merchant purchase').getByRole('button',{name:'Confirm purchase'}).click();
  await expect.poll(async()=> (await saved(page)).merchantStockRemaining?.['location:dasahi:city:general:rope']).toBe(38);
  await expect.poll(async()=> (await saved(page)).inventoryLedger.gear.find((item:any)=>item.name==='Rope')?.quantity).toBeGreaterThan(0);
