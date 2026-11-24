@@ -21,7 +21,13 @@ test('fighter creation to adventure, NPC, combat, rewards, save and resume',asyn
  await page.getByLabel('Dex background bonus').selectOption('2');await page.getByLabel('Con background bonus').selectOption('1');await page.getByRole('button',{name:'Continue to equipment'}).click();
  await page.getByRole('group',{name:'Class equipment',exact:true}).getByRole('radio').first().check();await page.getByRole('group',{name:'Background equipment',exact:true}).getByRole('radio').first().check();
  await page.getByRole('button',{name:'Continue to spells'}).click();await page.getByRole('button',{name:'Continue to identity'}).click();await page.getByLabel('name *',{exact:true}).fill('Aster');await page.getByRole('button',{name:'Continue to future levels'}).click();await page.getByRole('button',{name:'Continue to review'}).click();
- await page.getByRole('button',{name:/Home/}).click();await page.getByRole('button',{name:'Campaigns',exact:true}).click();await page.getByRole('button',{name:'New Adventure'}).click();
+ await page.getByRole('button',{name:/Home/}).click();
+ await page.getByRole('button',{name:'Characters',exact:true}).click();
+ await expect(page.getByRole('heading',{name:'Saved characters'})).toBeVisible();
+ await expect(page.getByRole('button',{name:'Aster',exact:true})).toBeVisible();
+ await expect(page.getByText('Resume draft',{exact:false})).toHaveCount(0);
+ await page.getByRole('button',{name:/Home/}).click();
+ await page.getByRole('button',{name:'Campaigns',exact:true}).click();await page.getByRole('button',{name:'New Adventure'}).click();
  const draftId=await page.getByLabel('Starting character').getByRole('option',{name:/Aster/}).getAttribute('value');await page.getByLabel('Starting character').selectOption(draftId!);
  await page.getByRole('button',{name:'Begin Adventure',exact:true}).click();
  await navigate(page,'Player');
