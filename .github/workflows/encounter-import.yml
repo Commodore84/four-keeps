@@ -1,0 +1,32 @@
+name: One-time encounter foundation candidate import
+on:
+  push:
+    branches:
+      - transfer/v23-encounter-foundation
+    paths:
+      - .github/workflows/encounter-import.yml
+permissions:
+  contents: write
+jobs:
+  import-candidate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+          fetch-depth: 0
+      - name: Verify base and import isolated encounter candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git merge-base HEAD aad739c8253a0e4e673727b24eec8ca13b019a90)" = "aad739c8253a0e4e673727b24eec8ca13b019a90"
+          cat .encounter-transfer/part-0{0,1}.txt | base64 --decode | gzip --decompress > /tmp/fk-encounter.patch
+          git apply --check /tmp/fk-encounter.patch
+          git apply /tmp/fk-encounter.patch
+          rm -rf .encounter-transfer .github/workflows/encounter-import.yml
+          git add -A
+          test "$(git write-tree)" = "239ffef67880eaab32dd8f43c36087d93eb3030a"
+          git config user.name "Four Keeps release automation"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Import verified encounter engine and Bestiary candidate"
+          git push origin HEAD:refs/heads/transfer/v23-encounter-foundation
