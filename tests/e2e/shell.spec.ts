@@ -1547,14 +1547,14 @@ test('redesigned creator shows expanded sticky live summary and groups custom sk
  await expect(summary.getByRole('button',{name:/Relic Hunter.*Expand/})).toHaveAttribute('aria-expanded','false');
 });
 
-test('iPhone portrait journal keeps three equal-width section controls visible',async({page})=>{
+test('iPhone portrait journal keeps four equal-width section controls visible',async({page})=>{
  await page.setViewportSize({width:390,height:844});
  await page.goto('/four-keeps/');
  await createLegacyCampaign(page,'Mobile journal');
  await navigate(page,'Journal');
  const nav=page.getByRole('navigation',{name:'Journal sections'});
  const buttons=nav.getByRole('button');
- await expect(buttons).toHaveCount(3);
+ await expect(buttons).toHaveCount(4);
  const widths=await buttons.evaluateAll(items=>items.map(el=>Math.round(el.getBoundingClientRect().width)));
  expect(Math.max(...widths)-Math.min(...widths)).toBeLessThanOrEqual(1);
  await expect(nav.getByRole('button',{name:'Adventures'})).toHaveAttribute('aria-current','page');
