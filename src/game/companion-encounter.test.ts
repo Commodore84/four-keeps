@@ -102,6 +102,22 @@ describe('isolated companion encounter vertical slice',()=>{
   expect(c.combat).toEqual(base.combat);
  });
 
+ it.each([
+  ['light-crossbow','Light Crossbow','Bolts',80],
+  ['light-crossbow','Light Crossbow','Crossbow Bolts',80],
+  ['sling','Sling','Bullets, Sling (20)',30],
+  ['blowgun','Blowgun','Needles',25],
+  ['pistol','Pistol','Bullets, Firearm',30],
+ ] as const)('spends a projectile on a miss with %s and %s', (id,name,ammo,range)=>{
+  const inventoryLedger={currency:{CP:0,SP:0,EP:0,GP:0,PP:0},gear:[{name,quantity:1},{name:ammo,quantity:1}]};
+  let c=startUnifiedEncounter({...build(),inventoryLedger},{nighthawk:20,paladin:10},{nighthawk:{x:0,y:2},paladin:{x:0,y:0}},{paladin:20});
+  c=addCompanionEnemy(c,'goblin1',15,{x:2,y:2},12,13,4);
+  c=setNighthawkEncounterLoadout(c,'weaponId',id);
+  const result=attackCompanionWithVerifiedStats(c,'nighthawk','goblin1',1,1,'Piercing',range);
+  expect(result.inventoryLedger?.gear).toContainEqual({name:ammo,quantity:0});
+  expect(result.companionEncounter?.ammunitionPendingRecovery).toMatchObject({[ammo]:1});
+  expect(c.inventoryLedger?.gear).toContainEqual({name:ammo,quantity:1});
+ });
  it('reconciles expended ammunition after completing an encounter without changing legacy combat',()=>{
   const base=build();
   let c=startUnifiedEncounter({...base,equipment:{daggers:0,arrows:2,caltrops:0,ballBearings:0},inventoryLedger:{currency:{CP:0,SP:0,EP:0,GP:0,PP:0},gear:[{name:'Shortbow',quantity:1}]}},{nighthawk:20,paladin:10},{nighthawk:{x:0,y:2},paladin:{x:0,y:0}},{paladin:20});

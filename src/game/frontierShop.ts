@@ -99,6 +99,8 @@ export function merchantInitialStock(tier:SettlementTier,itemId:string,type:Merc
  if(tier==='city')return cost>=5000?2:cost>=1000?8:
   item.category==='ammunition'?60:
   ['weapon','armor','shield','tool'].includes(item.category.toLowerCase())?12:40;
+ const purchaseStep=merchantPurchaseStep(itemId);
+ if(purchaseStep>1)return Math.floor((FRONTIER_INITIAL_STOCK[itemId]??0)/purchaseStep)*purchaseStep;
  if(tier==='traveling'||type==='trader')return itemId==='arrows'?100:itemId==='potion-of-healing'?1:Math.min(5,FRONTIER_INITIAL_STOCK[itemId]??0);
  if(tier==='village')return itemId==='arrows'?100:Math.min(8,FRONTIER_INITIAL_STOCK[itemId]??0);
  return itemId==='arrows'?100:Math.min(20,FRONTIER_INITIAL_STOCK[itemId]??0);
@@ -235,10 +237,23 @@ function requireCarryingCapacity(campaign:Campaign,items:{itemId:string;quantity
  if(current.unknown.length||projected.unknown.length)throw Error('Resolve unknown equipment weights before purchasing: '+projected.unknown.join(', '));
  if(projected.weight>projected.capacity+1e-8&&projected.weight>current.weight+1e-8)throw Error(`Purchase exceeds carrying capacity (${projected.weight.toFixed(1)} / ${projected.capacity} lb).`);
 }
+// Stock and cart quantities are individual units for these items.
+const ammunitionPurchaseSteps = new Map([['arrows',20],['bolts',20],['bullets-firearm',10],['needles',50]]);
+
+export function merchantPurchaseStep(itemId:string):number {
+ return ammunitionPurchaseSteps.get(itemId)??1;
+}
+
+function requirePurchasePack(itemId:string,quantity:number):void {
+ const step=merchantPurchaseStep(itemId);
+ if(quantity%step!==0)throw Error(`This ammunition is sold in packs of ${step}.`);
+}
+
 export function buyFrontierItem(campaign:Campaign,itemId:string,quantity=1,now=new Date().toISOString()):Campaign{
  if(!campaign.characterIdentity||campaign.adventureSession?.site!=='frontier'||campaign.adventureSession.status!=='exploring')throw Error('The merchant is not available here.');
  if(!Number.isSafeInteger(quantity)||quantity<1)throw Error('Invalid purchase quantity.');
  const item=merchantStock(campaign).find(i=>i.id===itemId);if(!item)throw Error('Item is not sold at this shop.');
+ requirePurchasePack(itemId,quantity);
  if(quantity>remainingMerchantStock(campaign,itemId))throw Error('The merchant does not have enough stock.');
  const ledger=campaign.inventoryLedger;if(!ledger)throw Error('Campaign inventory is missing.');
  const denominations=[['PP',1000],['GP',100],['EP',50],['SP',10],['CP',1]] as const;
@@ -273,7 +288,9 @@ export function parseFrontierPurchase(message:string):{itemId:string;quantity:nu
  });
  if(matches.length!==1)return null;
  const match=/\b(\d{1,3})\s*(?:x|×|of)?\s*/i.exec(message);
- const quantity=match?Number(match[1]):1;
+ const step=merchantPurchaseStep(matches[0].id);
+ const packMatch=/\b(\d{1,3})\s+(?:packs?|bundles?)\b/i.exec(message);
+ const quantity=packMatch?Number(packMatch[1])*step:match?Number(match[1]):step;
  if(!Number.isSafeInteger(quantity)||quantity<1)return null;
  return {itemId:matches[0].id,quantity};
 }
@@ -284,6 +301,7 @@ export function prepareMerchantPurchase(campaign:Campaign,itemId:string,quantity
  const item=merchantStock(campaign).find(i=>i.id===itemId);
  if(!item)throw Error('The merchant does not stock that item.');
  if(campaign.adventureSession?.site!=='frontier'||campaign.adventureSession.status!=='exploring')throw Error('You are not at the general store.');
+ requirePurchasePack(itemId,quantity);
  if(quantity>remainingMerchantStock(campaign,itemId))throw Error('The merchant does not have enough stock.');
  const discount=campaign.merchantDiscount?.itemId===itemId?campaign.merchantDiscount.percent:0;
  if(!Number.isInteger(discount)||discount<0||discount>20)throw Error('Invalid merchant discount.');

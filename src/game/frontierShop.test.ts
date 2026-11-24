@@ -1,11 +1,22 @@
+import {carriedWeight, coinWeight, purchaseWeightAfter} from './carryingCapacity';
 import {describe,it,expect} from 'vitest';
 import {merchantItemDescription,merchantItemFacts} from './merchantItemDetails';
 import {newCampaign,addExchange} from './campaign';
 import {beginAdventureSession} from './adventureSession';
-import {carriedWeight} from './carryingCapacity';
 import {buyFrontierItem,frontierShopStock,frontierMerchantContext,formatFrontierPrice,parseFrontierPurchase,prepareMerchantPurchase,prepareMerchantCart,settleMerchantPurchase,cityShopStock,merchantCatalogFor,availableMerchants,merchantStockKey,merchantStockKeyForCampaign,merchantInitialStock,merchantRestockIntervalMinutes,walletCopper,remainingMerchantStock,merchantCatalog,isMerchantBrowseRequest,isEstablishedMerchantConversation,merchantInvitationIsCurrent,trackMerchantConversation,acceptsMerchantBrowseInvitation,approveMerchantDiscount,isMerchantPurchaseRequest,classifyMerchantIntent,merchantNegotiationTarget,beginMerchantNegotiation,resolveMerchantNegotiation,merchantDiscountDC,beginCartNegotiation,resolveCartNegotiation,merchantResaleOffer,sellMerchantEquipment} from './frontierShop';
 function fixture(){const c=newCampaign('Shop','shop-test');return beginAdventureSession({...c,merchantSettlementTier:'town',characterIdentity:{name:'Test',speciesId:'elf',backgroundId:'sage',classId:'rogue',draftId:'draft',pronouns:'',appearance:'',personality:'',backstory:''},inventoryLedger:{currency:{GP:10,SP:0,CP:0,EP:0,PP:0},gear:[]}})}
 describe('merchant purchases use actual stock rather than an arbitrary 20-unit limit',()=>{
+ it('sells ammunition only in complete SRD packs',()=>{
+  const c={...fixture(),merchantShopType:'weaponsmith' as const};
+  expect(parseFrontierPurchase('I will buy 2 packs of crossbow bolts')).toEqual({itemId:'bolts',quantity:40});
+  expect(parseFrontierPurchase('I will buy arrows')).toEqual({itemId:'arrows',quantity:20});
+  expect(()=>prepareMerchantPurchase(c,'bolts',3,'broken-pack')).toThrow('sold in packs of 20');
+  expect(()=>buyFrontierItem(c,'arrows',19)).toThrow('sold in packs of 20');
+  const pending=prepareMerchantPurchase(c,'bolts',20,'bolt-pack');
+  const bought=settleMerchantPurchase(pending,'bolt-pack',true);
+  expect(bought.inventoryLedger?.gear).toContainEqual({name:'Bolts',quantity:20});
+  expect(walletCopper(bought.inventoryLedger?.currency)).toBe(900);
+ });
  it('purchases 60 individual arrows as three packs of 20 without losing ammunition accounting',()=>{
   const c={...fixture(),merchantShopType:'weaponsmith' as const};
   const order=prepareMerchantCart(c,[{itemId:'arrows',quantity:60}],'arrows-60');
@@ -57,6 +68,9 @@ describe('2024 merchant catalog compatibility and ammunition',()=>{
   const bought=settleMerchantPurchase(JSON.parse(JSON.stringify(pending)),'pack-1',true);
   expect(bought.inventoryLedger?.gear).toContainEqual({name:'Bullets, Sling (20)',quantity:40});
   expect(walletCopper(bought.inventoryLedger?.currency)).toBe(992);
+  const projected = purchaseWeightAfter(c, [{itemId:'bullets-sling',quantity:2}], 8);
+  expect(projected?.weight).toBeCloseTo(carriedWeight(bought).weight);
+  expect((carriedWeight(bought).weight - coinWeight(bought)) - (carriedWeight(c).weight - coinWeight(c))).toBeCloseTo(3);
   expect(remainingMerchantStock(bought,'bullets-sling')).toBe(3);
   expect(()=>settleMerchantPurchase(bought,'pack-1',true)).toThrow();
  });

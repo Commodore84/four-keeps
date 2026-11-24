@@ -22,7 +22,7 @@ export function carriedWeight(campaign:Campaign):{weight:number;unknown:string[]
   const item=byName.get(gear.name.toLowerCase())??creationByName.get(gear.name.toLowerCase());
   if(!item){unknown.push(gear.name);continue;}
   const pack=equipmentPackContents(item.id);
-  weight+=(pack?pack.reduce((sum,part)=>sum+part.item.weight*part.quantity,0):item.weight)*gear.quantity;
+  weight+=(pack?pack.reduce((sum,part)=>sum+part.item.weight*part.quantity,0):item.weight/(item.packQuantity??1))*gear.quantity;
  }
  // Older campaigns may keep combat supplies outside the inventory ledger.
  // Only use this fallback when the same item is not already recorded in the ledger.

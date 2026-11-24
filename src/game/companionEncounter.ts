@@ -1085,20 +1085,25 @@ export function attackCompanionWithVerifiedStats(campaign:Campaign,attackerId:st
  const targetAC=targetId==='nighthawk'&&battle.mode==='unified'?nighthawkEquippedDefense(campaign)?.armorClass:target.armorClass;
  if(attackModifier===undefined||damageModifier===undefined||targetAC===undefined||targetAC===null)throw Error('Verified attack or defense statistics unavailable');
  const weapon=equipped?ITEMS.find(item=>item.id===equipped.weaponId):undefined;
- const ammunitionWeapon=!!weapon?.properties?.some(p=>p.startsWith('Ammunition'));
- const ammoName=equipped?.weaponId==='shortbow'||equipped?.weaponId==='longbow'?'Arrows':
-  ['light-crossbow','heavy-crossbow','hand-crossbow'].includes(equipped?.weaponId??'')?'Crossbow Bolts':
-  equipped?.weaponId==='sling'?'Sling Bullets':null;
- if(ammunitionWeapon&&!ammoName)throw Error('Equipped ammunition weapon has no verified ammunition mapping');
- const ammoKey=ammoName==='Arrows'?'arrows':null;
- const equipmentAvailable=ammoKey&&!campaign.characterIdentity?(campaign.equipment?.arrows??0):0;
- const ledgerAvailable=ammoName?(campaign.inventoryLedger?.gear.find(g=>g.name===ammoName)?.quantity??0):0;
- if(ammoName&&equipmentAvailable+ledgerAvailable<1)throw Error('Insufficient campaign ammunition');
- if(!ammoName)return attackCompanion(campaign,attackerId,targetId,roll,attackModifier,targetAC,damageRoll,damageModifier,damageType,rangeFeet,secondD20,elvenAccuracyReroll,equipped?.weaponId,rollPoison);
- const source=equipmentAvailable>0?'arrows':ammoName;
- // Spend first in a local immutable snapshot; an invalid attack never commits the expenditure.
- const reserved=spendUnifiedNighthawkInventory(campaign,source,1);
- const spent=attackCompanion(reserved,attackerId,targetId,roll,attackModifier,targetAC,damageRoll,damageModifier,damageType,rangeFeet,secondD20,elvenAccuracyReroll,equipped?.weaponId,rollPoison,ammoName);
+ return attackWithCampaignAmmunition(campaign,weapon,(reserved,ammunitionName)=>attackCompanion(reserved,attackerId,targetId,roll,attackModifier,targetAC,damageRoll,damageModifier,damageType,rangeFeet,secondD20,elvenAccuracyReroll,equipped?.weaponId,rollPoison,ammunitionName));
+}
+
+function attackWithCampaignAmmunition(campaign:Campaign,weapon:typeof ITEMS[number]|undefined,attack:(campaign:Campaign,ammunitionName?:string)=>Campaign):Campaign {
+ const property=weapon?.properties?.find(value=>value.startsWith('Ammunition'));
+ if(!property)return attack(campaign);
+ const projectile=property.split(';')[1];
+ const names=projectile==='Arrow'?['Arrows']:
+  projectile==='Bolt'?['Bolts','Crossbow Bolts']:
+  projectile==='Needle'?['Needles']:
+  projectile==='Bullet'?(weapon?.id==='sling'?['Bullets, Sling (20)','Sling Bullets']:['Bullets, Firearm']):[];
+ if(!names.length)throw Error('Equipped ammunition weapon has no verified ammunition mapping');
+ const legacyArrows=projectile==='Arrow'&&!campaign.characterIdentity&&(campaign.equipment?.arrows??0)>0;
+ const owned=names.filter(name=>campaign.inventoryLedger?.gear.some(entry=>entry.name===name&&entry.quantity>0));
+ const coated=campaign.companionEncounter?.poisonedAmmunition?.name;
+ const source=legacyArrows?'arrows':owned.find(name=>name===coated)??owned[0];
+ if(!source)throw Error('Insufficient campaign ammunition');
+ // Reserve on an immutable snapshot so a rejected attack leaves inventory intact.
+ const spent=attack(spendUnifiedNighthawkInventory(campaign,source,1),legacyArrows?'Arrows':source);
  const current=spent.companionEncounter!;
  return save(spent,{...current,ammunitionPendingRecovery:{...current.ammunitionPendingRecovery,[source]:(current.ammunitionPendingRecovery?.[source]??0)+1},log:[...current.log,'Spent '+source+' awaiting DM ammunition reconciliation']});
 }
@@ -1270,7 +1275,7 @@ export function attackImportedRogue(campaign:Campaign,targetId:string,roll:numbe
  if(advantage!==disadvantage&&secondD20===undefined)throw Error('Advantage or disadvantage requires second d20');
  if(!Number.isInteger(weaponDamageDice)||weaponDamageDice<1||weaponDamageDice>100)throw Error('Invalid weapon damage roll');
  const hit=hitRoll===20||(hitRoll!==1&&hitRoll+attackModifier>=targetAC);
- const result=attackCompanion(campaign,'nighthawk',targetId,roll,attackModifier,targetAC,weaponDamageDice+(hit?sneakDice.slice(diceCost*(critical?2:1)).reduce((a,b)=>a+b,0):0),damageModifier,'Piercing',rangeFeet,secondD20,elvenAccuracyReroll,equipped.weaponId);
+ const result=attackWithCampaignAmmunition(campaign,item,(reserved,ammunitionName)=>attackCompanion(reserved,'nighthawk',targetId,roll,attackModifier,targetAC,weaponDamageDice+(hit?sneakDice.slice(diceCost*(critical?2:1)).reduce((a,b)=>a+b,0):0),damageModifier,'Piercing',rangeFeet,secondD20,elvenAccuracyReroll,equipped.weaponId,undefined,ammunitionName));
  if(!hit)return result;
  const combat=result.companionEncounter!;
  const strikeDC=8+ch.proficiencyBonus+abilityModifier(ch.scores.dex);
