@@ -1,26 +1,32 @@
 # Phase 1 — Inventory and Equipment
 
-Status as of November 24, 2026: in progress. The isolated branch started from verified GitHub foundation head `84694c1b6b6bf03236295b2292a6cb6011db4fa9`. The original sandbox checkout and its uncommitted merchant changes were preserved. Recovery worktree: `/vercel/four-keeps-phase1`.
+This checklist follows the Phase 1 candidate on `feat/phase-one-inventory`. It started from foundation `84694c1b6b6bf03236295b2292a6cb6011db4fa9`. The original checkout in the named Vercel sandbox remains available with its uncommitted merchant changes. The implementation worktree is `/vercel/four-keeps-phase1`.
 
-Rules reference: [Wizards of the Coast SRD 5.2.1](https://media.dndbeyond.com/compendium-images/srd/5.2/SRD_CC_v5.2.1.pdf). Implementation status below describes repository evidence, with tests called out separately.
+Rules reference: [Wizards of the Coast SRD 5.2.1](https://media.dndbeyond.com/compendium-images/srd/5.2/SRD_CC_v5.2.1.pdf). The public [2024 equipment rules](https://www.dndbeyond.com/sources/dnd/br-2024/equipment) and the catalog audit supply the equipment tables.
 
-| Area | Current evidence | Open acceptance work |
-| --- | --- | --- |
-| Weapons | Catalog has damage, properties and mastery. Unified combat derives bonuses from owned equipped weapons and class training. Imported Rogue uses verified Finesse or Ranged attacks for Sneak Attack. | Player sheet equip and unequip, verified weapon reach, range, Heavy penalties, damage types and hand restrictions are implemented. Light, Versatile and remaining Weapon Mastery effects are open. |
-| Armor and shields | Builder and unified combat have separate armor math. Unified combat still falls back to saved sheet AC when no armor is equipped. | Player-sheet equip and unequip, unarmored and shield AC, and tested training and Strength penalties added. Audit all combat, spellcasting and Stealth entry points. |
-| Ammunition | Shop checkout enforces full packs. Canonical and legacy ammunition names resolve in verified attacks. Verified Rogue Sneak Attack uses the same expenditure transaction. Existing poison handling stayed covered by regression tests. | Supplier orders use full packs, and imported encounters can search once to recover half of expended ammunition. Legacy combat keeps its existing recovery. Loading with additional attacks and mixed ammunition recovery need review. |
-| Carrying capacity | Currency, Strength-based capacity, legacy supply fallback and pack projection exist. Bought sling bullets now weigh the same before and after purchase. | Over-capacity imported characters cannot move. Review legacy entries and the remaining projection matrix. |
-| Equipment packs | Builder imports, merchant purchases and supplier collections grant pack contents. | Audit character creation, all pack contents, and constituent use and consumption. |
-| Tools and adventuring gear | Existing consumable and catalog actions plus owned tool checks with proficiency, expertise and Reliable Talent. DM adjudicates the result. | Broaden contextual interactions and verify catalog tool descriptions. |
-| Magic items | Protection ring and cloak have persisted worn and attuned states and deterministic AC and save bonuses. Two reviewed wands track charges, dawn recharge, hand use, and Spellcaster attunement for the Wand of Web. | Wand spell effects and other unsupported magic effects require DM adjudication. Review more items and per-copy state for duplicate wands. |
-| Inventory interface | Imported sheet groups owned gear, shows weight and descriptions, and allows equipment changes outside combat. | Compact actionable inventory, categories, full descriptions and persistent navigation. |
-| DM integration | Existing contextual merchant and consumable actions. | DM context now has owned, equipped, attuned and tool training evidence. Explicit Adventure requests to light a lamp, torch or candle, eat one ration or take antitoxin require player confirmation and reuse the existing campaign transaction. Expand supported intents as appropriate. |
-| Persistence | Existing campaign ledger and loadout fields. | New state migration, reload, repeat-action and consistency coverage. |
+| Area | Implementation and acceptance evidence |
+| --- | --- |
+| Weapons | Owned weapon slots, proficiency, Finesse ability selection by modifier, Heavy penalties, Reach, ranged and thrown limits, damage type, two-handed and Versatile grip, and Light attacks with or without Nick. Verified attacks apply trained Vex, Sap, Slow and Graze. Topple, Push and Cleave accept verified targets, saves or movement inputs. Rogue Sneak Attack validates the weapon, positioning and expends projectiles or thrown weapons. Dedicated mastery tests cover hit, miss, expiry and repeat-action cases. |
+| Armor and shields | Equip and unequip on Player. Derived AC handles unarmored defenses, armor group Dexterity limits and shield training. Low Strength affects Speed. Armor penalties carry through supported checks, saves, attacks, Stealth and spellcasting. Hands are shared among shield, weapons and supported wands. |
+| Ammunition | Full SRD packs at merchants and suppliers. Ledger stores individual pieces, supports legacy names, and consumes one per verified applicable strike including misses. Poison is applied to owned compatible ammunition. One post-combat search takes a game minute and recovers half of expended ammunition rounded down. Legacy prototype reconciliation remains compatible. |
+| Carrying capacity | Individual item weights, coin counts, pack expansion, Strength and Powerful Build. Cart weight and actual sling ammunition weight agree. Checkout and supplier collection enforce capacity. Imported characters above capacity see the warning and cannot move until their load is reduced. |
+| Equipment packs | Builder, merchant purchase and supplier collection expand packs into their canonical parts once. Constituent gear has its own quantity and can be consumed through supported equipment actions. |
+| Tools and gear | DM checks use owned tools and training, apply proficiency once, preserve skill Expertise, grant Advantage for skill and tool proficiency together and apply Rogue Reliable Talent where appropriate. Adventure use covers explicit light, ration and antitoxin requests with a player confirmation before the existing inventory transaction. Additional contextual gear effects use DM adjudication. |
+| Magic items | Owned, held or worn, and attuned states are distinct. Cloak and Ring of Protection require a confirmed Short Rest and improve AC and saves when worn. Reviewed Wand of Web requires a Spellcaster. Both supported wands store charges, validate expenditure, resolve last-charge loss and support rolled dawn recharge. Wand spell effects remain pending DM adjudication. |
+| Inventory and persistence | The portrait Player inventory shows categories, descriptions, equipment facts, item quantities and weights. It supports equip, unequip, offhand selection and confirmed discard with quantity validation. The section picker stays available while scrolling. Playwright verifies equipment and Adventure candle consumption survive real reloads. |
+| DM integration | Narration sees current owned, equipped, attuned and trained-tool state. Game transactions enforce confirmation, ownership, quantities and prerequisites. Uncertain checks and unsupported effects are adjudicated in conversation. |
 
-## Evidence
+## Current boundaries
 
-- Focused Vitest run passed 201 tests across six files on the first ammunition batch.
-- TypeScript passed after correcting checkout review references to the shared pack step.
-- iPhone 13 Chromium passed the conversational purchase reload, Dasahi merchant handoff, and equipment reload scenarios. Inspected the equipment screenshot for portrait layout and equipped state.
-- The armor checkpoint passed TypeScript, production Vite build, and full Vitest (934 tests). The latest batch is being verified.
-- Full release verification, Vercel READY and publication remain open.
+- The deterministic magic automation covers the protection wearables and the charge ledgers of the Wand of Magic Missiles and Wand of Web. Item-specific magic outside this set, wand spell outcomes and multiple identical charge-bearing items use DM adjudication. These effects are labelled in the inventory.
+- The shared encounter currently resolves a single primary attack per Attack action with Light and mastery follow-ups. Ammunition and action use are enforced on that path. Class features that grant multiple primary attacks are outside the verified Phase 1 engine.
+- Unknown legacy or magic-item weights remain marked for DM confirmation. Quest and terrain consequences of equipment use remain with the DM.
+- The release workflow runs full Playwright in iPhone 13 Chromium emulation when CI is set.
+
+## Verification and release
+
+- First ammunition batch: 201 focused Vitest tests passed.
+- Armor checkpoint: TypeScript, production build and 934 Vitest tests passed. The iPhone screenshot was inspected for the section picker, equipped state and inventory weight.
+- Broader equipment checkpoint: TypeScript, production build and 941 Vitest tests passed. Full iPhone Playwright passed 145 of 148 tests and identified three Rogue dagger range regressions. The throws were then resolved with the correct range and inventory expenditure.
+- The three Rogue regressions and both new iPhone persistence scenarios subsequently passed together.
+- The final release requires a full re-run on the finished tree, exact-SHA GitHub Actions evidence and exact-SHA Vercel READY before a protected foundation fast-forward. Verify the foundation and playtest alias after publication.

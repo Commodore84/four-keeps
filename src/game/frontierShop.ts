@@ -437,7 +437,8 @@ export function sellMerchantEquipment(campaign:Campaign,itemName:string,quantity
  existing.quantity-=quantity;
  if(existing.quantity===0)gear.splice(gear.indexOf(existing),1);
  const encounterLoadout={...campaign.encounterLoadout};
- if(offer.equipped){for(const key of ['weaponId','armorId','shieldId'] as const){if(encounterLoadout[key]===offer.itemId)delete encounterLoadout[key];}}
+ if(offer.equipped){for(const key of ['weaponId','offhandWeaponId','armorId','shieldId'] as const){if(encounterLoadout[key]===offer.itemId){if(key==='armorId')encounterLoadout.armorId='';else delete encounterLoadout[key];}}}
+ if(!encounterLoadout.weaponId&&encounterLoadout.offhandWeaponId)encounterLoadout.offhandWeaponId='';
  const combatKey=({dagger:'daggers',arrows:'arrows',caltrops:'caltrops','ball-bearings':'ballBearings'} as const)[offer.itemId as 'dagger'|'arrows'|'caltrops'|'ball-bearings'];
  const equipment=campaign.equipment?{...campaign.equipment}:undefined;
  if(equipment&&combatKey)equipment[combatKey]=Math.max(0,equipment[combatKey]-quantity);

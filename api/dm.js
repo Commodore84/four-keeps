@@ -162,7 +162,7 @@ export default async function handler(req, res) {
     const validTool=!tool||equipment.tools.includes(tool);
     if(requested&&SKILLS.includes(requested.skill)&&Object.hasOwn(DC,requested.difficulty)&&validTool){
       const ability=SKILL_ABILITIES[requested.skill];
-      const normalize=name=>name.toLowerCase().replace(/[’‘]/g,"'");
+      const normalize=name=>name.toLowerCase().replace(/[’‘']/g,'');
       const toolProficient=!!tool&&equipment.toolProficiencies.some(name=>normalize(name)===normalize(tool));
       const skillProficient=character.proficientSkills.includes(requested.skill)||character.expertiseSkills?.includes(requested.skill);
       const advantage=requested.mode==='advantage'||toolProficient&&skillProficient;

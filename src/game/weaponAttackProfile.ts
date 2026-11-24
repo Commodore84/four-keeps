@@ -12,6 +12,7 @@ export function weaponAttackProfile(item:Item,thrown=false) {
  const damage=item.damage?.match(/\b(bludgeoning|piercing|slashing)$/i)?.[1];
  return {
   ranged:!!range,
+  versatileDamage:properties.find(property=>property.startsWith('Versatile '))?.slice(10),
   rangedWeapon,
   reach,
   normalRange:range?Number(range[1]):reach,

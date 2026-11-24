@@ -10,7 +10,10 @@ export function armorEffects(campaign:Campaign) {
  const owns=(name:string)=>campaign.inventoryLedger?.gear.some(row=>row.name===name&&row.quantity>0);
  const wornArmor=armor?.category==='armor'&&owns(armor.name)?armor:undefined;
  const wornShield=shield?.category==='shield'&&owns(shield.name)?shield:undefined;
- const untrainedArmor=!!(classId&&wornArmor&&!armorTrained(classId,wornArmor));
+ const choices=campaign.characterBuild?.selections?.classChoices;
+ const orderTraining=classId==='cleric'&&wornArmor?.armorGroup==='Heavy'&&choices?.['divine-order']?.includes('Protector')||
+  classId==='druid'&&wornArmor?.armorGroup==='Medium'&&choices?.['primal-order']?.includes('Warden');
+ const untrainedArmor=!!(classId&&wornArmor&&!armorTrained(classId,wornArmor)&&!orderTraining);
  const speedPenalty=(wornArmor?.strength??0)>(campaign.character?.scores?.str??0)?10:0;
  return {
   speedPenalty, untrainedArmor,

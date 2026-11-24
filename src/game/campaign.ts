@@ -58,7 +58,7 @@ export interface Campaign {
   importedWizardSpellbook?:string[];
   importedWizardPortents?:number[];
   magicEquipment?:MagicEquipmentState;
-  encounterLoadout?:{weaponId?:string;armorId?:string;shieldId?:string};
+  encounterLoadout?:{weaponId?:string;offhandWeaponId?:string;armorId?:string;shieldId?:string};
   id: string;
   title: string;
   location: string;

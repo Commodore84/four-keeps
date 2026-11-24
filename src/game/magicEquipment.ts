@@ -1,3 +1,4 @@
+import {requireArmorSpellcasting} from './armorEffects';
 import {ITEM_BY_ID} from './creationEquipment';
 import type {Campaign} from './campaign';
 
@@ -26,7 +27,7 @@ export function wearMagicItem(campaign:Campaign,itemId:WearableId,worn:boolean):
  if(!ownedMagicWearables(campaign).some(item=>item.id===itemId))throw Error('The magic item is not in inventory.');
  if(worn&&itemId.startsWith('wand-')){
   const weapon=ITEM_BY_ID[campaign.encounterLoadout?.weaponId??''];
-  if(weapon?.properties?.includes('Two-Handed')||weapon&&campaign.encounterLoadout?.shieldId||
+  if(weapon?.properties?.includes('Two-Handed')||campaign.encounterLoadout?.offhandWeaponId||weapon&&campaign.encounterLoadout?.shieldId||
     ownedMagicWearables(campaign).some(item=>item.id!==itemId&&item.worn&&item.id.startsWith('wand-')))throw Error('Free a hand before holding this wand.');
  }
  return {...campaign,magicEquipment:{...campaign.magicEquipment,[itemId]:{...campaign.magicEquipment?.[itemId],worn:worn?true:undefined}}};
@@ -78,6 +79,7 @@ export function magicWandStatus(campaign:Campaign,itemId:string) {
 }
 
 export function spendMagicWand(campaign:Campaign,itemId:WandId,request:{id:string;spent:number;target:string;confirmed:boolean;lastChargeRoll?:number}):Campaign {
+ requireArmorSpellcasting(campaign);
  if(campaign.consumableUseIds?.includes(request.id))throw Error('Wand action already recorded.');
  if(campaign.companionEncounter?.status==='active'||campaign.combat&&campaign.combat.status!=='completed')throw Error('DM must adjudicate combat wand use.');
  const item=magicWandStatus(campaign,itemId);

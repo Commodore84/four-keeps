@@ -1,3 +1,4 @@
+import {discardInventoryItem} from '../game/inventoryDiscard';
 import {magicProtectionBonus,ownedMagicWearables,wearMagicItem,magicWandStatus,rechargeMagicWand,spendMagicWand} from '../game/magicEquipment';
 import {MAGIC_ITEMS} from '../game/magicWishlist';
 import {armorEffects} from '../game/armorEffects';
@@ -19,7 +20,7 @@ import {classSummary,spellcastingAtLevel} from '../game/creationClasses';
 import {SPECIES,resolveBackground} from '../game/creationOrigins';
 import {futureFeat,EPIC_BOONS} from '../game/creationFutureFeats';
 import {carriedWeight,carryingCapacity} from '../game/carryingCapacity';
-import {merchantItemDescription} from '../game/merchantItemDetails';
+import {merchantItemDescription,merchantItemFacts} from '../game/merchantItemDetails';
 import {ITEMS} from '../game/creationEquipment';
 import {playerEquippedAttack,playerEquippedDefense,setPlayerLoadout,spendPlayerResource} from '../game/companionEncounter';
 import {playerSheetSummary} from '../game/playerSheetSummary';
@@ -215,6 +216,7 @@ function WandControls({campaign,name,disabled,onChange}:{campaign:Campaign;name:
 
 function InventoryEquipment({campaign,saving,onChange}:{campaign:Campaign;saving:boolean;onChange:(next:Campaign,message:string)=>Promise<boolean>|boolean|void}){
  const [error,setError]=useState('');
+ const [discard,setDiscard]=useState<{name:string;quantity:string;expectedQuantity:number}|null>(null);
  const itemRows=(campaign.inventoryLedger?.gear??[]).filter(row=>row.quantity>0).map(row=>({row,item:ITEMS.find(entry=>entry.name.toLowerCase()===row.name.toLowerCase())}));
  const wearables=ownedMagicWearables(campaign);
  const categories=[...new Set(itemRows.map(({item,row})=>item?.category??(MAGIC_ITEMS.some(magic=>magic.name===row.name)?'magic items':'other')))];
@@ -229,16 +231,33 @@ function InventoryEquipment({campaign,saving,onChange}:{campaign:Campaign;saving
   {armor.untrainedShield&&<p className="text-xs text-amber-300">Untrained shield: no AC bonus.</p>}
   {armor.speedPenalty>0&&<p className="text-xs text-amber-300">Armor Strength requirement: speed reduced by {armor.speedPenalty} ft.</p>}
   {armor.stealthDisadvantage&&<p className="text-xs text-amber-300">Armor imposes disadvantage on Stealth.</p>}
+  {discard&&<div className="space-y-1 rounded border border-gold/35 p-2 text-sm" role="group" aria-label="Confirm inventory discard">
+   <p>Discard {discard.name}?</p>
+   <div className="flex flex-wrap items-center gap-2">
+    <label>Quantity <input className="w-16 rounded border bg-ink px-2 py-1" type="number" min={1} max={discard.expectedQuantity} value={discard.quantity} onChange={event=>setDiscard({...discard,quantity:event.target.value})}/></label>
+    <button type="button" disabled={saving} className="min-h-8 rounded border border-white/25 px-2" onClick={()=>setDiscard(null)}>Cancel</button>
+    <button type="button" disabled={saving||inCombat} className="min-h-8 rounded border border-gold/35 px-2" onClick={async()=>{
+     setError('');
+     try {
+      if(await onChange(discardInventoryItem(campaign,discard.name,Number(discard.quantity),discard.expectedQuantity),'Discarded '+discard.name)===false)throw Error('Inventory change could not be saved.');
+      setDiscard(null);
+     } catch(error){setError(error instanceof Error?error.message:'Discard failed.');}
+    }}>Discard</button>
+   </div>
+  </div>}
   {categories.map(category=><div key={category} className="rounded border border-white/15 text-sm">
    <h4 className="bg-white/5 px-2 py-1 font-semibold capitalize">{category}</h4>
    {itemRows.filter(({item,row})=>(item?.category??(MAGIC_ITEMS.some(magic=>magic.name===row.name)?'magic items':'other'))===category).map(({row,item})=>{
     const slot=category==='weapon'?'weaponId':category==='armor'?'armorId':category==='shield'?'shieldId':null;
     const equipped=!!slot&&campaign.encounterLoadout?.[slot]===item?.id;
+    const offhand=!!item&&campaign.encounterLoadout?.offhandWeaponId===item.id;
     const magic=category==='magic items'?MAGIC_ITEMS.find(magic=>magic.name===row.name):undefined;
     const wearable=wearables.find(item=>item.name===row.name);
     return <div key={row.name} className="space-y-1 border-t border-white/10 px-2 py-1.5">
      <div className="flex items-center justify-between gap-2">
-      <p><strong>{row.name}</strong> ×{row.quantity}{wearable?.attuned&&<span className="ml-1 text-gold">Attuned</span>}{(equipped||wearable?.worn)&&<span className="ml-1 text-gold">Equipped</span>}</p>
+      <p><strong>{row.name}</strong> ×{row.quantity}{offhand&&<span className="ml-1 text-gold">Off hand</span>}{wearable?.attuned&&<span className="ml-1 text-gold">Attuned</span>}{(equipped||wearable?.worn)&&<span className="ml-1 text-gold">Equipped</span>}</p>
+      <div className="flex shrink-0 gap-1">
+     <button type="button" className="ml-1 min-h-8 rounded border border-white/20 px-2 text-xs disabled:opacity-40" disabled={saving||inCombat} aria-label={'Discard '+row.name} onClick={()=>{setError('');setDiscard({name:row.name,quantity:'1',expectedQuantity:row.quantity});document.getElementById('player-equipment')?.scrollIntoView({block:'start'});}}>Discard</button>
       {slot&&item&&<button type="button" disabled={saving||inCombat} className="min-h-8 rounded border border-gold/35 px-2 disabled:opacity-50" aria-label={(equipped?'Unequip ':'Equip ')+row.name} onClick={async()=>{
        setError('');
        try {
@@ -252,8 +271,18 @@ function InventoryEquipment({campaign,saving,onChange}:{campaign:Campaign;saving
         if(await onChange(wearMagicItem(campaign,wearable.id,!wearable.worn),wearable.worn?'Removed '+row.name:'Equipped '+row.name)===false)setError('Equipment change could not be saved.');
        } catch(error){setError(error instanceof Error?error.message:'Equipment change failed.');}
       }}>{wearable.worn?'Unequip':'Equip'}</button>}
+      </div>
      </div>
-     {item&&<p className="text-xs text-parchment/75">{(item.weight/(item.packQuantity??1))*row.quantity} lb · {merchantItemDescription(item)}</p>}
+     {item?.properties?.includes('Light')&&campaign.encounterLoadout?.weaponId&&<button type="button" className="min-h-8 rounded border border-gold/35 px-2 text-xs disabled:opacity-40" disabled={saving||inCombat} aria-label={offhand?'Clear '+row.name+' from off hand':'Equip '+row.name+' in off hand'} onClick={async()=>{
+      setError('');
+      try {
+       if(await onChange(setPlayerLoadout(campaign,'offhandWeaponId',offhand?'':item.id),offhand?'Off hand cleared.':'Offhand weapon equipped.')===false)throw Error('Equipment change could not be saved.');
+      } catch(error){setError(error instanceof Error?error.message:'Equipment change failed.');}
+     }}>{offhand?'Clear off hand':'Equip in off hand'}</button>}
+     {item&&<div className="text-xs text-parchment/75">
+      <p>{Number(((item.weight/(item.packQuantity??1))*row.quantity).toFixed(3))} lb · {merchantItemFacts(item).join(' · ')}</p>
+      <p>{merchantItemDescription(item)}</p>
+     </div>}
      {magic&&<p className="text-xs text-parchment/75">{magic.description}</p>}
      {wearable&&<WandControls campaign={campaign} name={row.name} disabled={saving||inCombat} onChange={onChange}/>}
      {magic&&(!wearable||!wearable.protection)&&<p className="text-xs text-amber-300">Item effects require DM adjudication.</p>}

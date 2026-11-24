@@ -42,6 +42,12 @@ export interface CompanionEncounter {
  thrownWeaponsPendingRecovery?:Record<string,number>;
  /** Ammunition expended from verified inventory, awaiting DM-confirmed recovery. */
  ammunitionPendingRecovery?:Record<string,number>;
+ lightAttack?:{primaryId:string;used?:true};
+ weaponVex?:{target:string;round:number};
+ weaponSap?:Record<string,{round:number;turnIndex:number}>;
+ weaponSlow?:Record<string,number>;
+ weaponFollowup?:{kind:'Cleave'|'Push'|'Topple';weaponId:string;targetId:string};
+ cleaveUsed?:true;
  log:string[];
 }
 /** Remove only Paralysis introduced by this Wizard's Hold Person effect. */
@@ -387,7 +393,7 @@ export function resolveCompanionSavingThrow(campaign:Campaign,actorId:string,abi
   return {campaign:save(campaign,{...battle,log:[...battle.log,actorId+' is immune to Poisoned']}),success:true,effectiveTotal:null};
  }
  const autoFail=(ability==='Strength'||ability==='Dexterity')&&actor.conditions.some(c=>['Paralyzed','Petrified','Stunned','Unconscious'].includes(c));
- const disadvantage=ability==='Dexterity'&&actor.conditions.includes('Restrained');
+ const disadvantage=ability==='Dexterity'&&actor.conditions.includes('Restrained')||actorId==='nighthawk'&&(ability==='Strength'||ability==='Dexterity')&&armorEffects(campaign).untrainedArmor;
  const antitoxin=actorId==='nighthawk'&&poisonSave&&antitoxinSecondsRemaining(campaign)>0;
  const advantage=antitoxin||(actorId==='nighthawk'&&battle.mode==='unified'&&poisonSave&&campaign.characterIdentity?.speciesId==='dwarf');
  const needsSecond=!autoFail&&advantage!==disadvantage;
@@ -568,6 +574,9 @@ export function endCompanionTurn(campaign:Campaign,actorId:string,rollBurning=()
   if(expiry&&(expiry.round<nextRound||expiry.round===nextRound&&(battle.order.indexOf('nighthawk')===-1?expiry.turnIndex:battle.order.indexOf('nighthawk'))<=next))
    participants[id]={...participant,oilExpires:undefined};
  }
+ if(nextId==='nighthawk')for(const [id,speedFeet] of Object.entries(afterOil.weaponSlow??{})){
+  if(participants[id])participants[id]={...participants[id],speedFeet};
+ }
  const objects=battle.objects&&Object.fromEntries(Object.entries(battle.objects).map(([id,object])=>{
   const expiry=object.oilExpires;
   return [id,expiry&&(expiry.round<nextRound||expiry.round===nextRound&&(battle.order.indexOf('nighthawk')===-1?expiry.turnIndex:battle.order.indexOf('nighthawk'))<=next)
@@ -576,7 +585,7 @@ export function endCompanionTurn(campaign:Campaign,actorId:string,rollBurning=()
  const basicPoison=battle.basicPoison;
  const ammunitionPoisonExpired=!!battle.poisonedAmmunition&&nextId==='nighthawk'&&nextRound>=battle.poisonedAmmunition.expiresRound;
  const poisonExpired=basicPoison&&nextId==='nighthawk'&&nextRound>=basicPoison.expiresRound;
- const advanced=save(clocked,{...afterOil,groundOil:afterOil.groundOil?.filter(o=>o.ignitedRound===undefined?nextRound<o.expiresRound:nextRound<o.ignitedRound+2||nextRound===o.ignitedRound+2&&next<=o.ignitedTurn!).map(o=>({...o,damagedActorsThisTurn:[]})),...(poisonExpired?{basicPoison:undefined}:{}),...(ammunitionPoisonExpired?{poisonedAmmunition:undefined}:{}),...(objects?{objects}:{}),participants,groundEntries:undefined,turnIndex:next,round:battle.round+(next===0?1:0),log:[...battle.log,actorId+' ended turn']});
+ const advanced=save(clocked,{...afterOil,...{weaponFollowup:undefined},...(nextId==='nighthawk'?{lightAttack:undefined,cleaveUsed:undefined,weaponSlow:undefined}:{}),groundOil:afterOil.groundOil?.filter(o=>o.ignitedRound===undefined?nextRound<o.expiresRound:nextRound<o.ignitedRound+2||nextRound===o.ignitedRound+2&&next<=o.ignitedTurn!).map(o=>({...o,damagedActorsThisTurn:[]})),...(poisonExpired?{basicPoison:undefined}:{}),...(ammunitionPoisonExpired?{poisonedAmmunition:undefined}:{}),...(objects?{objects}:{}),participants,groundEntries:undefined,turnIndex:next,round:battle.round+(next===0?1:0),log:[...battle.log,actorId+' ended turn']});
  if(!battle.burningCreatures?.includes(nextId)||participants[nextId].deathSaves?.dead||
     (participants[nextId].actorKind==='enemy'&&participants[nextId].hp===0))return advanced;
  const damage=rollBurning();
@@ -735,7 +744,7 @@ export function removeCompanionCondition(campaign:Campaign,targetId:string,condi
 export function nighthawkEncounterStatistics(campaign:Campaign){
  const c=campaign.character;
  if(!c)throw Error('Nighthawk character unavailable');
- return {armorClass:c.armorClass??null,speedFeet:c.speed??null,proficiencyBonus:c.proficiencyBonus,dexterityModifier:abilityModifier(c.scores.dex),strengthModifier:abilityModifier(c.scores.str),spellSlots:c.spellSlots?{...c.spellSlots}:null,weaponAttackModifier:null as number|null};
+ return {armorClass:nighthawkEquippedDefense(campaign)?.armorClass??null,speedFeet:effectiveEquipmentSpeed(campaign)??null,proficiencyBonus:c.proficiencyBonus,dexterityModifier:abilityModifier(c.scores.dex),strengthModifier:abilityModifier(c.scores.str),spellSlots:c.spellSlots?{...c.spellSlots}:null,weaponAttackModifier:null as number|null};
 }
 /** Uses an explicitly granted bonus action; never assumes all actors have a bonus-action feature. */
 export function useCompanionBonusAction(campaign:Campaign,actorId:string,description:string,eligible:boolean):Campaign{
@@ -789,17 +798,20 @@ export function spendCompanionConsumable(campaign:Campaign,actorId:string,item:s
 /** Equip only items verified as owned in the campaign and present in the builder catalog.
  * Never assumes a carried weapon is equipped; legacy character AC remains authoritative.
  */
-export function setNighthawkEncounterLoadout(campaign:Campaign,slot:'weaponId'|'armorId'|'shieldId',itemId:string):Campaign{
+export function setNighthawkEncounterLoadout(campaign:Campaign,slot:EquipmentSlot,itemId:string):Campaign{
  const battle=encounter(campaign);
  if(battle.mode!=='unified'||!battle.participants.nighthawk)throw Error('Unified Nighthawk encounter required');
  const item=ITEMS.find(entry=>entry.id===itemId);
- const category=slot==='weaponId'?'weapon':slot==='armorId'?'armor':'shield';
+ const category=slot==='weaponId'||slot==='offhandWeaponId'?'weapon':slot==='armorId'?'armor':'shield';
  if(!item||item.category!==category)throw Error('Invalid equipment category');
  const owned=(campaign.inventoryLedger?.gear??[]).some(entry=>entry.name.toLowerCase()===item.name.toLowerCase()&&entry.quantity>0)||(!campaign.characterIdentity&&item.id==='dagger'&&(campaign.equipment?.daggers??0)>0);
  if(!owned)throw Error('Item is not verified in campaign inventory');
- return {...save(campaign,{...battle,log:[...battle.log,'Nighthawk equipped verified '+item.name+' for encounter reference']}),encounterLoadout:{...campaign.encounterLoadout,[slot]:itemId}};
+ const next={...campaign,encounterLoadout:{...campaign.encounterLoadout,[slot]:itemId}};
+ validateEquipmentHands(campaign,next.encounterLoadout);
+ const actor=battle.participants.nighthawk;
+ return save(next,{...battle,participants:{...battle.participants,nighthawk:{...actor,speedFeet:effectiveEquipmentSpeed(next)??actor.speedFeet}},log:[...battle.log,'Verified equipment equipped: '+item.name]});
 }
-type EquipmentSlot = 'weaponId' | 'armorId' | 'shieldId';
+type EquipmentSlot = 'weaponId' | 'offhandWeaponId' | 'armorId' | 'shieldId';
 
 export function setPlayerLoadout(campaign:Campaign,slot:EquipmentSlot,itemId:string):Campaign {
  if(!campaign.characterIdentity||!campaign.character)throw Error('An imported character is required.');
@@ -807,21 +819,32 @@ export function setPlayerLoadout(campaign:Campaign,slot:EquipmentSlot,itemId:str
  const loadout={...campaign.encounterLoadout,[slot]:itemId};
  if(itemId){
   const reference=nighthawkEquipmentReferences(campaign).items.find(item=>item.id===itemId);
-  const category=slot==='weaponId'?'weapon':slot==='armorId'?'armor':'shield';
+  const category=slot==='weaponId'||slot==='offhandWeaponId'?'weapon':slot==='armorId'?'armor':'shield';
   if(!reference||reference.category!==category)throw Error('The item must be owned and fit this equipment slot.');
  }
+ validateEquipmentHands(campaign,loadout);
+ return {...campaign,encounterLoadout:loadout};
+}
+
+function validateEquipmentHands(campaign:Campaign,loadout:NonNullable<Campaign['encounterLoadout']>):void {
  const weapon=ITEMS.find(item=>item.id===loadout.weaponId);
  if(loadout.shieldId&&weapon?.properties?.includes('Two-Handed'))throw Error('Unequip the shield or two-handed weapon first.');
  if(ownedMagicWearables(campaign).some(item=>item.worn&&item.id.startsWith('wand-'))&&
   (weapon?.properties?.includes('Two-Handed')||weapon&&loadout.shieldId))throw Error('Put away the wand first.');
- return {...campaign,encounterLoadout:loadout};
+ if(loadout.offhandWeaponId){
+  const offhand=ITEMS.find(item=>item.id===loadout.offhandWeaponId);
+  if(loadout.shieldId||!weapon?.properties?.includes('Light')||!offhand?.properties?.includes('Light'))throw Error('A second weapon requires two Light weapons and an available hand.');
+  if(offhand.id===weapon.id&&(campaign.inventoryLedger?.gear.find(row=>row.name===weapon.name)?.quantity??0)<2)throw Error('Two copies are required to equip this weapon in both hands.');
+  if(ownedMagicWearables(campaign).some(item=>item.worn&&item.id.startsWith('wand-')))throw Error('Put away the wand first.');
+ }
+
 }
 
 /** Derive equipped attacks from the saved class profile and shared equipment catalog.
  * Dice are supplied by the caller; missing identity retains the legacy Rogue profile.
  */
-export function nighthawkEquippedAttack(campaign:Campaign){
- const character=campaign.character, id=campaign.encounterLoadout?.weaponId;
+export function nighthawkEquippedAttack(campaign:Campaign,id=campaign.encounterLoadout?.weaponId){
+ const character=campaign.character;
  const item=ITEMS.find(entry=>entry.id===id&&entry.category==='weapon');
  if(!character||!item||!item.damage)return null;
  const owned=(campaign.inventoryLedger?.gear??[]).some(entry=>entry.quantity>0&&entry.name.toLowerCase()===item.name.toLowerCase())||(!campaign.characterIdentity&&item.id==='dagger'&&(campaign.equipment?.daggers??0)>0);
@@ -1036,21 +1059,27 @@ export function basicPoisonWeapon(campaign:Campaign){
 }
 
 /** Manual d20 and damage dice inputs; no automatic attack modifiers or dice invented. */
-export function attackCompanion(campaign:Campaign,attackerId:string,targetId:string,roll:number,attackModifier:number,targetAC:number,damageRoll:number,damageModifier:number,damageType:DamageType,rangeFeet?:number,secondD20?:number,elvenAccuracyReroll?:number,verifiedWeaponId?:string,rollPoison=()=>Math.floor(Math.random()*4)+1,ammunitionPoisonName?:string,attackMode?:'weapon'|'thrown'):Campaign{
+export function attackCompanion(campaign:Campaign,attackerId:string,targetId:string,roll:number,attackModifier:number,targetAC:number,damageRoll:number,damageModifier:number,damageType:DamageType,rangeFeet?:number,secondD20?:number,elvenAccuracyReroll?:number,verifiedWeaponId?:string,rollPoison=()=>Math.floor(Math.random()*4)+1,ammunitionPoisonName?:string,attackMode?:'weapon'|'thrown'|'light-bonus'|'light-nick'|'cleave'):Campaign{
  const battle=activeActor(campaign,attackerId);
  const attacker=battle.participants[attackerId],target=battle.participants[targetId];
  if(!target||attackerId===targetId||attacker.hp<=0||(target.hp<=0&&(!target.conditions.includes('Unconscious')||target.deathSaves?.dead)))throw Error('Invalid attacker or target');
- if(attacker.actionUsed)throw Error('Action already used this turn');
+ const lightExtra=attackMode==='light-bonus'||attackMode==='light-nick';
+ if(lightExtra)verifyLightAttack(campaign,battle,verifiedWeaponId,attackMode==='light-nick');
+ else if(attackMode==='cleave')verifyCleave(campaign,battle,targetId,verifiedWeaponId);
+ else if(attacker.actionUsed)throw Error('Action already used this turn');
  if(attacker.rogueDazeTurns!==undefined&&(attacker.rogueDazeChoice==='movement'||attacker.movementSpentFeet>0||attacker.bonusActionUsed))throw Error('Dazed: choose movement or one action or bonus action');
  if(cannotAct(attacker))throw Error('Condition prevents action');
  if((battle.cover??[]).some(p=>p.x===target.x&&p.y===target.y))throw Error('Target has annotated cover: DM must supply adjusted AC and clear cover annotation before attack');
  if(!companionLineOfSight(battle,attacker,target))throw Error('Line of sight blocked by map obstacle');
  const distanceFeet=Math.max(Math.abs(attacker.x-target.x),Math.abs(attacker.y-target.y))*5;
- const attackAdvantage=(attackerId==='nighthawk'&&(attacker.rogueSteadyAim||(attacker.rogueHidden&&!(attacker.rogueDetectedBy??[]).includes(targetId))))||attacker.conditions.includes('Invisible')||target.conditions.some(c=>['Blinded','Paralyzed','Restrained','Stunned','Unconscious'].includes(c))||(target.conditions.includes('Prone')&&distanceFeet<=5);
+ const vex=attackerId==='nighthawk'&&battle.weaponVex?.target===targetId&&battle.round<=battle.weaponVex.round+1;
+ const attackAdvantage=vex||(attackerId==='nighthawk'&&(attacker.rogueSteadyAim||(attacker.rogueHidden&&!(attacker.rogueDetectedBy??[]).includes(targetId))))||attacker.conditions.includes('Invisible')||target.conditions.some(c=>['Blinded','Paralyzed','Restrained','Stunned','Unconscious'].includes(c))||(target.conditions.includes('Prone')&&distanceFeet<=5);
  const verifiedWeapon=attackerId==='nighthawk'&&campaign.characterIdentity&&attackMode?ITEMS.find(item=>item.id===verifiedWeaponId):undefined;
  const equipmentDisadvantage=verifiedWeapon?verifiedWeaponDisadvantage(campaign,battle,verifiedWeapon,targetId,attackMode==='thrown'):false;
  const untrained=attackerId==='nighthawk'&&!!verifiedWeaponId&&armorEffects(campaign).untrainedArmor;
- const attackDisadvantage=equipmentDisadvantage||untrained||target.dodging||(target.rogueHidden&&!(target.rogueDetectedBy??[]).includes(attackerId))||target.conditions.includes('Invisible')||attacker.conditions.some(c=>['Poisoned','Blinded','Restrained'].includes(c))||(target.conditions.includes('Prone')&&distanceFeet>5);
+ const sap=battle.weaponSap?.[attackerId];
+ const sapped=!!sap&&(battle.round===sap.round||battle.round===sap.round+1&&battle.turnIndex<sap.turnIndex);
+ const attackDisadvantage=equipmentDisadvantage||untrained||sapped||target.dodging||(target.rogueHidden&&!(target.rogueDetectedBy??[]).includes(attackerId))||target.conditions.includes('Invisible')||attacker.conditions.some(c=>['Poisoned','Blinded','Restrained'].includes(c))||(target.conditions.includes('Prone')&&distanceFeet>5);
  if(attackAdvantage!==attackDisadvantage&&secondD20===undefined)throw Error(target.dodging?'Dodge requires a second d20 for disadvantage':'Advantage or disadvantage requires a second d20');
  if(secondD20!==undefined&&(!Number.isInteger(secondD20)||secondD20<1||secondD20>20))throw Error('Invalid second d20');
  if(rangeFeet!==undefined){if(!Number.isInteger(rangeFeet)||rangeFeet<5||rangeFeet>1000||rangeFeet%5!==0)throw Error('Invalid attack range');const distance=Math.max(Math.abs(attacker.x-target.x),Math.abs(attacker.y-target.y))*5;if(distance>rangeFeet)throw Error('Target outside declared attack range');}
@@ -1096,12 +1125,103 @@ export function attackCompanion(campaign:Campaign,attackerId:string,targetId:str
    coating=undefined;
   }
  }
- return save(campaign,{...battle,participants,basicPoison:coating,poisonedAmmunition,log:[...battle.log,attackerId+' attack d20 '+effectiveRoll+(elvenAccuracyReroll!==undefined?' (Elven Accuracy reroll '+elvenAccuracyReroll+')':'')+(target.dodging?' (Dodge disadvantage)':'')+(criticalHit?' critical hit':hit?' hit':' miss')+' vs '+targetId+' AC '+targetAC+(hit?'; '+dealt+' '+damageType+' damage'+(poisonDamage?' + '+poisonDamage+' Poison':''):'')]});
+ const mastery=verifiedWeapon?trainedWeaponMastery(campaign,verifiedWeapon):undefined;
+ if(mastery==='Graze'&&!hit){
+  const ability=nighthawkEquippedAttack(campaign,verifiedWeapon!.id)?.damageModifier??0;
+  const grazed=resolveTypedCompanionDamage(campaign,targetId,target,Math.max(0,ability),damageType);
+  dealt=grazed.taken;
+  participants[targetId]=grazed.updated;
+ }
+ const weaponSlow={...battle.weaponSlow};
+ if(mastery==='Slow'&&hit&&dealt>0&&!Object.hasOwn(weaponSlow,targetId)){
+  weaponSlow[targetId]=target.speedFeet;
+  participants[targetId]={...participants[targetId],speedFeet:Math.max(0,target.speedFeet-10)};
+ }
+ const weaponFollowup:CompanionEncounter['weaponFollowup']=hit&&verifiedWeapon&&(mastery==='Topple'||mastery==='Push'||mastery==='Cleave'&&!battle.cleaveUsed&&attackMode!=='cleave')?{kind:mastery,weaponId:verifiedWeapon.id,targetId}:undefined;
+ const nextVex=mastery==='Vex'&&hit&&dealt>0?{target:targetId,round:battle.round}:vex?undefined:battle.weaponVex;
+ const nextSap={...battle.weaponSap};
+ if(sap)delete nextSap[attackerId];
+ if(mastery==='Sap'&&hit)nextSap[targetId]={round:battle.round,turnIndex:battle.turnIndex};
+ const nextLight=lightExtra&&battle.lightAttack?{...battle.lightAttack,used:true as const}:
+  verifiedWeapon?.properties?.includes('Light')?{primaryId:verifiedWeapon.id}:battle.lightAttack;
+ if(attackMode==='light-bonus')participants[attackerId]={...participants[attackerId],bonusActionUsed:true};
+ return save(campaign,{...battle,participants,weaponVex:nextVex,weaponSap:nextSap,weaponSlow,weaponFollowup,cleaveUsed:attackMode==='cleave'?true:battle.cleaveUsed,lightAttack:nextLight,basicPoison:coating,poisonedAmmunition,log:[...battle.log,attackerId+' attack d20 '+effectiveRoll+(elvenAccuracyReroll!==undefined?' (Elven Accuracy reroll '+elvenAccuracyReroll+')':'')+(target.dodging?' (Dodge disadvantage)':'')+(criticalHit?' critical hit':hit?' hit':' miss')+' vs '+targetId+' AC '+targetAC+(hit?'; '+dealt+' '+damageType+' damage'+(poisonDamage?' + '+poisonDamage+' Poison':''):'')]});
 }
+function verifyCleave(campaign:Campaign,battle:CompanionEncounter,targetId:string,weaponId?:string):void {
+ const followup=battle.weaponFollowup,target=battle.participants[targetId],original=followup?battle.participants[followup.targetId]:undefined;
+ const weapon=ITEMS.find(item=>item.id===weaponId);
+ if(battle.cleaveUsed||!followup||followup.kind!=='Cleave'||followup.weaponId!==weaponId||campaign.encounterLoadout?.weaponId!==weaponId||!weapon||trainedWeaponMastery(campaign,weapon)!=='Cleave'||!target||!original||targetId===followup.targetId||Math.max(Math.abs(target.x-original.x),Math.abs(target.y-original.y))>1)throw Error('Choose a different target within 5 feet of the original target to Cleave.');
+}
+
+export function resolveWeaponCleave(campaign:Campaign,targetId:string,roll:number,damageRoll:number,secondD20?:number):Campaign {
+ const battle=activeActor(campaign,'nighthawk');
+ const equipped=nighthawkEquippedAttack(campaign);
+ const weapon=ITEMS.find(item=>item.id===equipped?.weaponId);
+ const target=battle.participants[targetId];
+ if(!equipped||!weapon||!target?.armorClass)throw Error('Verified weapon and target AC required.');
+ return attackCompanion(campaign,'nighthawk',targetId,roll,equipped.attackModifier,target.armorClass,damageRoll,Math.min(equipped.damageModifier,0),weaponAttackProfile(weapon).damageType??'Slashing',undefined,secondD20,undefined,weapon.id,undefined,undefined,'cleave');
+}
+
+export function resolveWeaponTopple(campaign:Campaign,saveTotal:number):Campaign {
+ const battle=activeActor(campaign,'nighthawk');
+ const followup=battle.weaponFollowup;
+ const weapon=followup?nighthawkEquippedAttack(campaign,followup.weaponId):null;
+ if(followup?.kind!=='Topple'||!weapon||!Number.isSafeInteger(saveTotal)||Math.abs(saveTotal)>100)throw Error('A verified Constitution save total is required for Topple.');
+ const dc=8+(campaign.character?.proficiencyBonus??0)+weapon.damageModifier;
+ const resolved=save(campaign,{...battle,weaponFollowup:undefined,log:[...battle.log,'Topple · Constitution save '+saveTotal+' vs DC '+dc]});
+ return saveTotal<dc?applyCompanionCondition(resolved,followup.targetId,'Prone'):resolved;
+}
+
+export function resolveWeaponPush(campaign:Campaign,distance:5|10,confirmedSize:boolean,groundSaves?:number[]):Campaign {
+ const battle=activeActor(campaign,'nighthawk');
+ const followup=battle.weaponFollowup;
+ const target=followup?battle.participants[followup.targetId]:null;
+ if(followup?.kind!=='Push'||!target||!confirmedSize||![5,10].includes(distance))throw Error('Confirm a Large or smaller target and choose a Push distance.');
+ const source=battle.participants.nighthawk;
+ const dx=target.x-source.x,dy=target.y-source.y;
+ const scale=Math.max(Math.abs(dx),Math.abs(dy));
+ if(!scale)throw Error('Push requires distinct attacker and target squares.');
+ let moved=campaign;
+ for(let step=1;step<=distance/5;step++){
+  moved=moveCompanionForced(moved,followup.targetId,target.x+Math.round(dx/scale)*step,target.y+Math.round(dy/scale)*step,groundSaves?.[step-1]);
+ }
+ const current=encounter(moved);
+ return save(moved,{...current,weaponFollowup:undefined,log:[...current.log,'Push mastery moved '+followup.targetId+' '+distance+' ft.']});
+}
+
 export function setCompanionSpeed(campaign:Campaign,actorId:string,speedFeet:number):Campaign{
  const battle=encounter(campaign),actor=battle.participants[actorId];
  if(!actor||!Number.isInteger(speedFeet)||speedFeet<0||speedFeet>120||speedFeet%5!==0)throw Error('Invalid speed');
- return save(campaign,{...battle,participants:{...battle.participants,[actorId]:{...actor,speedFeet}},log:[...battle.log,actorId+' speed set to '+speedFeet+' ft (manual character statistic)']});
+ const slowed=Object.hasOwn(battle.weaponSlow??{},actorId);
+ const weaponSlow=slowed?{...battle.weaponSlow,[actorId]:speedFeet}:battle.weaponSlow;
+ return save(campaign,{...battle,weaponSlow,participants:{...battle.participants,[actorId]:{...actor,speedFeet:slowed?Math.max(0,speedFeet-10):speedFeet}},log:[...battle.log,actorId+' speed set to '+speedFeet+' ft (manual character statistic)']});
+}
+
+function trainedWeaponMastery(campaign:Campaign,weapon:typeof ITEMS[number]) {
+ const selected=campaign.characterBuild?.selections?.classChoices?.['weapon-mastery']??[];
+ return selected.some(choice=>choice===weapon.id||choice===weapon.name)&&nighthawkEquippedAttack(campaign,weapon.id)?.proficient?weapon.mastery:undefined;
+}
+
+function verifyLightAttack(campaign:Campaign,battle:CompanionEncounter,weaponId:string|undefined,nick:boolean):void {
+ const actor=battle.participants.nighthawk;
+ const offhandId=campaign.encounterLoadout?.offhandWeaponId;
+ const offhand=ITEMS.find(item=>item.id===offhandId);
+ if(!actor.actionUsed||!battle.lightAttack||battle.lightAttack.used||!offhand?.properties?.includes('Light')||offhand.id!==weaponId)throw Error('A verified attack with another Light weapon is required first.');
+ if(nick&&trainedWeaponMastery(campaign,offhand)!=='Nick')throw Error('Nick mastery is required for this extra Attack action strike.');
+ if(!nick&&(actor.bonusActionUsed||actor.rogueDazeTurns!==undefined))throw Error('A bonus action is unavailable for this Light attack.');
+}
+
+export function attackWithOffhandWeapon(campaign:Campaign,targetId:string,roll:number,damageRoll:number,secondD20?:number):Campaign {
+ const battle=activeActor(campaign,'nighthawk');
+ const equipment=campaign.encounterLoadout;
+ validateEquipmentHands(campaign,equipment??{});
+ const equipped=nighthawkEquippedAttack(campaign,equipment?.offhandWeaponId??'');
+ const weapon=ITEMS.find(item=>item.id===equipped?.weaponId);
+ const target=battle.participants[targetId];
+ if(!equipped||!weapon||!target?.armorClass)throw Error('Verified offhand weapon and target AC required.');
+ const mode=trainedWeaponMastery(campaign,weapon)==='Nick'?'light-nick':'light-bonus';
+ const profile=weaponAttackProfile(weapon);
+ return attackWithCampaignAmmunition(campaign,weapon,(reserved,ammunitionName)=>attackCompanion(reserved,'nighthawk',targetId,roll,equipped.attackModifier,target.armorClass!,damageRoll,Math.min(equipped.damageModifier,0),profile.damageType??'Piercing',undefined,secondD20,undefined,weapon.id,undefined,ammunitionName,mode));
 }
 
 function verifiedWeaponDisadvantage(campaign:Campaign,battle:CompanionEncounter,weapon:typeof ITEMS[number],targetId:string,thrown=false):boolean {
@@ -1109,7 +1229,7 @@ function verifiedWeaponDisadvantage(campaign:Campaign,battle:CompanionEncounter,
  const profile=weaponAttackProfile(weapon,thrown);
  const distance=(other:Cell)=>Math.max(Math.abs(attacker.x-other.x),Math.abs(attacker.y-other.y))*5;
  if(distance(target)>profile.maximumRange)throw Error('Target outside the equipped weapon range.');
- if(profile.needsFreeHand&&(campaign.encounterLoadout?.shieldId||ownedMagicWearables(campaign).some(item=>item.worn&&item.id.startsWith('wand-'))))throw Error('This attack requires a free hand. Put away the shield or wand first.');
+ if(profile.needsFreeHand&&(campaign.encounterLoadout?.shieldId||campaign.encounterLoadout?.offhandWeaponId||ownedMagicWearables(campaign).some(item=>item.worn&&item.id.startsWith('wand-'))))throw Error('This attack requires a free hand. Put away the shield or wand first.');
  const ability=profile.rangedWeapon?'dex':'str';
  const heavyPenalty=profile.heavy&&(campaign.character?.scores[ability]??0)<13;
  const adjacentHostile=profile.ranged&&Object.entries(battle.participants).some(([id,actor])=>
@@ -1121,7 +1241,7 @@ function verifiedWeaponDisadvantage(campaign:Campaign,battle:CompanionEncounter,
 /** Uses authoritative combat modifiers/AC for verified equipped Nighthawk or DM-stat enemies.
  * Damage dice are still supplied explicitly; attack actions remain subject to the usual rules.
  */
-export function attackCompanionWithVerifiedStats(campaign:Campaign,attackerId:string,targetId:string,roll:number,damageRoll:number,damageType:DamageType,rangeFeet?:number,secondD20?:number,elvenAccuracyReroll?:number,rollPoison?:()=>number,thrown=false):Campaign{
+export function attackCompanionWithVerifiedStats(campaign:Campaign,attackerId:string,targetId:string,roll:number,damageRoll:number,damageType:DamageType,rangeFeet?:number,secondD20?:number,elvenAccuracyReroll?:number,rollPoison?:()=>number,thrown=false,versatile=false):Campaign{
  const battle=encounter(campaign),attacker=battle.participants[attackerId],target=battle.participants[targetId];
  if(!attacker||!target)throw Error('Unknown attack participant');
  const equipped=attackerId==='nighthawk'&&battle.mode==='unified'?nighthawkEquippedAttack(campaign):null;
@@ -1132,6 +1252,13 @@ export function attackCompanionWithVerifiedStats(campaign:Campaign,attackerId:st
  const weapon=equipped?ITEMS.find(item=>item.id===equipped.weaponId):undefined;
  const profile=weapon?weaponAttackProfile(weapon,thrown):undefined;
  if(weapon?.id==='dart'&&!thrown)throw Error('Use the thrown weapon action to throw a Dart.');
+ if(versatile){
+  if(thrown||!profile?.versatileDamage)throw Error('This weapon cannot use Versatile damage.');
+  if(campaign.encounterLoadout?.shieldId||campaign.encounterLoadout?.offhandWeaponId||ownedMagicWearables(campaign).some(item=>item.worn&&item.id.startsWith('wand-')))throw Error('Versatile damage requires both hands free for the weapon.');
+  const dieSize=Number(profile.versatileDamage.match(/d(\d+)/)?.[1]);
+  const criticalPossible=roll===20||secondD20===20||elvenAccuracyReroll===20||target.conditions.includes('Unconscious');
+  if(!Number.isSafeInteger(damageRoll)||damageRoll<1||damageRoll>dieSize*(criticalPossible?2:1))throw Error('Enter the verified Versatile damage dice total.');
+ }
  return attackWithCampaignAmmunition(campaign,weapon,(reserved,ammunitionName)=>attackCompanion(reserved,attackerId,targetId,roll,attackModifier,targetAC,damageRoll,damageModifier,profile?.damageType??damageType,rangeFeet,secondD20,elvenAccuracyReroll,equipped?.weaponId,rollPoison,ammunitionName,thrown?'thrown':'weapon'));
 }
 
@@ -1179,8 +1306,11 @@ export function collectSpentAmmunition(campaign:Campaign):Campaign {
  const gear=ledger.gear.map(row=>({...row}));
  const recovered:string[]=[];
  // Reconcile once, after a minute of searching. Unrecoverable shots are discarded.
+ let remainingHalves=Math.floor(spent.filter(([,quantity])=>quantity%2===1).length/2);
  for(const [name,quantity] of spent){
-  const count=Math.floor(quantity/2);
+  const extra=quantity%2===1&&remainingHalves>0;
+  if(extra)remainingHalves--;
+  const count=Math.floor(quantity/2)+(extra?1:0);
   if(!count)continue;
   const row=gear.find(entry=>entry.name===name);
   if(row)row.quantity+=count;else gear.push({name,quantity:count});
@@ -1202,8 +1332,12 @@ export function attackWithThrownEquippedWeapon(campaign:Campaign,attackerId:stri
  const available=(weapon.id==='dagger'&&!campaign.characterIdentity?campaign.equipment?.daggers??0:0)+(campaign.inventoryLedger?.gear.find(g=>g.name===weapon.name)?.quantity??0);
  if(available<1)throw Error('Insufficient thrown weapons');
  const resolved=attackCompanionWithVerifiedStats(campaign,attackerId,targetId,roll,damageRoll,damageType,rangeFeet,secondD20,undefined,undefined,true);
+ return spendThrownWeapon(resolved,weapon);
+}
+
+function spendThrownWeapon(campaign:Campaign,weapon:typeof ITEMS[number]):Campaign {
  const source=weapon.id==='dagger'&&!campaign.characterIdentity&&(campaign.equipment?.daggers??0)>0?'daggers':weapon.name;
- const spent=spendUnifiedNighthawkInventory(resolved,source,1);
+ const spent=spendUnifiedNighthawkInventory(campaign,source,1);
  const current=spent.companionEncounter!;
  return save(spent,{...current,...(current.basicPoison?.weaponId===weapon.id?{basicPoison:undefined}:{}),thrownWeaponsPendingRecovery:{...current.thrownWeaponsPendingRecovery,[source]:(current.thrownWeaponsPendingRecovery?.[source]??0)+1},log:[...current.log,'Thrown '+source+' awaiting DM recovery']});
 }
@@ -1281,11 +1415,16 @@ export function importedRogueSteadyAim(campaign:Campaign):Campaign{
  if(actor.bonusActionUsed||actor.rogueMovedThisTurn||actor.movementSpentFeet>0||actor.hp<=0||cannotAct(actor))throw Error('Steady Aim requires unused bonus action and no movement this turn');
  return save(campaign,{...battle,participants:{...battle.participants,nighthawk:{...actor,bonusActionUsed:true,rogueSteadyAim:true}},log:[...battle.log,'Rogue Steady Aim grants advantage on next attack and prevents movement']});
 }
-export function importedRogueHide(campaign:Campaign,stealthTotal:number,dmVerifiedConcealment=false):Campaign{
+export function importedRogueHide(campaign:Campaign,stealthTotal:number,dmVerifiedConcealment=false,secondTotal?:number):Campaign{
  const battle=activeActor(campaign,'nighthawk'),actor=battle.participants.nighthawk;
  if(battle.mode!=='unified'||campaign.characterIdentity?.classId!=='rogue'||(campaign.character?.level??0)<2)throw Error('Hide requires imported Rogue level 2');
  if(actor.bonusActionUsed||actor.hp<=0||cannotAct(actor))throw Error('Hide requires available bonus action');
  if(!Number.isInteger(stealthTotal)||stealthTotal<0||stealthTotal>100)throw Error('Verified Stealth total required');
+ const armor=armorEffects(campaign);
+ if(armor.untrainedArmor||armor.stealthDisadvantage){
+  if(!Number.isInteger(secondTotal)||secondTotal!<0||secondTotal!>100)throw Error('Armor disadvantage requires a second verified Stealth total.');
+  stealthTotal=Math.min(stealthTotal,secondTotal!);
+ }
  if(stealthTotal<15)throw Error('Hide requires DC 15 Stealth');
  if(!dmVerifiedConcealment&&Object.values(battle.participants).some(enemy=>enemy.actorKind==='enemy'&&enemy.hp>0&&companionLineOfSight(battle,enemy,actor)))throw Error('Hide requires no enemy line of sight or DM-verified heavy obscurity or three-quarters/total cover');
  return save(campaign,{...battle,participants:{...battle.participants,nighthawk:{...actor,bonusActionUsed:true,rogueHidden:true,rogueHideDC:stealthTotal,rogueHideConcealment:dmVerifiedConcealment,rogueDetectedBy:[]}},log:[...battle.log,'Rogue Hide succeeded with Stealth '+stealthTotal]});
@@ -1304,18 +1443,22 @@ export function resolveImportedRogueDetection(campaign:Campaign,observerId:strin
 }
 /** Rogue Sneak Attack is applied only after validating a hit and its eligibility.
  * The player supplies individual d6 results; no rolls are invented. */
-export function attackImportedRogue(campaign:Campaign,targetId:string,roll:number,weaponDamageDice:number,rangeFeet:number,sneakDice:number[],secondD20?:number,cunningStrike?:{effect:'Trip'|'Poison'|'Withdraw'|'Obscure'|'Daze'|'Knock Out';saveTotal?:number;withdrawTo?:{x:number;y:number}}|{effect:'Trip'|'Poison'|'Withdraw'|'Obscure'|'Daze'|'Knock Out';saveTotal?:number;withdrawTo?:{x:number;y:number}}[],elvenAccuracyReroll?:number):Campaign{
+export function attackImportedRogue(campaign:Campaign,targetId:string,roll:number,weaponDamageDice:number,rangeFeet:number,sneakDice:number[],secondD20?:number,cunningStrike?:{effect:'Trip'|'Poison'|'Withdraw'|'Obscure'|'Daze'|'Knock Out';saveTotal?:number;withdrawTo?:{x:number;y:number}}|{effect:'Trip'|'Poison'|'Withdraw'|'Obscure'|'Daze'|'Knock Out';saveTotal?:number;withdrawTo?:{x:number;y:number}}[],elvenAccuracyReroll?:number,useOffhand=false):Campaign{
  const battle=activeActor(campaign,'nighthawk'),actor=battle.participants.nighthawk,target=battle.participants[targetId];
  const ch=campaign.character;
  if(battle.mode!=='unified'||campaign.characterIdentity?.classId!=='rogue'||!ch)throw Error('Requires imported Rogue in a unified encounter');
  if(!target||target.hp<=0||actor.rogueSneakUsed)throw Error('Invalid target or Sneak Attack already used this turn');
- const equipped=nighthawkEquippedAttack(campaign),item=ITEMS.find(i=>i.id===equipped?.weaponId);
- if(!equipped||!item||item.id==='dart'||!(item.properties?.includes('Finesse')||item.properties?.some(p=>p.startsWith('Ammunition')||p.startsWith('Range '))))throw Error('Sneak Attack requires a verified equipped Finesse or Ranged weapon');
- const attackModifier=equipped.attackModifier,damageModifier=equipped.damageModifier,targetAC=target.armorClass;
+ const equipped=nighthawkEquippedAttack(campaign,useOffhand?(campaign.encounterLoadout?.offhandWeaponId??''):undefined),item=ITEMS.find(i=>i.id===equipped?.weaponId);
+ if(!equipped||!item||!(item.properties?.includes('Finesse')||item.properties?.some(p=>p.startsWith('Ammunition')||p.startsWith('Range '))))throw Error('Sneak Attack requires a verified equipped Finesse or Ranged weapon');
+ const attackModifier=equipped.attackModifier,damageModifier=useOffhand?Math.min(0,equipped.damageModifier):equipped.damageModifier,targetAC=target.armorClass;
  if(targetAC===undefined||!Number.isInteger(targetAC))throw Error('Target AC must be verified');
  const distance=Math.max(Math.abs(actor.x-target.x),Math.abs(actor.y-target.y))*5;
- const advantage=!!(actor.rogueSteadyAim||(actor.rogueHidden&&!(actor.rogueDetectedBy??[]).includes(targetId)))||actor.conditions.includes('Invisible')||target.conditions.some(c=>['Blinded','Paralyzed','Restrained','Stunned','Unconscious'].includes(c))||(target.conditions.includes('Prone')&&distance<=5);
- const disadvantage=verifiedWeaponDisadvantage(campaign,battle,item,targetId)||armorEffects(campaign).untrainedArmor||target.dodging||(target.rogueHidden&&!(target.rogueDetectedBy??[]).includes('nighthawk'))||target.conditions.includes('Invisible')||actor.conditions.some(c=>['Poisoned','Blinded','Restrained'].includes(c))||(target.conditions.includes('Prone')&&distance>5);
+ const weaponProfile=weaponAttackProfile(item);
+ const thrown=item.id==='dart'||!weaponProfile.ranged&&distance>weaponProfile.reach&&!!item.properties?.some(property=>property.startsWith('Thrown '));
+ if(useOffhand&&thrown)throw Error('An offhand Sneak Attack must be in weapon reach.');
+ const mode=useOffhand?(trainedWeaponMastery(campaign,item)==='Nick'?'light-nick':'light-bonus'):thrown?'thrown':'weapon';
+ const advantage=battle.weaponVex?.target===targetId&&battle.round<=battle.weaponVex.round+1||!!(actor.rogueSteadyAim||(actor.rogueHidden&&!(actor.rogueDetectedBy??[]).includes(targetId)))||actor.conditions.includes('Invisible')||target.conditions.some(c=>['Blinded','Paralyzed','Restrained','Stunned','Unconscious'].includes(c))||(target.conditions.includes('Prone')&&distance<=5);
+ const disadvantage=verifiedWeaponDisadvantage(campaign,battle,item,targetId,thrown)||armorEffects(campaign).untrainedArmor||target.dodging||(target.rogueHidden&&!(target.rogueDetectedBy??[]).includes('nighthawk'))||target.conditions.includes('Invisible')||actor.conditions.some(c=>['Poisoned','Blinded','Restrained'].includes(c))||(target.conditions.includes('Prone')&&distance>5);
  const ally=Object.entries(battle.participants).some(([id,p])=>id!=='nighthawk'&&id!==targetId&&p.hp>0&&p.faction!=='enemies'&&Math.max(Math.abs(p.x-target.x),Math.abs(p.y-target.y))<=1&&!p.conditions.includes('Incapacitated'));
  if(disadvantage&&!advantage||!(advantage&&!disadvantage||ally))throw Error('Sneak Attack requires advantage or an adjacent eligible ally, without disadvantage');
  const elvenEligible=campaign.importedEarnedFeats?.some(f=>f.name==='Elven Accuracy'&&f.legacyApproved&&f.level<=(ch.level??0))&&['Dexterity','Intelligence','Wisdom','Charisma'].includes(equipped.ability);
@@ -1338,7 +1481,8 @@ export function attackImportedRogue(campaign:Campaign,targetId:string,roll:numbe
  if(advantage!==disadvantage&&secondD20===undefined)throw Error('Advantage or disadvantage requires second d20');
  if(!Number.isInteger(weaponDamageDice)||weaponDamageDice<1||weaponDamageDice>100)throw Error('Invalid weapon damage roll');
  const hit=hitRoll===20||(hitRoll!==1&&hitRoll+attackModifier>=targetAC);
- const result=attackWithCampaignAmmunition(campaign,item,(reserved,ammunitionName)=>attackCompanion(reserved,'nighthawk',targetId,roll,attackModifier,targetAC,weaponDamageDice+(hit?sneakDice.slice(diceCost*(critical?2:1)).reduce((a,b)=>a+b,0):0),damageModifier,weaponAttackProfile(item).damageType??'Piercing',rangeFeet,secondD20,elvenAccuracyReroll,equipped.weaponId,undefined,ammunitionName,'weapon'));
+ const resolved=attackWithCampaignAmmunition(campaign,item,(reserved,ammunitionName)=>attackCompanion(reserved,'nighthawk',targetId,roll,attackModifier,targetAC,weaponDamageDice+(hit?sneakDice.slice(diceCost*(critical?2:1)).reduce((a,b)=>a+b,0):0),damageModifier,weaponProfile.damageType??'Piercing',rangeFeet,secondD20,elvenAccuracyReroll,equipped.weaponId,undefined,ammunitionName,mode));
+ const result=thrown?spendThrownWeapon(resolved,item):resolved;
  if(!hit)return result;
  const combat=result.companionEncounter!;
  const strikeDC=8+ch.proficiencyBonus+abilityModifier(ch.scores.dex);
@@ -1390,6 +1534,7 @@ export function useImportedMageHandLegerdemain(campaign:Campaign,description:str
 }
 /** Supported Warlock invocations are resolved with the same encounter action economy. */
 export function useImportedWarlockInvocation(campaign:Campaign,invocation:'Armor of Shadows'|'Mask of Many Faces'):Campaign{
+ requireArmorSpellcasting(campaign);
  const battle=activeActor(campaign,'nighthawk'),actor=battle.participants.nighthawk;
  if(battle.mode!=='unified'||campaign.characterIdentity?.classId!=='warlock'||!(campaign.importedWarlockInvocations??campaign.characterBuild?.selections.magic?.invocations??[]).includes(invocation))throw Error('Warlock invocation is not known');
  if(actor.hp<=0||actor.actionUsed||cannotAct(actor))throw Error('Invocation action unavailable');
@@ -1403,6 +1548,7 @@ export function useImportedWarlockInvocation(campaign:Campaign,invocation:'Armor
 }
 /** Eldritch Blast: verified d20 and damage dice, with Agonizing Blast CHA bonus. */
 export function attackImportedEldritchBlast(campaign:Campaign,targetId:string,roll:number,damageDice:number,secondD20?:number):Campaign{
+ requireArmorSpellcasting(campaign);
  const battle=activeActor(campaign,'nighthawk'),actor=battle.participants.nighthawk,target=battle.participants[targetId],ch=campaign.character;
  if(battle.mode!=='unified'||campaign.characterIdentity?.classId!=='warlock'||!ch?.cantrips?.includes('Eldritch Blast'))throw Error('Eldritch Blast is not known');
  if(!target||target.actorKind!=='enemy'||target.armorClass===undefined||!Number.isInteger(roll)||roll<1||roll>20||!Number.isInteger(damageDice)||damageDice<1||damageDice>(roll===20?20:10))throw Error('Verified target and damage roll required (2d10 total on a natural 20)');
@@ -1530,6 +1676,7 @@ export function resolveWizardScorchingRayMulti(campaign:Campaign,targets:[string
 
 /** Deterministic multi-target Magic Missile: each verified dart has its own d4 and target. */
 export function resolveWizardMagicMissileMulti(campaign:Campaign,targets:string[],dice:number[],rank:1|2):Campaign{
+ requireArmorSpellcasting(campaign);
  const battle=activeActor(campaign,'nighthawk'),caster=battle.participants.nighthawk,ch=campaign.character;
  if(battle.mode!=='unified'||campaign.characterIdentity?.classId!=='wizard'||!ch?.preparedSpells?.includes('Magic Missile')||caster.actionUsed||caster.hp<=0||cannotAct(caster))throw Error('Magic Missile unavailable');
  if(rank!==1&&rank!==2)throw Error('Invalid Magic Missile slot');

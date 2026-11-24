@@ -1,3 +1,4 @@
+import {discardInventoryItem} from './inventoryDiscard';
 import {magicProtectionBonus,magicWandStatus,rechargeMagicWand,spendMagicWand,wearMagicItem} from './magicEquipment';
 import {completePlayerRest} from './playerRecovery';
 import {campaignPlayerContext} from './campaignContext';
@@ -18,6 +19,15 @@ function rogue(){
  return campaignFromCharacterDraft(d,'Raven adventure');
 }
 describe('authoritative Player sheet summary',()=>{
+ it('discards an exact quantity and clears a removed equipped item without changing currency',()=>{
+  const c=setPlayerLoadout(rogue(),'armorId','leather-armor');
+  expect(()=>discardInventoryItem(c,'Leather Armor',2,1)).toThrow('quantity');
+  expect(()=>discardInventoryItem(c,'Leather Armor',1,2)).toThrow('Inventory changed');
+  const changed=discardInventoryItem(c,'Leather Armor',1,1);
+  expect(changed.inventoryLedger?.gear.some(row=>row.name==='Leather Armor')).toBe(false);
+  expect(changed.inventoryLedger?.currency).toEqual(c.inventoryLedger?.currency);
+  expect(playerSheetSummary(JSON.parse(JSON.stringify(changed)))?.armorClass).toBe(13);
+ });
  it('calculates equipped and explicitly unarmored AC after serialization',()=>{
   const c=rogue();
   const equipped=setPlayerLoadout(c,'armorId','leather-armor');
