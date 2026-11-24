@@ -29,4 +29,5 @@ Rules reference: [Wizards of the Coast SRD 5.2.1](https://media.dndbeyond.com/co
 - Armor checkpoint: TypeScript, production build and 934 Vitest tests passed. The iPhone screenshot was inspected for the section picker, equipped state and inventory weight.
 - Broader equipment checkpoint: TypeScript, production build and 941 Vitest tests passed. Full iPhone Playwright passed 145 of 148 tests and identified three Rogue dagger range regressions. The throws were then resolved with the correct range and inventory expenditure.
 - The three Rogue regressions and both new iPhone persistence scenarios subsequently passed together.
+- First exact-SHA release run surfaced an iPhone test race. The narration assertion now observes the first rendered frame, and shared fixtures wait for the campaign record before reloading. The same product assertions still run.
 - The final release requires a full re-run on the finished tree, exact-SHA GitHub Actions evidence and exact-SHA Vercel READY before a protected foundation fast-forward. Verify the foundation and playtest alias after publication.

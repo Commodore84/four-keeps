@@ -59,6 +59,7 @@ async function createAndImport(page:Page,id:ClassId){
  }
  await creator.getByRole('button',{name:'Continue to identity'}).click();await creator.getByLabel('name *',{exact:true}).fill(id+' Hero');await creator.getByRole('button',{name:'Continue to future levels'}).click();await creator.getByRole('button',{name:'Continue to review'}).click();await expect(creator.getByLabel('Character review')).toBeVisible();
  await page.getByRole('button',{name:/Home/}).click();await page.getByRole('button',{name:'Campaigns',exact:true}).click();await page.getByRole('button',{name:'New Adventure'}).click();const value=await page.getByLabel('Starting character').getByRole('option',{name:new RegExp(id+' Hero')}).getAttribute('value');await page.getByLabel('Starting character').selectOption(value!);await page.getByRole('button',{name:'Begin Adventure',exact:true}).click();
+ await expect.poll(async()=> (await saved(page))?.characterIdentity?.classId).toBe(id);
 }
 async function saved(page:Page){return page.evaluate(async()=>{const db=await new Promise<IDBDatabase>((resolve,reject)=>{const r=indexedDB.open('four-keeps-local',1);r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});return new Promise<any>(resolve=>{const r=db.transaction('campaigns','readonly').objectStore('campaigns').getAll();r.onsuccess=()=>{db.close();resolve(r.result[0]);};});});}
 for(const id of ['rogue'] as const)test(id+' complete creation, solo encounter, rewards, short/long rest and resume',async({page})=>{
@@ -112,16 +113,33 @@ test('AI-led opening, world memory and saved pending action retry survive reload
  await expect.poll(async()=>Boolean((await saved(page))?.characterIdentity)).toBe(true);
  await page.evaluate(()=>{localStorage.setItem('four-keeps-access-code','browser-test-code');localStorage.setItem('four-keeps-dm-mode','on');});
  const requests:any[]=[];let failure:string|null=null;
+ let releaseOpening!:()=>void;
+ const openingGate=new Promise<void>(resolve=>{releaseOpening=resolve;});
  await page.route('**/api/dm',async route=>{
    const body=route.request().postDataJSON();requests.push(body);
+   if(body.opening)await openingGate;
    if(failure){await route.fulfill({status:502,contentType:'application/json',body:JSON.stringify({error:failure})});return;}
    await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({narration:body.opening?'A bell tolls from the abandoned keep. The road winds through a crowded marketplace, where a suspicious merchant argues with a particularly uncooperative mule. Beyond the village gates, the old tower waits beneath the gathering clouds.':'Mira says the bell rang at dusk.',newFacts:['A bell rang at dusk'],mapActions:body.opening?[{type:'create',site:{id:'dm-opening-bell-camp',name:'Bell Camp',description:'A quiet camp near the road',x:38,y:63,kind:'minor',createdAt:1000,discovered:true}}]:[],worldUpdates:{npcs:[{name:'Mira',role:'Watchkeeper',location:'Dasahi',relationship:'neutral',notes:['Knows the old road']}],clues:[{text:'A stranger passed at dusk',evidence:'reported',source:'Mira'}]},combatStart:null})});
  })
  await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();await page.getByRole('button',{name:'Continue Adventure'}).click();
+ // Inspect the first rendered narration frame in the browser. Polling
+ // IndexedDB first can miss that frame on a busy CI runner.
+ await page.evaluate(()=>{
+  const probe=window as Window & {firstOpeningLineCount?:Promise<number>};
+  probe.firstOpeningLineCount=new Promise(resolve=>{
+   const observe=new MutationObserver(()=>{
+    const narration=document.querySelector('[aria-label="Dungeon Master narration"]');
+    const lines=narration?.querySelectorAll('.dm-narration-line');
+    if(lines?.length){observe.disconnect();resolve(lines.length);}
+   });
+   observe.observe(document.body,{subtree:true,childList:true});
+  });
+ });
+ releaseOpening();
+ expect(await page.evaluate(()=>(window as Window & {firstOpeningLineCount?:Promise<number>}).firstOpeningLineCount)).toBe(1);
  await expect.poll(async()=> (await saved(page))?.journal?.some((entry:any)=>entry.id?.endsWith('-dm-opening'))).toBe(true);
  const narration=page.getByLabel('Dungeon Master narration').first();
  await expect(narration).toContainText('A bell tolls from the abandoned keep.');
- await expect(narration.locator('.dm-narration-line')).toHaveCount(1);
  await narration.click();
  await expect(narration).toContainText('gathering clouds.');
 
