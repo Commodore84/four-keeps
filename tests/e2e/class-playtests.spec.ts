@@ -1860,6 +1860,35 @@ test('iPhone DM template handoff opens verified solo battlefield without requiri
  await page.getByRole('button',{name:'Bestiary'}).click();
  await expect(page.getByLabel('Bestiary')).toContainText('Creatures you encounter');
 });
+test('iPhone existing mapless warehouse rat combat opens the tactical board and persists after initiative',async({page})=>{
+ test.setTimeout(90000);
+ await createAndImport(page,'rogue');
+ await page.evaluate(()=>{
+  localStorage.setItem('four-keeps-access-code','browser-test-code');
+  localStorage.setItem('four-keeps-dm-mode','on');
+ });
+ await page.route('**/api/dm',async route=>{
+  const request=route.request().postDataJSON();
+  const shared={worldUpdates:{},newFacts:[]};
+  if(request.opening){await route.fulfill({json:{...shared,narration:'Dasahi warehouses are ready for investigation.'}});return;}
+  await route.fulfill({json:{...shared,narration:'Inside the warehouse behind a pallet stack, the enormous dockside rat sees your shortbow. Combat begins.',
+   combatStart:{enemyName:'Giant rat'}}});
+ });
+ await page.reload();
+ await page.getByRole('button',{name:'Campaigns',exact:true}).click();
+ await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await expect.poll(async()=> (await saved(page))?.journal?.some((entry:any)=>entry.id?.endsWith('-dm-opening'))).toBe(true);
+ await page.getByLabel('Message the Dungeon Master').fill('I move until I see the rat so I can attack it with my bow');
+ await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
+ const battle=page.getByRole('region',{name:'Tactical battlefield'});
+ await expect(battle).toBeVisible();
+ expect((await saved(page)).adventureSession.pendingEncounter.scenario).toBeUndefined();
+ await expect(battle.getByRole('button',{name:'Roll initiative'})).toBeVisible();
+ await page.reload();
+ await page.getByRole('button',{name:'Campaigns',exact:true}).click();
+ await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await expect(page.getByRole('region',{name:'Tactical battlefield'})).toBeVisible();
+});
 test('iPhone tactical combat opens from Adventure, previews movement, runs NPC turns and persists escape',async({page})=>{
  test.setTimeout(90000);
  await page.addInitScript(()=>{Math.random=()=>0.5;});
