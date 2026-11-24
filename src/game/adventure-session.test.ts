@@ -2,7 +2,7 @@ import type {Campaign} from './campaign';
 import {describe,it,expect} from 'vitest';
 import {newCampaign,registerSubclassActor} from './campaign';
 import {initialSubclassCombatState} from './subclassCombatRules';
-import {adventureSiteForCampaign,beginAdventureSession,travelAdventure,interactAdventure,enterAdventureEncounter,resumeAdventureExploration,proposeAdventureEncounter,declineAdventureEncounter,enterSoloAdventureEncounter} from './adventureSession';
+import {adventureSiteForCampaign,beginAdventureSession,travelAdventure,interactAdventure,enterAdventureEncounter,resumeAdventureExploration,proposeAdventureEncounter,recoverWarehouseRatEncounter,declineAdventureEncounter,enterSoloAdventureEncounter} from './adventureSession';
 import {finishCompanionEncounter,damageCompanion,spendPlayerResource} from './companionEncounter';
 import {settleEncounterRewards} from './encounterRewards';
 import {prepareAdventureAction,commitAdventureAction,pauseAdventureForClarification,answerAdventureClarification} from './adventureOrchestrator';
@@ -15,6 +15,29 @@ describe('Anchamida starter route isolation',()=>{
   expect(adventureSiteForCampaign(imported,'watchtower').name).toBe('Roadside ruins');
   expect(adventureSiteForCampaign(base,'frontier').name).toBe('Frontier Village');
   expect(adventureSiteForCampaign(base,'crossroads').name).toBe('Old Crossroads');
+ });
+});
+describe('legacy warehouse rat encounter recovery',()=>{
+ it('opens the previously validated two-rat battlefield without rerolling or replacing the saved narration',()=>{
+  const started=beginAdventureSession({...newCampaign('Warehouse recovery'),location:'Dasahi',characterBuild:{} as Campaign['characterBuild']});
+  const character={...started,characterIdentity:{name:'Nighthawk',speciesId:'elf',backgroundId:'criminal',classId:'rogue',draftId:'nighthawk',pronouns:'',appearance:'',personality:'',backstory:''}};
+  const introduced={...character,journal:[...character.journal,{id:'dm-warehouse',kind:'dm' as const,createdAt:'2026-11-24T22:30:00Z',text:'Inside the warehouse, a hulking dockside rat jerks its head toward your bow.'}]};
+  const pending=proposeAdventureEncounter(introduced,'Giant rat','rat-combat');
+  expect(pending.adventureSession?.pendingEncounter?.scenario).toBeUndefined();
+  const recovered=recoverWarehouseRatEncounter(pending);
+  expect(recovered.adventureSession?.pendingEncounter?.scenario?.actors.map(a=>a.profile)).toEqual(['giant-rat','giant-rat']);
+  expect(recovered.adventureSession?.pendingEncounter?.actionId).toBe('rat-combat');
+  expect(recovered.journal).toEqual(pending.journal);
+  expect(recovered.companionEncounter).toBeUndefined();
+  expect(recoverWarehouseRatEncounter(recovered)).toBe(recovered);
+ });
+ it('never silently changes unrelated or context-free enemy encounters',()=>{
+  const started=beginAdventureSession({...newCampaign('Other fight'),location:'Dasahi',characterBuild:{} as Campaign['characterBuild']});
+  const character={...started,characterIdentity:{name:'Nighthawk',speciesId:'elf',backgroundId:'criminal',classId:'rogue',draftId:'nighthawk',pronouns:'',appearance:'',personality:'',backstory:''}};
+  expect(recoverWarehouseRatEncounter(proposeAdventureEncounter(character,'Giant rat','rat-combat')).adventureSession?.pendingEncounter?.scenario).toBeUndefined();
+  const ratStory={...character,journal:[...character.journal,{id:'dm-test',kind:'dm' as const,createdAt:'2026-11-24T22:30:00Z',text:'A rat rustles in warehouse crates.'}]};
+  const bandit=proposeAdventureEncounter(ratStory,'Road bandit','bandit-combat');
+  expect(recoverWarehouseRatEncounter(bandit).adventureSession?.pendingEncounter?.scenario).toBeUndefined();
  });
 });
 describe('persistent adventure session',()=>{
