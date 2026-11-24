@@ -1,9 +1,9 @@
 import {describe,it,expect} from 'vitest';
 import {createCharacterDraft} from '../app/CharacterCreator';
 import {reviewErrors} from './creationReview';
-import {campaignFromCharacterDraft,characterDraftImportOptions} from './characterImport';
+import {campaignFromCharacterDraft,characterDraftImportOptions,startingCurrency,reconcileStartingCurrency} from './characterImport';
 import {beginAdventureSession} from './adventureSession';
-import {carriedWeight} from './carryingCapacity';
+import {carriedWeight,coinWeight} from './carryingCapacity';
 import {isCampaign,newCampaign} from './campaign';
 function validRogue(){
  const d=createCharacterDraft();
@@ -60,4 +60,22 @@ describe('starting inventory canonicalization',()=>{
   expect(gear.some(item=>item.name==='Backpack')).toBe(true);
   expect(carriedWeight(campaign).unknown).toEqual([]);
  });
+});
+
+it('issues 150 GP as 150 gold coins and preserves fractional change',()=>{
+ expect(startingCurrency(15000)).toEqual({CP:0,SP:0,EP:0,GP:150,PP:0});
+ expect(startingCurrency(15023)).toEqual({CP:3,SP:2,EP:0,GP:150,PP:0});
+});
+it('repairs a legacy imported wallet without changing value or other campaign data',()=>{
+ const c=campaignFromCharacterDraft(validRogue(),'Legacy wallet');
+ const money=c.inventoryLedger!.currency;
+ const cp=money.GP*100+money.SP*10+money.CP;
+ expect(cp).toBeGreaterThanOrEqual(100);
+ const legacy={...c,inventoryLedger:{...c.inventoryLedger!,currency:{CP:cp,SP:0,EP:0,GP:0,PP:0}}};
+ const fixed=reconcileStartingCurrency(legacy);
+ expect(fixed).toEqual(c);
+ expect(coinWeight(fixed)).toBeLessThan(coinWeight(legacy));
+ expect(reconcileStartingCurrency(fixed)).toBe(fixed);
+ const mixed={...legacy,inventoryLedger:{...legacy.inventoryLedger,currency:{...legacy.inventoryLedger.currency,GP:1}}};
+ expect(reconcileStartingCurrency(mixed)).toBe(mixed);
 });

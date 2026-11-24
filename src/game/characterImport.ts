@@ -26,7 +26,7 @@ export function campaignFromCharacterDraft(draft:CharacterDraft,title:string,id:
  const items=review.equipment;
  // Expand packs into canonical gear once; never count the pack itself as extra weight.
  const gear=expandInventoryPacks(items.map(item=>({name:item.name,quantity:item.quantity})));
- const ledger={currency:{CP:Math.round(review.remainingGold*100),SP:0,EP:0,GP:0,PP:0},gear};
+ const ledger={currency:startingCurrency(Math.round(review.remainingGold*100)),gear};
  const counted=(id:string)=>items.find(item=>item.name===ITEM_BY_ID[id]?.name)?.quantity??0;
  const base=newCampaign(title,id,now);
  return {...base,location:'Dasahi',character,hitDiceRemaining:1,characterBuild:structuredClone(draft),characterIdentity:{name:draft.identity.name.trim(),speciesId:draft.selections.speciesId!,lineageId:draft.selections.lineageId,backgroundId:draft.selections.backgroundId!,classId:draft.selections.classId!,draftId:draft.id,pronouns:draft.identity.pronouns,appearance:draft.identity.appearance,personality:draft.identity.personality,backstory:draft.identity.backstory},
@@ -39,4 +39,18 @@ export function characterDraftImportOptions(drafts:CharacterDraft[]):{id:string;
 }
 export function preparedSpellNamesFromDraft(draft:CharacterDraft):string[]{
  return (draft.selections.magic?.prepared??[]).map(id=>SPELL_BY_ID[id]?.name??id);
+}
+
+/** Starting money is issued in gold and small change, not copper-only. */
+export function startingCurrency(copper:number){
+ return {CP:copper%10,SP:Math.floor(copper%100/10),EP:0,GP:Math.floor(copper/100),PP:0};
+}
+/** Repair the legacy import representation without changing wallet value or mixed wallets. */
+export function reconcileStartingCurrency(campaign:Campaign):Campaign{
+ const ledger=campaign.inventoryLedger,c=ledger?.currency;
+ if(!campaign.characterBuild||!ledger||!c||c.CP<100||c.SP||c.EP||c.GP||c.PP)return campaign;
+ try{
+  if(c.CP!==Math.round(reviewCharacter(campaign.characterBuild).remainingGold*100))return campaign;
+ }catch{return campaign;}
+ return {...campaign,inventoryLedger:{...ledger,currency:startingCurrency(c.CP)}};
 }

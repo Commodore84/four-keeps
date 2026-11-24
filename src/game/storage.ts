@@ -1,3 +1,4 @@
+import {reconcileStartingCurrency} from './characterImport';
 import {expandInventoryPacks} from './equipmentPacks';
 import {useOwnedConsumable,type ConsumableRequest} from './consumables';
 import {useOwnedHealingPotion,type HealingPotionRequest} from './healingPotions';
@@ -81,11 +82,11 @@ function reconcileSavedPacks(campaign:Campaign):Campaign{
 export const localCampaignStorage: CampaignStorage = {
   async list() {
     const values = await transact<unknown[]>('readonly', (store, resolve, reject) => requestResult(store.getAll(), resolve, reject));
-    return values.filter(isCampaign).map(observe).map(reconcileSavedPacks).map(hydratePlayerState).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+    return values.filter(isCampaign).map(observe).map(reconcileSavedPacks).map(reconcileStartingCurrency).map(hydratePlayerState).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   },
   async get(id) {
     const value = await transact<unknown>('readonly', (store, resolve, reject) => requestResult(store.get(id), resolve, reject));
-    return isCampaign(value) ? hydratePlayerState(reconcileSavedPacks(observe(value))) : undefined;
+    return isCampaign(value) ? hydratePlayerState(reconcileStartingCurrency(reconcileSavedPacks(observe(value)))) : undefined;
   },
   async save(campaign, options) {
     if (!isCampaign(campaign)) throw new Error('Invalid campaign data');
@@ -127,7 +128,7 @@ export async function commitHealingPotionUse(id:string,request:HealingPotionRequ
   read.onsuccess=()=>{
    try{
     if(!isCampaign(read.result))throw Error('Campaign not found');
-    const current=hydratePlayerState(read.result);
+    const current=hydratePlayerState(reconcileStartingCurrency(read.result));
     const next=useOwnedHealingPotion(current,request);
     if(next===current){resolve(current);return}
     const put=store.put(next);
@@ -144,7 +145,7 @@ export async function commitConsumableUse(id:string,request:ConsumableRequest):P
   read.onsuccess=()=>{
    try{
     if(!isCampaign(read.result))throw Error('Campaign not found');
-    const current=hydratePlayerState(read.result),next=useOwnedConsumable(current,request);
+    const current=hydratePlayerState(reconcileStartingCurrency(read.result)),next=useOwnedConsumable(current,request);
     if(next===current){resolve(current);return}
     requestResult(store.put(next),()=>resolve(next),reject);
    }catch(error){reject(error instanceof Error?error:new Error(String(error)))}
