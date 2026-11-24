@@ -1,3 +1,4 @@
+import {validateCombatScenario,type CombatScenario} from './combatScenario';
 import type {Campaign} from './campaign';
 import {startUnifiedEncounter,addCompanionEnemy} from './companionEncounter';
 import {resupplyTravelingMerchant} from './merchantSupply';
@@ -5,7 +6,7 @@ import {settlementTier} from './frontierShop';
 export type AdventureSite='frontier'|'crossroads'|'watchtower';
 export interface AdventureSession {
  status:'exploring'|'encounter';site:AdventureSite;characterSource:'campaign-character';
- visited:AdventureSite[];interactions:{site:AdventureSite;choice:string;response:string}[];encounterActorId?:string;pendingEncounter?:{enemyName:string;actionId:string};
+ visited:AdventureSite[];interactions:{site:AdventureSite;choice:string;response:string}[];encounterActorId?:string;pendingEncounter?:{enemyName:string;actionId:string;scenario?:CombatScenario};
 }
 export const ADVENTURE_SITES:Record<AdventureSite,{name:string;description:string;neighbors:AdventureSite[];options:{id:string;label:string;response:string}[]}>={
  frontier:{name:'Frontier Village',description:'Lanterns glow above the village square. A general-goods shop is open beside the road; a watchkeeper studies arriving travelers.',neighbors:['crossroads'],options:[
@@ -85,12 +86,15 @@ export function resumeAdventureExploration(campaign:Campaign,now=new Date().toIS
 }
 
 /** Persist an AI-proposed encounter; never invent combat statistics or initiative. */
-export function proposeAdventureEncounter(campaign:Campaign,enemyName:unknown,actionId:string,now=new Date().toISOString()):Campaign{
+export function proposeAdventureEncounter(campaign:Campaign,enemyName:unknown,actionId:string,now=new Date().toISOString(),battlefield?:unknown):Campaign{
  const session=campaign.adventureSession;
  if(!campaign.characterIdentity||!session||session.status!=='exploring'||campaign.companionEncounter?.status==='active')return campaign;
  if(session.pendingEncounter)return campaign;
  if(typeof enemyName!=='string'||!enemyName.trim()||enemyName.trim().length>80||!actionId.trim())return campaign;
- return {...campaign,updatedAt:now,adventureSession:{...session,pendingEncounter:{enemyName:enemyName.trim(),actionId}}};
+ const locationKey=(campaign.location??session.site).trim().toLowerCase();
+ const scenario=battlefield===undefined?undefined:validateCombatScenario(battlefield,locationKey);
+ if(scenario&&!scenario.artwork&&campaign.tacticalArtwork?.[locationKey])scenario.artwork=campaign.tacticalArtwork[locationKey];
+ return {...campaign,updatedAt:now,adventureSession:{...session,pendingEncounter:{enemyName:enemyName.trim(),actionId,...(scenario?{scenario}:{})}}};
 }
 
 /** A player may reject a proposed fight without rewriting the DM's saved narration. */

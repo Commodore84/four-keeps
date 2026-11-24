@@ -33,6 +33,7 @@ export interface Campaign {
   /** Reserved for future non-Nighthawk actors; never implicitly applied to the Rogue prototype. */
   subclassActors?:Record<string,SubclassCombatState>;
   companionEncounter?:CompanionEncounter;
+  tacticalArtwork?:Record<string,'forest-ruins-test.svg'>;
   adventureSession?:AdventureSession;
   merchantShopOpen?:boolean;
   /** Persisted merchant dialogue context; bound to the scene to avoid opening shops after travel. */

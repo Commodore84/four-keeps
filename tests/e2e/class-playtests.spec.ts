@@ -1791,3 +1791,74 @@ test('iPhone consumable use updates healing, resistance and individual wand copi
  for(const name of ['Potion of Resistance','Potion of Healing'])
   expect(record.inventoryLedger.gear.filter((row:any)=>row.name===name).reduce((sum:number,row:any)=>sum+row.quantity,0)).toBe(0);
 });
+
+test('iPhone tactical combat opens from Adventure, previews movement, runs NPC turns and persists escape',async({page})=>{
+ test.setTimeout(90000);
+ await page.addInitScript(()=>{Math.random=()=>0.5;});
+ await createAndImport(page,'rogue');
+ await page.evaluate(()=>{
+  localStorage.setItem('four-keeps-access-code','browser-test-code');
+  localStorage.setItem('four-keeps-dm-mode','on');
+ });
+ const npcTurns:string[]=[];
+ await page.route('**/api/dm',async route=>{
+  const request=route.request().postDataJSON();
+  const shared={worldUpdates:{},newFacts:[]};
+  if(request.tacticalTurn){
+   const actor=request.gameState.tactical.active;
+   npcTurns.push(actor);
+   await route.fulfill({json:{...shared,narration:'They take a defensive stance.',tacticalActions:[{kind:'action',actor,action:'Dodge'},{kind:'end',actor}]}});
+   return;
+  }
+  if(request.opening){await route.fulfill({json:{...shared,narration:'You reach a guarded woodland path.'}});return;}
+  await route.fulfill({json:{...shared,narration:'The bandit draws steel. The watchguard holds the path.',
+   combatStart:{enemyName:'Road bandit',battlefield:{size:8,objective:'Escape through the west exit.',artwork:'forest-ruins-test.svg',
+    actors:[{id:'bandit',label:'Road bandit',profile:'bandit',side:'enemies',square:{x:5,y:1}},
+     {id:'guard',label:'Watchguard',profile:'guard',side:'allies',square:{x:6,y:5}}],
+    starts:[{x:1,y:1},{x:1,y:2}],difficult:[{x:2,y:1}],obstacles:[{x:3,y:3}],exits:[{x:0,y:1}]}}}});
+ });
+ async function reopen(){
+  await page.reload();
+  await page.getByRole('button',{name:'Campaigns',exact:true}).click();
+  await page.getByRole('button',{name:'Continue Adventure'}).click();
+ }
+ await reopen();
+ await expect.poll(async()=> (await saved(page))?.journal?.some((entry:any)=>entry.id?.endsWith('-dm-opening'))).toBe(true);
+ const composer=page.getByLabel('Message the Dungeon Master');
+ await composer.fill('I stand my ground when the bandit draws steel.');
+ await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
+ const panel=page.getByRole('region',{name:'Tactical battlefield'});
+ const map=panel.getByRole('group',{name:'Battle map',exact:true});
+ const square=(x:number,y:number)=>map.getByRole('button',{name:new RegExp('^Square '+x+', '+y+'(?:,|$)')});
+ await expect(map).toBeVisible();
+ await expect(panel.getByRole('button',{name:'Roll initiative'})).toBeDisabled();
+ await square(1,1).click();
+ await panel.getByRole('button',{name:'Roll initiative'}).click();
+ await expect(panel.getByLabel('Initiative order')).toContainText('You:');
+ await square(2,1).click();
+ await expect(panel.getByLabel('Movement preview')).toContainText('10 ft');
+ await square(2,1).click();
+ await expect.poll(async()=> (await saved(page))?.companionEncounter?.participants?.nighthawk?.x).toBe(2);
+ await panel.getByRole('button',{name:'Zoom in'}).click();
+ await panel.getByRole('button',{name:'Zoom out'}).click();
+ await square(5,1).click();
+ await panel.getByLabel('Attack mode').selectOption('thrown');
+ await panel.getByRole('button',{name:'Attack',exact:true}).click();
+ await expect.poll(async()=> (await saved(page))?.companionEncounter?.phaseThree?.lastRoll?.actor).toBe('nighthawk');
+ await panel.getByRole('button',{name:'End turn'}).click();
+ await expect.poll(async()=> (await saved(page))?.companionEncounter?.round).toBe(2);
+ expect(new Set(npcTurns)).toEqual(new Set(['bandit','guard']));
+ await reopen();
+ await expect(map).toBeVisible();
+ await expect.poll(async()=> (await saved(page))?.companionEncounter?.participants?.nighthawk?.x).toBe(2);
+ await expect(page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).resolves.toBe(true);
+ await page.screenshot({path:'test-results/iphone-phase-three-combat.png',fullPage:false});
+ await square(0,1).click();
+ await square(0,1).click();
+ await panel.getByRole('button',{name:'Escape',exact:true}).click();
+ await expect(panel).toHaveCount(0);
+ await expect(composer).toBeVisible();
+ await reopen();
+ await expect(panel).toHaveCount(0);
+ await expect.poll(async()=> (await saved(page))?.companionEncounter?.status).toBe('completed');
+});

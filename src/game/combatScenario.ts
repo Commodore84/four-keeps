@@ -1,0 +1,87 @@
+import type {DamageType} from './subclassCombatRules';
+
+export type Square={x:number;y:number};
+export type EncounterOutcome='victory'|'defeat'|'retreat'|'escape'|'surrender'|'negotiation'|'objective'|'abandoned';
+export type TacticalWeapon={name:string;bonus:number;dice:string;modifier:number;type:DamageType;reach:number;normal?:number;ammunition?:number};
+const spear:TacticalWeapon={name:'Spear',bonus:3,dice:'1d6',modifier:1,type:'Piercing',reach:5};
+export const TACTICAL_PROFILES={
+ bandit:{hp:11,ac:12,speed:30,initiative:1,perception:10,str:0,dex:1,con:1,weapons:[
+  {name:'Scimitar',bonus:3,dice:'1d6',modifier:1,type:'Slashing',reach:5},
+  {name:'Light Crossbow',bonus:3,dice:'1d8',modifier:1,type:'Piercing',reach:320,normal:80,ammunition:20},
+ ] as TacticalWeapon[]},
+ guard:{hp:11,ac:16,speed:30,initiative:1,perception:12,str:1,dex:1,con:1,weapons:[spear,{...spear,reach:60,normal:20,ammunition:1}]},
+ mage:{hp:81,ac:15,speed:30,initiative:2,perception:14,str:-1,dex:2,con:0,weapons:[
+  {name:'Arcane Burst',bonus:6,dice:'3d8',modifier:3,type:'Force',reach:5},
+  {name:'Arcane Burst',bonus:6,dice:'3d8',modifier:3,type:'Force',reach:120,normal:120},
+ ] as TacticalWeapon[]},
+} as const;
+export type TacticalProfile=keyof typeof TACTICAL_PROFILES;
+export type ScenarioActor={id:string;label:string;profile:TacticalProfile;side:'enemies'|'allies';square:Square;surprised?:boolean};
+export type CombatScenario={
+ locationKey:string;size:number;objective:string;actors:ScenarioActor[];starts:Square[];obstacles:Square[];
+ cover:Square[];difficult:Square[];exits:Square[];surprised:boolean;
+ darkness?:Square[];elevation?:Record<string,number>;artwork?:'forest-ruins-test.svg';
+};
+export type TacticalRoll={actor:string;target:string;dice:number[];modifier:number;hit:boolean;critical:boolean;damage:number;mode?:'advantage'|'disadvantage'};
+export type IncomingHit={attacker:string;amount:number;type:DamageType;critical:boolean;attackTotal?:number;targetAC?:number;uncanny?:boolean;shield?:boolean};
+export type TacticalState={
+ scenario:CombatScenario;initiative:{actor:string;dice:number[];modifier:number;total:number}[];
+ lastRoll?:TacticalRoll;
+ shield?:true;concentrationCheck?:number;
+ grapples?:Record<string,{by:string;dc:number}>;
+ help?:{by:string;target:string};
+ readied?:string;pendingReady?:{target:string};
+ pendingHit?:IncomingHit;outcome?:EncounterOutcome;note?:string;
+ actors:Record<string,{ammunition:number;hidden?:number}>;
+};
+export const squareKey=(s:Square)=>s.x+','+s.y;
+export const distanceFeet=(a:Square,b:Square)=>Math.max(Math.abs(a.x-b.x),Math.abs(a.y-b.y))*5;
+export const fitsBattlefield=(square:Square,size:number)=>Number.isInteger(square.x)&&Number.isInteger(square.y)&&square.x>=0&&square.y>=0&&square.x<size&&square.y<size;
+
+export function validateCombatScenario(value:unknown,locationKey:string):CombatScenario{
+ if(!value||typeof value!=='object')throw Error('The DM has not established a battlefield.');
+ const input=value as Record<string,unknown>;
+ const size=input.size;
+ if(typeof size!=='number'||!Number.isInteger(size)||size<6||size>12)throw Error('Battlefield must be 6–12 squares wide.');
+ const square=(raw:unknown):Square=>{
+  const cell=raw as Square;
+  if(!cell||!fitsBattlefield(cell,size))throw Error('Battlefield square is outside the grid.');
+  return {x:cell.x,y:cell.y};
+ };
+ const cells=(raw:unknown,max:number):Square[]=>{
+  if(raw===undefined)return [];
+  if(!Array.isArray(raw)||raw.length>max)throw Error('Invalid battlefield layer.');
+  return [...new Map(raw.map(rawCell=>{const cell=square(rawCell);return [squareKey(cell),cell];})).values()];
+ };
+ const obstacles=cells(input.obstacles,35),cover=cells(input.cover,35),difficult=cells(input.difficult,50),exits=cells(input.exits,24),starts=cells(input.starts,24);
+ const darkness=cells(input.darkness,144);
+ const elevation:Record<string,number>={};
+ if(input.elevation!==undefined){
+  if(!Array.isArray(input.elevation)||input.elevation.length>144)throw Error('Invalid elevation layer.');
+  for(const raw of input.elevation){
+   const cell=square(raw);
+   const feet=(raw as Square&{feet?:number}).feet;
+   if(typeof feet!=='number'||!Number.isInteger(feet)||feet<0||feet>40||feet%5!==0)throw Error('Elevation must be a multiple of 5 feet from 0 to 40.');
+   elevation[squareKey(cell)]=feet;
+  }
+ }
+ const walls=new Set(obstacles.map(squareKey));
+ if(!Array.isArray(input.actors)||!input.actors.length||input.actors.length>8||!starts.length)throw Error('The battlefield needs opponents and valid starting squares.');
+ const ids=new Set<string>(),occupied=new Set<string>();
+ const actors:ScenarioActor[]=input.actors.map(raw=>{
+  if(!raw||typeof raw!=='object')throw Error('Invalid battlefield actor.');
+  const actor=raw as Record<string,unknown>,position=square(actor.square);
+  const id=actor.id,label=actor.label,profile=actor.profile,side=actor.side;
+  if(typeof id!=='string'||! /^[a-z][a-z0-9-]{0,25}$/.test(id)||id==='nighthawk'||ids.has(id)||
+    typeof label!=='string'||!label.trim()||label.length>60||typeof profile!=='string'||!Object.hasOwn(TACTICAL_PROFILES,profile)||
+    side!=='enemies'&&side!=='allies'||occupied.has(squareKey(position))||walls.has(squareKey(position)))throw Error('Use a verified actor profile and an unoccupied battlefield square.');
+  ids.add(id);occupied.add(squareKey(position));
+  return {id,label:label.trim(),profile:profile as TacticalProfile,side,square:position,surprised:actor.surprised===true};
+ });
+ if(!actors.some(actor=>actor.side==='enemies')||starts.some(start=>walls.has(squareKey(start))||occupied.has(squareKey(start))))throw Error('Starting squares must be open and at least one hostile actor is required.');
+ if(exits.some(exit=>walls.has(squareKey(exit))||!([0,size-1].includes(exit.x)||[0,size-1].includes(exit.y))))throw Error('Exits must be open perimeter squares.');
+ const objective=typeof input.objective==='string'?input.objective.trim().slice(0,180):'';
+ return {locationKey,size,objective,actors,starts,obstacles,cover,difficult,exits,surprised:input.surprised===true,
+  ...(darkness.length?{darkness}:{}),...(Object.keys(elevation).length?{elevation}:{}),
+  ...(input.artwork==='forest-ruins-test.svg'?{artwork:input.artwork}:{})};
+}

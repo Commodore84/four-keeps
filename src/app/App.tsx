@@ -1,3 +1,5 @@
+import {TacticalBattlefield} from './TacticalBattlefield';
+import {executeDmTactics} from '../game/tacticalCombat';
 import {statsWithTemporaryEffects} from '../game/temporaryEffects';
 import {adventureEquipmentRequest,adventureHealingPotionRequest} from '../game/adventureEquipment';
 import {magicProtectionBonus} from '../game/magicEquipment';
@@ -153,7 +155,7 @@ const tabs = [
   { id: 'development', label: 'Developer', Icon: Blocks },
 ] as const;
 
-function Adventure({ campaign, fullHistory, onToggleHistory, onAdventureChange, onStartOpening, onRetryAction, onShopClose, onShopPrepare, onShopRevise, onShopSettle, onShopDiscuss, onUsePotion, saving, openingError, narrationSpeed, showDmRecommendations=true, development = false }: { campaign: Campaign | null; fullHistory: boolean; onToggleHistory: () => void; onAdventureChange:(next:Campaign,message:string)=>Promise<boolean>|boolean|void; onStartOpening:()=>Promise<void>; onRetryAction:()=>Promise<void>; onShopClose:()=>Promise<void>; onShopPrepare:(items:{itemId:string;quantity:number}[],merchant:import('../game/frontierShop').MerchantType)=>Promise<void>; onShopRevise:(items:{itemId:string;quantity:number}[])=>Promise<void>;onShopSettle:(confirmed:boolean)=>Promise<void>; onShopDiscuss:(items:{itemId:string;quantity:number}[],merchant:import('../game/frontierShop').MerchantType)=>Promise<void>; onUsePotion:(request:Omit<HealingPotionRequest,'rollDie'>)=>Promise<boolean>; saving:boolean; openingError:string|null; narrationSpeed:NarrationSpeed;showDmRecommendations?:boolean; development?:boolean }) {
+function Adventure({ campaign, fullHistory, onToggleHistory, onAdventureChange, onTacticalDm, onStartOpening, onRetryAction, onShopClose, onShopPrepare, onShopRevise, onShopSettle, onShopDiscuss, onUsePotion, saving, openingError, narrationSpeed, showDmRecommendations=true, development = false }: { campaign: Campaign | null; fullHistory: boolean; onToggleHistory: () => void; onAdventureChange:(next:Campaign,message:string)=>Promise<boolean>|boolean|void; onTacticalDm:(message?:string)=>Promise<void>; onStartOpening:()=>Promise<void>; onRetryAction:()=>Promise<void>; onShopClose:()=>Promise<void>; onShopPrepare:(items:{itemId:string;quantity:number}[],merchant:import('../game/frontierShop').MerchantType)=>Promise<void>; onShopRevise:(items:{itemId:string;quantity:number}[])=>Promise<void>;onShopSettle:(confirmed:boolean)=>Promise<void>; onShopDiscuss:(items:{itemId:string;quantity:number}[],merchant:import('../game/frontierShop').MerchantType)=>Promise<void>; onUsePotion:(request:Omit<HealingPotionRequest,'rollDie'>)=>Promise<boolean>; saving:boolean; openingError:string|null; narrationSpeed:NarrationSpeed;showDmRecommendations?:boolean; development?:boolean }) {
   const endRef = useRef<HTMLDivElement>(null);
   const shopRef = useRef<HTMLDivElement>(null);
   useEffect(()=>{if(campaign?.merchantShopOpen && campaign.adventureSession?.site==='frontier' && campaign.adventureSession.status==='exploring')shopRef.current?.scrollIntoView({behavior:'instant',block:'start'});},[campaign?.merchantShopOpen,campaign?.adventureSession?.site,campaign?.adventureSession?.status]);
@@ -172,6 +174,9 @@ function Adventure({ campaign, fullHistory, onToggleHistory, onAdventureChange, 
   const allTurns = campaign?.journal.filter((entry) => entry.kind === 'player' || entry.kind === 'dm') ?? [];
   const turns = fullHistory ? allTurns : allTurns.slice(-6);
   if(development)return <section className="space-y-4" aria-label="Classic adventure testing">{campaign&&<details className="rounded-xl border border-white/10 p-3" open><summary className="cursor-pointer text-sm text-gold">Classic adventure and encounter tools</summary><AdventureSessionPanel campaign={campaign} saving={saving} onChange={onAdventureChange}/></details>}</section>;
+  if(campaign&&(campaign.adventureSession?.pendingEncounter?.scenario||campaign.adventureSession?.status==='encounter'&&campaign.companionEncounter?.phaseThree)){
+    return <TacticalBattlefield key={campaign.id} campaign={campaign} saving={saving} onChange={onAdventureChange} onDm={onTacticalDm}/>;
+  }
   if(campaign?.merchantShopOpen && campaign.adventureSession?.site==='frontier' && campaign.adventureSession.status==='exploring')return <section aria-label="Adventure storefront" className="h-full min-h-0 pb-0"><MerchantShop showDmRecommendations={showDmRecommendations} campaign={campaign} saving={saving} onClose={onShopClose} onPrepare={onShopPrepare} onRevise={onShopRevise} onSettle={onShopSettle} onDiscuss={onShopDiscuss} onSupplyChange={onAdventureChange}/></section>;
   return <section className="space-y-5" aria-label="Adventure">
     {campaign&&<HealingPotionPanel campaign={campaign} saving={saving} onUse={onUsePotion}/>}
@@ -810,7 +815,36 @@ export function App() {
     }catch(error){setNotice('Could not save your reply: '+String(error));}
     finally{setSaving(false);}
   }
+  async function runTacticalDm(message?:string){
+    const current=campaign,battle=current?.companionEncounter,state=battle?.phaseThree;
+    if(!current||battle?.status!=='active'||!state||saving||adventureRequestRef.current)return;
+    if(!accessCode){setNotice('Enter your game access code to continue the DM turn.');return;}
+    if(state.pendingHit||state.pendingReady||state.concentrationCheck||battle.pendingOpportunity?.attackerIds.includes('nighthawk')){setNotice('Resolve your reaction first.');return;}
+    adventureRequestRef.current=true;
+    setSaving(true);
+    try{
+      const response=await fetch('/api/dm',{method:'POST',headers:{'Content-Type':'application/json','x-four-keeps-access':accessCode},
+        body:JSON.stringify({message:message?.trim()||'Choose the active NPC’s actions and end their turn when finished.',tacticalTurn:true,
+         character:statsWithTemporaryEffects(current)??prototypeNighthawk,
+         gameState:{...campaignPlayerContext(current),tactical:{scenario:state.scenario,actors:state.actors,round:battle.round,
+          active:battle.order[battle.turnIndex],participants:battle.participants,pendingOpportunity:battle.pendingOpportunity,web:battle.web}}})});
+      const result=await response.json() as {narration?:string;tacticalActions?:unknown[];error?:string};
+      if(!response.ok||!result.narration||!Array.isArray(result.tacticalActions))throw Error(result.error||'The DM did not return a tactical response.');
+      const applied=result.tacticalActions.length?executeDmTactics(current,result.tacticalActions):current;
+      const nextBattle=applied.companionEncounter!;
+      const now=new Date().toISOString();
+      const next={...applied,updatedAt:now,companionEncounter:{...nextBattle,phaseThree:{...nextBattle.phaseThree!,note:result.narration.slice(0,350)}},
+       journal:[...applied.journal,...(message?[{id:crypto.randomUUID(),kind:'player' as const,createdAt:now,text:message}]:[]),
+        {id:crypto.randomUUID(),kind:'dm' as const,createdAt:now,text:result.narration}]};
+      await localCampaignStorage.save(next);
+      setCampaign(next);setCampaigns(items=>items.map(item=>item.id===next.id?next:item));if(message)setDraft('');
+      setNotice('');
+    }catch(error){setNotice(error instanceof Error?error.message:'The DM turn failed.');}
+    finally{setSaving(false);adventureRequestRef.current=false;}
+  }
+
   async function submitAdventure() {
+    if(campaign?.companionEncounter?.status==='active'&&campaign.companionEncounter.phaseThree){await runTacticalDm(draft);return;}
     if(pendingAdventureSpell || pendingRest || pendingTestDamage!==null || saving || pendingEquipmentUse?.campaignId===campaign?.id&&pendingEquipmentUse!==null)return;
     if(campaign?.characterIdentity && (campaign.adventureSession?.status==='encounter'||campaign.adventureSession?.pendingEncounter)){setNotice('Resolve the current encounter before continuing the Dungeon Master conversation.');return;}
     if(campaign?.combat?.status==='awaiting-initiative'){setNotice('Roll initiative using the highlighted button before taking your turn.');return;}
@@ -1085,7 +1119,7 @@ export function App() {
       const history=memory.recentConversation;
       const response = await fetch('/api/dm', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-four-keeps-access': accessCode },
         body: JSON.stringify({ message:aiSession?prepared.pendingAdventureAction!.message:message, clarification:prepared.pendingClarification??null, actionId, character:statsWithTemporaryEffects(current) ?? prototypeNighthawk, gameState:{ magicWishlist:magicWishlistNames(current.id),magicSaleInventory:(current.inventoryLedger?.gear??[]).filter(item=>item.quantity>0).slice(0,40).map(item=>({name:item.name,quantity:item.quantity})), ...campaignPlayerContext(current), adventureSession:current.adventureSession??null, merchant:frontierMerchantContext(current), characterIdentity:current.characterIdentity??null, location:current.location, combat:current.combat??null, familiar:current.familiar ?? null, elapsedMinutes:current.elapsedMinutes ?? 0, concentration:current.concentration??null, spellEffects:(current.spellEffects??[]).slice(-12), recentEvents:current.journal.filter(e=>e.kind==='system').slice(-8).map(e=>e.text) }, history, worldFacts: memory.establishedFacts, world: current.world ?? emptyWorld(), anchamida:current.characterBuild?{predefined:anchamidaLocations.map(s=>({id:s.id,name:s.name,x:s.x,y:s.y,notes:s.notes})),discovered:current.mapDiscovered??[],dynamic:current.mapDynamicSites??[]}:null, adventureMemory:memory }) });
-      const result: { narration?: string; newFacts?: string[]; worldUpdates?: unknown; checkRequest?: { skill:string; tool?:string; mode:'normal'|'advantage'|'disadvantage'; reason:string; token:string } | null; combatStart?:{enemyName:string}|null; magicSaleOffer?:{buyer:string;questId:string;itemName:string;quantity:number;proceedsCp:number}|null; merchantDiscount?:{itemId:string;percent:number}|null; clarificationRequest?:{question:string}|null; travelDestination?:string|null; mapActions?:unknown; error?: string } = await response.json();
+      const result: { narration?: string; newFacts?: string[]; worldUpdates?: unknown; checkRequest?: { skill:string; tool?:string; mode:'normal'|'advantage'|'disadvantage'; reason:string; token:string } | null; combatStart?:{enemyName:string;battlefield?:unknown}|null; magicSaleOffer?:{buyer:string;questId:string;itemName:string;quantity:number;proceedsCp:number}|null; merchantDiscount?:{itemId:string;percent:number}|null; clarificationRequest?:{question:string}|null; travelDestination?:string|null; mapActions?:unknown; error?: string } = await response.json();
       if (!response.ok || !result.narration) throw new Error(result.error || 'DM request failed');
       // Do not trust the network boundary to enforce mutually exclusive gameplay transitions.
       // A rejected response leaves the persisted pending action available for an exact-ID retry.
@@ -1116,7 +1150,7 @@ export function App() {
         ? (()=>{try{return travelAdventure(negotiated,result.travelDestination as AdventureSite)}catch{return negotiated}})()
         : negotiated;
       const next = current.characterIdentity && current.adventureSession && result.combatStart
-        ? proposeAdventureEncounter(travelled,result.combatStart.enemyName,actionId!)
+        ? proposeAdventureEncounter(travelled,result.combatStart.enemyName,actionId!,undefined,result.combatStart.battlefield)
         : result.combatStart && !current.adventureSession && !current.characterIdentity && !current.combat && !current.pendingAftermath ? beginDuel(travelled,result.combatStart.enemyName) : current.pendingAftermath ? {...travelled,pendingAftermath:undefined} : travelled;
       let mapped=next;
       if(current.characterBuild && !result.clarificationRequest && !result.checkRequest) {
@@ -1566,7 +1600,7 @@ export function App() {
     catch(error){setNotice('Consumable rejected: '+String(error));return false}
     finally{setSaving(false)}
   }
-  const content = { 'magic-items': <MagicItemCompendium campaignId={campaign?.id??null}/>, adventure: campaign?.combat && campaign.combat.status!=='completed' ? null : <Adventure campaign={campaign} fullHistory={fullHistory} onToggleHistory={() => setFullHistory(value => !value)} onAdventureChange={saveSubclassActor} onStartOpening={startAiAdventure} onRetryAction={()=>sendToDM()} onShopClose={closeMerchantShop} onShopPrepare={prepareShopPurchase} onShopRevise={reviseShopPurchase} onShopSettle={settleShopPurchase} onShopDiscuss={discussShopCart} onUsePotion={usePotion} saving={saving} openingError={openingError} narrationSpeed={narrationSpeed} showDmRecommendations={dmEquipmentRecommendations}/>, party: <Party campaign={campaign} saving={saving} onRoll={(skill,mode) => void saveSkillRoll(skill,mode)} onSaveRoll={(ability,mode) => void saveSavingThrow(ability,mode)} onAwardXP={(amount,reason) => void updateProgress('award',amount,reason)} onLevelUp={hp => void updateProgress('level',hp)} onLevelThree={(hp,cantrips,spells) => void updateProgress('level3',hp,'',cantrips,spells)} onReconcile={() => void updateProgress('reconcile')} onUndoReconcile={() => void updateProgress('undoReconcile')} onRestore={() => void updateProgress('restore')} onCastSpell={(spell,ritual,components,target)=>void castSpell(spell,ritual,components,target)} onEndConcentration={()=>void endConcentration()} onAdjustEquipment={(item,delta)=>void changeEquipment(item,delta)} onUpdateInventory={ledger=>void updateInventoryLedger(ledger)} onSubclassChange={saveSubclassActor} onUseConsumable={useConsumable}/> , journal: <Journal campaign={campaign}/>, map: campaign?.characterBuild ? <AnchamidaRegionMap campaign={campaign}/> : <WorldMap campaign={campaign}/>, settings: <section className="space-y-4"><h2 className="font-serif text-2xl">Settings</h2><p className="text-sm text-parchment/60">Manage campaigns, backups, and Dungeon Master access below.</p></section>, development: campaign?.characterIdentity?<ImportedCharacterSheet campaign={campaign} saving={saving} onChange={saveSubclassActor} development/>:<section aria-label="Developer tools"><h2 className="font-serif text-2xl">Developer tools</h2><p>Legacy testing remains available through the existing development controls.</p></section> };
+  const content = { 'magic-items': <MagicItemCompendium campaignId={campaign?.id??null}/>, adventure: campaign?.combat && campaign.combat.status!=='completed' ? null : <Adventure campaign={campaign} fullHistory={fullHistory} onToggleHistory={() => setFullHistory(value => !value)} onAdventureChange={saveSubclassActor} onTacticalDm={runTacticalDm} showDmRecommendations={dmEquipmentRecommendations} onStartOpening={startAiAdventure} onRetryAction={()=>sendToDM()} onShopClose={closeMerchantShop} onShopPrepare={prepareShopPurchase} onShopRevise={reviseShopPurchase} onShopSettle={settleShopPurchase} onShopDiscuss={discussShopCart} onUsePotion={usePotion} saving={saving} openingError={openingError} narrationSpeed={narrationSpeed}/>, party: <Party campaign={campaign} saving={saving} onRoll={(skill,mode) => void saveSkillRoll(skill,mode)} onSaveRoll={(ability,mode) => void saveSavingThrow(ability,mode)} onAwardXP={(amount,reason) => void updateProgress('award',amount,reason)} onLevelUp={hp => void updateProgress('level',hp)} onLevelThree={(hp,cantrips,spells) => void updateProgress('level3',hp,'',cantrips,spells)} onReconcile={() => void updateProgress('reconcile')} onUndoReconcile={() => void updateProgress('undoReconcile')} onRestore={() => void updateProgress('restore')} onCastSpell={(spell,ritual,components,target)=>void castSpell(spell,ritual,components,target)} onEndConcentration={()=>void endConcentration()} onAdjustEquipment={(item,delta)=>void changeEquipment(item,delta)} onUpdateInventory={ledger=>void updateInventoryLedger(ledger)} onSubclassChange={saveSubclassActor} onUseConsumable={useConsumable}/> , journal: <Journal campaign={campaign}/>, map: campaign?.characterBuild ? <AnchamidaRegionMap campaign={campaign}/> : <WorldMap campaign={campaign}/>, settings: <section className="space-y-4"><h2 className="font-serif text-2xl">Settings</h2><p className="text-sm text-parchment/60">Manage campaigns, backups, and Dungeon Master access below.</p></section>, development: campaign?.characterIdentity?<ImportedCharacterSheet campaign={campaign} saving={saving} onChange={saveSubclassActor} development/>:<section aria-label="Developer tools"><h2 className="font-serif text-2xl">Developer tools</h2><p>Legacy testing remains available through the existing development controls.</p></section> };
   if(portalScreen!=='adventure')return <div className="min-h-dvh bg-ink text-parchment">
     <div className="mx-auto min-h-dvh w-full max-w-3xl space-y-5 px-5 pb-12 pt-[max(2rem,env(safe-area-inset-top))]">
       <header className="flex flex-col items-center gap-2 border-b border-gold/20 pb-6">

@@ -1,3 +1,4 @@
+import {fitsBattlefield,type TacticalState} from './combatScenario';
 import {effectiveStrength,gameSeconds,resistsTemporaryDamage} from './temporaryEffects';
 import {advanceProvisionsClock} from './provisionsClock';
 import {ammunitionNamesForWeapon,weaponAttackProfile} from './weaponAttackProfile';
@@ -17,6 +18,7 @@ import {resolveRogueMagicalAmbushSave} from './rogueMagicalAmbush';
 /** Isolated companion skirmish. Never mutates Campaign.combat (the Nighthawk training encounter). */
 export interface CompanionEncounter {
  id?:string;
+ phaseThree?:TacticalState;
  settlement?:{xp:number;gold:number;items:{name:string;quantity:number}[];completedAt:string};
  status:'active'|'completed';
  mode?:'companions'|'unified';
@@ -25,7 +27,7 @@ export interface CompanionEncounter {
  round:number;
  turnIndex:number;
  order:string[];
- participants:Record<string,{ropeBound?:boolean;ropeAddedRestraint?:boolean;caltropsStopped?:boolean;oilExpires?:{round:number;turnIndex:number};x:number;y:number;hp:number;maxHp:number;initiative:number;conditions:('Charmed'|'Poisoned'|'Blinded'|'Deafened'|'Frightened'|'Grappled'|'Incapacitated'|'Invisible'|'Paralyzed'|'Petrified'|'Prone'|'Restrained'|'Stunned'|'Unconscious'|'Exhaustion')[];speedFeet:number;movementSpentFeet:number;actionUsed:boolean;bonusActionUsed:boolean;dashFeet:number;disengaged:boolean;dodging:boolean;reactionUsed?:boolean;rogueSneakUsed?:boolean;roguePoisonDC?:number;roguePoisonRounds?:number;roguePoisonSaveResolved?:boolean;rogueObscureUntilTurn?:number;rogueDazeTurns?:number;rogueDazeChoice?:'movement'|'action';rogueKnockoutDC?:number;rogueKnockoutRounds?:number;rogueKnockoutSaveResolved?:boolean;conditionImmunities?:string[];damageResistances?:DamageType[];damageImmunities?:DamageType[];rogueSteadyAim?:boolean;rogueHidden?:boolean;rogueHideDC?:number;rogueHideConcealment?:boolean;rogueDetectedBy?:string[];rogueMovedThisTurn?:boolean;concentratingOn?:string;consumables?:Record<string,number>;faction?:string;reachFeet?:number;actorKind?:'party'|'enemy';armorClass?:number;attackModifier?:number;constitutionSaveModifier?:number;damageModifier?:number;damageDice?:string;enemyTactic?:'hold'|'nearest'|'lowest-hp';rangedAttackFeet?:number;deathSaves?:{successes:number;failures:number;stable:boolean;dead:boolean}}>;
+ participants:Record<string,{primaryAttacks?:number;darkvision?:number;ropeBound?:boolean;ropeAddedRestraint?:boolean;caltropsStopped?:boolean;oilExpires?:{round:number;turnIndex:number};x:number;y:number;hp:number;maxHp:number;initiative:number;conditions:('Charmed'|'Poisoned'|'Blinded'|'Deafened'|'Frightened'|'Grappled'|'Incapacitated'|'Invisible'|'Paralyzed'|'Petrified'|'Prone'|'Restrained'|'Stunned'|'Unconscious'|'Exhaustion')[];speedFeet:number;movementSpentFeet:number;actionUsed:boolean;bonusActionUsed:boolean;dashFeet:number;disengaged:boolean;dodging:boolean;reactionUsed?:boolean;rogueSneakUsed?:boolean;roguePoisonDC?:number;roguePoisonRounds?:number;roguePoisonSaveResolved?:boolean;rogueObscureUntilTurn?:number;rogueDazeTurns?:number;rogueDazeChoice?:'movement'|'action';rogueKnockoutDC?:number;rogueKnockoutRounds?:number;rogueKnockoutSaveResolved?:boolean;conditionImmunities?:string[];damageResistances?:DamageType[];damageImmunities?:DamageType[];rogueSteadyAim?:boolean;rogueHidden?:boolean;rogueHideDC?:number;rogueHideConcealment?:boolean;rogueDetectedBy?:string[];rogueMovedThisTurn?:boolean;concentratingOn?:string;consumables?:Record<string,number>;faction?:string;reachFeet?:number;actorKind?:'party'|'enemy';armorClass?:number;attackModifier?:number;constitutionSaveModifier?:number;damageModifier?:number;damageDice?:string;enemyTactic?:'hold'|'nearest'|'lowest-hp';rangedAttackFeet?:number;deathSaves?:{successes:number;failures:number;stable:boolean;dead:boolean}}>;
  objects?:Record<string,{x:number;y:number;hp:number;oilExpires?:{round:number;turnIndex:number}}>;
  basicPoison?:{weaponId:string;expiresRound:number};
  poisonedAmmunition?:{name:string;remaining:number;expiresRound:number};
@@ -161,8 +163,9 @@ export function escapeItemWeb(campaign:Campaign,total:number):Campaign{
 function activeActor(campaign:Campaign,actorId:string):CompanionEncounter{
  const battle=encounter(campaign);
  if(battle.order[battle.turnIndex]!==actorId)throw Error('Not this actor’s turn');
+ if(battle.phaseThree?.pendingHit||battle.phaseThree?.pendingReady||battle.phaseThree?.concentrationCheck)throw Error('Resolve the pending reaction or concentration save first.');
  if(pendingWebSave(battle))throw Error('Resolve the Web Dexterity save first.');
- if(!(actorId==='nighthawk'&&battle.mode==='unified')&&!campaign.subclassActors?.[actorId]&&battle.participants[actorId]?.actorKind!=='enemy')throw Error('Actor is not registered');
+ if(!(actorId==='nighthawk'&&battle.mode==='unified')&&!campaign.subclassActors?.[actorId]&&battle.participants[actorId]?.actorKind!=='enemy'&&!battle.phaseThree?.actors[actorId])throw Error('Actor is not registered');
  return battle;
 }
 function save(campaign:Campaign,battle:CompanionEncounter):Campaign{
@@ -182,7 +185,28 @@ function save(campaign:Campaign,battle:CompanionEncounter):Campaign{
  const rogueInterrupted=interrupted&&(cleaned.rogueHoldPersonTargets?.length??0)>0;
  const cleared=rogueInterrupted?{...cleaned,rogueHoldPersonTargets:[],participants:Object.fromEntries(Object.entries(cleaned.participants).map(([id,a])=>[id,cleaned.rogueHoldPersonTargets?.includes(id)?{...a,conditions:a.conditions.filter(c=>c!=='Paralyzed')}:a]))}:cleaned;
  const participants=interrupted?{...cleared.participants,nighthawk:{...cleared.participants.nighthawk,concentratingOn:undefined}}:cleared.participants;
- return {...campaign,companionEncounter:{...cleared,participants,...(interrupted?{log:[...cleaned.log,'Wizard concentration ended at zero HP']}: {})},updatedAt:new Date().toISOString()};
+ let phaseThree=cleared.phaseThree;
+ if(phaseThree&&cleared.status==='active'){
+  const old=campaign.companionEncounter;
+  const player=participants.nighthawk,oldPlayer=old?.id===battle.id?old?.participants.nighthawk:undefined;
+  const injury=(oldPlayer?.hp??0)-(player?.hp??0);
+  if(injury>0&&player?.concentratingOn&&player.hp>0)phaseThree={...phaseThree,concentrationCheck:injury};
+  if(!player?.concentratingOn&&phaseThree.concentrationCheck)phaseThree={...phaseThree,concentrationCheck:undefined};
+  if(phaseThree.grapples){
+   const grapples={...phaseThree.grapples};
+   for(const [id,grapple] of Object.entries(grapples)){
+    const target=participants[id],source=participants[grapple.by];
+    if(!target||!source||source.hp<=0||cannotAct(source)||Math.max(Math.abs(target.x-source.x),Math.abs(target.y-source.y))>1){
+     delete grapples[id];
+     if(target)participants[id]={...target,conditions:target.conditions.filter(condition=>condition!=='Grappled')};
+    }
+   }
+   phaseThree={...phaseThree,grapples};
+  }
+ }
+ const playerState=cleared.phaseThree&&campaign.character&&participants.nighthawk?
+  {character:{...campaign.character,currentHitPoints:participants.nighthawk.hp}}:{};
+ return {...campaign,...playerState,companionEncounter:{...cleared,...(phaseThree?{phaseThree}:{}),...(cleared.phaseThree&&participants.nighthawk?{nighthawkSheetHpSnapshot:participants.nighthawk.hp}:{}),participants,...(interrupted?{log:[...cleaned.log,'Wizard concentration ended at zero HP']}: {})},updatedAt:new Date().toISOString()};
 }
 export function startCompanionEncounter(campaign:Campaign,initiative:Record<string,number>,positions:Record<string,{x:number;y:number}>,hitPoints:Record<string,number>):Campaign{
  if(campaign.companionEncounter?.status==='active')throw Error('Finish the existing companion encounter first');
@@ -202,20 +226,33 @@ export function startCompanionEncounter(campaign:Campaign,initiative:Record<stri
 type Cell={x:number;y:number};
 const key=(p:Cell)=>p.x+','+p.y;
 const valid=(p:Cell)=>Number.isInteger(p.x)&&Number.isInteger(p.y)&&p.x>=0&&p.y>=0&&p.x<20&&p.y<20;
+function terrainFeet(battle:CompanionEncounter,from:Cell,to:Cell):number{
+ const terrain=battle.phaseThree?.scenario;
+ const rise=Math.abs((terrain?.elevation?.[key(to)]??0)-(terrain?.elevation?.[key(from)]??0));
+ const rough=battle.web&&insideWeb(battle.web,to)||terrain?.difficult.some(tile=>key(tile)===key(to));
+ return (rough?5:0)+rise*2;
+}
+export function companionCanSee(battle:CompanionEncounter,from:Cell,to:Cell):boolean{
+ const darkness=battle.phaseThree?.scenario.darkness?.some(tile=>key(tile)===key(to));
+ const distance=Math.max(Math.abs(from.x-to.x),Math.abs(from.y-to.y))*5;
+ return companionLineOfSight(battle,from,to)&&(!darkness||distance<=((from as Cell&{darkvision?:number}).darkvision??0));
+}
 function pathRoute(battle:CompanionEncounter,from:Cell,to:Cell,actorId:string):Cell[]{
  const blocked=new Set((battle.obstacles??[]).map(key));
  for(const [id,p] of Object.entries(battle.participants))if(id!==actorId&&p.hp>0)blocked.add(key(p));
- const queue:Cell[]=[from],visited=new Set([key(from)]),previous=new Map<string,Cell>();
- for(let i=0;i<queue.length;i++){
-  const current=queue[i];
+ const queue:Cell[]=[from],costs=new Map([[key(from),0]]),previous=new Map<string,Cell>();
+ while(queue.length){
+  if(battle.phaseThree)queue.sort((a,b)=>costs.get(key(a))!-costs.get(key(b))!);
+  const current=queue.shift()!;
   if(current.x===to.x&&current.y===to.y){const route=[current];let step=current;while(previous.has(key(step))){step=previous.get(key(step))!;route.unshift(step)}return route;}
   for(let dx=-1;dx<=1;dx++)for(let dy=-1;dy<=1;dy++){
    if(!dx&&!dy)continue;
-   const next={x:current.x+dx,y:current.y+dy};
-   if(!valid(next)||blocked.has(key(next))||visited.has(key(next)))continue;
-   // Prevent cutting a diagonal through a fully blocked corner.
+   const next={x:current.x+dx,y:current.y+dy},id=key(next);
+   if(!valid(next)||blocked.has(id)||battle.phaseThree&&!fitsBattlefield(next,battle.phaseThree.scenario.size))continue;
    if(dx&&dy&&blocked.has(key({x:current.x+dx,y:current.y}))&&blocked.has(key({x:current.x,y:current.y+dy})))continue;
-   visited.add(key(next));previous.set(key(next),current);queue.push(next);
+   const cost=costs.get(key(current))!+(battle.phaseThree?(battle.participants[actorId]?.conditions.includes('Prone')?10:5)+terrainFeet(battle,current,next):5);
+   if((costs.get(id)??Infinity)<=cost)continue;
+   costs.set(id,cost);previous.set(id,current);queue.push(next);
   }
  }
  throw Error('No unobstructed path to destination');
@@ -239,9 +276,7 @@ export function previewCompanionMovement(campaign:Campaign,actorId:string,x:numb
  if(!valid({x,y}))return {...initial,error:'Destination outside encounter grid'};
  try{
   const path=pathRoute(battle,actor,{x,y},actorId).map(p=>({x:p.x,y:p.y}));
-  const web=battle.web;
-  const webSteps=web?path.slice(1).filter(cell=>insideWeb(web,cell)).length:0;
-  const costFeet=((path.length-1)*(actor.conditions.includes('Prone')?2:1)+webSteps)*5;
+  const costFeet=path.slice(1).reduce((sum,cell,index)=>sum+(actor.conditions.includes('Prone')?10:5)+terrainFeet(battle,path[index],cell),0);
   const edges=path.slice(1).map((to,i)=>({from:path[i],to,attackers:companionOpportunityCandidates(battle,actorId,path[i],to)}));
   const first=edges.find(e=>e.attackers.length>0);
   const opportunityAttackerIds=[...new Set(edges.flatMap(e=>e.attackers))];
@@ -325,7 +360,7 @@ export function companionOpportunityCandidates(battle:CompanionEncounter,moverId
  const mover=battle.participants[moverId];
  if(!mover||mover.disengaged)return [];
  const within=(a:Cell,b:Cell,feet:number)=>Math.max(Math.abs(a.x-b.x),Math.abs(a.y-b.y))*5<=feet;
- return Object.entries(battle.participants).filter(([id,actor])=>id!==moverId&&actor.hp>0&&!actor.reactionUsed&&(!mover.faction||!actor.faction||mover.faction!==actor.faction)&&within(actor,from,actor.reachFeet??5)&&!within(actor,to,actor.reachFeet??5)).map(([id])=>id);
+ return Object.entries(battle.participants).filter(([id,actor])=>id!==moverId&&actor.hp>0&&!actor.reactionUsed&&(!mover.faction||!actor.faction||mover.faction!==actor.faction)&&(!battle.phaseThree||companionCanSee(battle,actor,{...mover,...from}))&&within(actor,from,actor.reachFeet??5)&&!within(actor,to,actor.reachFeet??5)).map(([id])=>id);
 }
 /** Explicit faction and melee reach configuration. Unset factions remain unknown. */
 /** Explicit DM-defined enemy. Statistics are required; no monster stat block is invented. */
@@ -425,7 +460,7 @@ export function dismissEnemyOpportunityReactions(campaign:Campaign,enemyId:strin
  */
 export function resumeEnemyInterruptedMovement(campaign:Campaign,enemyId:string):Campaign{
  const battle=activeActor(campaign,enemyId),pending=battle.pendingOpportunity;
- if(battle.participants[enemyId]?.actorKind!=='enemy'||pending?.moverId!==enemyId||!pending.destination)throw Error('No interrupted enemy movement');
+ if(!battle.phaseThree&&battle.participants[enemyId]?.actorKind!=='enemy'||pending?.moverId!==enemyId||!pending.destination)throw Error('No interrupted enemy movement');
  if(pending.attackerIds.length)throw Error('Pending opportunity reactions require DM adjudication');
  const actor=battle.participants[enemyId];
  const cleared=save(campaign,{...battle,pendingOpportunity:undefined});
@@ -433,7 +468,7 @@ export function resumeEnemyInterruptedMovement(campaign:Campaign,enemyId:string)
  // The DM already adjudicated this exact reach-exit edge. Cross it once
  // without re-triggering the same opportunity; subsequent edges remain checked.
  const step=pending.to;
- const cost=actor.conditions.includes('Prone')?10:5;
+ const cost=(actor.conditions.includes('Prone')?10:5)+terrainFeet(battle,actor,step);
  if(!valid(step)||Math.max(Math.abs(actor.x-step.x),Math.abs(actor.y-step.y))!==1||actor.movementSpentFeet+cost>actor.speedFeet+actor.dashFeet||Object.entries(battle.participants).some(([id,p])=>id!==enemyId&&p.hp>0&&p.x===step.x&&p.y===step.y)||(battle.obstacles??[]).some(p=>p.x===step.x&&p.y===step.y))throw Error('Interrupted reach-exit square no longer traversable');
  const crossed=save(cleared,{...cleared.companionEncounter!,participants:{...battle.participants,[enemyId]:{...actor,x:step.x,y:step.y,movementSpentFeet:actor.movementSpentFeet+cost}},log:[...battle.log,enemyId+' crossed DM-adjudicated reach-exit edge to '+step.x+','+step.y]});
  if(step.x===pending.destination.x&&step.y===pending.destination.y)return crossed;
@@ -548,15 +583,14 @@ export function moveCompanion(campaign:Campaign,actorId:string,x:number,y:number
  const route=pathRoute(battle,actor,{x,y},actorId);
  const steps=route.length-1;
  const firstTrigger=route.slice(1).map((step,i)=>({from:route[i],to:step,candidates:companionOpportunityCandidates(battle,actorId,route[i],step)})).find(entry=>entry.candidates.length>0);
- const interrupt=actor.actorKind==='enemy'&&firstTrigger;
+ const interrupt=(actor.actorKind==='enemy'||!!battle.phaseThree)&&firstTrigger;
  const destination=interrupt?firstTrigger.from:{x,y};
  const traversedSteps=interrupt?route.findIndex(p=>p.x===destination.x&&p.y===destination.y):steps;
  const candidates=interrupt?firstTrigger.candidates:[...new Set(route.slice(1).flatMap((step,i)=>companionOpportunityCandidates(battle,actorId,route[i],step)))];
  const web=battle.web;
  const enteredWeb=!!web&&!web.checked.includes(actorId)&&!insideWeb(web,actor)&&route.slice(1,traversedSteps+1).some(cell=>insideWeb(web,cell));
  if(enteredWeb&&(traversedSteps>1||!Number.isInteger(groundSave)||Math.abs(groundSave!)>100))throw Error('Enter Web one square at a time with a verified Dexterity save.');
- const webSteps=web?route.slice(1,traversedSteps+1).filter(cell=>insideWeb(web,cell)).length:0;
- const movementCost=(traversedSteps+webSteps)*5+(actor.conditions.includes('Prone')?traversedSteps*5:0);
+ const movementCost=route.slice(1,traversedSteps+1).reduce((sum,cell,index)=>sum+(actor.conditions.includes('Prone')?10:5)+terrainFeet(battle,route[index],cell),0);
  if(movementCost>actor.speedFeet+actor.dashFeet-actor.movementSpentFeet)throw Error('Move exceeds remaining movement');
  if(Object.entries(battle.participants).some(([id,p])=>id!==actorId&&p.hp>0&&p.x===destination.x&&p.y===destination.y))throw Error('Square occupied');
  if(traversedSteps>1&&route.slice(1,traversedSteps+1).some(cell=>battle.groundOil?.some(o=>o.ignitedRound!==undefined&&o.x===cell.x&&o.y===cell.y)))throw Error('Enter burning Oil one 5-foot step at a time');
@@ -701,7 +735,7 @@ export function endCompanionTurn(campaign:Campaign,actorId:string,rollBurning=()
   : oilResolved;
  const clocked=next===0&&battle.mode==='unified'
   ? {...timed,equipmentCombatSeconds:(timed.equipmentCombatSeconds??0)+6}:timed;
- const nextId=battle.order[next];const outgoing=afterOil.participants[actorId];const participants={...afterOil.participants,[actorId]:{...outgoing,disengaged:false,roguePoisonSaveResolved:false,rogueKnockoutSaveResolved:false,...(outgoing.rogueDazeTurns!==undefined?(outgoing.rogueDazeTurns<=1?{rogueDazeTurns:undefined,rogueDazeChoice:undefined}:{rogueDazeTurns:outgoing.rogueDazeTurns-1,rogueDazeChoice:undefined}):{}),...(outgoing.rogueObscureUntilTurn!==undefined?(outgoing.rogueObscureUntilTurn<=1?{rogueObscureUntilTurn:undefined,conditions:outgoing.conditions.filter(c=>c!=='Blinded')}:{rogueObscureUntilTurn:outgoing.rogueObscureUntilTurn-1}):{})}};participants[nextId]={...participants[nextId],caltropsStopped:undefined,movementSpentFeet:0,actionUsed:false,bonusActionUsed:false,dashFeet:0,disengaged:false,dodging:false,reactionUsed:false,rogueSneakUsed:false,rogueSteadyAim:false,rogueMovedThisTurn:false};const nextRound=battle.round+(next===0?1:0);
+ const nextId=battle.order[next];const outgoing=afterOil.participants[actorId];const participants={...afterOil.participants,[actorId]:{...outgoing,disengaged:false,roguePoisonSaveResolved:false,rogueKnockoutSaveResolved:false,...(outgoing.rogueDazeTurns!==undefined?(outgoing.rogueDazeTurns<=1?{rogueDazeTurns:undefined,rogueDazeChoice:undefined}:{rogueDazeTurns:outgoing.rogueDazeTurns-1,rogueDazeChoice:undefined}):{}),...(outgoing.rogueObscureUntilTurn!==undefined?(outgoing.rogueObscureUntilTurn<=1?{rogueObscureUntilTurn:undefined,conditions:outgoing.conditions.filter(c=>c!=='Blinded')}:{rogueObscureUntilTurn:outgoing.rogueObscureUntilTurn-1}):{})}};participants[nextId]={...participants[nextId],primaryAttacks:undefined,caltropsStopped:undefined,movementSpentFeet:0,actionUsed:false,bonusActionUsed:false,dashFeet:0,disengaged:false,dodging:false,reactionUsed:false,rogueSneakUsed:false,rogueSteadyAim:false,rogueMovedThisTurn:false};const nextRound=battle.round+(next===0?1:0);
  for(const [id,participant] of Object.entries(participants)){
   const expiry=participant.oilExpires;
   if(expiry&&(expiry.round<nextRound||expiry.round===nextRound&&(battle.order.indexOf('nighthawk')===-1?expiry.turnIndex:battle.order.indexOf('nighthawk'))<=next))
@@ -722,7 +756,9 @@ export function endCompanionTurn(campaign:Campaign,actorId:string,rollBurning=()
  const basicPoison=battle.basicPoison;
  const ammunitionPoisonExpired=!!battle.poisonedAmmunition&&nextId==='nighthawk'&&nextRound>=battle.poisonedAmmunition.expiresRound;
  const poisonExpired=basicPoison&&nextId==='nighthawk'&&nextRound>=basicPoison.expiresRound;
- const advanced=save(clocked,{...afterOil,web:afterOil.web?{...afterOil.web,checked:[]}:undefined,...{weaponFollowup:undefined},...(nextId==='nighthawk'?{lightAttack:undefined,cleaveUsed:undefined,weaponSlow:undefined}:{}),groundOil:afterOil.groundOil?.filter(o=>o.ignitedRound===undefined?nextRound<o.expiresRound:nextRound<o.ignitedRound+2||nextRound===o.ignitedRound+2&&next<=o.ignitedTurn!).map(o=>({...o,damagedActorsThisTurn:[]})),...(poisonExpired?{basicPoison:undefined}:{}),...(ammunitionPoisonExpired?{poisonedAmmunition:undefined}:{}),...(objects?{objects}:{}),participants,groundEntries:undefined,turnIndex:next,round:battle.round+(next===0?1:0),log:[...battle.log,actorId+' ended turn']});
+ const advanced=save(clocked,{...afterOil,...(afterOil.phaseThree?{phaseThree:{...afterOil.phaseThree,
+  ...(nextId==='nighthawk'?{shield:undefined,readied:undefined}:{}),
+  ...(afterOil.phaseThree.help?.by===nextId?{help:undefined}:{})}}:{}),web:afterOil.web?{...afterOil.web,checked:[]}:undefined,...{weaponFollowup:undefined},...(nextId==='nighthawk'?{lightAttack:undefined,cleaveUsed:undefined,weaponSlow:undefined}:{}),groundOil:afterOil.groundOil?.filter(o=>o.ignitedRound===undefined?nextRound<o.expiresRound:nextRound<o.ignitedRound+2||nextRound===o.ignitedRound+2&&next<=o.ignitedTurn!).map(o=>({...o,damagedActorsThisTurn:[]})),...(poisonExpired?{basicPoison:undefined}:{}),...(ammunitionPoisonExpired?{poisonedAmmunition:undefined}:{}),...(objects?{objects}:{}),participants,groundEntries:undefined,turnIndex:next,round:battle.round+(next===0?1:0),log:[...battle.log,actorId+' ended turn']});
  if(!battle.burningCreatures?.includes(nextId)||participants[nextId].deathSaves?.dead||
     (participants[nextId].actorKind==='enemy'&&participants[nextId].hp===0))return advanced;
  const damage=rollBurning();
@@ -798,7 +834,7 @@ export function healCompanion(campaign:Campaign,actorId:string,amount:number):Ca
 function resolveTypedCompanionDamage(campaign:Campaign,targetId:string,actor:CompanionEncounter['participants'][string],
  amount:number,type:DamageType,critical=false){
  const battle=encounter(campaign);
- const adjust=(value:number)=>(targetId==='nighthawk'&&battle.mode==='unified')||actor.actorKind==='enemy'
+ const adjust=(value:number)=>(targetId==='nighthawk'&&battle.mode==='unified')||actor.actorKind==='enemy'||!!battle.phaseThree&&!campaign.subclassActors?.[targetId]
   ?value:adjudicateSubclassActorDamage(campaign,targetId,value,type);
  const resistant=actor.damageResistances?.includes(type)||resistsTemporaryDamage(campaign,targetId,type);
  const resolveAmount=(value:number)=>actor.damageImmunities?.includes(type)?0:resistant?Math.min(adjust(value),Math.floor(value/2)):adjust(value);
@@ -824,7 +860,7 @@ export function conditionCompanion(campaign:Campaign,targetId:string,condition:'
  const auraActive=!!source&&source.subclassId==='paladin-devotion'&&source.level>=7&&!!aura&&aura.hp>0;
  const withinDevotionAura=auraActive&&Math.max(Math.abs(aura!.x-actor.x),Math.abs(aura!.y-actor.y))<=2;
  const ownAura=campaign.subclassActors?.[targetId]?.subclassId==='paladin-devotion'&&campaign.subclassActors[targetId].level>=7&&actor.hp>0;
- const permitted=!(condition==='Charmed'&&(withinDevotionAura||ownAura))&&((targetId==='nighthawk'&&battle.mode==='unified')||actor.actorKind==='enemy'||(actor.actorKind==='party'&&!campaign.subclassActors?.[targetId])?true:adjudicateSubclassActorCondition(campaign,targetId,condition,{auraActive:ownAura,withinDevotionAura:ownAura}));
+ const permitted=!(condition==='Charmed'&&(withinDevotionAura||ownAura))&&((targetId==='nighthawk'&&battle.mode==='unified')||actor.actorKind==='enemy'||!!battle.phaseThree&&!campaign.subclassActors?.[targetId]||(actor.actorKind==='party'&&!campaign.subclassActors?.[targetId])?true:adjudicateSubclassActorCondition(campaign,targetId,condition,{auraActive:ownAura,withinDevotionAura:ownAura}));
  if(!permitted)return save(campaign,{...battle,log:[...battle.log,targetId+' is immune to '+condition]});
  return save(campaign,{...battle,participants:{...battle.participants,[targetId]:{...actor,conditions:[...new Set([...actor.conditions,condition])]}},log:[...battle.log,targetId+' gained '+condition]});
 }
@@ -1067,17 +1103,18 @@ export function spendUnifiedNighthawkSpellSlot(campaign:Campaign,spell:string,sl
 /** Deterministic opportunity attack from an explicitly verified leaving-reach event.
  * Melee range, target AC and damage are supplied by the DM. No dice are generated.
  */
-export function resolveCompanionOpportunityAttack(campaign:Campaign,attackerId:string,targetId:string,roll:number,modifier:number,targetAC:number,damage:number,damageModifier:number,damageType:DamageType):Campaign{
+export function resolveCompanionOpportunityAttack(campaign:Campaign,attackerId:string,targetId:string,roll:number,modifier:number,targetAC:number,damage:number,damageModifier:number,damageType:DamageType,readied=false):Campaign{
  const battle=encounter(campaign),attacker=battle.participants[attackerId],target=battle.participants[targetId];
  if(!attacker||!target||attackerId===targetId||attacker.hp<=0||target.hp<=0||attacker.reactionUsed||cannotAct(attacker))throw Error('Opportunity reaction unavailable');
  if(!Number.isInteger(roll)||roll<1||roll>20||![modifier,targetAC,damage,damageModifier].every(Number.isInteger)||targetAC<1||damage<0)throw Error('Invalid opportunity attack adjudication');
- if(target.disengaged)throw Error('Disengage prevents opportunity attack');
+ if(readied&&battle.phaseThree?.pendingReady?.target!==targetId)throw Error('Readied attack trigger is unavailable.');
+ if(!readied&&target.disengaged)throw Error('Disengage prevents opportunity attack');
  if(battle.pendingOpportunity&&(!battle.pendingOpportunity.attackerIds.includes(attackerId)||battle.pendingOpportunity.moverId!==targetId))throw Error('Attacker not in pending opportunity candidates');
  if(!companionLineOfSight(battle,attacker,target)&&!battle.pendingOpportunity)throw Error('Opportunity target not visible');
  const hit=roll===20||(roll!==1&&roll+modifier>=targetAC);
  const raw=hit?Math.max(0,damage+damageModifier):0;
- const {taken,updated}=resolveTypedCompanionDamage(campaign,targetId,target,raw,damageType);
- return save(campaign,{...battle,pendingOpportunity:battle.pendingOpportunity?.destination?{...battle.pendingOpportunity,attackerIds:battle.pendingOpportunity.attackerIds.filter(id=>id!==attackerId)}:battle.pendingOpportunity&&battle.pendingOpportunity.attackerIds.some(id=>id!==attackerId)?{...battle.pendingOpportunity,attackerIds:battle.pendingOpportunity.attackerIds.filter(id=>id!==attackerId)}:undefined,participants:{...battle.participants,[attackerId]:{...attacker,reactionUsed:true},[targetId]:updated},log:[...battle.log,attackerId+' opportunity attack vs '+targetId+': '+(hit?'hit for '+taken:'miss')+' (DM verified reach trigger)']});
+ const {taken,updated}=resolveTypedCompanionDamage(campaign,targetId,target,raw,damageType,roll===20);
+ return save(campaign,{...battle,...(readied&&battle.phaseThree?{phaseThree:{...battle.phaseThree,pendingReady:undefined,readied:undefined}}:{}),pendingOpportunity:battle.pendingOpportunity?.destination?{...battle.pendingOpportunity,attackerIds:battle.pendingOpportunity.attackerIds.filter(id=>id!==attackerId)}:battle.pendingOpportunity&&battle.pendingOpportunity.attackerIds.some(id=>id!==attackerId)?{...battle.pendingOpportunity,attackerIds:battle.pendingOpportunity.attackerIds.filter(id=>id!==attackerId)}:undefined,participants:{...battle.participants,[attackerId]:{...attacker,reactionUsed:true},[targetId]:updated},log:[...battle.log,attackerId+' opportunity attack vs '+targetId+': '+(hit?'hit for '+taken:'miss')+' (DM verified reach trigger)']});
 }
 export function finishCompanionEncounter(campaign:Campaign):Campaign{
  const battle=encounter(campaign);
@@ -1198,27 +1235,42 @@ export function basicPoisonWeapon(campaign:Campaign){
 }
 
 /** Manual d20 and damage dice inputs; no automatic attack modifiers or dice invented. */
-export function attackCompanion(campaign:Campaign,attackerId:string,targetId:string,roll:number,attackModifier:number,targetAC:number,damageRoll:number,damageModifier:number,damageType:DamageType,rangeFeet?:number,secondD20?:number,elvenAccuracyReroll?:number,verifiedWeaponId?:string,rollPoison=()=>Math.floor(Math.random()*4)+1,ammunitionPoisonName?:string,attackMode?:'weapon'|'thrown'|'light-bonus'|'light-nick'|'cleave'):Campaign{
+export function companionAttackRollMode(campaign:Campaign,attackerId:string,targetId:string,verifiedWeaponId?:string,thrown=false,normalRange?:number){
+ const battle=encounter(campaign),attacker=battle.participants[attackerId],target=battle.participants[targetId];
+ if(!attacker||!target)throw Error('Unknown attack participant');
+ const distanceFeet=Math.max(Math.abs(attacker.x-target.x),Math.abs(attacker.y-target.y))*5;
+ const vex=attackerId==='nighthawk'&&battle.weaponVex?.target===targetId&&battle.round<=battle.weaponVex.round+1;
+ const help=battle.phaseThree?.help;
+ const helped=help?.target===targetId&&help.by!==attackerId&&battle.participants[help.by]?.faction===attacker.faction;
+ const attackAdvantage=!!battle.phaseThree&&!companionCanSee(battle,target,attacker)||helped||vex||((attackerId==='nighthawk'||battle.phaseThree)&&(attacker.rogueSteadyAim||(attacker.rogueHidden&&!(attacker.rogueDetectedBy??[]).includes(targetId))))||attacker.conditions.includes('Invisible')||target.conditions.some(c=>['Blinded','Paralyzed','Restrained','Stunned','Unconscious'].includes(c))||(target.conditions.includes('Prone')&&distanceFeet<=5);
+ const verifiedWeapon=attackerId==='nighthawk'&&campaign.characterIdentity?ITEMS.find(item=>item.id===verifiedWeaponId):undefined;
+ const equipmentDisadvantage=verifiedWeapon?verifiedWeaponDisadvantage(campaign,battle,verifiedWeapon,targetId,thrown):false;
+ const untrained=attackerId==='nighthawk'&&!!verifiedWeaponId&&armorEffects(campaign).untrainedArmor;
+ const sap=battle.weaponSap?.[attackerId];
+ const sapped=!!sap&&(battle.round===sap.round||battle.round===sap.round+1&&battle.turnIndex<sap.turnIndex);
+ const grapple=battle.phaseThree?.grapples?.[attackerId];
+ const attackDisadvantage=!!battle.phaseThree&&!companionCanSee(battle,attacker,target)||!!grapple&&grapple.by!==targetId||equipmentDisadvantage||normalRange!==undefined&&(distanceFeet>normalRange||distanceFeet<=5)||untrained||sapped||target.dodging||(target.rogueHidden&&!(target.rogueDetectedBy??[]).includes(attackerId))||target.conditions.includes('Invisible')||attacker.conditions.some(c=>['Poisoned','Blinded','Restrained'].includes(c))||(target.conditions.includes('Prone')&&distanceFeet>5);
+ return {distanceFeet,vex,helped,verifiedWeapon,sap,attackAdvantage,attackDisadvantage};
+}
+
+export function attackCompanion(campaign:Campaign,attackerId:string,targetId:string,roll:number,attackModifier:number,targetAC:number,damageRoll:number,damageModifier:number,damageType:DamageType,rangeFeet?:number,secondD20?:number,elvenAccuracyReroll?:number,verifiedWeaponId?:string,rollPoison=()=>Math.floor(Math.random()*4)+1,ammunitionPoisonName?:string,attackMode?:'weapon'|'thrown'|'light-bonus'|'light-nick'|'cleave',normalRange?:number):Campaign{
  const battle=activeActor(campaign,attackerId);
  const attacker=battle.participants[attackerId],target=battle.participants[targetId];
  if(!target||attackerId===targetId||attacker.hp<=0||(target.hp<=0&&(!target.conditions.includes('Unconscious')||target.deathSaves?.dead)))throw Error('Invalid attacker or target');
  const lightExtra=attackMode==='light-bonus'||attackMode==='light-nick';
  if(lightExtra)verifyLightAttack(campaign,battle,verifiedWeaponId,attackMode==='light-nick');
  else if(attackMode==='cleave')verifyCleave(campaign,battle,targetId,verifiedWeaponId);
- else if(attacker.actionUsed)throw Error('Action already used this turn');
+ else if(attacker.actionUsed&&!(battle.phaseThree&&attackerId==='nighthawk'&&verifiedWeaponId&&attacker.primaryAttacks&&attacker.primaryAttacks<primaryAttackLimit(campaign)&&
+  !ITEMS.find(item=>item.id===verifiedWeaponId)?.properties?.includes('Loading')))throw Error('Action already used this turn');
  if(attacker.rogueDazeTurns!==undefined&&(attacker.rogueDazeChoice==='movement'||attacker.movementSpentFeet>0||attacker.bonusActionUsed))throw Error('Dazed: choose movement or one action or bonus action');
  if(cannotAct(attacker))throw Error('Condition prevents action');
- if((battle.cover??[]).some(p=>p.x===target.x&&p.y===target.y))throw Error('Target has annotated cover: DM must supply adjusted AC and clear cover annotation before attack');
+ if((battle.cover??[]).some(p=>p.x===target.x&&p.y===target.y)){
+  if(!battle.phaseThree)throw Error('Target has annotated cover: DM must supply adjusted AC and clear cover annotation before attack');
+  targetAC+=2;
+ }
+ if(battle.phaseThree?.shield&&targetId==='nighthawk')targetAC+=5;
  if(!companionLineOfSight(battle,attacker,target))throw Error('Line of sight blocked by map obstacle');
- const distanceFeet=Math.max(Math.abs(attacker.x-target.x),Math.abs(attacker.y-target.y))*5;
- const vex=attackerId==='nighthawk'&&battle.weaponVex?.target===targetId&&battle.round<=battle.weaponVex.round+1;
- const attackAdvantage=vex||(attackerId==='nighthawk'&&(attacker.rogueSteadyAim||(attacker.rogueHidden&&!(attacker.rogueDetectedBy??[]).includes(targetId))))||attacker.conditions.includes('Invisible')||target.conditions.some(c=>['Blinded','Paralyzed','Restrained','Stunned','Unconscious'].includes(c))||(target.conditions.includes('Prone')&&distanceFeet<=5);
- const verifiedWeapon=attackerId==='nighthawk'&&campaign.characterIdentity&&attackMode?ITEMS.find(item=>item.id===verifiedWeaponId):undefined;
- const equipmentDisadvantage=verifiedWeapon?verifiedWeaponDisadvantage(campaign,battle,verifiedWeapon,targetId,attackMode==='thrown'):false;
- const untrained=attackerId==='nighthawk'&&!!verifiedWeaponId&&armorEffects(campaign).untrainedArmor;
- const sap=battle.weaponSap?.[attackerId];
- const sapped=!!sap&&(battle.round===sap.round||battle.round===sap.round+1&&battle.turnIndex<sap.turnIndex);
- const attackDisadvantage=equipmentDisadvantage||untrained||sapped||target.dodging||(target.rogueHidden&&!(target.rogueDetectedBy??[]).includes(attackerId))||target.conditions.includes('Invisible')||attacker.conditions.some(c=>['Poisoned','Blinded','Restrained'].includes(c))||(target.conditions.includes('Prone')&&distanceFeet>5);
+ const {distanceFeet,vex,helped,verifiedWeapon,sap,attackAdvantage,attackDisadvantage}=companionAttackRollMode(campaign,attackerId,targetId,attackMode?verifiedWeaponId:undefined,attackMode==='thrown',normalRange);
  if(attackAdvantage!==attackDisadvantage&&secondD20===undefined)throw Error(target.dodging?'Dodge requires a second d20 for disadvantage':'Advantage or disadvantage requires a second d20');
  if(secondD20!==undefined&&(!Number.isInteger(secondD20)||secondD20<1||secondD20>20))throw Error('Invalid second d20');
  if(rangeFeet!==undefined){if(!Number.isInteger(rangeFeet)||rangeFeet<5||rangeFeet>1000||rangeFeet%5!==0)throw Error('Invalid attack range');const distance=Math.max(Math.abs(attacker.x-target.x),Math.abs(attacker.y-target.y))*5;if(distance>rangeFeet)throw Error('Target outside declared attack range');}
@@ -1230,7 +1282,18 @@ export function attackCompanion(campaign:Campaign,attackerId:string,targetId:str
  const critical=effectiveRoll===20;
  const hit=critical||(effectiveRoll!==1&&effectiveRoll+attackModifier>=targetAC);
  const criticalHit=hit&&(critical||(target.conditions.includes('Unconscious')&&distanceFeet<=5));
- const used={...attacker,actionUsed:true,rogueHidden:false};
+ const primary=!!battle.phaseThree&&attackerId==='nighthawk'&&!!verifiedWeaponId&&!lightExtra&&attackMode!=='cleave';
+ const used={...attacker,actionUsed:true,rogueHidden:false,...(primary?{primaryAttacks:(attacker.primaryAttacks??0)+1}:{})};
+ const reactionEligible=hit&&battle.phaseThree&&targetId==='nighthawk'&&attacker.actorKind==='enemy'&&!target.reactionUsed&&
+  !cannotAct(target)&&target.hp>0&&damageRoll+damageModifier>0;
+ const uncanny=!!reactionEligible&&campaign.characterIdentity?.classId==='rogue'&&(campaign.character?.level??0)>=5&&
+  !target.conditions.includes('Blinded')&&!attacker.conditions.includes('Invisible');
+ const slots=campaign.character?.spellSlots;
+ const shield=!!reactionEligible&&!!slots&&slots.usedLevel1<slots.level1&&!!campaign.character?.preparedSpells?.includes('Shield')&&!armorEffects(campaign).untrainedArmor;
+ if(uncanny||shield)return save(campaign,{...battle,participants:{...battle.participants,[attackerId]:used},
+  phaseThree:{...battle.phaseThree!,pendingHit:{attacker:attackerId,amount:damageRoll+damageModifier,type:damageType,critical:criticalHit,
+   attackTotal:effectiveRoll+attackModifier,targetAC,uncanny,shield}},
+  log:[...battle.log,'An attack hit. A reaction is available.']});
  const participants={...battle.participants,[attackerId]:used};
  let dealt=0;
  let poisonDamage=0;
@@ -1284,7 +1347,9 @@ export function attackCompanion(campaign:Campaign,attackerId:string,targetId:str
  const nextLight=lightExtra&&battle.lightAttack?{...battle.lightAttack,used:true as const}:
   verifiedWeapon?.properties?.includes('Light')?{primaryId:verifiedWeapon.id}:battle.lightAttack;
  if(attackMode==='light-bonus')participants[attackerId]={...participants[attackerId],bonusActionUsed:true};
- return save(campaign,{...battle,participants,weaponVex:nextVex,weaponSap:nextSap,weaponSlow,weaponFollowup,cleaveUsed:attackMode==='cleave'?true:battle.cleaveUsed,lightAttack:nextLight,basicPoison:coating,poisonedAmmunition,log:[...battle.log,attackerId+' attack d20 '+effectiveRoll+(elvenAccuracyReroll!==undefined?' (Elven Accuracy reroll '+elvenAccuracyReroll+')':'')+(target.dodging?' (Dodge disadvantage)':'')+(criticalHit?' critical hit':hit?' hit':' miss')+' vs '+targetId+' AC '+targetAC+(hit?'; '+dealt+' '+damageType+' damage'+(poisonDamage?' + '+poisonDamage+' Poison':''):'')]});
+ const phaseThree=battle.phaseThree?{...battle.phaseThree,...(helped?{help:undefined}:{}),lastRoll:{actor:attackerId,target:targetId,
+  dice:attackAdvantage!==attackDisadvantage?[roll,secondD20!]:[roll],...(attackAdvantage!==attackDisadvantage?{mode:attackAdvantage?'advantage' as const:'disadvantage' as const}:{}),modifier:attackModifier,hit,critical:criticalHit,damage:dealt+poisonDamage}}:undefined;
+ return save(campaign,{...battle,...(phaseThree?{phaseThree}:{}),participants,weaponVex:nextVex,weaponSap:nextSap,weaponSlow,weaponFollowup,cleaveUsed:attackMode==='cleave'?true:battle.cleaveUsed,lightAttack:nextLight,basicPoison:coating,poisonedAmmunition,log:[...battle.log,attackerId+' attack d20 '+effectiveRoll+(elvenAccuracyReroll!==undefined?' (Elven Accuracy reroll '+elvenAccuracyReroll+')':'')+(target.dodging?' (Dodge disadvantage)':'')+(criticalHit?' critical hit':hit?' hit':' miss')+' vs '+targetId+' AC '+targetAC+(hit?'; '+dealt+' '+damageType+' damage'+(poisonDamage?' + '+poisonDamage+' Poison':''):'')]});
 }
 function verifyCleave(campaign:Campaign,battle:CompanionEncounter,targetId:string,weaponId?:string):void {
  const followup=battle.weaponFollowup,target=battle.participants[targetId],original=followup?battle.participants[followup.targetId]:undefined;
@@ -1292,6 +1357,36 @@ function verifyCleave(campaign:Campaign,battle:CompanionEncounter,targetId:strin
  if(battle.cleaveUsed||!followup||followup.kind!=='Cleave'||followup.weaponId!==weaponId||campaign.encounterLoadout?.weaponId!==weaponId||!weapon||trainedWeaponMastery(campaign,weapon)!=='Cleave'||!target||!original||targetId===followup.targetId||Math.max(Math.abs(target.x-original.x),Math.abs(target.y-original.y))>1)throw Error('Choose a different target within 5 feet of the original target to Cleave.');
 }
 
+export function primaryAttackLimit(campaign:Campaign):number{
+ const cls=campaign.characterIdentity?.classId??campaign.character?.classId,level=campaign.character?.level??1;
+ if(cls==='fighter')return level>=20?4:level>=11?3:level>=5?2:1;
+ if(level>=5&&['barbarian','monk','paladin','ranger'].includes(cls??''))return 2;
+ const subclass=campaign.importedSubclassId;
+ if(level>=6&&(subclass==='bard-valor'||subclass==='bard-swords'))return 2;
+ return 1;
+}
+
+export function resolveTacticalIncomingHit(campaign:Campaign,useReaction:boolean|'shield'):Campaign{
+ const battle=encounter(campaign),state=battle.phaseThree,hit=state?.pendingHit,player=battle.participants.nighthawk;
+ if(!state||!hit||!player)throw Error('No interrupted hit.');
+ if(useReaction&&(player.reactionUsed||cannotAct(player)))throw Error('Your reaction is unavailable.');
+ const shield=useReaction==='shield',slots=campaign.character?.spellSlots;
+ if(shield&&(!hit.shield||!slots||slots.usedLevel1>=slots.level1))throw Error('Shield is unavailable.');
+ if(useReaction===true&&!hit.uncanny)throw Error('Uncanny Dodge is unavailable.');
+ const prevented=shield&&!hit.critical&&hit.attackTotal!==undefined&&hit.targetAC!==undefined&&hit.attackTotal<hit.targetAC+5;
+ const raw=prevented?0:useReaction===true?Math.floor(hit.amount/2):hit.amount;
+ const resolved=resolveTypedCompanionDamage(campaign,'nighthawk',player,raw,hit.type,hit.critical&&!prevented);
+ const cast=shield?{...campaign,character:{...campaign.character!,spellSlots:{...slots!,usedLevel1:slots!.usedLevel1+1}}}:campaign;
+ return save(cast,{...battle,phaseThree:{...state,pendingHit:undefined,...(shield?{shield:true as const}:{}),lastRoll:{actor:hit.attacker,target:'nighthawk',dice:[],modifier:0,hit:!prevented,critical:hit.critical,damage:resolved.taken}},
+  participants:{...battle.participants,nighthawk:{...resolved.updated,reactionUsed:!!useReaction||player.reactionUsed}},
+  log:[...battle.log,(shield?'Shield: ':useReaction?'Uncanny Dodge: ':'')+resolved.taken+' '+hit.type+' damage']});
+}
+
+export function declineTacticalOpportunity(campaign:Campaign,id:string):Campaign{
+ const battle=encounter(campaign),pending=battle.pendingOpportunity;
+ if(!battle.phaseThree||!pending?.attackerIds.includes(id))throw Error('No matching opportunity reaction.');
+ return save(campaign,{...battle,pendingOpportunity:{...pending,attackerIds:pending.attackerIds.filter(attacker=>attacker!==id)}});
+}
 export function resolveWeaponCleave(campaign:Campaign,targetId:string,roll:number,damageRoll:number,secondD20?:number):Campaign {
  const battle=activeActor(campaign,'nighthawk');
  const equipped=nighthawkEquippedAttack(campaign);
@@ -1582,7 +1677,7 @@ export function resolveImportedRogueDetection(campaign:Campaign,observerId:strin
 }
 /** Rogue Sneak Attack is applied only after validating a hit and its eligibility.
  * The player supplies individual d6 results; no rolls are invented. */
-export function attackImportedRogue(campaign:Campaign,targetId:string,roll:number,weaponDamageDice:number,rangeFeet:number,sneakDice:number[],secondD20?:number,cunningStrike?:{effect:'Trip'|'Poison'|'Withdraw'|'Obscure'|'Daze'|'Knock Out';saveTotal?:number;withdrawTo?:{x:number;y:number}}|{effect:'Trip'|'Poison'|'Withdraw'|'Obscure'|'Daze'|'Knock Out';saveTotal?:number;withdrawTo?:{x:number;y:number}}[],elvenAccuracyReroll?:number,useOffhand=false):Campaign{
+export function attackImportedRogue(campaign:Campaign,targetId:string,roll:number,weaponDamageDice:number,rangeFeet:number,sneakDice:number[],secondD20?:number,cunningStrike?:{effect:'Trip'|'Poison'|'Withdraw'|'Obscure'|'Daze'|'Knock Out';saveTotal?:number;withdrawTo?:{x:number;y:number}}|{effect:'Trip'|'Poison'|'Withdraw'|'Obscure'|'Daze'|'Knock Out';saveTotal?:number;withdrawTo?:{x:number;y:number}}[],elvenAccuracyReroll?:number,useOffhand=false,poisonDie?:()=>number,forceThrown=false):Campaign{
  const battle=activeActor(campaign,'nighthawk'),actor=battle.participants.nighthawk,target=battle.participants[targetId];
  const ch=campaign.character;
  if(battle.mode!=='unified'||campaign.characterIdentity?.classId!=='rogue'||!ch)throw Error('Requires imported Rogue in a unified encounter');
@@ -1593,7 +1688,7 @@ export function attackImportedRogue(campaign:Campaign,targetId:string,roll:numbe
  if(targetAC===undefined||!Number.isInteger(targetAC))throw Error('Target AC must be verified');
  const distance=Math.max(Math.abs(actor.x-target.x),Math.abs(actor.y-target.y))*5;
  const weaponProfile=weaponAttackProfile(item);
- const thrown=item.id==='dart'||!weaponProfile.ranged&&distance>weaponProfile.reach&&!!item.properties?.some(property=>property.startsWith('Thrown '));
+ const thrown=forceThrown||item.id==='dart'||!weaponProfile.ranged&&distance>weaponProfile.reach&&!!item.properties?.some(property=>property.startsWith('Thrown '));
  if(useOffhand&&thrown)throw Error('An offhand Sneak Attack must be in weapon reach.');
  const mode=useOffhand?(trainedWeaponMastery(campaign,item)==='Nick'?'light-nick':'light-bonus'):thrown?'thrown':'weapon';
  const advantage=battle.weaponVex?.target===targetId&&battle.round<=battle.weaponVex.round+1||!!(actor.rogueSteadyAim||(actor.rogueHidden&&!(actor.rogueDetectedBy??[]).includes(targetId)))||actor.conditions.includes('Invisible')||target.conditions.some(c=>['Blinded','Paralyzed','Restrained','Stunned','Unconscious'].includes(c))||(target.conditions.includes('Prone')&&distance<=5);
@@ -1619,8 +1714,8 @@ export function attackImportedRogue(campaign:Campaign,targetId:string,roll:numbe
  if(diceCost>Math.ceil((ch.level??1)/2))throw Error('Insufficient Sneak Attack dice for Cunning Strike');
  if(advantage!==disadvantage&&secondD20===undefined)throw Error('Advantage or disadvantage requires second d20');
  if(!Number.isInteger(weaponDamageDice)||weaponDamageDice<1||weaponDamageDice>100)throw Error('Invalid weapon damage roll');
- const hit=hitRoll===20||(hitRoll!==1&&hitRoll+attackModifier>=targetAC);
- const resolved=attackWithCampaignAmmunition(campaign,item,(reserved,ammunitionName)=>attackCompanion(reserved,'nighthawk',targetId,roll,attackModifier,targetAC,weaponDamageDice+(hit?sneakDice.slice(diceCost*(critical?2:1)).reduce((a,b)=>a+b,0):0),damageModifier,weaponProfile.damageType??'Piercing',rangeFeet,secondD20,elvenAccuracyReroll,equipped.weaponId,undefined,ammunitionName,mode));
+ const hit=hitRoll===20||(hitRoll!==1&&hitRoll+attackModifier>=targetAC+(battle.phaseThree&&battle.cover?.some(p=>p.x===target.x&&p.y===target.y)?2:0));
+ const resolved=attackWithCampaignAmmunition(campaign,item,(reserved,ammunitionName)=>attackCompanion(reserved,'nighthawk',targetId,roll,attackModifier,targetAC,weaponDamageDice+(hit?sneakDice.slice(diceCost*(critical?2:1)).reduce((a,b)=>a+b,0):0),damageModifier,weaponProfile.damageType??'Piercing',rangeFeet,secondD20,elvenAccuracyReroll,equipped.weaponId,poisonDie,ammunitionName,mode));
  const result=thrown?spendThrownWeapon(resolved,item):resolved;
  if(!hit)return result;
  const combat=result.companionEncounter!;
