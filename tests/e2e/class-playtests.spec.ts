@@ -737,8 +737,10 @@ test('new Rogue starts at Frontier Village, buys supplies, and sees persisted Pl
   return main.y>0&&cart.y+cart.height<=composer.y+2;
  }).toBe(true);
  await page.screenshot({path:'test-results/v19-merchant-viewport-expanded-iphone.png',fullPage:false});
-  await expect(compactCart).toContainText('Available');
- await expect(compactCart).toContainText('Cart (0)');
+  await expect(compactCart.getByLabel('Current wallet')).toBeVisible();
+ expect((await compactCart.boundingBox())!.height).toBeLessThanOrEqual(112);
+ await expect(compactCart.getByText(/Current load .*coins/)).not.toBeVisible();
+ await expect(compactCart).toContainText('Cart details (0 items)');
  await expect(shop.getByLabel('City supplier orders')).toBeVisible();
  expect((await saved(page)).pendingMerchantSupplyOrder).toBeUndefined();
  await expect(shop.getByLabel('Merchant inventory')).toContainText('Dagger');
