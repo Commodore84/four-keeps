@@ -1793,6 +1793,43 @@ test('iPhone consumable use updates healing, resistance and individual wand copi
   expect(record.inventoryLedger.gear.filter((row:any)=>row.name===name).reduce((sum:number,row:any)=>sum+row.quantity,0)).toBe(0);
 });
 
+test('iPhone Stealth check resolution transitions directly into warehouse tactical combat',async({page})=>{
+ test.setTimeout(90000);
+ await createAndImport(page,'rogue');
+ await page.evaluate(()=>{
+  localStorage.setItem('four-keeps-access-code','browser-test-code');
+  localStorage.setItem('four-keeps-dm-mode','on');
+ });
+ await page.route('**/api/dm',async route=>{
+  const request=route.request().postDataJSON();
+  const shared={worldUpdates:{},newFacts:[]};
+  if(request.opening){await route.fulfill({json:{...shared,narration:'Dasahi warehouses are busy.'}});return;}
+  if(request.checkToken){
+   await route.fulfill({json:{...shared,narration:'Your careful approach succeeds, but two giant rats see the drawn bow and rush you. Roll initiative.',
+    checkResult:{skill:'Stealth',dice:request.dice,kept:request.dice[0],modifier:7,total:request.dice[0]+7,success:true},
+    combatStart:{enemyName:'Warehouse rats',templateId:'warehouse-vermin'}}});return;
+  }
+  await route.fulfill({json:{...shared,narration:'You slip between crates. Make a Stealth check to approach the rats.',
+    checkRequest:{skill:'Stealth',mode:'normal',reason:'Approach quietly',token:'signed-test-token'}}});
+ });
+ await page.reload();
+ await page.getByRole('button',{name:'Campaigns',exact:true}).click();
+ await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await expect.poll(async()=> (await saved(page))?.journal?.some((entry:any)=>entry.id?.endsWith('-dm-opening'))).toBe(true);
+ await page.getByLabel('Message the Dungeon Master').fill('I approach quietly and ready my bow if the rats attack.');
+ await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
+ await expect(page.getByRole('button',{name:'Roll Stealth'})).toBeVisible();
+ await page.getByRole('button',{name:'Roll Stealth'}).click();
+ await expect.poll(async()=> (await saved(page))?.adventureSession?.pendingEncounter?.scenario?.actors?.length).toBe(2);
+ const state=await saved(page);
+ expect(state.pendingCheck).toBeUndefined();
+ expect(state.adventureSession.pendingEncounter.scenario.actors.map((actor:any)=>actor.profile)).toEqual(['giant-rat','giant-rat']);
+ await expect(page.getByRole('region',{name:'Tactical battlefield'})).toBeVisible();
+ await page.reload();
+ await page.getByRole('button',{name:'Campaigns',exact:true}).click();
+ await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await expect(page.getByRole('region',{name:'Tactical battlefield'})).toBeVisible();
+});
 test('iPhone DM template handoff opens verified solo battlefield without requiring a generated map',async({page})=>{
  test.setTimeout(90000);
  await createAndImport(page,'rogue');
