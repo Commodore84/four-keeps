@@ -32,7 +32,7 @@ export type TacticalState={
  help?:{by:string;target:string};
  readied?:string;pendingReady?:{target:string};
  pendingHit?:IncomingHit;outcome?:EncounterOutcome;note?:string;
- actors:Record<string,{ammunition:number;hidden?:number}>;
+ actors:Record<string,{ammunition:number;hidden?:number;spellUses?:Record<string,number>}>;
 };
 export const squareKey=(s:Square)=>s.x+','+s.y;
 export const distanceFeet=(a:Square,b:Square)=>Math.max(Math.abs(a.x-b.x),Math.abs(a.y-b.y))*5;
