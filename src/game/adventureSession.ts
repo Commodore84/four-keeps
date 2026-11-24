@@ -98,6 +98,22 @@ export function proposeAdventureEncounter(campaign:Campaign,enemyName:unknown,ac
  return {...campaign,updatedAt:now,adventureSession:{...session,pendingEncounter:{enemyName:enemyName.trim(),actionId,...(scenario?{scenario}:{})}}};
 }
 
+/** Recover the named Dasahi warehouse-rat job from a legacy DM combatStart that
+ * omitted its already-verified tactical template. Never infer generic fights. */
+export function recoverWarehouseRatEncounter(campaign:Campaign):Campaign{
+ const session=campaign.adventureSession,pending=session?.pendingEncounter;
+ if(!session||!pending||pending.scenario||!campaign.characterIdentity||session.status!=='exploring')return campaign;
+ const recent=campaign.journal.slice(-12).filter(entry=>entry.kind==='dm'||entry.kind==='player')
+  .map(entry=>entry.text).join(' ').toLowerCase();
+ const warehouse=/(warehouse|pallet stack|cargo|dockside)/.test(recent);
+ const rats=/\brats?\b/.test(pending.enemyName.toLowerCase());
+ const city=/(dasahi)/i.test(campaign.location??'')||session.site==='frontier';
+ if(!warehouse||!rats||!city)return campaign;
+ const locationKey=(campaign.location??session.site).trim().toLowerCase();
+ const scenario=resolveDmBattlefield({templateId:'warehouse-vermin'},locationKey);
+ return {...campaign,adventureSession:{...session,pendingEncounter:{...pending,scenario}}};
+}
+
 /** A player may reject a proposed fight without rewriting the DM's saved narration. */
 export function declineAdventureEncounter(campaign:Campaign,actionId:string,now=new Date().toISOString()):Campaign{
  const session=campaign.adventureSession;
