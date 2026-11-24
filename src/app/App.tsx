@@ -727,18 +727,21 @@ export function App() {
         .map(entry => ({ role: entry.kind === 'player' ? 'user' : 'assistant', content: entry.text }));
       const response = await fetch('/api/dm', { method:'POST', headers:{ 'Content-Type':'application/json','x-four-keeps-access':accessCode },
         body:JSON.stringify({ checkToken:pending.token, dice, character:locked.character ?? prototypeNighthawk, gameState:{ magicWishlist:magicWishlistNames(locked.id), ...campaignPlayerContext(locked), familiar:locked.familiar ?? null, elapsedMinutes:locked.elapsedMinutes ?? 0, concentration:locked.concentration??null, spellEffects:(locked.spellEffects??[]).slice(-12), recentEvents:locked.journal.filter(e=>e.kind==='system').slice(-8).map(e=>e.text) }, history, worldFacts:locked.worldFacts ?? [], world:locked.world ?? emptyWorld() }) });
-      const result: { narration?:string; newFacts?:string[]; worldUpdates?:unknown; checkResult?:{skill:string;tool?:string;dice:number[];kept:number;modifier:number;total:number;success:boolean}; error?:string } = await response.json();
+      const result: { narration?:string; newFacts?:string[]; worldUpdates?:unknown; combatStart?:{enemyName:string;templateId?:string;battlefield?:unknown}|null;checkResult?:{skill:string;tool?:string;dice:number[];kept:number;modifier:number;total:number;success:boolean}; error?:string } = await response.json();
       if (!response.ok || !result.narration || !result.checkResult) throw new Error(result.error || 'Check resolution failed');
       const r = result.checkResult;
       const rollText = 'Nighthawk · '+r.skill+(r.tool?' with '+r.tool:'')+': '+(r.dice.length === 1 ? String(r.dice[0]) : r.dice.join(' / ')+' ('+pending.mode+': '+r.kept+')')+' '+(r.modifier >= 0 ? '+' : '−')+Math.abs(r.modifier)+' = '+r.total+'.';
       const narrated = addExchange(locked, rollText, result.narration, new Date().toISOString(), result.newFacts ?? [], result.worldUpdates);
-      const next = locked.pendingMerchantNegotiation?.checkToken===pending.token
+      const verified=locked.pendingMerchantNegotiation?.checkToken===pending.token
         ? resolveMerchantNegotiation(narrated,pending.token,r.success,r.total) : narrated;
+      const validCombat=!!result.combatStart&&!!locked.characterIdentity&&locked.adventureSession?.status==='exploring';
+      const next=validCombat?proposeAdventureEncounter(verified,result.combatStart!.enemyName,
+        'check-'+pending.token,undefined,result.combatStart!.battlefield,result.combatStart!.templateId):verified;
       await localCampaignStorage.save(next);
       setCampaign(next);
       setCampaigns(items => items.map(item => item.id === next.id ? next : item));
       setActiveView('adventure');
-      setNotice('Check resolved and saved.');
+      setNotice(validCombat?'Check resolved. Tactical encounter ready.':'Check resolved and saved.');
     } catch(error) { setNotice('Check error: '+String(error)+' Your dice are saved; retry to use the same roll.'); }
     finally { resolvingCheckRef.current = false; setSaving(false); }
   }
