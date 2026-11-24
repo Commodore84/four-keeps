@@ -1731,3 +1731,63 @@ test('iPhone adventure equipment confirmation consumes a candle once and persist
  expect(await count()).toBe(starting-1);
  expect((await saved(page)).equipmentLights.Candle.remainingSeconds).toBe(3600);
 });
+
+test('iPhone consumable use updates healing, resistance and individual wand copies across reload',async({page},testInfo)=>{
+ await createAndImport(page,'rogue');
+ await page.evaluate(async()=>{
+  const db=await new Promise<IDBDatabase>((resolve,reject)=>{
+   const request=indexedDB.open('four-keeps-local',1);
+   request.onsuccess=()=>resolve(request.result);
+   request.onerror=()=>reject(request.error);
+  });
+  await new Promise<void>((resolve,reject)=>{
+   const tx=db.transaction('campaigns','readwrite'),store=tx.objectStore('campaigns'),rows=store.getAll();
+   rows.onsuccess=()=>{
+    const campaign=rows.result[0];
+    campaign.character.currentHitPoints=1;
+    campaign.inventoryLedger.gear=[...campaign.inventoryLedger.gear,{name:'Potion of Healing',quantity:1},
+     {name:'Potion of Resistance',quantity:1},{name:'Wand of Magic Missiles',quantity:2}];
+    store.put(campaign);
+   };
+   tx.oncomplete=()=>resolve();
+   tx.onerror=()=>reject(tx.error);
+  });
+  db.close();
+  localStorage.setItem('four-keeps-access-code','browser-test-code');
+  localStorage.setItem('four-keeps-dm-mode','on');
+ });
+ await page.route('**/api/dm',route=>route.fulfill({json:{narration:'The camp is quiet.',worldUpdates:{},newFacts:[]}}));
+ await page.reload();
+ await page.getByRole('button',{name:'Campaigns',exact:true}).click();
+ await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await expect.poll(async()=> (await saved(page))?.journal?.some((entry:any)=>entry.id?.endsWith('-dm-opening'))).toBe(true);
+ for(const command of ['I drink a potion of healing','I drink a potion of fire resistance']){
+  await page.getByLabel('Message the Dungeon Master').fill(command);
+  await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
+  await page.getByLabel('Confirm equipment use').getByRole('button',{name:'Use equipment'}).click();
+  await expect(page.getByLabel('Confirm equipment use')).toHaveCount(0);
+ }
+ expect((await saved(page)).character.currentHitPoints).toBeGreaterThan(1);
+ await navigate(page,'Player');
+ const wand=page.getByLabel('Wand of Magic Missiles charges',{exact:true});
+ await wand.locator('summary').click();
+ await wand.getByLabel('Wand copy').selectOption('1');
+ await wand.getByRole('button',{name:'Hold this copy'}).click();
+ await wand.getByLabel('Target or area').fill('The guard');
+ await wand.getByLabel('DM confirmed the use and target').check();
+ await wand.getByRole('button',{name:'Spend charges for Magic Missile'}).click();
+ await expect.poll(async()=> (await saved(page)).magicEquipment?.['wand-of-magic-missiles']?.copies?.map((copy:any)=>copy.charges)).toEqual([7,6]);
+ await page.reload();
+ await page.getByRole('button',{name:'Campaigns',exact:true}).click();
+ await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await navigate(page,'Player');
+ await expect(page.getByText('You · Fire resistance · 60 min remaining',{exact:true})).toBeVisible();
+ await wand.locator('summary').click();
+ await expect(wand.getByLabel('Wand copy')).toHaveValue('1');
+ await expect(wand.locator('summary')).toHaveText('6 / 7 charges');
+ await wand.scrollIntoViewIfNeeded();
+ await page.screenshot({path:testInfo.outputPath('iphone-consumables-phase-two.png')});
+ const record=await saved(page);
+ for(const name of ['Potion of Resistance','Potion of Healing'])
+  expect(record.inventoryLedger.gear.filter((row:any)=>row.name===name).reduce((sum:number,row:any)=>sum+row.quantity,0)).toBe(0);
+});

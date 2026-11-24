@@ -475,7 +475,7 @@ export function completeQuestMagicSale(campaign:Campaign,approvalId:string):Camp
  const entry=gear.find(item=>item.name.toLowerCase()===approval.itemName.toLowerCase())!;
  entry.quantity-=approval.quantity;
  if(entry.quantity===0)gear.splice(gear.indexOf(entry),1);
- const magicEquipment=entry.quantity===0?forgetSoldMagicEquipment(campaign,entry.name):campaign.magicEquipment;
+ const magicEquipment=forgetSoldMagicEquipment(campaign,entry.name,entry.quantity);
  return {...campaign,inventoryLedger:{...ledger,currency,gear},...(magicEquipment?{magicEquipment}:{}),magicSaleAuthorization:undefined,completedMagicSales:[...(campaign.completedMagicSales??[]),approvalId]};
 }
 

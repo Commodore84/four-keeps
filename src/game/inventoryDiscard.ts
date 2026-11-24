@@ -20,7 +20,7 @@ export function discardInventoryItem(campaign:Campaign,name:string,quantity:numb
  const legacySupply={Dagger:'daggers',Arrows:'arrows',Caltrops:'caltrops','Ball Bearings':'ballBearings'} as const;
  const supply=Object.hasOwn(legacySupply,name)?legacySupply[name as keyof typeof legacySupply]:undefined;
  const equipment=campaign.equipment&&supply?{...campaign.equipment,[supply]:remaining}:campaign.equipment;
- const magicEquipment=remaining===0?forgetSoldMagicEquipment(campaign,name):campaign.magicEquipment;
+ const magicEquipment=forgetSoldMagicEquipment(campaign,name,remaining);
  const now=new Date().toISOString();
  return {...campaign,inventoryLedger:{...ledger,gear},encounterLoadout,equipment,magicEquipment,updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',createdAt:now,text:'Discarded '+quantity+' × '+name+'.'}]};
 }

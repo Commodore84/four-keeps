@@ -1,3 +1,4 @@
+import {effectiveStrength,gameSeconds,resistsTemporaryDamage} from './temporaryEffects';
 import {advanceProvisionsClock} from './provisionsClock';
 import {ammunitionNamesForWeapon,weaponAttackProfile} from './weaponAttackProfile';
 import {magicProtectionBonus,ownedMagicWearables} from './magicEquipment';
@@ -28,7 +29,8 @@ export interface CompanionEncounter {
  objects?:Record<string,{x:number;y:number;hp:number;oilExpires?:{round:number;turnIndex:number}}>;
  basicPoison?:{weaponId:string;expiresRound:number};
  poisonedAmmunition?:{name:string;remaining:number;expiresRound:number};
- groundSupplies?:{id:string;name:'Ball Bearings'|'Caltrops';x:number;y:number}[];
+ web?:{x:number;y:number;dc:number;expiresAt:number;collapseRound?:number;checked:string[];restrained:string[]};
+ groundSupplies?:{id:string;name:'Ball Bearings'|'Caltrops'|'Hunting Trap';x:number;y:number;sprung?:true;trappedActor?:string}[];
  /** Oil spilled on a five-foot square; ignition is explicitly DM-verified. */
  groundOil?:{id:string;x:number;y:number;expiresRound:number;ignitedRound?:number;ignitedTurn?:number;damagedActorsThisTurn?:string[]}[];
  groundEntries?:string[];
@@ -69,13 +71,110 @@ function encounter(campaign:Campaign):CompanionEncounter{
  if(!campaign.companionEncounter||campaign.companionEncounter.status!=='active')throw Error('No active companion encounter');
  return campaign.companionEncounter;
 }
+type WebArea=NonNullable<CompanionEncounter['web']>;
+export type WebPlacement={x:number;y:number;anchored:boolean};
+
+function insideWeb(web:WebArea,cell:Cell):boolean{
+ return cell.x>=web.x&&cell.x<web.x+4&&cell.y>=web.y&&cell.y<web.y+4;
+}
+function clearItemWeb(battle:CompanionEncounter):CompanionEncounter{
+ const web=battle.web;
+ if(!web)return battle;
+ const participants=Object.fromEntries(Object.entries(battle.participants).map(([id,actor])=>[id,{
+  ...actor,conditions:web.restrained.includes(id)?actor.conditions.filter(c=>c!=='Restrained'):actor.conditions,
+  ...(id==='nighthawk'&&actor.concentratingOn==='Web'?{concentratingOn:undefined}:{}),
+ }]));
+ return {...battle,participants,web:undefined};
+}
+function itemMagicActor(campaign:Campaign){
+ const battle=activeActor(campaign,'nighthawk'),actor=battle.participants.nighthawk;
+ if(battle.status!=='active'||battle.mode!=='unified'||!actor||actor.hp<=0||cannotAct(actor)||actor.actionUsed||
+  actor.rogueDazeTurns!==undefined&&(actor.movementSpentFeet>0||actor.bonusActionUsed))throw Error('An available Magic action is required.');
+ return {battle,actor};
+}
+export function useItemMagicAction(campaign:Campaign,message:string):Campaign{
+ const {battle,actor}=itemMagicActor(campaign);
+ return save(campaign,{...battle,participants:{...battle.participants,nighthawk:{...actor,actionUsed:true}},log:[...battle.log,message]});
+}
+export function castItemMagicMissile(campaign:Campaign,rank:number,targets:string[],dice:number[],shieldedTargets:string[]=[]):Campaign{
+ const {battle,actor}=itemMagicActor(campaign);
+ if(!Number.isInteger(rank)||rank<1||rank>9||targets.length!==rank+2||targets.length!==dice.length||
+  dice.some(roll=>!Number.isInteger(roll)||roll<1||roll>4))throw Error('Provide one verified d4 and target for each Magic Missile dart.');
+ for(const id of targets){
+  const target=battle.participants[id];
+  if(!target||target.deathSaves?.dead||target.hp<=0&&!target.conditions.includes('Unconscious')||actor.conditions.includes('Blinded')||
+   target.conditions.includes('Invisible')||target.rogueHidden&&!target.rogueDetectedBy?.includes('nighthawk')||
+   Math.max(Math.abs(actor.x-target.x),Math.abs(actor.y-target.y))*5>120||!companionLineOfSight(battle,actor,target))
+   throw Error('Choose a visible Magic Missile target within 120 feet.');
+ }
+ const damage=new Map<string,number>();
+ targets.forEach((id,index)=>{if(!shieldedTargets.includes(id))damage.set(id,(damage.get(id)??0)+dice[index]+1);});
+ let next=useItemMagicAction(campaign,'Magic Missile rank '+rank+' · '+targets.length+' darts');
+ for(const [id,amount] of damage)next=damageCompanion(next,id,amount,'Force');
+ return next;
+}
+export function castItemWeb(campaign:Campaign,placement:WebPlacement,dc:number):Campaign{
+ const {battle,actor}=itemMagicActor(campaign);
+ const {x,y,anchored}=placement;
+ if(!valid({x,y})||x+4>20||y+4>20||typeof anchored!=='boolean'||!Number.isInteger(dc)||dc<1||dc>30||
+  Math.max(Math.abs(actor.x-x),Math.abs(actor.y-y))*5>60||!companionLineOfSight(battle,actor,{x,y}))
+  throw Error('Choose a 20-foot Web cube origin within 60 feet with a clear path.');
+ const otherConcentration=actor.concentratingOn;
+ let previous=clearItemWeb(battle);
+ if(otherConcentration==='Hold Person'){
+  previous=clearWizardHoldPerson(previous);
+  if(previous.rogueHoldPersonTargets?.length){
+   const held=previous.rogueHoldPersonTargets;
+   previous={...previous,rogueHoldPersonTargets:[],participants:Object.fromEntries(Object.entries(previous.participants).map(([id,p])=>[id,held.includes(id)?{...p,conditions:p.conditions.filter(condition=>condition!=='Paralyzed')}:p]))};
+  }
+ }
+ return save(campaign,{...previous,web:{x,y,dc,expiresAt:gameSeconds(campaign)+3600,collapseRound:anchored?undefined:battle.round+1,checked:['nighthawk'],restrained:[]},
+  participants:{...previous.participants,nighthawk:{...previous.participants.nighthawk,actionUsed:true,concentratingOn:'Web'}},log:[...previous.log,'Web created · Dexterity DC '+dc]});
+}
+export function pendingWebSave(battle:CompanionEncounter):string|undefined{
+ const id=battle.order[battle.turnIndex],actor=battle.participants[id],web=battle.web;
+ return web&&actor&&actor.hp>0&&insideWeb(web,actor)&&!web.checked.includes(id)&&battle.status==='active'?id:undefined;
+}
+function resolveWebSave(campaign:Campaign,id:string,total:number):Campaign{
+ const battle=encounter(campaign),web=battle.web,actor=battle.participants[id];
+ if(!web||!actor||!insideWeb(web,actor)||web.checked.includes(id)||!Number.isInteger(total)||Math.abs(total)>100)throw Error('Enter a verified Web Dexterity save total.');
+ const failed=total<web.dc||actor.conditions.some(c=>['Paralyzed','Petrified','Stunned','Unconscious'].includes(c));
+ const restrained=failed&&!actor.conditions.includes('Restrained')&&!actor.conditionImmunities?.includes('Restrained');
+ return save(campaign,{...battle,web:{...web,checked:[...web.checked,id],restrained:restrained?[...web.restrained,id]:web.restrained},
+  participants:{...battle.participants,[id]:restrained?{...actor,conditions:[...actor.conditions,'Restrained']}:actor},
+  log:[...battle.log,id+(failed?' failed':' passed')+' the Web Dexterity save']});
+}
+export function resolveWebTurnSave(campaign:Campaign,total:number):Campaign{
+ const id=pendingWebSave(encounter(campaign));
+ if(!id)throw Error('No Web save is pending.');
+ return resolveWebSave(campaign,id,total);
+}
+export function escapeItemWeb(campaign:Campaign,total:number):Campaign{
+ const battle=encounter(campaign),web=battle.web,id=battle.order[battle.turnIndex],actor=battle.participants[id];
+ if(!web?.restrained.includes(id)||!actor||actor.actionUsed||actor.hp<=0||cannotAct(actor)||!Number.isInteger(total)||Math.abs(total)>100)throw Error('The restrained actor needs a free Action and a verified Athletics check.');
+ const success=total>=web.dc;
+ return save(campaign,{...battle,web:{...web,restrained:success?web.restrained.filter(target=>target!==id):web.restrained},
+  participants:{...battle.participants,[id]:{...actor,actionUsed:true,conditions:success?actor.conditions.filter(c=>c!=='Restrained'):actor.conditions}},
+  log:[...battle.log,id+(success?' escaped':' failed to escape')+' the Web']});
+}
+
 function activeActor(campaign:Campaign,actorId:string):CompanionEncounter{
  const battle=encounter(campaign);
  if(battle.order[battle.turnIndex]!==actorId)throw Error('Not this actor’s turn');
+ if(pendingWebSave(battle))throw Error('Resolve the Web Dexterity save first.');
  if(!(actorId==='nighthawk'&&battle.mode==='unified')&&!campaign.subclassActors?.[actorId]&&battle.participants[actorId]?.actorKind!=='enemy')throw Error('Actor is not registered');
  return battle;
 }
 function save(campaign:Campaign,battle:CompanionEncounter):Campaign{
+ const web=battle.web;
+ if(web&&(battle.status!=='active'||battle.participants.nighthawk?.concentratingOn!=='Web'||battle.participants.nighthawk?.hp===0||battle.participants.nighthawk&&cannotAct(battle.participants.nighthawk)||
+  gameSeconds(campaign)>=web.expiresAt||web.collapseRound!==undefined&&battle.round>=web.collapseRound&&battle.order[battle.turnIndex]==='nighthawk'))
+  battle=clearItemWeb(battle);
+ else if(web){
+  const escaped=web.restrained.filter(id=>!battle.participants[id]||!insideWeb(web,battle.participants[id]));
+  if(escaped.length)battle={...battle,web:{...web,restrained:web.restrained.filter(id=>!escaped.includes(id))},
+   participants:Object.fromEntries(Object.entries(battle.participants).map(([id,actor])=>[id,escaped.includes(id)?{...actor,conditions:actor.conditions.filter(c=>c!=='Restrained')}:actor]))};
+ }
  // Centralized cleanup covers all damage paths, including attacks and environmental damage.
  const wizard=battle.participants.nighthawk;
  const interrupted=wizard?.hp===0&&(wizard.concentratingOn||campaign.companionEncounter?.participants.nighthawk?.concentratingOn);
@@ -135,12 +234,14 @@ export function previewCompanionMovement(campaign:Campaign,actorId:string,x:numb
  const initial={...empty,availableFeet,remainingFeet:availableFeet};
  if(battle.order[battle.turnIndex]!==actorId)return {...initial,error:'Not the active turn'};
  if(battle.pendingOpportunity?.moverId===actorId&&battle.pendingOpportunity.attackerIds.length)return {...initial,error:'Resolve pending opportunity reactions'};
- if(actor.hp<=0||actor.conditions.some(c=>IMMOBILE.includes(c)))return {...initial,error:'Actor cannot move'};
+ if(actor.hp<=0||actor.caltropsStopped||battle.groundSupplies?.some(supply=>supply.trappedActor===actorId)||actor.conditions.some(c=>IMMOBILE.includes(c)))return {...initial,error:'Actor cannot move'};
  if(actor.rogueSteadyAim)return {...initial,error:'Steady Aim prevents movement this turn'};
  if(!valid({x,y}))return {...initial,error:'Destination outside encounter grid'};
  try{
   const path=pathRoute(battle,actor,{x,y},actorId).map(p=>({x:p.x,y:p.y}));
-  const costFeet=(path.length-1)*5*(actor.conditions.includes('Prone')?2:1);
+  const web=battle.web;
+  const webSteps=web?path.slice(1).filter(cell=>insideWeb(web,cell)).length:0;
+  const costFeet=((path.length-1)*(actor.conditions.includes('Prone')?2:1)+webSteps)*5;
   const edges=path.slice(1).map((to,i)=>({from:path[i],to,attackers:companionOpportunityCandidates(battle,actorId,path[i],to)}));
   const first=edges.find(e=>e.attackers.length>0);
   const opportunityAttackerIds=[...new Set(edges.flatMap(e=>e.attackers))];
@@ -435,9 +536,9 @@ export function resolveGroundOilHazard(campaign:Campaign,actorId:string):Campaig
  return damageCompanion(updated,actorId,5,'Fire');
 }
 
-export function moveCompanion(campaign:Campaign,actorId:string,x:number,y:number,groundSave?:number):Campaign{
+export function moveCompanion(campaign:Campaign,actorId:string,x:number,y:number,groundSave?:number,groundDamage?:number):Campaign{
  const battle=activeActor(campaign,actorId),actor=battle.participants[actorId];
- if(actor.hp<=0||actor.caltropsStopped)throw Error('Actor cannot move at zero HP or speed');
+ if(actor.hp<=0||actor.caltropsStopped||battle.groundSupplies?.some(supply=>supply.trappedActor===actorId))throw Error('Actor cannot move at zero HP or speed');
  if(actor.rogueDazeTurns!==undefined&&(actor.rogueDazeChoice==='action'||actor.actionUsed||actor.bonusActionUsed))throw Error('Dazed: cannot move after taking an action or bonus action');
  if(actor.conditions.some(c=>IMMOBILE.includes(c)))throw Error('Condition prevents movement');
  if(actor.rogueSteadyAim)throw Error('Steady Aim prevents movement this turn');
@@ -451,13 +552,19 @@ export function moveCompanion(campaign:Campaign,actorId:string,x:number,y:number
  const destination=interrupt?firstTrigger.from:{x,y};
  const traversedSteps=interrupt?route.findIndex(p=>p.x===destination.x&&p.y===destination.y):steps;
  const candidates=interrupt?firstTrigger.candidates:[...new Set(route.slice(1).flatMap((step,i)=>companionOpportunityCandidates(battle,actorId,route[i],step)))];
- const movementCost=traversedSteps*5*(actor.conditions.includes('Prone')?2:1);
+ const web=battle.web;
+ const enteredWeb=!!web&&!web.checked.includes(actorId)&&!insideWeb(web,actor)&&route.slice(1,traversedSteps+1).some(cell=>insideWeb(web,cell));
+ if(enteredWeb&&(traversedSteps>1||!Number.isInteger(groundSave)||Math.abs(groundSave!)>100))throw Error('Enter Web one square at a time with a verified Dexterity save.');
+ const webSteps=web?route.slice(1,traversedSteps+1).filter(cell=>insideWeb(web,cell)).length:0;
+ const movementCost=(traversedSteps+webSteps)*5+(actor.conditions.includes('Prone')?traversedSteps*5:0);
  if(movementCost>actor.speedFeet+actor.dashFeet-actor.movementSpentFeet)throw Error('Move exceeds remaining movement');
  if(Object.entries(battle.participants).some(([id,p])=>id!==actorId&&p.hp>0&&p.x===destination.x&&p.y===destination.y))throw Error('Square occupied');
  if(traversedSteps>1&&route.slice(1,traversedSteps+1).some(cell=>battle.groundOil?.some(o=>o.ignitedRound!==undefined&&o.x===cell.x&&o.y===cell.y)))throw Error('Enter burning Oil one 5-foot step at a time');
  const supply=groundEntry(battle,actorId,route.slice(0,traversedSteps+1),groundSave);
  const moved=save(campaign,revealRogueOnVisibilityChange({...battle,participants:{...battle.participants,[actorId]:{...actor,x:destination.x,y:destination.y,movementSpentFeet:actor.movementSpentFeet+movementCost,...(actor.rogueDazeTurns!==undefined&&movementCost>0?{rogueDazeChoice:'movement' as const}:{}),rogueMovedThisTurn:actor.rogueMovedThisTurn||movementCost>0,rogueHidden:actorId==='nighthawk'&&movementCost>0&&Object.values(battle.participants).some(enemy=>enemy.actorKind==='enemy'&&enemy.hp>0&&companionLineOfSight(battle,enemy,destination))?false:actor.rogueHidden}},pendingOpportunity:candidates.length?{moverId:actorId,attackerIds:candidates,from:interrupt?{x:firstTrigger.from.x,y:firstTrigger.from.y}:{x:actor.x,y:actor.y},to:interrupt?{x:firstTrigger.to.x,y:firstTrigger.to.y}:{x,y},...(interrupt?{destination:{x,y}}:{})}:undefined,log:[...battle.log,actorId+' moved to '+destination.x+','+destination.y+(interrupt?' · interrupted before leaving reach toward '+firstTrigger.to.x+','+firstTrigger.to.y:candidates.length?' · potential opportunity attackers: '+candidates.join(', '):'')]}));
- return resolveGroundOilHazard(resolveGroundEntry(moved,actorId,supply,groundSave),actorId);
+ if(enteredWeb&&supply)throw Error('Resolve overlapping Web and gear hazards with the DM before moving.');
+ const resolved=resolveGroundEntry(moved,actorId,supply,groundSave,groundDamage);
+ return resolveGroundOilHazard(enteredWeb?resolveWebSave(resolved,actorId,groundSave!):resolved,actorId);
 }
 
 type GroundSupply=NonNullable<CompanionEncounter['groundSupplies']>[number];
@@ -467,6 +574,7 @@ function groundEntry(battle:CompanionEncounter,actorId:string,route:Cell[],verif
  const entered=(battle.groundSupplies??[]).filter(supply=>{
   if(battle.groundEntries?.includes(groundEntryKey(actorId,supply.id))||
      (battle.order[battle.turnIndex]===actorId&&battle.groundEntries?.includes(supply.id)))return false;
+  if(supply.sprung)return false;
   const size=supply.name==='Ball Bearings'?2:1;
   const inside=(cell:Cell)=>cell.x>=supply.x&&cell.x<supply.x+size&&cell.y>=supply.y&&cell.y<supply.y+size;
   return route.slice(1).some((cell,index)=>inside(cell)&&!inside(route[index]));
@@ -479,11 +587,18 @@ function groundEntry(battle:CompanionEncounter,actorId:string,route:Cell[],verif
  return entered[0];
 }
 
-function resolveGroundEntry(moved:Campaign,actorId:string,supply:GroundSupply|undefined,groundSave?:number):Campaign{
+function resolveGroundEntry(moved:Campaign,actorId:string,supply:GroundSupply|undefined,groundSave?:number,groundDamage?:number):Campaign{
  if(!supply)return moved;
  const current=encounter(moved);
  const failed=current.participants[actorId].conditions.some(condition=>['Paralyzed','Petrified','Stunned','Unconscious'].includes(condition))||
-  groundSave!<(supply.name==='Caltrops'?15:10);
+  groundSave!<(supply.name==='Caltrops'?15:supply.name==='Hunting Trap'?13:10);
+ if(supply.name==='Hunting Trap'){
+  if(!failed)return moved;
+  if(!Number.isInteger(groundDamage)||groundDamage!<1||groundDamage!>4)throw Error('Enter the verified Hunting Trap d4 damage.');
+  const damaged=damageCompanion(moved,actorId,groundDamage!,'Piercing');
+  const state=encounter(damaged);
+  return save(damaged,{...state,groundSupplies:state.groundSupplies?.map(entry=>entry.id===supply.id?{...entry,sprung:true,trappedActor:actorId}:entry),log:[...state.log,actorId+' caught by a Hunting Trap']});
+ }
  const resolved=save(moved,{...current,groundEntries:[...(current.groundEntries??[]),groundEntryKey(actorId,supply.id)],
   log:[...current.log,actorId+' '+(failed?'failed':'passed')+' the '+supply.name+' save']});
  if(!failed)return resolved;
@@ -495,7 +610,19 @@ function resolveGroundEntry(moved:Campaign,actorId:string,supply:GroundSupply|un
 
 }
 
-export function moveCompanionForced(campaign:Campaign,actorId:string,x:number,y:number,groundSave?:number):Campaign{
+export function freeHuntingTrapTarget(campaign:Campaign,targetId:string,total:number):Campaign{
+ const battle=encounter(campaign),actorId=battle.order[battle.turnIndex],actor=battle.participants[actorId],target=battle.participants[targetId];
+ const trap=battle.groundSupplies?.find(entry=>entry.trappedActor===targetId);
+ if(battle.status!=='active'||!trap||!target||!actor||actor.hp<=0||actor.actionUsed||cannotAct(actor)||!Number.isInteger(total)||Math.abs(total)>100||
+  Math.max(Math.abs(actor.x-target.x),Math.abs(actor.y-target.y))>1)throw Error('A free Action, reachable trapped creature and verified Athletics check are required.');
+ const success=total>=13;
+ const next=save(campaign,{...battle,participants:{...battle.participants,[actorId]:{...actor,actionUsed:true}},
+  groundSupplies:battle.groundSupplies?.map(entry=>entry.id===trap.id&&success?{...entry,trappedActor:undefined}:entry),
+  log:[...battle.log,actorId+(success?' freed ':' failed to free ')+targetId+' from the Hunting Trap']});
+ return success?next:damageCompanion(next,targetId,1,'Piercing');
+}
+
+export function moveCompanionForced(campaign:Campaign,actorId:string,x:number,y:number,groundSave?:number,groundDamage?:number):Campaign{
  const battle=encounter(campaign),actor=battle.participants[actorId],destination={x,y};
  if(battle.mode!=='unified'||!actor||actor.deathSaves?.dead||!valid(destination)||
     Math.max(Math.abs(x-actor.x),Math.abs(y-actor.y))!==1||
@@ -503,11 +630,16 @@ export function moveCompanionForced(campaign:Campaign,actorId:string,x:number,y:
     Object.entries(battle.participants).some(([id,other])=>id!==actorId&&other.hp>0&&other.x===x&&other.y===y))
   throw Error('Choose an adjacent unoccupied square for verified forced movement');
  if(battle.pendingOpportunity?.attackerIds.length)throw Error('Resolve pending opportunity reactions first');
+ const web=battle.web;
+ const enteredWeb=!!web&&!web.checked.includes(actorId)&&!insideWeb(web,actor)&&insideWeb(web,destination);
+ if(enteredWeb&&(!Number.isInteger(groundSave)||Math.abs(groundSave!)>100))throw Error('Enter the verified Web Dexterity save.');
  const supply=groundEntry(battle,actorId,[actor,destination],groundSave);
  const moved=save(campaign,revealRogueOnVisibilityChange({...battle,
   participants:{...battle.participants,[actorId]:{...actor,...destination}},
   log:[...battle.log,actorId+' was forcibly moved to '+x+','+y+' (DM verified)']}));
- return resolveGroundOilHazard(resolveGroundEntry(moved,actorId,supply,groundSave),actorId);
+ if(enteredWeb&&supply)throw Error('Resolve overlapping Web and gear hazards with the DM before moving.');
+ const resolved=resolveGroundEntry(moved,actorId,supply,groundSave,groundDamage);
+ return resolveGroundOilHazard(enteredWeb?resolveWebSave(resolved,actorId,groundSave!):resolved,actorId);
 }
 
 export function bindCompanionWithRope(campaign:Campaign,targetId:string):Campaign{
@@ -556,6 +688,7 @@ export function resolveRoguePoisonSave(campaign:Campaign,targetId:string,saveTot
 }
 export function endCompanionTurn(campaign:Campaign,actorId:string,rollBurning=()=>Math.floor(Math.random()*4)+1):Campaign{
  const battle=activeActor(campaign,actorId);
+ if(pendingWebSave(battle))throw Error('Resolve the Web Dexterity save first.');
  if(battle.mode==='unified'&&(battle.wizardHoldPersonTargets?.includes(actorId)||battle.rogueHoldPersonTargets?.includes(actorId))&&battle.participants[actorId]?.conditions.includes('Paralyzed'))throw Error('Resolve Hold Person end-of-turn Wisdom save before ending turn');
  if(battle.participants[actorId]?.actorKind==='enemy'&&battle.pendingOpportunity?.moverId===actorId&&battle.pendingOpportunity.attackerIds.length)throw Error('Pending opportunity reactions require DM adjudication');
  if(battle.participants[actorId]?.roguePoisonDC!==undefined&&!battle.participants[actorId]?.roguePoisonSaveResolved)throw Error('Resolve Rogue Poison end-of-turn Constitution save before ending turn');
@@ -574,6 +707,10 @@ export function endCompanionTurn(campaign:Campaign,actorId:string,rollBurning=()
   if(expiry&&(expiry.round<nextRound||expiry.round===nextRound&&(battle.order.indexOf('nighthawk')===-1?expiry.turnIndex:battle.order.indexOf('nighthawk'))<=next))
    participants[id]={...participant,oilExpires:undefined};
  }
+ if(participants.nighthawk&&effectiveStrength(oilResolved)!==effectiveStrength(clocked)){
+  const speedFeet=effectiveEquipmentSpeed(clocked);
+  if(speedFeet!==undefined)participants.nighthawk={...participants.nighthawk,speedFeet};
+ }
  if(nextId==='nighthawk')for(const [id,speedFeet] of Object.entries(afterOil.weaponSlow??{})){
   if(participants[id])participants[id]={...participants[id],speedFeet};
  }
@@ -585,7 +722,7 @@ export function endCompanionTurn(campaign:Campaign,actorId:string,rollBurning=()
  const basicPoison=battle.basicPoison;
  const ammunitionPoisonExpired=!!battle.poisonedAmmunition&&nextId==='nighthawk'&&nextRound>=battle.poisonedAmmunition.expiresRound;
  const poisonExpired=basicPoison&&nextId==='nighthawk'&&nextRound>=basicPoison.expiresRound;
- const advanced=save(clocked,{...afterOil,...{weaponFollowup:undefined},...(nextId==='nighthawk'?{lightAttack:undefined,cleaveUsed:undefined,weaponSlow:undefined}:{}),groundOil:afterOil.groundOil?.filter(o=>o.ignitedRound===undefined?nextRound<o.expiresRound:nextRound<o.ignitedRound+2||nextRound===o.ignitedRound+2&&next<=o.ignitedTurn!).map(o=>({...o,damagedActorsThisTurn:[]})),...(poisonExpired?{basicPoison:undefined}:{}),...(ammunitionPoisonExpired?{poisonedAmmunition:undefined}:{}),...(objects?{objects}:{}),participants,groundEntries:undefined,turnIndex:next,round:battle.round+(next===0?1:0),log:[...battle.log,actorId+' ended turn']});
+ const advanced=save(clocked,{...afterOil,web:afterOil.web?{...afterOil.web,checked:[]}:undefined,...{weaponFollowup:undefined},...(nextId==='nighthawk'?{lightAttack:undefined,cleaveUsed:undefined,weaponSlow:undefined}:{}),groundOil:afterOil.groundOil?.filter(o=>o.ignitedRound===undefined?nextRound<o.expiresRound:nextRound<o.ignitedRound+2||nextRound===o.ignitedRound+2&&next<=o.ignitedTurn!).map(o=>({...o,damagedActorsThisTurn:[]})),...(poisonExpired?{basicPoison:undefined}:{}),...(ammunitionPoisonExpired?{poisonedAmmunition:undefined}:{}),...(objects?{objects}:{}),participants,groundEntries:undefined,turnIndex:next,round:battle.round+(next===0?1:0),log:[...battle.log,actorId+' ended turn']});
  if(!battle.burningCreatures?.includes(nextId)||participants[nextId].deathSaves?.dead||
     (participants[nextId].actorKind==='enemy'&&participants[nextId].hp===0))return advanced;
  const damage=rollBurning();
@@ -663,9 +800,11 @@ function resolveTypedCompanionDamage(campaign:Campaign,targetId:string,actor:Com
  const battle=encounter(campaign);
  const adjust=(value:number)=>(targetId==='nighthawk'&&battle.mode==='unified')||actor.actorKind==='enemy'
   ?value:adjudicateSubclassActorDamage(campaign,targetId,value,type);
- const base=actor.damageImmunities?.includes(type)?0:actor.damageResistances?.includes(type)?Math.floor(adjust(amount)/2):adjust(amount);
+ const resistant=actor.damageResistances?.includes(type)||resistsTemporaryDamage(campaign,targetId,type);
+ const resolveAmount=(value:number)=>actor.damageImmunities?.includes(type)?0:resistant?Math.min(adjust(value),Math.floor(value/2)):adjust(value);
+ const base=resolveAmount(amount);
  const ignited=type==='Fire'&&base>0&&!!actor.oilExpires;
- const taken=ignited?(actor.damageImmunities?.includes(type)?0:actor.damageResistances?.includes(type)?Math.floor(adjust(amount+5)/2):adjust(amount+5)):base;
+ const taken=ignited?resolveAmount(amount+5):base;
  return {taken,ignited,updated:damagedActor(ignited?{...actor,oilExpires:undefined}:actor,taken,critical)};
 }
 
@@ -744,7 +883,7 @@ export function removeCompanionCondition(campaign:Campaign,targetId:string,condi
 export function nighthawkEncounterStatistics(campaign:Campaign){
  const c=campaign.character;
  if(!c)throw Error('Nighthawk character unavailable');
- return {armorClass:nighthawkEquippedDefense(campaign)?.armorClass??null,speedFeet:effectiveEquipmentSpeed(campaign)??null,proficiencyBonus:c.proficiencyBonus,dexterityModifier:abilityModifier(c.scores.dex),strengthModifier:abilityModifier(c.scores.str),spellSlots:c.spellSlots?{...c.spellSlots}:null,weaponAttackModifier:null as number|null};
+ return {armorClass:nighthawkEquippedDefense(campaign)?.armorClass??null,speedFeet:effectiveEquipmentSpeed(campaign)??null,proficiencyBonus:c.proficiencyBonus,dexterityModifier:abilityModifier(c.scores.dex),strengthModifier:abilityModifier(effectiveStrength(campaign)??c.scores.str),spellSlots:c.spellSlots?{...c.spellSlots}:null,weaponAttackModifier:null as number|null};
 }
 /** Uses an explicitly granted bonus action; never assumes all actors have a bonus-action feature. */
 export function useCompanionBonusAction(campaign:Campaign,actorId:string,description:string,eligible:boolean):Campaign{
@@ -851,7 +990,7 @@ export function nighthawkEquippedAttack(campaign:Campaign,id=campaign.encounterL
  if(!owned)return null;
  const finesse=item.properties?.includes('Finesse');
  const ranged=weaponAttackProfile(item).rangedWeapon;
- const dex=abilityModifier(character.scores.dex),str=abilityModifier(character.scores.str);
+ const dex=abilityModifier(character.scores.dex),str=abilityModifier(effectiveStrength(campaign)??character.scores.str);
  const abilityModifierUsed=finesse?Math.max(str,dex):ranged?dex:str;
  // Explicit imported proficiencies take precedence over the legacy fallback.
  const classId=campaign.characterIdentity?.classId??character.classId;
@@ -975,7 +1114,7 @@ export function thrownConsumableTargets(campaign: Campaign, requiresSight=true,i
  if (battle?.status !== 'active' || battle.mode !== 'unified' ||
      battle.order[battle.turnIndex] !== 'nighthawk' || !actor || actor.actionUsed ||
      actor.hp <= 0 || cannotAct(actor) || requiresSight && actor.conditions.includes('Blinded') ||
-     !level || level >= 5 || !campaign.characterIdentity ||
+     !level || !campaign.characterIdentity ||
      battle.pendingOpportunity?.attackerIds.length) return [];
  const targetsWithinReach=(target:Cell)=>Math.max(Math.abs(actor.x-target.x),Math.abs(actor.y-target.y))<=4&&companionLineOfSight(battle,actor,target);
  const creatures=Object.entries(battle.participants).filter(([id, target]) =>
@@ -1231,7 +1370,7 @@ function verifiedWeaponDisadvantage(campaign:Campaign,battle:CompanionEncounter,
  if(distance(target)>profile.maximumRange)throw Error('Target outside the equipped weapon range.');
  if(profile.needsFreeHand&&(campaign.encounterLoadout?.shieldId||campaign.encounterLoadout?.offhandWeaponId||ownedMagicWearables(campaign).some(item=>item.worn&&item.id.startsWith('wand-'))))throw Error('This attack requires a free hand. Put away the shield or wand first.');
  const ability=profile.rangedWeapon?'dex':'str';
- const heavyPenalty=profile.heavy&&(campaign.character?.scores[ability]??0)<13;
+ const heavyPenalty=profile.heavy&&(ability==='str'?effectiveStrength(campaign)??0:campaign.character?.scores.dex??0)<13;
  const adjacentHostile=profile.ranged&&Object.entries(battle.participants).some(([id,actor])=>
   id!=='nighthawk'&&(id===targetId||actor.faction==='enemies')&&actor.hp>0&&!cannotAct(actor)&&!actor.conditions.includes('Blinded')&&distance(actor)<=5&&companionLineOfSight(battle,actor,attacker));
  return heavyPenalty||adjacentHostile||distance(target)>profile.normalRange;

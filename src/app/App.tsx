@@ -1,4 +1,5 @@
-import {adventureEquipmentRequest} from '../game/adventureEquipment';
+import {statsWithTemporaryEffects} from '../game/temporaryEffects';
+import {adventureEquipmentRequest,adventureHealingPotionRequest} from '../game/adventureEquipment';
 import {magicProtectionBonus} from '../game/magicEquipment';
 import {equipmentRollMode} from '../game/armorEffects';
 import {carriedWeight,carryingCapacity} from '../game/carryingCapacity';
@@ -492,7 +493,7 @@ export function App() {
   const [draft, setDraft] = useState('');
   const [askDMOpen, setAskDMOpen] = useState(false);
   const [askDMDraft, setAskDMDraft] = useState('');
-  const [pendingEquipmentUse,setPendingEquipmentUse]=useState<{campaignId:string;request:ConsumableRequest}|null>(null);
+  const [pendingEquipmentUse,setPendingEquipmentUse]=useState<{campaignId:string;request:ConsumableRequest|Omit<HealingPotionRequest,'rollDie'>}|null>(null);
   const [pendingAdventureSpell, setPendingAdventureSpell] = useState<{spell:string;ritual:boolean;intent:string}|null>(null);
   const [adventureComponentsConfirmed,setAdventureComponentsConfirmed] = useState(false);
   const [pendingRest,setPendingRest] = useState<'short'|'long'|null>(null);
@@ -592,7 +593,7 @@ export function App() {
     if (!campaign || saving) return;
     setSaving(true);
     try {
-      const result = rollCheck(campaign.character ?? prototypeNighthawk, skill, equipmentRollMode(campaign,mode,skillAbility[skill],skill==='Stealth'));
+      const result = rollCheck(statsWithTemporaryEffects(campaign) ?? prototypeNighthawk, skill, equipmentRollMode(campaign,mode,skillAbility[skill],skill==='Stealth'));
       const next = addRoll(campaign, describeCheck(result));
       await localCampaignStorage.save(next);
       setCampaign(next);
@@ -610,7 +611,7 @@ export function App() {
       const count = mode === 'normal' ? 1 : 2;
       const dice = Array.from({ length: count }, () => Math.floor(Math.random() * 20) + 1);
       const selected = mode === 'advantage' ? Math.max(...dice) : mode === 'disadvantage' ? Math.min(...dice) : dice[0];
-      const modifier = savingThrowModifier(campaign.character ?? prototypeNighthawk, ability)+magicProtectionBonus(campaign);
+      const modifier = savingThrowModifier(statsWithTemporaryEffects(campaign) ?? prototypeNighthawk, ability)+magicProtectionBonus(campaign);
       const result = 'Nighthawk · ' + ability.toUpperCase() + ' saving throw: ' + (dice.length === 1 ? String(selected) : dice.join(' / ') + ' (' + mode + ': ' + selected + ')') + ' ' + (modifier >= 0 ? '+' : '') + modifier + ' = ' + (selected + modifier) + '. Outcome awaits DM adjudication.';
       const next = addRoll(campaign, result);
       await localCampaignStorage.save(next);
@@ -936,7 +937,8 @@ export function App() {
     }
     if(campaign?.characterIdentity){
       try {
-        const request=adventureEquipmentRequest(campaign,draft,crypto.randomUUID());
+        const requestId=crypto.randomUUID();
+        const request=adventureHealingPotionRequest(campaign,draft,requestId)??adventureEquipmentRequest(campaign,draft,requestId);
         if(request){setPendingEquipmentUse({campaignId:campaign.id,request});return;}
       } catch(error){setNotice(error instanceof Error?error.message:'Equipment use is unavailable.');return;}
       await sendToDM();return;
@@ -1080,7 +1082,7 @@ export function App() {
       const memory=adventureMemory(prepared);
       const history=memory.recentConversation;
       const response = await fetch('/api/dm', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-four-keeps-access': accessCode },
-        body: JSON.stringify({ message:aiSession?prepared.pendingAdventureAction!.message:message, clarification:prepared.pendingClarification??null, actionId, character:current.character ?? prototypeNighthawk, gameState:{ magicWishlist:magicWishlistNames(current.id),magicSaleInventory:(current.inventoryLedger?.gear??[]).filter(item=>item.quantity>0).slice(0,40).map(item=>({name:item.name,quantity:item.quantity})), ...campaignPlayerContext(current), adventureSession:current.adventureSession??null, merchant:frontierMerchantContext(current), characterIdentity:current.characterIdentity??null, location:current.location, combat:current.combat??null, familiar:current.familiar ?? null, elapsedMinutes:current.elapsedMinutes ?? 0, concentration:current.concentration??null, spellEffects:(current.spellEffects??[]).slice(-12), recentEvents:current.journal.filter(e=>e.kind==='system').slice(-8).map(e=>e.text) }, history, worldFacts: memory.establishedFacts, world: current.world ?? emptyWorld(), anchamida:current.characterBuild?{predefined:anchamidaLocations.map(s=>({id:s.id,name:s.name,x:s.x,y:s.y,notes:s.notes})),discovered:current.mapDiscovered??[],dynamic:current.mapDynamicSites??[]}:null, adventureMemory:memory }) });
+        body: JSON.stringify({ message:aiSession?prepared.pendingAdventureAction!.message:message, clarification:prepared.pendingClarification??null, actionId, character:statsWithTemporaryEffects(current) ?? prototypeNighthawk, gameState:{ magicWishlist:magicWishlistNames(current.id),magicSaleInventory:(current.inventoryLedger?.gear??[]).filter(item=>item.quantity>0).slice(0,40).map(item=>({name:item.name,quantity:item.quantity})), ...campaignPlayerContext(current), adventureSession:current.adventureSession??null, merchant:frontierMerchantContext(current), characterIdentity:current.characterIdentity??null, location:current.location, combat:current.combat??null, familiar:current.familiar ?? null, elapsedMinutes:current.elapsedMinutes ?? 0, concentration:current.concentration??null, spellEffects:(current.spellEffects??[]).slice(-12), recentEvents:current.journal.filter(e=>e.kind==='system').slice(-8).map(e=>e.text) }, history, worldFacts: memory.establishedFacts, world: current.world ?? emptyWorld(), anchamida:current.characterBuild?{predefined:anchamidaLocations.map(s=>({id:s.id,name:s.name,x:s.x,y:s.y,notes:s.notes})),discovered:current.mapDiscovered??[],dynamic:current.mapDynamicSites??[]}:null, adventureMemory:memory }) });
       const result: { narration?: string; newFacts?: string[]; worldUpdates?: unknown; checkRequest?: { skill:string; tool?:string; mode:'normal'|'advantage'|'disadvantage'; reason:string; token:string } | null; combatStart?:{enemyName:string}|null; magicSaleOffer?:{buyer:string;questId:string;itemName:string;quantity:number;proceedsCp:number}|null; merchantDiscount?:{itemId:string;percent:number}|null; clarificationRequest?:{question:string}|null; travelDestination?:string|null; mapActions?:unknown; error?: string } = await response.json();
       if (!response.ok || !result.narration) throw new Error(result.error || 'DM request failed');
       // Do not trust the network boundary to enforce mutually exclusive gameplay transitions.
@@ -1551,7 +1553,7 @@ export function App() {
     try{
       const next=await commitHealingPotionUse(campaign.id,{...request,rollDie:()=>Math.floor(Math.random()*4)+1});
       setCampaign(next);setCampaigns(items=>items.map(item=>item.id===next.id?next:item));
-      setNotice('Healing potion used.');return true;
+      setNotice(next.journal.at(-1)?.text??'Healing potion used.');return true;
     }catch(error){setNotice('Potion use rejected: '+String(error));return false}
     finally{setSaving(false)}
   }
@@ -1982,7 +1984,8 @@ export function App() {
           <div className="flex gap-2">
             <button type="button" disabled={saving} className="min-h-9 rounded border border-white/25 px-3" onClick={()=>setPendingEquipmentUse(null)}>Cancel</button>
             <button type="button" disabled={saving} className="min-h-9 rounded bg-gold px-3 font-semibold text-ink" onClick={async()=>{
-              const used=await useConsumable({...pendingEquipmentUse.request,confirmed:true});
+              const request=pendingEquipmentUse.request;
+              const used='expectedHP' in request?await usePotion({...request,confirmed:true}):await useConsumable({...request,confirmed:true});
               setPendingEquipmentUse(null);
               if(used)setDraft('');
             }}>Use equipment</button>

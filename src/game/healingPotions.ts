@@ -6,12 +6,21 @@ export const HEALING_POTIONS = {
   'Potion of Healing (superior)': {dice:8,faces:4,bonus:8,rarity:'Rare'},
   'Potion of Healing (supreme)': {dice:10,faces:4,bonus:20,rarity:'Very Rare'},
 } as const;
-export type HealingPotionName = keyof typeof HEALING_POTIONS;
+const healingAliases={
+ 'Potion of Greater Healing':'Potion of Healing (greater)',
+ 'Potion of Superior Healing':'Potion of Healing (superior)',
+ 'Potion of Supreme Healing':'Potion of Healing (supreme)',
+} as const;
+export type HealingPotionName=keyof typeof HEALING_POTIONS|keyof typeof healingAliases;
 export function isHealingPotion(name:string):name is HealingPotionName {
- return Object.prototype.hasOwnProperty.call(HEALING_POTIONS,name);
+ return Object.hasOwn(HEALING_POTIONS,name)||Object.hasOwn(healingAliases,name);
+}
+export function healingPotionProfile(name:HealingPotionName){
+ const canonical=Object.hasOwn(healingAliases,name)?healingAliases[name as keyof typeof healingAliases]:name as keyof typeof HEALING_POTIONS;
+ return HEALING_POTIONS[canonical];
 }
 export function healingPotionAmount(name:HealingPotionName,rollDie:()=>number):number {
- const {dice,faces,bonus}=HEALING_POTIONS[name];
+ const {dice,faces,bonus}=healingPotionProfile(name);
  let total=bonus;
  for(let i=0;i<dice;i++){const roll=rollDie();if(!Number.isInteger(roll)||roll<1||roll>faces)throw Error('Invalid healing die');total+=roll;}
  return total;
@@ -20,7 +29,7 @@ export function healingPotionAmount(name:HealingPotionName,rollDie:()=>number):n
 export interface HealingPotionRequest {
  name:HealingPotionName;confirmed:boolean;expectedQuantity:number;expectedHP:number;
  rollDie:()=>number;requestId:string;targetId?:string;expectedTargetHP?:number;
- expectedTurnIndex?:number;expectedRound?:number;expectedActorPosition?:{x:number;y:number};expectedTargetPosition?:{x:number;y:number};
+ expectedEncounterId?:string;expectedTurnIndex?:number;expectedRound?:number;expectedActorPosition?:{x:number;y:number};expectedTargetPosition?:{x:number;y:number};
 }
 export function eligiblePotionTargets(campaign:Campaign):{id:string;hp:number;maxHp:number}[]{
  const battle=campaign.companionEncounter;
@@ -40,6 +49,7 @@ export function useOwnedHealingPotion(campaign:Campaign,request:HealingPotionReq
  const targetId=request.targetId??'nighthawk';
  if(battle?.status==='active'&&(battle.mode!=='unified'||battle.order[battle.turnIndex]!=='nighthawk'||!battle.participants.nighthawk))throw Error('Unsupported encounter or actor turn');
  if(targetId!=='nighthawk'&&(!battle||battle.status!=='active'||battle.mode!=='unified'))throw Error('Companion administration requires an active unified encounter');
+ if(request.expectedEncounterId!==undefined&&request.expectedEncounterId!==battle?.id)throw Error('Stale encounter');
  if(battle?.status==='active'&&(request.expectedTurnIndex!==undefined&&request.expectedTurnIndex!==battle.turnIndex||request.expectedRound!==undefined&&request.expectedRound!==battle.round))throw Error('Stale encounter turn');
  const ch=campaign.character;
  if(!ch||typeof ch.currentHitPoints!=='number'||typeof ch.maxHitPoints!=='number'||!Number.isFinite(ch.currentHitPoints)||!Number.isFinite(ch.maxHitPoints))throw Error('Character HP unavailable');
@@ -48,6 +58,7 @@ export function useOwnedHealingPotion(campaign:Campaign,request:HealingPotionReq
  const actor=battle?.status==='active'?battle.participants.nighthawk:undefined;
  if(actor&&(actor.conditions?.some(c=>['Incapacitated','Paralyzed','Petrified','Stunned','Unconscious'].includes(c))||actor.hp<=0))throw Error('Actor cannot take actions');
  if(actor&&request.expectedActorPosition&&(request.expectedActorPosition.x!==actor.x||request.expectedActorPosition.y!==actor.y))throw Error('Stale actor position');
+ if(actor?.rogueDazeTurns!==undefined&&(actor.actionUsed||actor.movementSpentFeet>0))throw Error('Dazed: choose movement or one action or bonus action');
  if(actor?.bonusActionUsed)throw Error('Bonus Action already spent');
  const recipient=targetId==='nighthawk'?undefined:battle?.participants[targetId];
  if(targetId!=='nighthawk'&&(!recipient||recipient.actorKind==='enemy'||!eligiblePotionTargets(campaign).some(t=>t.id===targetId)))throw Error('Target is not an eligible adjacent ally');

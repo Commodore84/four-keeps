@@ -31,8 +31,10 @@ A `Could not resolve host: github.com` error from one shell is **not** proof tha
 5. Do not claim a Vercel sandbox, GitHub Actions run, or cloud computer is accessible without checking. If no executable test environment exists, report the specific blocker and leave the foundation untouched.
 
 ## Development and publication
-- Work on an isolated branch; batch coherent changes.
-- For behavior changes, run focused tests while iterating and the **full exact-SHA release gate** described in RELEASE_CHECKS.md before publication.
+- Work on an isolated branch. Audit relevant source, tests and rules once, then implement related changes in substantial batches.
+- Reuse the recovered environment, dependencies, rules research and fixtures. Add regression tests during implementation and run them together with TypeScript after the batch. Retest affected checks when fixing a concrete failure.
+- Use the **full exact-SHA release gate** in RELEASE_CHECKS.md for final regression coverage. Use the authoritative CI run for the full suite and avoid duplicating it locally. Inspect relevant mobile evidence when the UI changes.
+- Diagnose any failed release check before retrying. Keep the branch isolated and continue through verification and publication. Resolve routine implementation decisions independently.
 - Create only one fresh `verify/*` ref from the finished candidate SHA for a release attempt; inspect full CI, including iPhone Playwright artifacts.
 - Publish by protected, non-forced fast-forward only after successful verification; confirm exact-SHA Vercel READY.
 - Never use a documentation-only GitHub API edit as evidence that runtime behavior has been implemented.

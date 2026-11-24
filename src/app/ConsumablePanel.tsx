@@ -1,19 +1,27 @@
+import {ItemSpellFields,useItemSpellInputs} from './ItemSpellFields';
+import {activeTemporaryEffects,effectDescription,gameSeconds,isStrengthPotion,RESISTANCE_TYPES,type ResistanceType} from '../game/temporaryEffects';
 import {ammunitionNamesForWeapon} from '../game/weaponAttackProfile';
 import {ITEM_BY_ID} from '../game/creationEquipment';
-import {castOwnedSpellScroll,scrollTier} from '../game/spellScrolls';
+import {castOwnedSpellScroll,scrollTier,spellScrollCheckDC} from '../game/spellScrolls';
 import {useRef,useState} from 'react';
 import type {Campaign} from '../game/campaign';
 import {antitoxinSecondsRemaining,eligibleKitTargets,equipmentLightRemaining,equipmentLightRules,provisionsToday,type EquipmentLight,type ConsumableName,type ConsumableRequest} from '../game/consumables';
 import {attackCompanionWithVerifiedStats,basicPoisonWeapon,endCompanionTurn,finishCompanionEncounter,collectSpentAmmunition,recoverEncounterAmmunition,thrownConsumableTargets,type HolyWaterTargetType} from '../game/companionEncounter';
 export function ConsumablePanel({campaign,saving,onUse,onEncounterChange}:{campaign:Campaign;saving:boolean;onUse:(r:ConsumableRequest)=>Promise<boolean>;onEncounterChange?:(next:Campaign,message:string)=>Promise<boolean>|boolean|void}){
- const owned=(campaign.inventoryLedger?.gear??[]).filter(g=>g.quantity>0&&(g.name==='Ball Bearings'||g.name==='Caltrops'||g.name==='Rations'||g.name==='Waterskin'||g.name==='Rope'||g.name==='Candle'||g.name==='Lamp'||g.name==='Torch'||g.name==='Poison, Basic'||g.name==='Oil'||g.name==='Alchemist’s Fire'||g.name==='Holy Water'||g.name==='Acid'||g.name==='Antitoxin'||g.name==="Healer's Kit"));
+ const owned=(campaign.inventoryLedger?.gear??[]).filter(g=>g.quantity>0&&(g.name==='Ball Bearings'||g.name==='Caltrops'||g.name==='Hunting Trap'||g.name==='Potion of Resistance'||isStrengthPotion(g.name)||g.name==='Rations'||g.name==='Waterskin'||g.name==='Rope'||g.name==='Candle'||g.name==='Lamp'||g.name==='Torch'||g.name==='Poison, Basic'||g.name==='Oil'||g.name==='Alchemist’s Fire'||g.name==='Holy Water'||g.name==='Acid'||g.name==='Antitoxin'||g.name==="Healer's Kit"));
  const [name,setName]=useState<ConsumableName|null>(null),[target,setTarget]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState('');
  const [acidSave,setAcidSave]=useState(''),[acidDamage,setAcidDamage]=useState('');
  const [creatureType,setCreatureType]=useState<HolyWaterTargetType|''>('');
   const [ropeCheck,setRopeCheck]=useState(''),[waterChoice,setWaterChoice]=useState<'drink'|'refill'>('drink');
  const [groundX,setGroundX]=useState(''),[groundY,setGroundY]=useState(''),[level,setLevel]=useState(false),[spillOil,setSpillOil]=useState(false);
  const [poisonQuantity,setPoisonQuantity]=useState('3');
+ const [resistance,setResistance]=useState<ResistanceType|''>('');
+ const [scrollCheck,setScrollCheck]=useState('');
+ const scrollFields=useItemSpellInputs();
+ const effects=activeTemporaryEffects(campaign);
  const [scrollName,setScrollName]=useState(''),[scrollSpell,setScrollSpell]=useState(''),[scrollConfirmed,setScrollConfirmed]=useState(false);
+ const scrollRank=scrollTier(scrollName);
+ const scrollCheckDC=scrollRank===null?null:spellScrollCheckDC(campaign,scrollRank);
  const scrolls=(campaign.inventoryLedger?.gear??[]).filter(g=>g.quantity>0&&scrollTier(g.name)!==null);
  const [combatTarget,setCombatTarget]=useState(''),[recoveryAmmoName,setRecoveryAmmoName]=useState(''),[combatD20,setCombatD20]=useState(''),[combatDamage,setCombatDamage]=useState(''),[combatRange,setCombatRange]=useState(''),[recoverAmmo,setRecoverAmmo]=useState('1');
  const [recoveryId,setRecoveryId]=useState(''),[recoveryAccess,setRecoveryAccess]=useState(false);
@@ -24,7 +32,7 @@ export function ConsumablePanel({campaign,saving,onUse,onEncounterChange}:{campa
   campaign.companionEncounter.groundSupplies??[]:[];
  const recoverable=recovery.find(supply=>supply.id===recoveryId);
  const canTrack=!!campaign.characterIdentity&&campaign.companionEncounter?.status!=='active'&&!campaign.provisionTracking;
- if(!canTrack&&!campaign.provisionTracking&&!recovery.length&&!owned.length&&!antitoxinRemaining&&!campaign.companionEncounter?.basicPoison&&!campaign.companionEncounter?.poisonedAmmunition&&!Object.values(campaign.companionEncounter?.ammunitionPendingRecovery??{}).some(n=>n>0)&&!campaign.companionEncounter?.groundOil?.length&&!lights.length&&!scrolls.length)return null;
+ if(!effects.length&&!canTrack&&!campaign.provisionTracking&&!recovery.length&&!owned.length&&!antitoxinRemaining&&!campaign.companionEncounter?.basicPoison&&!campaign.companionEncounter?.poisonedAmmunition&&!Object.values(campaign.companionEncounter?.ammunitionPendingRecovery??{}).some(n=>n>0)&&!campaign.companionEncounter?.groundOil?.length&&!lights.length&&!scrolls.length)return null;
  const item=owned.find(g=>g.name===name),battle=campaign.companionEncounter,actor=battle?.participants.nighthawk,targets=eligibleKitTargets(campaign);
  const currentActor=battle?.status==='active'?battle.order[battle.turnIndex]:undefined;
  const lastAttack=battle?.log?.filter(line=>/ attack d20 /.test(line)).at(-1);
@@ -56,9 +64,9 @@ export function ConsumablePanel({campaign,saving,onUse,onEncounterChange}:{campa
  const useSupply=name==='Rations'&&battle?.status!=='active'||
   name==='Waterskin'&&item?.quantity===1&&battle?.status!=='active'&&(waterChoice==='drink'?pints>0:pints<4)||
   name==='Rope'&&item?.quantity===1&&!campaign.ropeKnotted&&ropeCheck!=='';
- const deploying=name==='Ball Bearings'||name==='Caltrops'||name==='Oil'&&spillOil;
+ const deploying=name==='Ball Bearings'||name==='Caltrops'||name==='Hunting Trap'||name==='Oil'&&spillOil;
  const canDeploy=deploying&&battle?.status==='active'&&level&&groundX!==''&&groundY!=='';
- const ready=canDeploy||useSupply||canLight||canCoat||throwing&&!deploying&&targetsInRange.includes(target)&&(objectTarget||acidSave!=='')&&(!needsDamage||acidDamage!=='')&&(name!=='Holy Water'||creatureType!=='')||name==='Antitoxin'||name==="Healer's Kit"&&!!selected;
+ const ready=!!name&&isStrengthPotion(name)||name==='Potion of Resistance'&&!!resistance||canDeploy||useSupply||canLight||canCoat||throwing&&!deploying&&targetsInRange.includes(target)&&(objectTarget||acidSave!=='')&&(!needsDamage||acidDamage!=='')&&(name!=='Holy Water'||creatureType!=='')||name==='Antitoxin'||name==="Healer's Kit"&&!!selected;
  const clear=()=>{setName(null);setTarget('');setAcidSave('');setAcidDamage('');setCreatureType('');setRopeCheck('');setWaterChoice('drink');setGroundX('');setGroundY('');setLevel(false);setSpillOil(false);pending.current=null;setError('')};
  return <section aria-label="Adventuring consumables" className="rounded-xl border border-white/20 p-3 space-y-2">
  <h3 className="font-semibold">Adventuring consumables</h3>
@@ -66,13 +74,16 @@ export function ConsumablePanel({campaign,saving,onUse,onEncounterChange}:{campa
  {battle?.status==='active'&&<p aria-label="Consumable combat readiness" className="text-xs text-parchment/70">Combat round {battle.round} · Current turn: {currentActor??'none'}{actor?' · Action '+(actor.actionUsed?'spent':'available')+' · Bonus Action '+(actor.bonusActionUsed?'spent':'available'):''}. Consumables require an eligible action and a confirmed target.</p>}
  {scrolls.length>0&&<details className="rounded border border-gold/30 p-2 space-y-2" aria-label="Spell scroll casting">
  <summary>Cast an owned spell scroll (DM-confirmed)</summary>
- <p className="text-xs text-parchment/70">Choose the scroll and spell. Only spells verified in your character's prepared spells or cantrips are supported here. The DM must confirm casting requirements, action, and any spell effects. Combat casting is not yet supported in this panel. No spell slot is spent.</p>
+ <p className="text-xs text-parchment/70">Verified class-list spells can be cast without a spell slot. Magic Missile and Web resolve on the encounter grid. Other spell effects require DM adjudication.</p>
  <label className="block text-sm">Owned scroll<select aria-label="Owned spell scroll" className="block w-full bg-slate-900" value={scrollName} onChange={e=>{setScrollName(e.target.value);setScrollConfirmed(false)}}><option value="">Choose scroll</option>{scrolls.map(g=><option key={g.name} value={g.name}>{g.name} ({g.quantity})</option>)}</select></label>
  <label className="block text-sm">Spell on scroll<input aria-label="Spell on scroll" className="block w-full bg-slate-900" value={scrollSpell} onChange={e=>{setScrollSpell(e.target.value);setScrollConfirmed(false)}} placeholder="Exact spell name"/></label>
+ {scrollCheckDC!==null&&<label>Spellcasting ability d20 · DC {scrollCheckDC}<input type="number" className="rounded bg-ink" min={1} max={20} value={scrollCheck} onChange={e=>setScrollCheck(e.target.value)}/></label>}
+ <ItemSpellFields campaign={campaign} spell={scrollSpell.trim()} rank={scrollRank??0} fields={scrollFields}/>
  <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={scrollConfirmed} onChange={e=>setScrollConfirmed(e.target.checked)}/>DM confirms this scroll can be cast now</label>
- <button type="button" className="rounded border border-gold px-3 py-2" disabled={saving||busy||!scrollName||!scrollSpell.trim()||!scrollConfirmed||!onEncounterChange} onClick={async()=>{setBusy(true);setError('');try{const next=castOwnedSpellScroll(campaign,{itemName:scrollName,spell:scrollSpell,requestId:crypto.randomUUID(),dmConfirmed:scrollConfirmed});if(await onEncounterChange?.(next,'DM confirmed casting '+scrollSpell+' from '+scrollName)===false)throw Error('Scroll action could not be saved');setScrollName('');setScrollSpell('');setScrollConfirmed(false)}catch(e){setError(String(e))}finally{setBusy(false)}}}>Consume scroll and request spell adjudication</button>
+ <button type="button" className="rounded border border-gold px-3 py-2" disabled={saving||busy||!scrollName||!scrollSpell.trim()||!scrollConfirmed||!onEncounterChange} onClick={async()=>{setBusy(true);setError('');try{const next=castOwnedSpellScroll(campaign,{itemName:scrollName,spell:scrollSpell,requestId:crypto.randomUUID(),dmConfirmed:scrollConfirmed,checkRoll:scrollCheck?Number(scrollCheck):undefined,...scrollFields.request(scrollSpell.trim(),scrollRank??0)});if(await onEncounterChange?.(next,'DM confirmed casting '+scrollSpell+' from '+scrollName)===false)throw Error('Scroll action could not be saved');setScrollName('');setScrollSpell('');setScrollConfirmed(false)}catch(e){setError(String(e))}finally{setBusy(false)}}}>{battle?.status==='active'?'Cast scroll in encounter':'Consume scroll and request spell adjudication'}</button>
  </details>}
  <p className="text-xs text-parchment/70">Antitoxin: Bonus Action, advantage against Poisoned for 1 in-game hour. Healer's Kit: Action, stabilize an adjacent unconscious ally at 0 HP; 10 uses per kit.</p>
+ {effects.map(effect=><p key={effect.kind+effect.targetId} role="status">{effect.targetId==='nighthawk'?'You':effect.targetId} · {effectDescription(effect)} · {Math.ceil((effect.expiresAt-gameSeconds(campaign))/60)} min remaining</p>)}
  {antitoxinRemaining>0&&<p role="status">Antitoxin active: {Math.floor(antitoxinRemaining/60)} in-game minutes remaining{antitoxinRemaining%60>0?' ('+antitoxinRemaining%60+' additional seconds)':''}</p>}
  {lights.map(source=>{
   const rules=equipmentLightRules[source],remaining=Math.ceil(equipmentLightRemaining(campaign,source)/60);
@@ -88,7 +99,7 @@ export function ConsumablePanel({campaign,saving,onUse,onEncounterChange}:{campa
  {deploying&&<fieldset className="space-y-2">
   <label>Ground X<input type="number" className="w-full bg-slate-900" value={groundX} onChange={e=>{setGroundX(e.target.value);pending.current=null}}/></label>
   <label>Ground Y<input type="number" className="w-full bg-slate-900" value={groundY} onChange={e=>{setGroundY(e.target.value);pending.current=null}}/></label>
-  <label><input type="checkbox" checked={level} onChange={e=>{setLevel(e.target.checked);pending.current=null}}/> DM confirms level ground</label>
+  <label><input type="checkbox" checked={level} onChange={e=>{setLevel(e.target.checked);pending.current=null}}/> {name==='Hunting Trap'?'DM confirms level ground and an immovable anchor':'DM confirms level ground'}</label>
  </fieldset>}
  {name==='Rations'&&<p>Eat one ration. Today: {today.rations} eaten.</p>}
  {name==='Waterskin'&&<div><p>Water: {pints}/4 pints · {today.waterPints} drunk today</p>
@@ -135,10 +146,14 @@ export function ConsumablePanel({campaign,saving,onUse,onEncounterChange}:{campa
  {needsDamage&&<label className="block">{name==='Acid'?'Rolled acid damage':name==='Holy Water'?'Rolled 2d8 radiant damage':'Rolled 1d4 fire damage'}<input className="w-full bg-slate-900" type="number" min={name==='Alchemist’s Fire'?1:2} max={name==='Acid'?12:name==='Holy Water'?16:4} value={acidDamage} onChange={e=>{setAcidDamage(e.target.value);pending.current=null}}/></label>}
  </fieldset>}
  {item&&!ready&&<p aria-label="Consumable requirements" className="text-xs text-amber-200">Choose the required target, roll, location, or confirmation before using {item.name}. During combat, check that the correct turn and action are available.</p>}
+ {name==='Potion of Resistance'&&<div className="space-y-1 text-sm">
+  <label>DM-identified damage type <select className="rounded bg-ink" value={resistance} onChange={e=>setResistance(e.target.value as ResistanceType|'')}><option value="">Choose type</option>{RESISTANCE_TYPES.map(type=><option key={type}>{type}</option>)}</select></label>
+  {battle?.status==='active'&&actor&&<label className="block">Recipient <select className="rounded bg-ink" value={target} onChange={e=>setTarget(e.target.value)}><option value="">Self</option>{Object.entries(battle.participants).filter(([id,p])=>id!=='nighthawk'&&p.actorKind!=='enemy'&&!p.deathSaves?.dead&&Math.max(Math.abs(p.x-actor.x),Math.abs(p.y-actor.y))<=1).map(([id])=><option key={id}>{id}</option>)}</select></label>}
+ </div>}
  {item&&<div className="flex gap-2"><button type="button" disabled={saving||busy||!ready} onClick={async()=>{
   if(!pending.current)pending.current=crypto.randomUUID();
   setBusy(true);setError('');
-  try{const ok=await onUse({name:item.name as ConsumableName,requestId:pending.current,confirmed:true,expectedQuantity:item.quantity,expectedElapsedMinutes:campaign.elapsedMinutes??0,expectedWeaponId:poisonWeapon?.id,...(name==='Poison, Basic'&&equippedAmmo?{poisonAmmunition:{name:equippedAmmo,quantity:Number(poisonQuantity)}}:{}),expectedSupplyState:JSON.stringify(supplyState),supplyOperation:waterChoice,ropeCheck:Number(ropeCheck),...(deploying?{ground:{x:Number(groundX),y:Number(groundY),level}}:{}),...(lightName?{lightOperation:extinguishing?'extinguish' as const:'light' as const,expectedLight:JSON.stringify(light??null),expectedFuelQuantity:oil?.quantity}:{}),...(throwing&&!deploying?{targetId:target,expectedTargetHP:recipient?.hp,expectedTargetPosition:recipient?{x:recipient.x,y:recipient.y}:undefined,throwRolls:{saveTotal:Number(acidSave),damage:Number(acidDamage),targetType:name==='Holy Water'?creatureType||undefined:undefined}}:name==="Healer's Kit"?{expectedKitUses:campaign.healerKitUsesRemaining??10,targetId:target,expectedTargetHP:recipient?.hp,expectedTargetPosition:recipient?{x:recipient.x,y:recipient.y}:undefined}:{targetId:'nighthawk'}),...(battle?.status==='active'?{expectedEncounterId:battle.id,expectedTurnIndex:battle.turnIndex,expectedRound:battle.round,expectedActorPosition:actor?{x:actor.x,y:actor.y}:undefined}:{})});if(ok)clear();else setError('Use rejected; refresh and check the current state.')}catch(e){setError(String(e))}finally{setBusy(false)}
+  try{const ok=await onUse({name:item.name as ConsumableName,requestId:pending.current,confirmed:true,expectedQuantity:item.quantity,expectedElapsedMinutes:campaign.elapsedMinutes??0,expectedWeaponId:poisonWeapon?.id,...(name==='Poison, Basic'&&equippedAmmo?{poisonAmmunition:{name:equippedAmmo,quantity:Number(poisonQuantity)}}:{}),expectedSupplyState:JSON.stringify(supplyState),supplyOperation:waterChoice,ropeCheck:Number(ropeCheck),...(deploying?{ground:{x:Number(groundX),y:Number(groundY),level,anchored:name==='Hunting Trap'&&level}}:{}),...(lightName?{lightOperation:extinguishing?'extinguish' as const:'light' as const,expectedLight:JSON.stringify(light??null),expectedFuelQuantity:oil?.quantity}:{}),...(throwing&&!deploying?{targetId:target,expectedTargetHP:recipient?.hp,expectedTargetPosition:recipient?{x:recipient.x,y:recipient.y}:undefined,throwRolls:{saveTotal:Number(acidSave),damage:Number(acidDamage),targetType:name==='Holy Water'?creatureType||undefined:undefined}}:name==="Healer's Kit"?{expectedKitUses:campaign.healerKitUsesRemaining??10,targetId:target,expectedTargetHP:recipient?.hp,expectedTargetPosition:recipient?{x:recipient.x,y:recipient.y}:undefined}:name==='Potion of Resistance'?{targetId:target||'nighthawk',resistanceType:resistance||undefined,expectedTargetPosition:recipient?{x:recipient.x,y:recipient.y}:undefined}:{targetId:'nighthawk'}),...(battle?.status==='active'?{expectedEncounterId:battle.id,expectedTurnIndex:battle.turnIndex,expectedRound:battle.round,expectedActorPosition:actor?{x:actor.x,y:actor.y}:undefined}:{})});if(ok)clear();else setError('Use rejected; refresh and check the current state.')}catch(e){setError(String(e))}finally{setBusy(false)}
  }} className="rounded bg-amber-700 px-3 py-2 disabled:opacity-40">Confirm use</button><button type="button" onClick={clear}>Cancel</button></div>}
  {canTrack&&<details className="rounded border border-white/20 p-2">
   <summary>Daily food and water</summary>

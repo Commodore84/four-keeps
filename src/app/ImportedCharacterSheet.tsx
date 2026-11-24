@@ -1,5 +1,8 @@
+import {isHealingPotion} from '../game/healingPotions';
+import {isStrengthPotion} from '../game/temporaryEffects';
+import {ItemSpellFields,useItemSpellInputs} from './ItemSpellFields';
 import {discardInventoryItem} from '../game/inventoryDiscard';
-import {magicProtectionBonus,ownedMagicWearables,wearMagicItem,magicWandStatus,rechargeMagicWand,spendMagicWand} from '../game/magicEquipment';
+import {magicProtectionBonus,ownedMagicWearables,wearMagicItem,magicWandStatus,rechargeMagicWand,selectMagicWandCopy,spendMagicWand} from '../game/magicEquipment';
 import {MAGIC_ITEMS} from '../game/magicWishlist';
 import {armorEffects} from '../game/armorEffects';
 import {formatFrontierPrice,walletCopper} from '../game/frontierShop';
@@ -181,7 +184,10 @@ const FEATURE_ACTIONS:Record<string,string>={'Sneak Attack':'On hit','Cunning Ac
 const earnedTraitName=(name:string)=>name.replace(/\s*\(level \d+\)/i,'');
 function WandControls({campaign,name,disabled,onChange}:{campaign:Campaign;name:string;disabled:boolean;onChange:(next:Campaign,message:string)=>Promise<boolean>|boolean|void}){
  const item=ownedMagicWearables(campaign).find(entry=>entry.name===name);
- const wand=item?magicWandStatus(campaign,item.id):null;
+ const inBattle=campaign.companionEncounter?.status==='active';
+ const fields=useItemSpellInputs();
+ const [copy,setCopy]=useState<number|undefined>();
+ const wand=item?magicWandStatus(campaign,item.id,copy)??magicWandStatus(campaign,item.id):null;
  const [target,setTarget]=useState('');
  const [spent,setSpent]=useState(1);
  const [roll,setRoll]=useState('');
@@ -198,17 +204,21 @@ function WandControls({campaign,name,disabled,onChange}:{campaign:Campaign;name:
  }
  return <details className="text-xs" aria-label={name+' charges'}>
   <summary className="cursor-pointer text-gold">{wand.charges} / 7 charges</summary>
-  {wand.multiple&&<p>Ask the DM to identify individual copies before tracking their charges.</p>}
+  {wand.quantity>1&&<div className="flex items-center gap-2">
+   <label>Wand copy <select className="rounded bg-ink" value={wand.copyIndex} onChange={e=>setCopy(Number(e.target.value))}>{wand.copies.map((entry,index)=><option key={index} value={index}>Copy {index+1} · {entry.charges}/7</option>)}</select></label>
+   {!wand.held&&<button type="button" disabled={disabled||inBattle} onClick={()=>void save(()=>selectMagicWandCopy(campaign,wand.id,wand.copyIndex),'Wand held.')}>Hold this copy</button>}
+  </div>}
+  {wand.held&&!wand.ready&&<p>Attune to this copy during a Short Rest.</p>}
   {wand.ready&&wand.charges>0&&<div className="grid gap-1 py-1">
    <label>Charges <select className="rounded border bg-ink px-2 py-1" aria-label="Charges to spend" value={spent} onChange={event=>setSpent(Number(event.target.value))}>{Array.from({length:Math.min(wand.charges,wand.maxSpend)},(_,index)=><option key={index} value={index+1}>{index+1}</option>)}</select></label>
-   <label>Target or area <input className="w-full rounded border bg-ink px-2 py-1" value={target} maxLength={100} onChange={event=>setTarget(event.target.value)}/></label>
+   {inBattle?<ItemSpellFields campaign={campaign} spell={wand.spell} rank={spent} fields={fields}/>:<label>Target or area <input className="w-full rounded border bg-ink px-2 py-1" value={target} maxLength={100} onChange={event=>setTarget(event.target.value)}/></label>}
    {spent===wand.charges&&<label>Last-charge d20 <input className="w-16 rounded border bg-ink px-2 py-1" type="number" min={1} max={20} value={roll} onChange={event=>setRoll(event.target.value)}/></label>}
    <label className="flex items-center gap-2"><input type="checkbox" checked={confirmed} onChange={event=>setConfirmed(event.target.checked)}/> DM confirmed the use and target</label>
-   <button type="button" className="min-h-8 rounded border border-gold/35 px-2" disabled={disabled||!target.trim()||!confirmed} onClick={()=>void save(()=>spendMagicWand(campaign,wand.id,{id:crypto.randomUUID(),spent,target,confirmed,lastChargeRoll:roll?Number(roll):undefined}),'Wand use saved for DM adjudication.')}>Spend charges for {wand.spell}</button>
+   <button type="button" className="min-h-8 rounded border border-gold/35 px-2" disabled={disabled||!inBattle&&!target.trim()||!confirmed} onClick={()=>void save(()=>spendMagicWand(campaign,wand.id,{id:crypto.randomUUID(),spent,target:inBattle?wand.spell:target,confirmed,copyIndex:wand.copyIndex,...fields.request(wand.spell,spent),lastChargeRoll:roll?Number(roll):undefined}),inBattle?'Wand spell resolved.':'Wand use saved for DM adjudication.')}>Spend charges for {wand.spell}</button>
   </div>}
   {wand.canRecharge&&<div className="flex flex-wrap items-center gap-2 py-1">
    <label>Dawn recharge d6 <input className="w-16 rounded border bg-ink px-2 py-1" type="number" min={1} max={6} value={rechargeRoll} onChange={event=>setRechargeRoll(event.target.value)}/></label>
-   <button type="button" className="min-h-8 rounded border border-gold/35 px-2" disabled={disabled||!rechargeRoll} onClick={()=>void save(()=>rechargeMagicWand(campaign,wand.id,Number(rechargeRoll)),'Dawn recharge saved.')}>Recharge</button>
+   <button type="button" className="min-h-8 rounded border border-gold/35 px-2" disabled={disabled||!rechargeRoll} onClick={()=>void save(()=>rechargeMagicWand(campaign,wand.id,Number(rechargeRoll),wand.copyIndex),'Dawn recharge saved.')}>Recharge</button>
   </div>}
   {error&&<p role="alert" className="text-red-300">{error}</p>}
  </details>;
@@ -284,8 +294,8 @@ function InventoryEquipment({campaign,saving,onChange}:{campaign:Campaign;saving
       <p>{merchantItemDescription(item)}</p>
      </div>}
      {magic&&<p className="text-xs text-parchment/75">{magic.description}</p>}
-     {wearable&&<WandControls campaign={campaign} name={row.name} disabled={saving||inCombat} onChange={onChange}/>}
-     {magic&&(!wearable||!wearable.protection)&&<p className="text-xs text-amber-300">Item effects require DM adjudication.</p>}
+     {wearable&&<WandControls campaign={campaign} name={row.name} disabled={saving} onChange={onChange}/>}
+     {magic&&(!wearable||!wearable.protection&&!wearable.id.startsWith('wand-'))&&row.name!=='Potion of Resistance'&&!isStrengthPotion(row.name)&&!isHealingPotion(row.name)&&<p className="text-xs text-amber-300">Item effects require DM adjudication.</p>}
      {wearable?.attunement&&!wearable.attuned&&<p className="text-xs text-amber-300">Requires attunement during a Short Rest.</p>}
     </div>;
    })}

@@ -1,3 +1,4 @@
+import {effectiveStrength} from './temporaryEffects';
 import {effectiveEquipmentSpeed} from './armorEffects';
 import type {Campaign} from './campaign';
 import {ITEMS} from './creationEquipment';
@@ -29,7 +30,7 @@ export function playerSheetSummary(campaign:Campaign){
  const attacks=weapons.map(({item,quantity})=>{
   const ranged=item.properties?.some(p=>p.startsWith('Ammunition')||p.startsWith('Range '))||['shortbow','longbow','light-crossbow','heavy-crossbow','hand-crossbow'].includes(item.id);
   const finesse=item.properties?.includes('Finesse');
-  const dex=abilityModifier(c.scores.dex),str=abilityModifier(c.scores.str);
+  const dex=abilityModifier(c.scores.dex),str=abilityModifier(effectiveStrength(campaign)??c.scores.str);
   const modifier=ranged?dex:finesse?Math.max(str,dex):str;
   const proficient=proficiencies.includes(item.name)||proficiencies.includes(item.weaponGroup==='simple'?'Simple':'Martial')||(item.weaponGroup==='martial'&&((proficiencies.includes('Martial Light')&&!!item.properties?.includes('Light'))||(proficiencies.includes('Martial (Finesse or Light)')&&!!item.properties?.some(p=>p==='Finesse'||p==='Light'))));
   const selected=campaign.characterBuild?.selections.classChoices?.['weapon-mastery']??[];

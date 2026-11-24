@@ -1,3 +1,4 @@
+import type {TemporaryEffect} from './temporaryEffects';
 import type {MagicEquipmentState} from './magicEquipment';
 import {advanceProvisionsClock} from './provisionsClock';
 import type {EncounterRecord} from './encounterJournal';
@@ -58,6 +59,7 @@ export interface Campaign {
   importedWizardSpellbook?:string[];
   importedWizardPortents?:number[];
   magicEquipment?:MagicEquipmentState;
+  temporaryEffects?:TemporaryEffect[];
   encounterLoadout?:{weaponId?:string;offhandWeaponId?:string;armorId?:string;shieldId?:string};
   id: string;
   title: string;

@@ -122,7 +122,7 @@ export const localCampaignStorage: CampaignStorage = {
 
 /** Atomic read/validate/update: retries with the same request ID return the saved result. */
 export async function commitHealingPotionUse(id:string,request:HealingPotionRequest):Promise<Campaign>{
- return transact<Campaign>('readwrite',(store,resolve,reject)=>{
+ const committed=await transact<Campaign>('readwrite',(store,resolve,reject)=>{
   const read=store.get(id);
   read.onerror=()=>reject(read.error??new Error('Campaign lookup failed'));
   read.onsuccess=()=>{
@@ -136,6 +136,7 @@ export async function commitHealingPotionUse(id:string,request:HealingPotionRequ
    }catch(error){reject(error instanceof Error?error:new Error(String(error)))}
   };
  });
+ return observe(committed);
 }
 
 export async function commitConsumableUse(id:string,request:ConsumableRequest):Promise<Campaign>{

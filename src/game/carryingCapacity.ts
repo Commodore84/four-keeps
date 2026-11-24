@@ -1,3 +1,4 @@
+import {effectiveStrength} from './temporaryEffects';
 import type {Campaign} from './campaign';
 import {OFFICIAL_EQUIPMENT_2024} from './officialEquipment2024';
 import {equipmentPackContents} from './equipmentPacks';
@@ -42,7 +43,7 @@ export function carriedWeight(campaign:Campaign):{weight:number;unknown:string[]
 }
 /** 2024 carrying capacity: Strength × 15 lb.; Powerful Build doubles it. */
 export function carryingCapacity(campaign:Campaign):number|null {
- const strength=campaign.character?.scores.str;
+ const strength=effectiveStrength(campaign);
  if(!strength||!Number.isFinite(strength))return null;
  const species=campaign.characterIdentity?.speciesId;
  // Goliath's Powerful Build: count as one size larger for carrying capacity.

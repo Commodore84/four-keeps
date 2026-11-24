@@ -1,3 +1,4 @@
+import {effectiveStrength} from './temporaryEffects';
 import {carriedWeight,carryingCapacity} from './carryingCapacity';
 import type {Campaign} from './campaign';
 import type {Ability, RollMode} from './checks';
@@ -14,7 +15,7 @@ export function armorEffects(campaign:Campaign) {
  const orderTraining=classId==='cleric'&&wornArmor?.armorGroup==='Heavy'&&choices?.['divine-order']?.includes('Protector')||
   classId==='druid'&&wornArmor?.armorGroup==='Medium'&&choices?.['primal-order']?.includes('Warden');
  const untrainedArmor=!!(classId&&wornArmor&&!armorTrained(classId,wornArmor)&&!orderTraining);
- const speedPenalty=(wornArmor?.strength??0)>(campaign.character?.scores?.str??0)?10:0;
+ const speedPenalty=(wornArmor?.strength??0)>(effectiveStrength(campaign)??0)?10:0;
  return {
   speedPenalty, untrainedArmor,
   untrainedShield:!!(classId&&wornShield&&!armorTrained(classId,wornShield)),

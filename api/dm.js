@@ -107,6 +107,8 @@ export default async function handler(req, res) {
   const equipment={
     owned:Array.isArray(rawEquipment.owned)?rawEquipment.owned.filter(item=>item&&typeof item.name==='string'&&Number.isSafeInteger(item.quantity)&&item.quantity>0).slice(0,100).map(item=>({name:item.name.slice(0,100),quantity:item.quantity})):[],
     equipped:strings(rawEquipment.equipped,20),
+    activeEffects:strings(rawEquipment.activeEffects,15),
+    charges:strings(rawEquipment.charges,12),
     attuned:strings(rawEquipment.attuned,3),
     tools:strings(rawEquipment.tools,40).filter(tool=>rawEquipment.owned?.some?.(entry=>entry?.name===tool&&entry.quantity>0)),
     toolProficiencies:strings(rawEquipment.toolProficiencies,40),

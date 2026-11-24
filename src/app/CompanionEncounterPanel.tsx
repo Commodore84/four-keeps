@@ -1,3 +1,4 @@
+import {escapeItemWeb,freeHuntingTrapTarget,pendingWebSave,resolveWebTurnSave} from '../game/companionEncounter';
 import {armorEffects} from '../game/armorEffects';
 import {weaponAttackProfile} from '../game/weaponAttackProfile';
 import {ITEM_BY_ID} from '../game/creationEquipment';
@@ -11,6 +12,9 @@ import type {DamageType} from '../game/subclassCombatRules';
 export function CompanionEncounterPanel({campaign,saving,onChange}:{campaign:Campaign;saving:boolean;onChange:(next:Campaign,message:string)=>Promise<boolean>|boolean|void}){
  const [forcedActor,setForcedActor]=useState(''),[forcedX,setForcedX]=useState(''),[forcedY,setForcedY]=useState(''),[ropeTotal,setRopeTotal]=useState('');
  const [groundSave,setGroundSave]=useState('');
+ const [trapDamage,setTrapDamage]=useState('');
+ const [hazardCheck,setHazardCheck]=useState('');
+ const verifiedTrapDamage=trapDamage===''?undefined:Number(trapDamage);
  const verifiedGroundSave=groundSave===''?undefined:Number(groundSave);
  const [objectName,setObjectName]=useState(''),[objectX,setObjectX]=useState(''),[objectY,setObjectY]=useState(''),[objectHP,setObjectHP]=useState('');
  const [objectFire,setObjectFire]=useState('');
@@ -122,7 +126,7 @@ export function CompanionEncounterPanel({campaign,saving,onChange}:{campaign:Cam
  const activeActor=active&&battle?battle.participants[active]:undefined;
  const targetDistanceFeet=activeActor&&targetActor?Math.max(Math.abs(activeActor.x-targetActor.x),Math.abs(activeActor.y-targetActor.y))*5:null;
  const moveWithGroundSave=(actorId:string,x:number,y:number)=>{
-  const moved=moveCompanion(campaign,actorId,x,y,verifiedGroundSave);
+  const moved=moveCompanion(campaign,actorId,x,y,verifiedGroundSave,verifiedTrapDamage);
   setGroundSave('');
   return moved;
  };
@@ -169,7 +173,7 @@ export function CompanionEncounterPanel({campaign,saving,onChange}:{campaign:Cam
    <label>Forced Y<input className="w-full bg-slate-900" type="number" value={forcedY} onChange={e=>setForcedY(e.target.value)}/></label>
   </div>
   <button disabled={saving||!forcedActor||forcedX===''||forcedY===''} onClick={()=>apply(()=>{
-   const moved=moveCompanionForced(campaign,forcedActor,Number(forcedX),Number(forcedY),verifiedGroundSave);
+   const moved=moveCompanionForced(campaign,forcedActor,Number(forcedX),Number(forcedY),verifiedGroundSave,verifiedTrapDamage);
    setGroundSave('');return moved;
   },'Verified forced movement recorded')}>Confirm forced 5-foot step</button>
   {active==='nighthawk'&&campaign.inventoryLedger?.gear.some(item=>item.name==='Rope'&&item.quantity===1)&&
@@ -183,6 +187,16 @@ export function CompanionEncounterPanel({campaign,saving,onChange}:{campaign:Cam
  {battle.groundSupplies?.length?<section aria-label="Deployed ground supplies">
   <ul>{battle.groundSupplies.map(supply=><li key={supply.id}>{supply.name} at ({supply.x}, {supply.y})</li>)}</ul>
   <label>Verified ground hazard Dexterity save<input type="number" className="block w-full bg-slate-900" value={groundSave} onChange={e=>setGroundSave(e.target.value)}/></label>
+  {battle.groundSupplies?.some(supply=>supply.name==='Hunting Trap'&&!supply.sprung)&&<label>Verified Hunting Trap d4<input type="number" min={1} max={4} value={trapDamage} onChange={e=>setTrapDamage(e.target.value)}/></label>}
+  {battle.web&&<div aria-label="Active Web" className="space-y-1 text-sm">
+   <p>Web at ({battle.web.x}, {battle.web.y}) · 4×4 squares · Concentration · DC {battle.web.dc}</p>
+   {pendingWebSave(battle)&&<button type="button" disabled={saving||verifiedGroundSave===undefined} onClick={()=>apply(()=>resolveWebTurnSave(campaign,verifiedGroundSave!),'Web save resolved')}>Resolve Web Dexterity save for {pendingWebSave(battle)}</button>}
+  </div>}
+  {(battle.web?.restrained.includes(active)||battle.groundSupplies?.some(supply=>supply.trappedActor))&&<div className="flex flex-wrap gap-2">
+   <label>Verified Athletics total <input type="number" value={hazardCheck} onChange={e=>setHazardCheck(e.target.value)}/></label>
+   {battle.web?.restrained.includes(active)&&<button type="button" disabled={saving||!hazardCheck} onClick={()=>apply(()=>escapeItemWeb(campaign,Number(hazardCheck)),'Web escape resolved')}>Break free of Web</button>}
+   {battle.groundSupplies?.flatMap(supply=>supply.trappedActor?[<button type="button" key={supply.id} disabled={saving||!hazardCheck} onClick={()=>apply(()=>freeHuntingTrapTarget(campaign,supply.trappedActor!,Number(hazardCheck)),'Hunting Trap check resolved')}>Free {supply.trappedActor}</button>]:[])}
+  </div>}
   <p>Enter hazard squares one step at a time.</p>
  </section>:null}
  <div className="flex flex-wrap gap-2"><label>Move X<input aria-label="Move X" type="number" className="w-14 bg-black/30" value={coords[active]?.x??String(battle.participants[active].x)} onChange={e=>setCoords(v=>({...v,[active]:{x:e.target.value,y:v[active]?.y??String(battle.participants[active].y)}}))}/></label><label>Move Y<input aria-label="Move Y" type="number" className="w-14 bg-black/30" value={coords[active]?.y??String(battle.participants[active].y)} onChange={e=>setCoords(v=>({...v,[active]:{x:v[active]?.x??String(battle.participants[active].x),y:e.target.value}}))}/></label><button disabled={saving} onClick={()=>apply(()=>moveWithGroundSave(active,Number(coords[active]?.x??battle.participants[active].x),Number(coords[active]?.y??battle.participants[active].y)),'Actor moved')}>Move active actor</button><button disabled={saving||!!(battle.wizardHoldPersonTargets?.includes(active)&&battle.participants[active].conditions.includes('Paralyzed'))} onClick={()=>{setCoords({});apply(()=>endCompanionTurn(campaign,active),'Turn ended')}}>End companion turn</button></div>
