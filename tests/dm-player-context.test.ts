@@ -17,6 +17,20 @@ it('preserves imported Rogue expertise across signed check request and dice adju
  setup({narration:'The tracks are uncertain.',checkRequest:{skill:'Stealth',difficulty:'moderate',mode:'normal',reason:'Stay hidden'}});const first=response();await handler(req({message:'I hide.',character}),first);expect(first.body.checkRequest.token).toBeTruthy();
  setup({narration:'You move quietly.'});const second=response();await handler(req({checkToken:first.body.checkRequest.token,dice:[10],character}),second);expect(second.body.checkResult.modifier).toBe(7);expect(second.body.checkResult.total).toBe(17);
 });
+it('allows a tactical encounter to begin from a resolved Stealth check without bypassing the saved roll',async()=>{
+ setup({narration:'You approach unseen.',checkRequest:{skill:'Stealth',difficulty:'moderate',mode:'normal',reason:'Approach the warehouse rat.'}});
+ const first=response();await handler(req({message:'I approach the rat with my bow ready.',character}),first);
+ expect(first.body.checkRequest?.token).toBeTruthy();
+ setup({narration:'Your stealth succeeds, but the rats spot your drawn bow and rush you. Roll initiative.',
+  combatStart:{enemyName:'Warehouse rats',templateId:'warehouse-vermin'}});
+ const second=response();
+ await handler(req({checkToken:first.body.checkRequest.token,dice:[15],character,
+  gameState:{characterIdentity:{name:'Nighthawk',classId:'rogue'},
+   adventureSession:{site:'frontier',status:'exploring'},location:'Dasahi'}}),second);
+ expect(second.code).toBe(200);
+ expect(second.body.checkResult).toMatchObject({skill:'Stealth',kept:15,success:true});
+ expect(second.body.combatStart).toEqual({enemyName:'Warehouse rats',templateId:'warehouse-vermin'});
+});
 it('reports unavailable AI configuration without calling a provider',async()=>{
  vi.stubEnv('FOUR_KEEPS_ACCESS_CODE','');const fetch=vi.fn();vi.stubGlobal('fetch',fetch);const res=response();await handler(req({message:'Hello'}),res);expect(res.code).toBe(503);expect(fetch).not.toHaveBeenCalled();
 });
