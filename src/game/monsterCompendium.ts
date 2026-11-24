@@ -50,6 +50,20 @@ export const MONSTER_COMPENDIUM={
     attack:{kind:'ranged',bonus:3,normalFeet:80,longFeet:320,damageDice:'1d8',damageModifier:1,damageType:'Piercing'}}
   ],bonusActions:[],reactions:[]
  }),
+ 'goblin-warrior':monster({
+  id:'goblin-warrior',name:'Goblin Warrior',size:'Small',type:'Fey (Goblinoid)',alignment:'Chaotic Neutral',
+  cr:'1/4',xp:50,ac:15,hp:10,hitDice:'3d6',speedFeet:30,initiative:2,
+  abilities:{str:8,dex:15,con:10,int:10,wis:8,cha:8},saves:{},skills:{Stealth:6},
+  senses:{passivePerception:9,darkvisionFeet:60},languages:['Common','Goblin'],traits:[],
+  actions:[
+   {id:'scimitar',name:'Scimitar',economy:'action',description:'Melee attack; an attack with Advantage deals an additional 1d4 Slashing damage.',
+    attack:{kind:'melee',bonus:4,reachFeet:5,damageDice:'1d6',damageModifier:2,damageType:'Slashing'}},
+   {id:'shortbow',name:'Shortbow',economy:'action',description:'Ranged attack; an attack with Advantage deals an additional 1d4 Piercing damage.',
+    attack:{kind:'ranged',bonus:4,normalFeet:80,longFeet:320,damageDice:'1d6',damageModifier:2,damageType:'Piercing'}}
+  ],
+  bonusActions:[{id:'nimble-escape',name:'Nimble Escape',economy:'bonus',effect:'nimble-escape',
+   description:'Take the Disengage or Hide action as a Bonus Action.'}],reactions:[]
+ }),
  'goblin-minion':monster({
   id:'goblin-minion',name:'Goblin Minion',size:'Small',type:'Fey (Goblinoid)',alignment:'Chaotic Neutral',
   cr:'1/8',xp:25,ac:12,hp:7,hitDice:'2d6',speedFeet:30,initiative:2,

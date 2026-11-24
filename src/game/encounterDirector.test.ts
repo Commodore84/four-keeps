@@ -4,12 +4,13 @@ import {buildSoloEncounter,levelOneEncounterBudget,SOLO_ROGUE_ENCOUNTERS} from '
 import {TACTICAL_PROFILES,validateCombatScenario} from './combatScenario';
 describe('SRD 5.2.1 monster compendium and solo encounter director',()=>{
  it('uses documented full stats rather than invented enemy HP and attacks',()=>{
-  expect(monsterIds).toEqual(['giant-rat','bandit','goblin-minion']);
+  expect(monsterIds).toEqual(['giant-rat','bandit','goblin-warrior','goblin-minion']);
   expect(getMonster('giant-rat')?.ac).toBe(13);
   expect(getMonster('giant-rat')?.actions[0].attack?.bonus).toBe(5);
   expect(getMonster('giant-rat')?.traits[0].effect).toBe('pack-tactics');
   expect(getMonster('bandit')?.languages).toContain("Thieves' Cant");
   expect(getMonster('goblin-minion')?.bonusActions[0].effect).toBe('nimble-escape');
+  expect(getMonster('goblin-warrior')).toMatchObject({xp:50,ac:15,hp:10});
   expect(getMonster('__proto__')).toBeUndefined();
  });
  it('resolves playable combat profiles directly from the monster registry',()=>{
@@ -37,7 +38,9 @@ describe('SRD 5.2.1 monster compendium and solo encounter director',()=>{
   for(const id of ids){
    const {scenario,assessment}=buildSoloEncounter(id,'dasahi');
    expect(validateCombatScenario(scenario,'dasahi').actors).toHaveLength(SOLO_ROGUE_ENCOUNTERS[id].monsterIds.length);
-   expect(assessment.xp).toBe(id==='ruins-goblin-scouts'?50:25);
+   expect(assessment.xp).toBe(id==='warehouse-vermin'?50:id==='roadside-bandit'?75:100);
+   expect(assessment.difficulty).toBe(SOLO_ROGUE_ENCOUNTERS[id].risk);
+   expect(SOLO_ROGUE_ENCOUNTERS[id].shopkeeperClue.length).toBeGreaterThan(30);
    expect(SOLO_ROGUE_ENCOUNTERS[id].alternatives).toContain('withdraw');
    expect(scenario.exits).not.toHaveLength(0);
   }

@@ -389,10 +389,13 @@ export function executeDmTactics(campaign:Campaign,value:unknown,random=rollDie)
    const packTactics=Boolean(getMonster(npc.profile)?.traits.some(trait=>trait.effect==='pack-tactics'))&&
      Object.entries(battle.participants).some(([allyId,ally])=>allyId!==active&&ally.hp>0&&
        sameSide(battle,active,allyId)&&distanceFeet(ally,target)<=5);
-   const {a,b,kept}=d20Pair(random,!!mode.attackAdvantage||packTactics,!!mode.attackDisadvantage);
+   const attackAdvantage=!!mode.attackAdvantage||packTactics;
+   const attackDisadvantage=!!mode.attackDisadvantage;
+   const {a,b,kept}=d20Pair(random,attackAdvantage,attackDisadvantage);
    const ac=step.target==='nighthawk'?nighthawkEquippedDefense(next)?.armorClass:battle.participants[step.target].armorClass;
    if(ac===null||ac===undefined)throw Error('Target armor class unavailable.');
-   next=attackCompanion(next,active,step.target,a,weapon.bonus,ac,rollDamage(weapon.dice,kept===20,random),weapon.modifier,weapon.type,weapon.reach,b,undefined,undefined,undefined,undefined,undefined,weapon.normal);
+   const advantageBonus=npc.profile==='goblin-warrior'&&attackAdvantage&&!attackDisadvantage?die(random,4):0;
+   next=attackCompanion(next,active,step.target,a,weapon.bonus,ac,rollDamage(weapon.dice,kept===20,random)+advantageBonus,weapon.modifier,weapon.type,weapon.reach,b,undefined,undefined,undefined,undefined,undefined,weapon.normal);
    const monster=getMonster(npc.profile);
    const observed=monster?.actions.find(action=>action.name===weapon.name);
    if(observed)next=recordMonsterAbility(next,npc.profile,observed.id);
