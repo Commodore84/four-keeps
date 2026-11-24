@@ -1,3 +1,4 @@
+import {armorEffects} from '../game/armorEffects';
 import {formatFrontierPrice,walletCopper} from '../game/frontierShop';
 import {SPELLS,SPELL_BY_ID,WIZARD_LEVEL2_SPELLS} from '../game/creationMagic';
 import {awardExperience} from '../game/campaign';
@@ -15,8 +16,10 @@ import {abilities,abilityModifier,savingThrowModifier} from '../game/checks';
 import {classSummary,spellcastingAtLevel} from '../game/creationClasses';
 import {SPECIES,resolveBackground} from '../game/creationOrigins';
 import {futureFeat,EPIC_BOONS} from '../game/creationFutureFeats';
+import {carriedWeight,carryingCapacity} from '../game/carryingCapacity';
+import {merchantItemDescription} from '../game/merchantItemDetails';
 import {ITEMS} from '../game/creationEquipment';
-import {playerEquippedAttack,playerEquippedDefense,spendPlayerResource} from '../game/companionEncounter';
+import {playerEquippedAttack,playerEquippedDefense,setPlayerLoadout,spendPlayerResource} from '../game/companionEncounter';
 import {playerSheetSummary} from '../game/playerSheetSummary';
 import {SubclassActorManager} from './SubclassActorManager';
 import {CompanionEncounterPanel} from './CompanionEncounterPanel';
@@ -173,6 +176,41 @@ const MORE_CLASS_FEATURES:Record<string,{description:string;activation:string}>=
 const resourceRecoveryLabel=(pool:{recovery:'short'|'long';shortRecovery?:number})=>pool.recovery==='short'?'Short or Long Rest':pool.shortRecovery!==undefined?`Long Rest; ${pool.shortRecovery} use${pool.shortRecovery===1?'':'s'} on a Short Rest`:'Long Rest';
 const FEATURE_ACTIONS:Record<string,string>={'Sneak Attack':'On hit','Cunning Action':'Bonus Action','Cunning Strike':'On hit','Uncanny Dodge':'Reaction','Second Wind':'Bonus Action','Action Surge':'On your turn','Rage':'Bonus Action','Reckless Attack':'On attack','Arcane Recovery':'Short Rest','Lay on Hands':'Bonus Action','Bardic Inspiration':'Bonus Action','Wild Shape':'Bonus Action','Channel Divinity':'Varies by option'};
 const earnedTraitName=(name:string)=>name.replace(/\s*\(level \d+\)/i,'');
+function InventoryEquipment({campaign,saving,onChange}:{campaign:Campaign;saving:boolean;onChange:(next:Campaign,message:string)=>Promise<boolean>|boolean|void}){
+ const [error,setError]=useState('');
+ const itemRows=(campaign.inventoryLedger?.gear??[]).filter(row=>row.quantity>0).map(row=>({row,item:ITEMS.find(entry=>entry.name.toLowerCase()===row.name.toLowerCase())}));
+ const categories=[...new Set(itemRows.map(({item})=>item?.category??'other'))];
+ const armor=armorEffects(campaign);
+ const inCombat=campaign.companionEncounter?.status==='active'||!!campaign.combat&&campaign.combat.status!=='completed';
+ return <>
+  {error&&<p className="text-xs text-red-300" role="alert">{error}</p>}
+  {armor.untrainedArmor&&<p className="text-xs text-amber-300">Untrained armor: disadvantage on Strength and Dexterity tests. Spellcasting unavailable.</p>}
+  {armor.untrainedShield&&<p className="text-xs text-amber-300">Untrained shield: no AC bonus.</p>}
+  {armor.speedPenalty>0&&<p className="text-xs text-amber-300">Armor Strength requirement: speed reduced by {armor.speedPenalty} ft.</p>}
+  {armor.stealthDisadvantage&&<p className="text-xs text-amber-300">Armor imposes disadvantage on Stealth.</p>}
+  {categories.map(category=><div key={category} className="rounded border border-white/15 text-sm">
+   <h4 className="bg-white/5 px-2 py-1 font-semibold capitalize">{category}</h4>
+   {itemRows.filter(({item})=>(item?.category??'other')===category).map(({row,item})=>{
+    const slot=category==='weapon'?'weaponId':category==='armor'?'armorId':category==='shield'?'shieldId':null;
+    const equipped=!!slot&&campaign.encounterLoadout?.[slot]===item?.id;
+    return <div key={row.name} className="space-y-1 border-t border-white/10 px-2 py-1.5">
+     <div className="flex items-center justify-between gap-2">
+      <p><strong>{row.name}</strong> ×{row.quantity}{equipped&&<span className="ml-1 text-gold">Equipped</span>}</p>
+      {slot&&item&&<button type="button" disabled={saving||inCombat} className="min-h-8 rounded border border-gold/35 px-2 disabled:opacity-50" aria-label={(equipped?'Unequip ':'Equip ')+row.name} onClick={async()=>{
+       setError('');
+       try {
+        const message=(equipped?'Unequipped ':'Equipped ')+row.name;
+        if(await onChange(setPlayerLoadout(campaign,slot,equipped?'':item.id),message)===false)setError('Equipment change could not be saved.');
+       } catch(error){setError(error instanceof Error?error.message:'Equipment change failed.');}
+      }}>{equipped?'Unequip':'Equip'}</button>}
+     </div>
+     {item&&<p className="text-xs text-parchment/75">{(item.weight/(item.packQuantity??1))*row.quantity} lb · {merchantItemDescription(item)}</p>}
+    </div>;
+   })}
+  </div>)}
+ </>;
+}
+
 export function ImportedCharacterSheet({campaign,saving,onChange,consumables,development=false}:{campaign:Campaign;saving:boolean;onChange:(next:Campaign,message:string)=>Promise<boolean>|boolean|void;consumables?:ReactNode;development?:boolean}){
  const c=campaign.character!,identity=campaign.characterIdentity!,cls=classSummary(identity.classId),attack=playerEquippedAttack(campaign),handoff=campaignAdvancementReview(campaign);
  const sheet=playerSheetSummary(campaign);
@@ -251,7 +289,15 @@ export function ImportedCharacterSheet({campaign,saving,onChange,consumables,dev
  <section  className="scroll-mt-36 space-y-2 rounded-xl border border-white/20 p-3" aria-label="Player class resources"><h3 className="font-semibold">Class resources</h3><p className="text-xs opacity-70">Saved resource totals. The Spend 1 use control appears only on your active encounter turn; its effect requires DM adjudication.</p>
  {Object.entries(c.resources??{}).length===0?<p className="text-sm opacity-70">No tracked class resources.</p>:Object.entries(c.resources??{}).map(([name,pool])=><div key={name} className="rounded-lg border border-white/10 p-2 text-sm"><div className="flex justify-between gap-2"><strong>{name}</strong><span>{Math.max(0,pool.maximum-pool.used)} / {pool.maximum} remaining</span></div><p className="text-xs opacity-70">Recovery: {resourceRecoveryLabel(pool)} · {pool.used} used</p>{playerTurn&&pool.used<pool.maximum&&<button type="button" className="mt-1 rounded border border-gold/40 px-2 py-1 text-xs" disabled={saving} aria-label={`Spend ${name} use`} onClick={()=>{try{void onChange(spendPlayerResource(campaign,name),`Spent one ${name} use; effect requires DM adjudication.`)}catch(e){setError(String(e))}}}>Spend 1 use (DM adjudicated)</button>}</div>)}
  </section>
- <section id="player-equipment" className="scroll-mt-36 space-y-2" aria-label="Equipment and inventory"><h3 className="font-semibold">Equipment and inventory</h3><p>{formatFrontierPrice(walletCopper(campaign.inventoryLedger?.currency))}</p>{campaign.inventoryLedger?.gear.map(i=><p key={i.name}>{i.name} ×{i.quantity}</p>)}<p className="text-xs opacity-70">Known catalog weight: {sheet?.totalKnownWeight??0} lb{sheet?.unverifiedWeight.length?' · Weight excludes unrecognized items: '+sheet.unverifiedWeight.join(', '):''}</p>{consumables}</section>
+ <section id="player-equipment" className="scroll-mt-36 space-y-2" aria-label="Equipment and inventory">
+  <h3 className="font-semibold">Equipment and inventory</h3>
+  <div className="flex justify-between gap-2 text-sm">
+   <span>{formatFrontierPrice(walletCopper(campaign.inventoryLedger?.currency))}</span>
+   <span>{carriedWeight(campaign).weight.toFixed(1)} / {carryingCapacity(campaign)??'—'} lb</span>
+  </div>
+  <InventoryEquipment campaign={campaign} saving={saving} onChange={onChange}/>
+  {consumables}
+ </section>
  <section id="player-spells" className="scroll-mt-36 space-y-3 rounded-xl border border-white/20 p-3" aria-label="Player spellcasting"><h3 className="font-semibold">Spellcasting</h3><p className="text-xs opacity-70">Saved spell and slot values are authoritative. Spend slots through supported gameplay actions; this section is read-only. Class progression below is reference only.</p>
  {knownSpells.length||slots.length?<><div className="grid grid-cols-2 gap-2 text-sm"><p>Spellcasting ability <strong>{castingAbility?.toUpperCase()??'Not recorded'}</strong></p><p>Spell attack <strong>{spellBonus===undefined?'—':signed(spellBonus)}</strong></p><p>Spell save DC <strong>{spellBonus===undefined?'—':8+spellBonus}</strong></p>{identity.classId==='warlock'&&<p>Pact slot rank <strong>{campaign.importedWarlockPactSlotLevel??1}</strong></p>}</div>
  {spellcasting&&<div aria-label="Class spell progression" className="rounded-lg border border-white/10 p-2 text-xs"><strong>Class progression (level {c.level??1})</strong><p>{spellcasting.kind==='pact'?'Pact Magic':'Spellcasting'}: {spellcasting.slots.map((count,index)=>`rank ${index+1}: ${count}`).join(' · ')||'No slots at this level'}</p>{spellcasting.preparedSpells!==null&&<p>Class prepared-spell allowance: {spellcasting.preparedSpells}</p>}<p className="opacity-70">Progression reference only; it does not grant slots or replace the saved, spendable slot tracker.</p></div>}

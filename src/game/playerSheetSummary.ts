@@ -1,3 +1,4 @@
+import {effectiveEquipmentSpeed} from './armorEffects';
 import type {Campaign} from './campaign';
 import {ITEMS} from './creationEquipment';
 import {classSummary} from './creationClasses';
@@ -29,5 +30,5 @@ export function playerSheetSummary(campaign:Campaign){
  });
  const totalWeight=owned.reduce((sum,g)=>sum+g.quantity*(ITEMS.find(i=>i.name.toLowerCase()===g.name.toLowerCase())?.weight??0),0);
  const unverifiedWeight=owned.filter(g=>!ITEMS.some(i=>i.name.toLowerCase()===g.name.toLowerCase())).map(g=>g.name);
- return {armorClass:playerEquippedDefense(campaign)?.armorClass??null,initiative:abilityModifier(c.scores.dex),speed:c.speed,proficiencyBonus:c.proficiencyBonus,tools:toolNames,backgroundTool:background?.tool??null,attacks,totalKnownWeight:totalWeight,unverifiedWeight,inventory:owned};
+ return {armorClass:playerEquippedDefense(campaign)?.armorClass??null,initiative:abilityModifier(c.scores.dex),speed:effectiveEquipmentSpeed(campaign),proficiencyBonus:c.proficiencyBonus,tools:toolNames,backgroundTool:background?.tool??null,attacks,totalKnownWeight:totalWeight,unverifiedWeight,inventory:owned};
 }

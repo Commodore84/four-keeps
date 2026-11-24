@@ -1669,3 +1669,24 @@ test('iPhone shop sells ordinary gear with confirmation and persists gold and we
  await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();await page.getByRole('button',{name:'Continue Adventure'}).click();
  expect((await saved(page)).inventoryLedger.gear.find((x:any)=>x.name==='Dagger')?.quantity).toBe(1);
 });
+
+test('iPhone equipment changes survive a campaign reload',async({page},testInfo)=>{
+ await createAndImport(page,'rogue');
+ await navigate(page,'Player');
+ const inventory=page.getByLabel('Equipment and inventory',{exact:true});
+ const equip=inventory.getByRole('button',{name:'Equip Leather Armor',exact:true});
+ const unequip=inventory.getByRole('button',{name:'Unequip Leather Armor',exact:true});
+ if(await unequip.isVisible())await unequip.click();
+ await equip.click();
+ await expect(unequip).toBeVisible();
+ await page.reload();
+ await page.getByRole('button',{name:'Campaigns',exact:true}).click();
+ await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await navigate(page,'Player');
+ await expect(unequip).toBeVisible();
+ await unequip.scrollIntoViewIfNeeded();
+ await page.screenshot({path:testInfo.outputPath('iphone-equipment.png')});
+ await unequip.click();
+ await expect(equip).toBeVisible();
+ expect((await saved(page)).encounterLoadout.armorId).toBe('');
+});

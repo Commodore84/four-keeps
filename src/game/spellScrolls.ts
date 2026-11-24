@@ -1,3 +1,4 @@
+import {requireArmorSpellcasting} from './armorEffects';
 import type {Campaign} from './campaign';
 
 export type ScrollCastRequest={itemName:string;spell:string;requestId:string;dmConfirmed:boolean};
@@ -6,6 +7,7 @@ export const scrollTier=(name:string):number|null=>{
  return !match?null:match[1]==='Cantrip'?0:Number(match[2]);
 };
 export function castOwnedSpellScroll(campaign:Campaign,request:ScrollCastRequest):Campaign{
+ requireArmorSpellcasting(campaign);
  const {itemName,spell,requestId,dmConfirmed}=request;
  const tier=scrollTier(itemName);
  if(tier===null)throw Error('Choose a supported spell scroll.');

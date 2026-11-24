@@ -1,3 +1,5 @@
+import {armorEffects,equipmentRollMode,requireArmorSpellcasting} from './armorEffects';
+import {setPlayerLoadout} from './companionEncounter';
 import {describe,it,expect} from 'vitest';
 import {createCharacterDraft} from '../app/CharacterCreator';
 import {campaignFromCharacterDraft} from './characterImport';
@@ -13,6 +15,35 @@ function rogue(){
  return campaignFromCharacterDraft(d,'Raven adventure');
 }
 describe('authoritative Player sheet summary',()=>{
+ it('calculates equipped and explicitly unarmored AC after serialization',()=>{
+  const c=rogue();
+  const equipped=setPlayerLoadout(c,'armorId','leather-armor');
+  expect(playerSheetSummary(equipped)?.armorClass).toBe(14);
+  const removed=setPlayerLoadout(equipped,'armorId','');
+  expect(playerSheetSummary(JSON.parse(JSON.stringify(removed)))?.armorClass).toBe(13);
+  expect(equipped.encounterLoadout?.armorId).toBe('leather-armor');
+  expect(removed.inventoryLedger).toEqual(c.inventoryLedger);
+  expect(()=>setPlayerLoadout(c,'armorId','plate-armor')).toThrow('owned');
+ });
+ it('applies heavy armor AC, untrained penalties and the Strength speed penalty',()=>{
+  const c=rogue();
+  c.inventoryLedger?.gear.push({name:'Chain Mail',quantity:1});
+  const armored=setPlayerLoadout(c,'armorId','chain-mail');
+  expect(playerSheetSummary(armored)?.armorClass).toBe(16);
+  expect(playerSheetSummary(armored)?.speed).toBe((c.character?.speed??0)-10);
+  expect(armorEffects(armored)).toMatchObject({untrainedArmor:true,speedPenalty:10,stealthDisadvantage:true});
+  expect(equipmentRollMode(armored,'normal','dex',true)).toBe('disadvantage');
+  expect(equipmentRollMode(armored,'advantage','str')).toBe('normal');
+  expect(equipmentRollMode(armored,'normal','wis')).toBe('normal');
+  expect(()=>requireArmorSpellcasting(armored)).toThrow('without training');
+ });
+ it('requires a free hand for equipped two-handed weapons',()=>{
+  const c=rogue();
+  c.inventoryLedger?.gear.push({name:'Shield',quantity:1});
+  const shielded=setPlayerLoadout(c,'shieldId','shield');
+  expect(()=>setPlayerLoadout(shielded,'weaponId','shortbow')).toThrow('two-handed weapon');
+  expect(setPlayerLoadout(setPlayerLoadout(shielded,'shieldId',''),'weaponId','shortbow').encounterLoadout?.weaponId).toBe('shortbow');
+ });
  it('uses imported origin tool replacement without granting duplicate tool proficiency',()=>{
   const c=rogue(),s=playerSheetSummary(c)!;
   expect(s.tools).toContain('Herbalism Kit');

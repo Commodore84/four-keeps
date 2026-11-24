@@ -1,3 +1,4 @@
+import {armorEffects,effectiveEquipmentSpeed,requireArmorSpellcasting} from './armorEffects';
 import {SPELL_BY_ID} from './creationMagic';
 import type {Campaign} from './campaign';
 import {antitoxinSecondsRemaining} from './consumables';
@@ -202,7 +203,7 @@ export function startUnifiedEncounter(campaign:Campaign,initiative:Record<string
  const position=positions.nighthawk,roll=initiative.nighthawk;
  const character=campaign.character;
  const hp=character.currentHitPoints??character.maxHitPoints;
- const maxHp=character.maxHitPoints,speed=character.speed;
+ const maxHp=character.maxHitPoints,speed=effectiveEquipmentSpeed(campaign);
  if(!position||!valid(position)||Object.values(battle.participants).some(p=>p.x===position.x&&p.y===position.y))throw Error('Invalid Nighthawk position');
  if(!Number.isInteger(roll)||roll<1||roll>40||!Number.isInteger(hp)||!Number.isInteger(maxHp)||hp!<1||maxHp!<1||hp!>maxHp!||!Number.isInteger(speed)||speed!<0||speed!>120||speed!%5!==0)throw Error('Invalid Nighthawk character statistics');
  const participants:CompanionEncounter['participants']={...battle.participants,nighthawk:{...position,hp:hp!,maxHp:maxHp!,initiative:roll,conditions:(character.conditions??[]) as CompanionCondition[],deathSaves:character.deathSaves,armorClass:character.armorClass,actorKind:'party',faction:'party',speedFeet:speed!,movementSpentFeet:0,actionUsed:false,bonusActionUsed:false,dashFeet:0,disengaged:false,dodging:false,reactionUsed:false}};
@@ -685,7 +686,7 @@ export function conditionCompanion(campaign:Campaign,targetId:string,condition:'
 export function refreshNighthawkEncounterStatistics(campaign:Campaign):Campaign{
  const battle=encounter(campaign),actor=battle.participants.nighthawk,character=campaign.character;
  if(battle.mode!=='unified'||!actor||!character)throw Error('Unified Nighthawk encounter required');
- const speed=character.speed,maxHp=character.maxHitPoints;
+ const speed=effectiveEquipmentSpeed(campaign),maxHp=character.maxHitPoints;
  if(!Number.isInteger(speed)||speed!<0||speed!>120||speed!%5!==0||!Number.isInteger(maxHp)||maxHp!<1||maxHp!>500)throw Error('Invalid verified character statistics');
  if(actor.hp>maxHp!)throw Error('Encounter HP exceeds updated character maximum; reconcile manually');
  return save(campaign,{...battle,participants:{...battle.participants,nighthawk:{...actor,speedFeet:speed!,maxHp:maxHp!}},log:[...battle.log,'Nighthawk refreshed verified speed and maximum HP from character sheet']});
@@ -795,6 +796,22 @@ export function setNighthawkEncounterLoadout(campaign:Campaign,slot:'weaponId'|'
  if(!owned)throw Error('Item is not verified in campaign inventory');
  return {...save(campaign,{...battle,log:[...battle.log,'Nighthawk equipped verified '+item.name+' for encounter reference']}),encounterLoadout:{...campaign.encounterLoadout,[slot]:itemId}};
 }
+type EquipmentSlot = 'weaponId' | 'armorId' | 'shieldId';
+
+export function setPlayerLoadout(campaign:Campaign,slot:EquipmentSlot,itemId:string):Campaign {
+ if(!campaign.characterIdentity||!campaign.character)throw Error('An imported character is required.');
+ if(campaign.companionEncounter?.status==='active'||campaign.combat&&campaign.combat.status!=='completed')throw Error('Change this equipment outside combat.');
+ const loadout={...campaign.encounterLoadout,[slot]:itemId};
+ if(itemId){
+  const reference=nighthawkEquipmentReferences(campaign).items.find(item=>item.id===itemId);
+  const category=slot==='weaponId'?'weapon':slot==='armorId'?'armor':'shield';
+  if(!reference||reference.category!==category)throw Error('The item must be owned and fit this equipment slot.');
+ }
+ const weapon=ITEMS.find(item=>item.id===loadout.weaponId);
+ if(loadout.shieldId&&weapon?.properties?.includes('Two-Handed'))throw Error('Unequip the shield or two-handed weapon first.');
+ return {...campaign,encounterLoadout:loadout};
+}
+
 /** Derive equipped attacks from the saved class profile and shared equipment catalog.
  * Dice are supplied by the caller; missing identity retains the legacy Rogue profile.
  */
@@ -825,9 +842,14 @@ export function nighthawkEquippedDefense(campaign:Campaign){
  const owned=(name:string)=>(campaign.inventoryLedger?.gear??[]).some(g=>g.quantity>0&&g.name.toLowerCase()===name.toLowerCase());
  const validArmor=armor&&owned(armor.name)?armor:null;
  const validShield=shield&&owned(shield.name)?shield:null;
- if(!validArmor)return {armorClass:character.armorClass??null,source:'character-sheet' as const};
+ if(!validArmor&&campaign.encounterLoadout?.armorId!==''&&!validShield)return {armorClass:character.armorClass??null,source:'character-sheet' as const};
  const dex=abilityModifier(character.scores.dex);
- const armorClass=validArmor.baseAC!+(validArmor.armorGroup==='Heavy'?0:Math.min(dex,validArmor.dexCap??99))+(validShield?2:0);
+ const classId=campaign.characterIdentity?.classId??character.classId;
+ const trainedShield=validShield&&(!classId||classSummary(classId)?.armor.includes('Shields'));
+ const unarmoredBonus=classId==='barbarian'?abilityModifier(character.scores.con):classId==='monk'&&!validShield?abilityModifier(character.scores.wis):0;
+ const armorClass=(validArmor?
+  validArmor.baseAC!+(validArmor.armorGroup==='Heavy'?0:Math.min(dex,validArmor.dexCap??99)):
+  10+dex+unarmoredBonus)+(trainedShield?2:0);
  return {armorClass,source:'verified-loadout' as const};
 }
 export function nighthawkEquipmentReferences(campaign:Campaign){
@@ -861,6 +883,7 @@ export function spendUnifiedNighthawkInventory(campaign:Campaign,item:string,qua
  return {...save(campaign,{...battle,log:[...battle.log,'Nighthawk spent '+quantity+' '+name+' from campaign inventory']}),inventoryLedger:{...campaign.inventoryLedger!,gear:gear.map((entry,i)=>i===index?{...entry,quantity:entry.quantity-quantity}:entry)}};
 }
 export function spendUnifiedNighthawkSpellSlot(campaign:Campaign,spell:string,slotLevel:1|2=1):Campaign{
+ requireArmorSpellcasting(campaign);
  const battle=activeActor(campaign,'nighthawk'),actor=battle.participants.nighthawk;
  const character=campaign.character,slots=character?.spellSlots;
  if(battle.mode!=='unified'||!character||!slots)throw Error('Nighthawk has no verified level-one spell slots');
@@ -1018,7 +1041,8 @@ export function attackCompanion(campaign:Campaign,attackerId:string,targetId:str
  if(!companionLineOfSight(battle,attacker,target))throw Error('Line of sight blocked by map obstacle');
  const distanceFeet=Math.max(Math.abs(attacker.x-target.x),Math.abs(attacker.y-target.y))*5;
  const attackAdvantage=(attackerId==='nighthawk'&&(attacker.rogueSteadyAim||(attacker.rogueHidden&&!(attacker.rogueDetectedBy??[]).includes(targetId))))||attacker.conditions.includes('Invisible')||target.conditions.some(c=>['Blinded','Paralyzed','Restrained','Stunned','Unconscious'].includes(c))||(target.conditions.includes('Prone')&&distanceFeet<=5);
- const attackDisadvantage=target.dodging||(target.rogueHidden&&!(target.rogueDetectedBy??[]).includes(attackerId))||target.conditions.includes('Invisible')||attacker.conditions.some(c=>['Poisoned','Blinded','Restrained'].includes(c))||(target.conditions.includes('Prone')&&distanceFeet>5);
+ const untrained=attackerId==='nighthawk'&&!!verifiedWeaponId&&armorEffects(campaign).untrainedArmor;
+ const attackDisadvantage=untrained||target.dodging||(target.rogueHidden&&!(target.rogueDetectedBy??[]).includes(attackerId))||target.conditions.includes('Invisible')||attacker.conditions.some(c=>['Poisoned','Blinded','Restrained'].includes(c))||(target.conditions.includes('Prone')&&distanceFeet>5);
  if(attackAdvantage!==attackDisadvantage&&secondD20===undefined)throw Error(target.dodging?'Dodge requires a second d20 for disadvantage':'Advantage or disadvantage requires a second d20');
  if(secondD20!==undefined&&(!Number.isInteger(secondD20)||secondD20<1||secondD20>20))throw Error('Invalid second d20');
  if(rangeFeet!==undefined){if(!Number.isInteger(rangeFeet)||rangeFeet<5||rangeFeet>1000||rangeFeet%5!==0)throw Error('Invalid attack range');const distance=Math.max(Math.abs(attacker.x-target.x),Math.abs(attacker.y-target.y))*5;if(distance>rangeFeet)throw Error('Target outside declared attack range');}
@@ -1194,6 +1218,7 @@ function startSoloPlayerEncounterBase(campaign:Campaign):Campaign{
 
 /** The background's recorded free cast is independent of class spell slots. */
 export function spendPlayerOriginSpell(campaign:Campaign):Campaign{
+ requireArmorSpellcasting(campaign);
  const battle=activeActor(campaign,'nighthawk'),actor=battle.participants.nighthawk;
  const origin=campaign.characterBuild?.selections.originMagic,spell=origin?.spell?SPELL_BY_ID[origin.spell]:undefined;
  const pool=campaign.character?.resources?.['Magic Initiate'];
@@ -1252,7 +1277,7 @@ export function attackImportedRogue(campaign:Campaign,targetId:string,roll:numbe
  if(targetAC===undefined||!Number.isInteger(targetAC))throw Error('Target AC must be verified');
  const distance=Math.max(Math.abs(actor.x-target.x),Math.abs(actor.y-target.y))*5;
  const advantage=!!(actor.rogueSteadyAim||(actor.rogueHidden&&!(actor.rogueDetectedBy??[]).includes(targetId)))||actor.conditions.includes('Invisible')||target.conditions.some(c=>['Blinded','Paralyzed','Restrained','Stunned','Unconscious'].includes(c))||(target.conditions.includes('Prone')&&distance<=5);
- const disadvantage=target.dodging||(target.rogueHidden&&!(target.rogueDetectedBy??[]).includes('nighthawk'))||target.conditions.includes('Invisible')||actor.conditions.some(c=>['Poisoned','Blinded','Restrained'].includes(c))||(target.conditions.includes('Prone')&&distance>5);
+ const disadvantage=armorEffects(campaign).untrainedArmor||target.dodging||(target.rogueHidden&&!(target.rogueDetectedBy??[]).includes('nighthawk'))||target.conditions.includes('Invisible')||actor.conditions.some(c=>['Poisoned','Blinded','Restrained'].includes(c))||(target.conditions.includes('Prone')&&distance>5);
  const ally=Object.entries(battle.participants).some(([id,p])=>id!=='nighthawk'&&id!==targetId&&p.hp>0&&p.faction!=='enemies'&&Math.max(Math.abs(p.x-target.x),Math.abs(p.y-target.y))<=1&&!p.conditions.includes('Incapacitated'));
  if(disadvantage&&!advantage||!(advantage&&!disadvantage||ally))throw Error('Sneak Attack requires advantage or an adjacent eligible ally, without disadvantage');
  const elvenEligible=campaign.importedEarnedFeats?.some(f=>f.name==='Elven Accuracy'&&f.legacyApproved&&f.level<=(ch.level??0))&&['Dexterity','Intelligence','Wisdom','Charisma'].includes(equipped.ability);
@@ -1386,6 +1411,7 @@ export function useImportedWizardPortentAttack(campaign:Campaign,index:number,ta
 /** Strict, single-target verified Wizard spell resolution. Area spells are not supported here. */
 export type WizardSpellResolution={spell:'Magic Missile'|'Scorching Ray'|'Hold Person';targetId:string;slotLevel:1|2;damageDice?:number[];attackRolls?:number[];saveTotal?:number;saveModifier?:number;portentIndex?:number;humanoidConfirmed?:boolean};
 export function resolveImportedWizardSpell(campaign:Campaign,choice:WizardSpellResolution):Campaign{
+ requireArmorSpellcasting(campaign);
  const battle=activeActor(campaign,'nighthawk'),caster=battle.participants.nighthawk,target=battle.participants[choice.targetId],ch=campaign.character;
  if(battle.mode!=='unified'||campaign.characterIdentity?.classId!=='wizard'||!ch||!target||target.actorKind!=='enemy'||target.hp<=0||caster.actionUsed||caster.hp<=0||cannotAct(caster))throw Error('Wizard spell requires an eligible turn and enemy target');
  requireDazeChoice(caster,'action');
@@ -1497,6 +1523,7 @@ export function resolveImportedRogueEvasion(campaign:Campaign,saveSucceeded:bool
  * Hidden status is DM-adjudicated for this target at the instant of casting, never inferred
  * from the Invisible condition. The two d20 rolls are independently verified. */
 export function castArcaneTricksterHoldPerson(campaign:Campaign,choice:{targetId:string;slotLevel:2;humanoidConfirmed:boolean;hiddenFromTarget:boolean;saveRolls:[number,number];saveModifier:number}):Campaign{
+ requireArmorSpellcasting(campaign);
  const battle=activeActor(campaign,'nighthawk'),caster=battle.participants.nighthawk,target=battle.participants[choice.targetId],ch=campaign.character;
  if(battle.mode!=='unified'||campaign.characterIdentity?.classId!=='rogue'||campaign.importedSubclassId!=='rogue-arcane-trickster'||(ch?.level??0)<7||!ch||!caster||caster.hp<=0||caster.actionUsed||cannotAct(caster))throw Error('Arcane Trickster cannot cast on this turn');
  if(!ch.preparedSpells?.includes('Hold Person')||choice.slotLevel!==2||!choice.humanoidConfirmed)throw Error('Prepared Hold Person and verified humanoid target required');

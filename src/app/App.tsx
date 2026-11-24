@@ -1,3 +1,4 @@
+import {equipmentRollMode} from '../game/armorEffects';
 import {carriedWeight,carryingCapacity} from '../game/carryingCapacity';
 import {ConsumablePanel} from './ConsumablePanel';
 import {commitConsumableUse} from '../game/storage';
@@ -588,7 +589,7 @@ export function App() {
     if (!campaign || saving) return;
     setSaving(true);
     try {
-      const result = rollCheck(campaign.character ?? prototypeNighthawk, skill, mode);
+      const result = rollCheck(campaign.character ?? prototypeNighthawk, skill, equipmentRollMode(campaign,mode,skillAbility[skill],skill==='Stealth'));
       const next = addRoll(campaign, describeCheck(result));
       await localCampaignStorage.save(next);
       setCampaign(next);
@@ -602,6 +603,7 @@ export function App() {
     if (!campaign || saving) return;
     setSaving(true);
     try {
+      mode = equipmentRollMode(campaign,mode,ability);
       const count = mode === 'normal' ? 1 : 2;
       const dice = Array.from({ length: count }, () => Math.floor(Math.random() * 20) + 1);
       const selected = mode === 'advantage' ? Math.max(...dice) : mode === 'disadvantage' ? Math.min(...dice) : dice[0];
