@@ -1,3 +1,5 @@
+import {Star} from 'lucide-react';
+import {equipmentRecommendation} from '../game/merchantRecommendations';
 import {carriedWeight,carryingCapacity,purchaseWeightAfter,purchaseWeight,coinWeight} from '../game/carryingCapacity';
 import {merchantCategory} from '../game/merchantCategories';
 import {merchantItemDescription,merchantItemFacts} from '../game/merchantItemDetails';
@@ -9,7 +11,7 @@ import {ADVENTURE_SITES,beginTravelingMerchantRoute} from '../game/adventureSess
 import type {Campaign} from '../game/campaign';
 import {merchantPurchaseStep,merchantStock,remainingMerchantStock,walletCopper,availableMerchants,settlementTier,MERCHANT_LABELS,merchantCatalogFor,merchantResaleOffer,sellMerchantEquipment,completeQuestMagicSale,pendingQuestMagicOffer,authorizeQuestMagicSale,formatFrontierPrice} from '../game/frontierShop';
 
-export function MerchantShop({campaign,saving,onClose,onPrepare,onRevise,onSettle,onDiscuss,onSupplyChange}:{campaign:Campaign;saving:boolean;onClose:()=>void;onPrepare:(items:{itemId:string;quantity:number}[],merchant:ReturnType<typeof availableMerchants>[number])=>Promise<void>;onRevise:(items:{itemId:string;quantity:number}[])=>Promise<void>;onSettle:(confirmed:boolean)=>Promise<void>;onDiscuss:(items:{itemId:string;quantity:number}[],merchant:ReturnType<typeof availableMerchants>[number])=>Promise<void>;onSupplyChange:(next:Campaign,message:string)=>Promise<boolean>|boolean|void}){
+export function MerchantShop({campaign,saving,onClose,onPrepare,onRevise,onSettle,onDiscuss,onSupplyChange,showDmRecommendations=true}:{campaign:Campaign;saving:boolean;onClose:()=>void;onPrepare:(items:{itemId:string;quantity:number}[],merchant:ReturnType<typeof availableMerchants>[number])=>Promise<void>;onRevise:(items:{itemId:string;quantity:number}[])=>Promise<void>;onSettle:(confirmed:boolean)=>Promise<void>;onDiscuss:(items:{itemId:string;quantity:number}[],merchant:ReturnType<typeof availableMerchants>[number])=>Promise<void>;onSupplyChange:(next:Campaign,message:string)=>Promise<boolean>|boolean|void;showDmRecommendations?:boolean}){
  const merchantKey='four-keeps:cart:v1:'+campaign.id+':'+(campaign.location??'')+':'+(campaign.merchantShopType??'general');
  const [cart,setCart]=useState<Record<string,number>>(()=>{
   try{const raw=localStorage.getItem(merchantKey);if(!raw)return {};const parsed:unknown=JSON.parse(raw);if(!parsed||typeof parsed!=='object'||Array.isArray(parsed))return {};return Object.fromEntries(Object.entries(parsed).filter(([id,n])=>/^[a-z0-9-]+$/.test(id)&&typeof n==='number'&&Number.isSafeInteger(n)&&n>=0&&n<=1000000));}catch{return {};}
@@ -28,6 +30,7 @@ export function MerchantShop({campaign,saving,onClose,onPrepare,onRevise,onSettl
  const [search,setSearch]=useState('');
  const [sort,setSort]=useState<'name'|'price-up'|'price-down'>('name');
  const [activeCategory,setActiveCategory]=useState<string|null>(null);
+ const [explainedPick,setExplainedPick]=useState<string|null>(null);
 
  const pending=campaign.pendingMerchantPurchase;
  const funds=walletCopper(campaign.inventoryLedger?.currency);
@@ -113,6 +116,7 @@ export function MerchantShop({campaign,saving,onClose,onPrepare,onRevise,onSettl
     <div className="flex items-baseline justify-between gap-x-2 text-sm" aria-label={item.name+' availability'}>
      <div className="flex min-w-0 flex-wrap items-baseline gap-x-2">
       <strong>{item.name}</strong>
+      {showDmRecommendations&&(()=>{const pick=equipmentRecommendation(campaign,item,stock);return pick?<span className="relative inline-flex shrink-0 items-center"><button type="button" title={pick.reason} aria-label={`DM recommendation: ${pick.stars} of 3 stars for ${item.name}. ${pick.reason}`} aria-expanded={explainedPick===item.id} onClick={()=>setExplainedPick(old=>old===item.id?null:item.id)} className="inline-flex items-center gap-0.5 rounded px-0.5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-gold">{Array.from({length:pick.stars},(_,i)=><Star key={i} size={12} fill="currentColor" aria-hidden="true" className={pick.stars===3?'text-amber-300':pick.stars===2?'text-sky-300':'text-slate-300'}/>)}</button>{explainedPick===item.id&&<span role="note" className="absolute left-0 top-full z-30 mt-1 w-56 max-w-[75vw] rounded border border-gold/60 bg-[#151c24] p-2 text-xs leading-relaxed text-parchment shadow-xl">{pick.reason}</span>}</span>:null;})()}
       <span className="whitespace-nowrap text-xs tabular-nums text-parchment/70">{owned} owned{Object.values(campaign.encounterLoadout??{}).includes(item.id)?' · Equipped':''} · {merchantPurchaseStep(item.id)>1?Math.floor(stock/merchantPurchaseStep(item.id))+' packs in stock':stock+' in stock'} · {item.weight*(merchantPurchaseStep(item.id))} lb{merchantPurchaseStep(item.id)>1?' / '+merchantPurchaseStep(item.id):''}</span>
      </div>
      <span className="shrink-0 tabular-nums text-gold">{formatFrontierPrice(unit*(merchantPurchaseStep(item.id)))}{merchantPurchaseStep(item.id)>1?' / '+merchantPurchaseStep(item.id):''}</span>
