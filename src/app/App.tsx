@@ -1,3 +1,4 @@
+import {knownMonsterFacts} from '../game/monsterKnowledge';
 import {TacticalBattlefield} from './TacticalBattlefield';
 import {executeDmTactics} from '../game/tacticalCombat';
 import {statsWithTemporaryEffects} from '../game/temporaryEffects';
@@ -364,7 +365,7 @@ function Party({ campaign, onRoll, onSaveRoll, onAwardXP, onLevelUp, onLevelThre
 </section>;
 }
 function Journal({ campaign }: { campaign: Campaign | null }) {
-  const [section,setSection] = useState<'Adventures'|'People'|'Places'>('Adventures');
+  const [section,setSection] = useState<'Adventures'|'People'|'Places'|'Bestiary'>('Adventures');
   const [searchOpen,setSearchOpen] = useState(false);
   const [query,setQuery] = useState('');
   const [kind,setKind] = useState('All');
@@ -379,12 +380,12 @@ function Journal({ campaign }: { campaign: Campaign | null }) {
   const places = (campaign?.world?.places ?? []).filter(p=>matches([p.name,p.description,...p.notes].join(' ')));
   const visible = events.filter(e=>(kind==='All'||e.kind===kind)&&matches([e.summary,e.recount,...e.tags].join(' ')));
   const levels=[...new Set(visible.map(e=>e.level))].sort((a,b)=>a-b);
-  const tabs = [{name:'Adventures',Icon:BookOpen},{name:'People',Icon:Users},{name:'Places',Icon:MapPin}] as const;
+  const tabs = [{name:'Adventures',Icon:BookOpen},{name:'People',Icon:Users},{name:'Places',Icon:MapPin},{name:'Bestiary',Icon:BookOpen}] as const;
   return <section className="flex min-h-0 flex-col gap-3">
     <div className="sticky top-0 z-20 space-y-2 bg-ink pb-2">
       <div className="flex items-center justify-between"><h2 className="flex items-center gap-2 font-serif text-xl"><BookOpen className="text-gold"/>Journal</h2>
         <button type="button" aria-label="Search and filter journal" aria-expanded={searchOpen} onClick={()=>setSearchOpen(v=>!v)} className="rounded-lg border border-white/15 p-2"><Search size={19}/></button></div>
-      <nav aria-label="Journal sections" className="grid grid-cols-3 gap-1.5">
+      <nav aria-label="Journal sections" className="grid grid-cols-4 gap-1.5">
         {tabs.map(({name,Icon})=><button key={name} type="button" aria-current={section===name?'page':undefined} onClick={()=>{setSection(name);setExpanded([]);setKind('All')}} className={`flex min-w-0 flex-col items-center justify-center gap-1 rounded-lg border px-1 py-2 text-xs ${section===name?'border-gold/60 bg-gold/15 text-gold':'border-white/15 bg-panel text-parchment'}`}><Icon size={19}/><span>{name}</span></button>)}
       </nav>
       {searchOpen && <div className="space-y-2 rounded-lg border border-white/15 bg-panel p-2">
@@ -393,7 +394,16 @@ function Journal({ campaign }: { campaign: Campaign | null }) {
         <button type="button" onClick={()=>{setQuery('');setKind('All');setSearchOpen(false)}} className="text-xs text-gold">Clear and close</button>
       </div>}
     </div>
-    {!campaign ? <p className="text-sm text-parchment/60">Create a campaign to begin your journal.</p> : section==='Adventures' ? <div className="space-y-2">
+    {!campaign ? <p className="text-sm text-parchment/60">Create a campaign to begin your journal.</p> : section==='Bestiary' ? <div aria-label="Bestiary" className="space-y-2">
+      {Object.values(campaign.monsterKnowledge??{}).filter(Boolean).length===0&&<p className="text-sm text-parchment/60">Creatures you encounter will be recorded here. Abilities appear only as you discover them.</p>}
+      {Object.values(campaign.monsterKnowledge??{}).filter((entry):entry is NonNullable<typeof entry>=>Boolean(entry)).sort((a,b)=>a.monsterId.localeCompare(b.monsterId)).map(entry=>{
+        const facts=knownMonsterFacts(entry);
+        return facts&&[facts.name,facts.type,entry.firstSeenLocation,...facts.known.map(ability=>ability.name)].some(text=>matches(text))?<article key={entry.monsterId} className="rounded-xl border border-white/15 bg-panel p-3">
+          <h3 className="font-semibold">{facts.name}</h3><p className="text-xs text-parchment/60">{facts.type} · First encountered at {entry.firstSeenLocation}</p>
+          {facts.known.length>0?<ul className="mt-2 space-y-1">{facts.known.map(ability=><li key={ability.name} className="text-sm"><strong>{ability.name}.</strong> {ability.description}</li>)}</ul>:<p className="mt-2 text-sm text-parchment/60">Its abilities remain unknown.</p>}
+        </article>:null;
+      })}
+    </div> : section==='Adventures' ? <div className="space-y-2">
       {visible.length===0 && <p className="text-sm text-parchment/60">No matching recorded encounters yet.</p>}
       {levels.map(level=><div key={level} className="space-y-2"><h3 className="sticky top-32 z-10 bg-ink py-1 text-sm font-semibold text-gold">{level===0?'Earlier adventures':`Level ${level}`}</h3>{visible.filter(e=>e.level===level).map(e=>{const category=e.kind;const Icon=icons[category];const open=expanded.includes(e.id);const detail=e.recount;return <article key={e.id} className="overflow-hidden rounded-xl border border-white/15 bg-panel">
         <button type="button" aria-expanded={open} onClick={()=>setExpanded(old=>open?old.filter(id=>id!==e.id):[...old,e.id])} className="flex w-full items-start gap-3 p-3 text-left">

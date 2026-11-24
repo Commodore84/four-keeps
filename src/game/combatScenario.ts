@@ -1,14 +1,24 @@
 import type {DamageType} from './subclassCombatRules';
+import {MONSTER_COMPENDIUM} from './monsterCompendium';
 
 export type Square={x:number;y:number};
 export type EncounterOutcome='victory'|'defeat'|'retreat'|'escape'|'surrender'|'negotiation'|'objective'|'abandoned';
 export type TacticalWeapon={name:string;bonus:number;dice:string;modifier:number;type:DamageType;reach:number;normal?:number;ammunition?:number};
 const spear:TacticalWeapon={name:'Spear',bonus:3,dice:'1d6',modifier:1,type:'Piercing',reach:5};
+const srdProfiles=Object.fromEntries(Object.entries(MONSTER_COMPENDIUM).map(([id,m])=>[id,{
+ hp:m.hp,ac:m.ac,speed:m.speedFeet,initiative:m.initiative,perception:m.senses.passivePerception,
+ str:Math.floor((m.abilities.str-10)/2),dex:Math.floor((m.abilities.dex-10)/2),con:Math.floor((m.abilities.con-10)/2),
+ weapons:m.actions.filter(a=>a.attack).flatMap(a=>{
+  const attack=a.attack!;
+  const base={name:a.name,bonus:attack.bonus,dice:attack.damageDice,modifier:attack.damageModifier,type:attack.damageType};
+  return attack.kind==='both'?[{...base,reach:attack.reachFeet??5},
+    {...base,reach:attack.longFeet??attack.normalFeet??5,normal:attack.normalFeet}]:
+   attack.kind==='ranged'?[{...base,reach:attack.longFeet??attack.normalFeet??5,normal:attack.normalFeet,ammunition:20}]:
+   [{...base,reach:attack.reachFeet??5}];
+ })
+}])) as Record<keyof typeof MONSTER_COMPENDIUM,{hp:number;ac:number;speed:number;initiative:number;perception:number;str:number;dex:number;con:number;weapons:TacticalWeapon[]}>;
 export const TACTICAL_PROFILES={
- bandit:{hp:11,ac:12,speed:30,initiative:1,perception:10,str:0,dex:1,con:1,weapons:[
-  {name:'Scimitar',bonus:3,dice:'1d6',modifier:1,type:'Slashing',reach:5},
-  {name:'Light Crossbow',bonus:3,dice:'1d8',modifier:1,type:'Piercing',reach:320,normal:80,ammunition:20},
- ] as TacticalWeapon[]},
+ ...srdProfiles,
  guard:{hp:11,ac:16,speed:30,initiative:1,perception:12,str:1,dex:1,con:1,weapons:[spear,{...spear,reach:60,normal:20,ammunition:1}]},
  mage:{hp:81,ac:15,speed:30,initiative:2,perception:14,str:-1,dex:2,con:0,weapons:[
   {name:'Arcane Burst',bonus:6,dice:'3d8',modifier:3,type:'Force',reach:5},

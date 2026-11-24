@@ -33,6 +33,7 @@ export interface Campaign {
   /** Reserved for future non-Nighthawk actors; never implicitly applied to the Rogue prototype. */
   subclassActors?:Record<string,SubclassCombatState>;
   companionEncounter?:CompanionEncounter;
+  monsterKnowledge?:Partial<Record<import('./monsterCompendium').MonsterId,import('./monsterKnowledge').MonsterKnowledgeEntry>>;
   tacticalArtwork?:Record<string,'forest-ruins-test.svg'>;
   adventureSession?:AdventureSession;
   merchantShopOpen?:boolean;

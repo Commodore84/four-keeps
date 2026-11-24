@@ -20,6 +20,27 @@ const importCampaign=(classId='fighter',level=5):Campaign=>{
 const middle=(faces:number)=>faces===20?12:1;
 const begin=(classId='fighter',level=5)=>startTacticalEncounter(proposeAdventureEncounter(importCampaign(classId,level),'Road bandit','action',undefined,battlePlan),{x:1,y:1},middle);
 const restore=(campaign:Campaign)=>JSON.parse(JSON.stringify(campaign)) as Campaign;
+describe('SRD creature actions in tactical combat',()=>{
+ it('Goblin Minion Nimble Escape consumes only a bonus action and becomes observed knowledge',()=>{
+  const scenario={...battlePlan,actors:[{id:'goblin',label:'Goblin Minion',profile:'goblin-minion',side:'enemies',square:{x:5,y:1}}]};
+  const proposed=proposeAdventureEncounter(importCampaign('rogue',1),'Goblin Minion','check',undefined,scenario);
+  const started=startTacticalEncounter(proposed,{x:1,y:1},middle);
+  expect(started.monsterKnowledge?.['goblin-minion']?.encounters).toBe(1);
+  const battle=started.companionEncounter!;
+  const turn=battle.order.indexOf('goblin');
+  const onTurn={...started,companionEncounter:{...battle,turnIndex:turn}};
+  const used=tacticalAction(onTurn,'goblin','Disengage',{bonus:true},middle);
+  expect(used.companionEncounter?.participants.goblin).toMatchObject({bonusActionUsed:true,actionUsed:false,disengaged:true});
+  expect(used.monsterKnowledge?.['goblin-minion']?.observedAbilities).toContain('nimble-escape');
+  expect(()=>tacticalAction(used,'goblin','Disengage',{bonus:true},middle)).toThrow();
+ });
+ it('Non-goblin monsters cannot claim Nimble Escape',()=>{
+  const started=begin('rogue',1),battle=started.companionEncounter!;
+  const id=battle.order.find(x=>x==='bandit')!;
+  const onTurn={...started,companionEncounter:{...battle,turnIndex:battle.order.indexOf(id)}};
+  expect(()=>tacticalAction(onTurn,id,'Disengage',{bonus:true},middle)).toThrow('cannot use Nimble Escape');
+ });
+});
 describe('structured tactical combat',()=>{
  it('rejects forged profiles and placements and saves actual surprise rolls and initiative order',()=>{
   const base=importCampaign();

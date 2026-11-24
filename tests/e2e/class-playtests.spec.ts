@@ -1861,4 +1861,14 @@ test('iPhone tactical combat opens from Adventure, previews movement, runs NPC t
  await reopen();
  await expect(panel).toHaveCount(0);
  await expect.poll(async()=> (await saved(page))?.companionEncounter?.status).toBe('completed');
+ await navigate(page,'Journal');
+ await page.getByRole('button',{name:'Bestiary'}).click();
+ await expect(page.getByLabel('Bestiary')).toContainText('Bandit');
+ await expect(page.getByLabel('Bestiary')).not.toContainText('AC 12');
+ await page.reload();
+ await page.getByRole('button',{name:'Campaigns',exact:true}).click();
+ await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await navigate(page,'Journal');
+ await page.getByRole('button',{name:'Bestiary'}).click();
+ await expect(page.getByLabel('Bestiary')).toContainText('Bandit');
 });

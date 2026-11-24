@@ -1,4 +1,6 @@
 import {magicProtectionBonus} from './magicEquipment';
+import {getMonster} from './monsterCompendium';
+import {recordMonsterSighting,recordMonsterAbility} from './monsterKnowledge';
 import type {Campaign} from './campaign';
 import {abilityModifier,savingThrowModifier,skillModifier} from './checks';
 import {ITEM_BY_ID} from './creationEquipment';
@@ -67,6 +69,7 @@ export function startTacticalEncounter(campaign:Campaign,start:Square,random=rol
  const actors=Object.fromEntries(scenario.actors.map(actor=>[actor.id,{ammunition:TACTICAL_PROFILES[actor.profile].weapons.find(weapon=>weapon.ammunition!==undefined)?.ammunition??0,
   ...(actor.profile==='mage'?{spellUses:{Fireball:2,'Misty Step':3}}:{})}]));
  const now=new Date().toISOString();
+ next=recordMonsterSighting(next,scenario.actors.filter(actor=>actor.side==='enemies').map(actor=>actor.profile),now);
  return {...next,updatedAt:now,...(scenario.artwork?{tacticalArtwork:{...campaign.tacticalArtwork,[scenario.locationKey]:scenario.artwork}}:{}),merchantShopOpen:false,adventureSession:{...session,status:'encounter',pendingEncounter:undefined,encounterActorId:scenario.actors.find(actor=>actor.side==='enemies')!.id},
   companionEncounter:{...battle,phaseThree:{scenario,initiative:rolls,actors},participants,order,turnIndex:0,obstacles:scenario.obstacles,cover:scenario.cover},
   journal:[...next.journal,{id:crypto.randomUUID(),kind:'system',createdAt:now,text:'The encounter begins. Initiative has been rolled.'}]};
@@ -162,12 +165,24 @@ export function escapeTacticalGrapple(campaign:Campaign,id:string,acrobatics=fal
 }
 
 export type TacticalAction='Dash'|'Disengage'|'Dodge'|'Hide'|'Search'|'Study'|'Help'|'Utilize'|'Ready'|'Grapple'|'Shove'|'Steady Aim';
+function useMonsterNimbleEscape(campaign:Campaign,id:string,action:'Hide'|'Disengage'):Campaign{
+ const {battle}=requireTurn(campaign,id),actor=battle.participants[id];
+ const profile=profileActor(campaign,id);
+ if(!profile||!getMonster(profile.profile)?.bonusActions.some(ability=>ability.effect==='nimble-escape')||
+    actor.hp<=0||actor.bonusActionUsed||actor.conditions.some(c=>['Incapacitated','Paralyzed','Petrified','Stunned','Unconscious'].includes(c)))
+  throw Error('This monster cannot use Nimble Escape now.');
+ const next={...campaign,companionEncounter:{...battle,participants:{...battle.participants,
+  [id]:{...actor,bonusActionUsed:true,...(action==='Disengage'?{disengaged:true}:{})}},
+  log:[...battle.log,id+' uses Nimble Escape ('+action+').']}};
+ return recordMonsterAbility(next,profile.profile,'nimble-escape');
+}
 export function tacticalAction(campaign:Campaign,id:string,action:TacticalAction,options:{bonus?:boolean;target?:string;detail?:string}={},random=rollDie):Campaign{
  const {battle,state}=requireTurn(campaign,id);
  const actor=battle.participants[id],target=options.target?battle.participants[options.target]:undefined;
  const player=id==='nighthawk';
  if(action==='Steady Aim')return importedRogueSteadyAim(campaign);
- if(options.bonus&&(action==='Dash'||action==='Disengage'))return importedRogueCunningAction(campaign,action);
+ if(options.bonus&&!player&&action==='Disengage')return useMonsterNimbleEscape(campaign,id,'Disengage');
+ if(options.bonus&&player&&(action==='Dash'||action==='Disengage'))return importedRogueCunningAction(campaign,action);
  if(action==='Dash'||action==='Disengage'||action==='Dodge')return useCompanionAction(campaign,id,action);
  if(action==='Grapple'||action==='Shove'){
   if(!target||!options.target||sameSide(battle,id,options.target)||target.hp<=0||distanceFeet(actor,target)>5)throw Error('Choose a reachable hostile creature.');
@@ -186,7 +201,7 @@ export function tacticalAction(campaign:Campaign,id:string,action:TacticalAction
  if(action==='Hide'){
   if(Object.entries(battle.participants).some(([other,p])=>p.hp>0&&!sameSide(battle,id,other)&&companionLineOfSight(battle,p,actor)))throw Error('Hide requires breaking hostile line of sight.');
   const total=die(random,20)+(player&&campaign.character?skillModifier(statsWithTemporaryEffects(campaign)??campaign.character,'Stealth'):npcAbility(campaign,id,'dex'));
-  const used=options.bonus&&player?useTacticalHideBonus(campaign,battle):useCompanionAction(campaign,id,'Utilize'),next=used.companionEncounter!;
+  const used=options.bonus?(player?useTacticalHideBonus(campaign,battle):useMonsterNimbleEscape(campaign,id,'Hide')):useCompanionAction(campaign,id,'Utilize'),next=used.companionEncounter!;
   return {...used,companionEncounter:{...next,phaseThree:{...state,actors:{...state.actors,[id]:{...state.actors[id],ammunition:state.actors[id]?.ammunition??0,hidden:total>=15?total:undefined}}},
    participants:{...next.participants,[id]:{...next.participants[id],rogueHidden:total>=15,rogueDetectedBy:[]}},log:[...next.log,id+(total>=15?' hid.':' failed to Hide.')]}};
  }
@@ -370,13 +385,21 @@ export function executeDmTactics(campaign:Campaign,value:unknown,random=rollDie)
    const weapon=TACTICAL_PROFILES[npc.profile].weapons[step.ranged===true?1:0];
    if(!weapon||weapon.ammunition!==undefined&&state.actors[active].ammunition<1)throw Error('The NPC lacks the requested weapon or ammunition.');
    const mode=companionAttackRollMode(next,active,step.target,undefined,false,weapon.normal);
-   const {a,b,kept}=d20Pair(random,!!mode.attackAdvantage,!!mode.attackDisadvantage);
+   const target=battle.participants[step.target];
+   const packTactics=Boolean(getMonster(npc.profile)?.traits.some(trait=>trait.effect==='pack-tactics'))&&
+     Object.entries(battle.participants).some(([allyId,ally])=>allyId!==active&&ally.hp>0&&
+       sameSide(battle,active,allyId)&&distanceFeet(ally,target)<=5);
+   const {a,b,kept}=d20Pair(random,!!mode.attackAdvantage||packTactics,!!mode.attackDisadvantage);
    const ac=step.target==='nighthawk'?nighthawkEquippedDefense(next)?.armorClass:battle.participants[step.target].armorClass;
    if(ac===null||ac===undefined)throw Error('Target armor class unavailable.');
    next=attackCompanion(next,active,step.target,a,weapon.bonus,ac,rollDamage(weapon.dice,kept===20,random),weapon.modifier,weapon.type,weapon.reach,b,undefined,undefined,undefined,undefined,undefined,weapon.normal);
+   const monster=getMonster(npc.profile);
+   const observed=monster?.actions.find(action=>action.name===weapon.name);
+   if(observed)next=recordMonsterAbility(next,npc.profile,observed.id);
+   if(packTactics)next=recordMonsterAbility(next,npc.profile,'pack-tactics');
    if(weapon.ammunition!==undefined){const encounter=next.companionEncounter!,current=encounter.phaseThree!;next={...next,companionEncounter:{...encounter,phaseThree:{...current,actors:{...current.actors,[active]:{...current.actors[active],ammunition:current.actors[active].ammunition-1}}}}};}
   } else if(step.kind==='action'&&typeof step.action==='string'&&['Dash','Disengage','Dodge','Hide','Search','Study','Help','Utilize','Ready','Grapple','Shove'].includes(step.action))
-   next=tacticalAction(next,active,step.action as TacticalAction,{target:typeof step.target==='string'?step.target:undefined,detail:typeof step.detail==='string'?step.detail:undefined},random);
+   next=tacticalAction(next,active,step.action as TacticalAction,{target:typeof step.target==='string'?step.target:undefined,detail:typeof step.detail==='string'?step.detail:undefined,bonus:step.bonus===true},random);
   else throw Error('This tactical command requires explicit DM adjudication.');
  }
  return next;
