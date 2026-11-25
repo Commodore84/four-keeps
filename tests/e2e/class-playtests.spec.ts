@@ -2026,6 +2026,95 @@ test('iPhone opens a window and virtualizes a 256×256 illustrated battlefield a
  await board.screenshot({path:'test-results/dynamic-virtualized-256-board.png'});
  expect((await saved(page)).combat.battlefield).toMatchObject({width:256,height:256});
 });
+async function fixtureWarehouse(page:Page){
+ await createAndImport(page,'rogue');
+ await page.evaluate(()=>{localStorage.setItem('four-keeps-access-code','browser-test-code');localStorage.setItem('four-keeps-dm-mode','on');});
+ await page.route('**/api/dm',async route=>{
+  const request=route.request().postDataJSON(),shared={worldUpdates:{},newFacts:[]};
+  await route.fulfill({json:{...shared,narration:request.opening?'Warehouse forecourt.':'Rats emerge from the storage bays.',
+   ...(request.opening?{}:{combatStart:{enemyName:'Warehouse rats',templateId:'warehouse-vermin'}})}});
+ });
+ await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();
+ await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await expect.poll(async()=> (await saved(page))?.journal?.some((entry:any)=>entry.id?.endsWith('-dm-opening'))).toBe(true);
+ await page.getByLabel('Message the Dungeon Master').fill('I approach the store room.');
+ await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
+ await expect(page.getByRole('button',{name:'Roll initiative (d20 + DEX)'})).toBeVisible();
+ await page.evaluate(()=>{const original=crypto.getRandomValues.bind(crypto);let count=0;crypto.getRandomValues=((a:ArrayBufferView|null)=>{
+  if(a instanceof Uint32Array&&a.length===1&&count<2){a[0]=count++===0?19:0;return a;}return original(a);
+ }) as typeof crypto.getRandomValues;});
+ await page.getByRole('button',{name:'Roll initiative (d20 + DEX)'}).click();
+ const board=page.getByRole('grid',{name:'Combat movement grid'});
+ await expect(board).toBeVisible();
+ return board;
+}
+async function provisionFixtureScenario(page:Page,kind:'lock'|'window'){
+ await page.evaluate(async kind=>{
+  const db=await new Promise<IDBDatabase>((resolve,reject)=>{const r=indexedDB.open('four-keeps-local',1);r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});
+  const tx=db.transaction('campaigns','readwrite'),store=tx.objectStore('campaigns'),entries=await new Promise<any[]>(resolve=>{const r=store.getAll();r.onsuccess=()=>resolve(r.result);});
+  const c=entries[0];
+  if(kind==='lock'){
+   const door=c.combat.battlefield.objects.find((o:any)=>o.kind==='door');
+   Object.assign(door,{locked:true,lockDC:15,forceDC:15,material:'wood',hp:18});
+   c.inventoryLedger=c.inventoryLedger??{currency:{CP:0,SP:0,EP:0,GP:0,PP:0},gear:[]};
+   c.inventoryLedger.gear.push({name:"Thieves' Tools",quantity:1});
+  }else c.combat.battlefield.objects.push({id:'fragile-pane',kind:'window',x:3,y:15,width:1,height:1,hp:4,material:'glass'});
+  store.put(c);
+  await new Promise<void>((resolve,reject)=>{tx.oncomplete=()=>resolve();tx.onerror=()=>reject(tx.error);});db.close();
+ },kind);
+ await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();
+ await page.getByRole('button',{name:'Continue Adventure'}).click();
+}
+test('iPhone locked wooden door requires an Action to pick, then a free interaction to open',async({page})=>{
+ test.setTimeout(90000);
+ await fixtureWarehouse(page);
+ await provisionFixtureScenario(page,'lock');
+ const board=page.getByRole('grid',{name:'Combat movement grid'});
+ await board.scrollIntoViewIfNeeded();
+ const target=board.getByRole('gridcell',{name:'Inspect locked door at 5, 18'});
+ await expect(target).toBeEnabled();
+ await target.click();
+ const controls=page.getByRole('group',{name:'Nearby fixture controls'});
+ await expect(controls.getByLabel('Fixture condition')).toContainText('Locked');
+ await expect(controls.getByLabel('Fixture condition')).toContainText('AC 15');
+ await page.evaluate(()=>{const original=crypto.getRandomValues.bind(crypto);crypto.getRandomValues=((a:ArrayBufferView|null)=>{
+  if(a instanceof Uint32Array&&a.length===1){a[0]=19;return a;}return original(a);
+ }) as typeof crypto.getRandomValues;});
+ await controls.getByRole('button',{name:'Pick lock (Action)'}).click();
+ await expect.poll(async()=> (await saved(page)).combat.battlefield.objects.find((o:any)=>o.kind==='door')?.locked).toBe(false);
+ expect((await saved(page)).combat.actionUsed).toBe(true);
+ expect((await saved(page)).combat.objectInteractionUsed).toBeFalsy();
+ await expect(controls.getByRole('button',{name:'Strike fixture (Action)'})).toBeDisabled();
+ await controls.getByRole('button',{name:'Open (Free)'}).click();
+ await expect.poll(async()=> (await saved(page)).combat.battlefield.objects.find((o:any)=>o.kind==='door')?.open).toBe(true);
+ await expect(board.locator('[data-terrain-art="door-open"]')).toHaveCount(1);
+ await board.screenshot({path:'test-results/fixture-locked-open-iphone.png'});
+ await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await expect(board.locator('[data-terrain-art="door-open"]')).toHaveCount(1);
+ await expect(page.getByLabel('Combat turn summary')).toBeVisible();
+});
+test('iPhone dagger attack shatters a glass window and removes physical cover',async({page})=>{
+ test.setTimeout(90000);
+ await fixtureWarehouse(page);
+ await provisionFixtureScenario(page,'window');
+ const board=page.getByRole('grid',{name:'Combat movement grid'});
+ await board.scrollIntoViewIfNeeded();
+ const controls=page.getByRole('group',{name:'Nearby fixture controls'});
+ await controls.getByLabel('Select nearby fixture').selectOption('fragile-pane');
+ await expect(controls.getByLabel('Fixture condition')).toContainText('AC 13');
+ await page.evaluate(()=>{const original=crypto.getRandomValues.bind(crypto);crypto.getRandomValues=((a:ArrayBufferView|null)=>{
+  if(a instanceof Uint32Array&&a.length===1){a[0]=19;return a;}return original(a);
+ }) as typeof crypto.getRandomValues;});
+ await controls.getByRole('button',{name:'Strike fixture (Action)'}).click();
+ await expect.poll(async()=> (await saved(page)).combat.battlefield.objects.find((o:any)=>o.id==='fragile-pane')?.destroyed).toBe(true);
+ const c=await saved(page);expect(c.combat.actionUsed).toBe(true);
+ expect(c.combat.battlefield.objects.find((o:any)=>o.id==='fragile-pane').hp).toBe(0);
+ await expect(board.locator('[data-terrain-art="window-shattered"]')).toHaveCount(1);
+ await board.screenshot({path:'test-results/fixture-glass-shattered-iphone.png'});
+ await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await expect(board.locator('[data-terrain-art="window-shattered"]')).toHaveCount(1);
+ await expect(page.getByLabel('Combat resources')).toBeVisible();
+});
 for(const scenario of [
  {id:'roadside-bandit',width:32,height:60,label:'roadside'},
  {id:'ruins-goblin-scouts',width:48,height:40,label:'ruins'}

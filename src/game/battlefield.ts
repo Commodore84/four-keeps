@@ -2,7 +2,10 @@
  * The renderer consumes this same data; images never determine rules. */
 export type BattlefieldPoint={x:number;y:number};
 export type BattlefieldObjectKind='wall'|'pillar'|'table'|'chair'|'crate'|'cargo'|'rock'|'tree'|'door'|'window'|'rubble'|'water'|'undergrowth';
-export type BattlefieldObject={id:string;kind:BattlefieldObjectKind;x:number;y:number;width:number;height:number;asset?:string;open?:boolean};
+export type BattlefieldObject={id:string;kind:BattlefieldObjectKind;x:number;y:number;width:number;height:number;asset?:string;open?:boolean;
+ /** Optional 2024 DMG fixture stats. Undefined preserves historical saves and ordinary objects. */
+ locked?:boolean;lockDC?:10|15|20;lockComplexity?:'simple'|'complex';lockProgress?:number;
+ forceDC?:number;material?:'glass'|'wood'|'stone'|'iron';hp?:number;destroyed?:boolean};
 export type Battlefield={width:number;height:number;objects:BattlefieldObject[];theme?:'warehouse'|'roadside'|'ruins'};
 const properties:Record<BattlefieldObjectKind,{blocked:boolean;difficult:boolean;cover:0|2|5|'total'}>={
  wall:{blocked:true,difficult:false,cover:'total'},pillar:{blocked:true,difficult:false,cover:'total'},
@@ -17,11 +20,13 @@ export const battlefieldContains=(map:Pick<Battlefield,'width'|'height'>,p:Battl
 export const objectAt=(map:Battlefield,p:BattlefieldPoint)=>map.objects.filter(o=>p.x>=o.x&&p.x<o.x+o.width&&p.y>=o.y&&p.y<o.y+o.height);
 /** Opened doors have no physical footprint for movement or cover.
  * The source map itself remains immutable for save/replay determinism. */
-export const battlefieldObjectBlocks=(o:BattlefieldObject)=>properties[o.kind].blocked&&!((o.kind==='door'||o.kind==='window')&&o.open);
+export const battlefieldObjectBlocks=(o:BattlefieldObject)=>!o.destroyed&&properties[o.kind].blocked&&!((o.kind==='door'||o.kind==='window')&&o.open);
 export const battlefieldBlocked=(map:Battlefield,p:BattlefieldPoint)=>!battlefieldContains(map,p)||objectAt(map,p).some(battlefieldObjectBlocks);
 export function toggleBattlefieldOpening(map:Battlefield,id:string,occupied:BattlefieldPoint[]=[]):Battlefield{
  const opening=map.objects.find(o=>o.id===id);
  if(!opening||(opening.kind!=='door'&&opening.kind!=='window'))throw Error('That object is not an interactive door or window.');
+ if(opening.destroyed)throw Error('This fixture is destroyed.');
+ if(opening.locked&&!opening.open)throw Error('This fixture is locked.');
  if(opening.open&&occupied.some(point=>point.x>=opening.x&&point.x<opening.x+opening.width&&point.y>=opening.y&&point.y<opening.y+opening.height))throw Error('A creature is standing in the '+(opening.kind==='door'?'doorway':'window opening')+'.');
  return {...map,objects:map.objects.map(o=>o.id===id?{...o,open:!o.open}:o)};
 }
@@ -34,7 +39,9 @@ export function battlefieldOpeningWithinReach(opening:BattlefieldObject,point:Ba
  return Math.max(opening.x-1-point.x,point.x-(opening.x+opening.width),opening.y-1-point.y,point.y-(opening.y+opening.height))<=0;
 }
 export const battlefieldDoorWithinReach=battlefieldOpeningWithinReach;
-export const battlefieldDifficult=(map:Battlefield,p:BattlefieldPoint)=>objectAt(map,p).some(o=>properties[o.kind].difficult||(o.kind==='window'&&o.open));
+export const battlefieldDifficult=(map:Battlefield,p:BattlefieldPoint)=>objectAt(map,p).some(o=>properties[o.kind].difficult||(o.kind==='window'&&(o.open||o.destroyed)));
+/** An object is transparent to sight when open or shattered. */
+export const battlefieldObjectCover=(o:BattlefieldObject):0|2|5|'total'=>o.destroyed||((o.kind==='door'||o.kind==='window')&&o.open)?0:properties[o.kind].cover;
 export function validateBattlefield(value:unknown):Battlefield{
  if(!value||typeof value!=='object')throw Error('Invalid battlefield geometry.');
  const m=value as Battlefield;
@@ -44,8 +51,27 @@ export function validateBattlefield(value:unknown):Battlefield{
  if(m.width*m.height>65536)throw Error('Battlefield exceeds the current 65,536-cell rendering budget.');
  const ids=new Set<string>();
  const objects=m.objects.map(o=>{
-  if(!o||('open' in o&&(!['door','window'].includes(o.kind)||typeof o.open!=='boolean'))||typeof o.id!=='string'||!o.id||ids.has(o.id)||!Object.hasOwn(properties,o.kind)||!battlefieldContains(m,o)||!Number.isSafeInteger(o.width)||!Number.isSafeInteger(o.height)||o.width<1||o.height<1||!battlefieldContains(m,{x:o.x+o.width-1,y:o.y+o.height-1}))throw Error('Invalid battlefield object.');
-  ids.add(o.id);return {id:o.id,kind:o.kind,x:o.x,y:o.y,width:o.width,height:o.height,...(typeof o.asset==='string'?{asset:o.asset}:{}),...((o.kind==='door'||o.kind==='window')&&typeof o.open==='boolean'?{open:o.open}:{})};
+  if(!o||
+   ('open' in o&&(!['door','window'].includes(o.kind)||typeof o.open!=='boolean'))||
+   ('locked' in o&&(!['door','window'].includes(o.kind)||typeof o.locked!=='boolean'))||
+   ('lockDC' in o&&(!['door','window'].includes(o.kind)||![10,15,20].includes(o.lockDC!)))||
+   ('lockComplexity' in o&&(!['door','window'].includes(o.kind)||!['simple','complex'].includes(o.lockComplexity!)))||
+   ('lockProgress' in o&&(!o.locked||o.lockComplexity!=='complex'||!Number.isSafeInteger(o.lockProgress)||o.lockProgress!<0||o.lockProgress!>9))||
+   ('forceDC' in o&&(!['door','window'].includes(o.kind)||!Number.isSafeInteger(o.forceDC)||o.forceDC!<5||o.forceDC!>30))||
+   ('material' in o&&!['glass','wood','stone','iron'].includes(o.material!))||
+   ('hp' in o&&(!Number.isSafeInteger(o.hp)||o.hp!<0||o.hp!>1000))||
+   ('destroyed' in o&&(typeof o.destroyed!=='boolean'||o.destroyed&&o.hp!==0))||
+   (o.open&&o.locked)||(o.destroyed&&o.locked)||typeof o.id!=='string'||!o.id||ids.has(o.id)||!Object.hasOwn(properties,o.kind)||!battlefieldContains(m,o)||!Number.isSafeInteger(o.width)||!Number.isSafeInteger(o.height)||o.width<1||o.height<1||!battlefieldContains(m,{x:o.x+o.width-1,y:o.y+o.height-1}))throw Error('Invalid battlefield object.');
+  ids.add(o.id);return {id:o.id,kind:o.kind,x:o.x,y:o.y,width:o.width,height:o.height,...(typeof o.asset==='string'?{asset:o.asset}:{}),
+   ...((o.kind==='door'||o.kind==='window')&&typeof o.open==='boolean'?{open:o.open}:{}),
+   ...(typeof o.locked==='boolean'?{locked:o.locked}:{}),
+   ...(o.lockDC!==undefined?{lockDC:o.lockDC}:{}),
+   ...(o.lockComplexity!==undefined?{lockComplexity:o.lockComplexity}:{}),
+   ...(o.lockProgress!==undefined?{lockProgress:o.lockProgress}:{}),
+   ...(o.forceDC!==undefined?{forceDC:o.forceDC}:{}),
+   ...(o.material!==undefined?{material:o.material}:{}),
+   ...(o.hp!==undefined?{hp:o.hp}:{}),
+   ...(o.destroyed!==undefined?{destroyed:o.destroyed}:{})};
  });
  if(m.theme!==undefined&&!['warehouse','roadside','ruins'].includes(m.theme))throw Error('Invalid battlefield environment.');
  return {width:m.width,height:m.height,objects,...(m.theme?{theme:m.theme}:{})};
@@ -61,7 +87,7 @@ export function battlefieldCover(map:Battlefield,from:BattlefieldPoint,to:Battle
   const tx=to.x-dy/length*offset,ty=to.y+dx/length*offset;
   let fraction=0;
   for(const o of map.objects){
-   const c=(o.kind==='door'||o.kind==='window')&&o.open?0:properties[o.kind].cover;if(!c)continue;
+   const c=battlefieldObjectCover(o);if(!c)continue;
    let lo=0,hi=1;
    for(const [start,delta,min,max] of [[from.x,tx-from.x,o.x-.5,o.x+o.width-.5],[from.y,ty-from.y,o.y-.5,o.y+o.height-.5]]){
     if(!delta){if(start<=min||start>=max){hi=-1;break;}continue;}

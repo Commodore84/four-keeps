@@ -88,7 +88,7 @@ export function generateBattlefield(environment:BattlefieldEnvironment,seed:stri
   }
   // A closable storage partition near the entrance, including an exterior-view window.
   add('door',4,mid+1);add('wall',4,mid+2);add('wall',4,mid+3);
-  add('window',22,mid-7,2,1);
+  add('window',22,mid-7,2,1);objects[objects.length-1].hp=4;
   add('table',7,mid+1,2,1);add('chair',6,mid+2);add('pillar',18,mid-1);
  }else if(environment==='roadside-bandit'){
   // A broad open road with scattered terrain to either side, not a sealed corridor.
@@ -105,7 +105,8 @@ export function generateBattlefield(environment:BattlefieldEnvironment,seed:stri
    add('rubble',x-2,mid-6,3,2);add('pillar',x+2,mid+1);
   }
   add('wall',7,mid-6,4,1);add('wall',14,mid-2,1,3);
-  add('rubble',6,mid+1,2,2);add('rock',10,mid+5,2,1);add('door',14,mid+1);add('window',24,mid-1);
+  add('rubble',6,mid+1,2,2);add('rock',10,mid+5,2,1);add('door',14,mid+1);Object.assign(objects[objects.length-1],{locked:true,lockDC:15,forceDC:15,material:'wood',hp:18});
+  add('window',24,mid-1);Object.assign(objects[objects.length-1],{hp:4,material:'glass'});
  }
  const battlefield:Battlefield={width,height,objects,theme:environment==='warehouse-vermin'?'warehouse':environment==='roadside-bandit'?'roadside':'ruins'};
  const result={battlefield,starts,enemyStarts,exits};

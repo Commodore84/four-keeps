@@ -36,3 +36,6 @@
 [data-terrain-art="cargo-rusted"]{background-image:url("../assets/battlefield/cargo-rusted.svg");}
 [data-terrain-art="floor-roadside-mud"]{background-image:url("../assets/battlefield/floor-roadside-mud.svg");}
 [data-terrain-art="floor-ruins-cracked"]{background-image:url("../assets/battlefield/floor-ruins-cracked.svg");}
+[data-terrain-art="door-locked"]{background-image:url("../assets/battlefield/door-locked.svg");}
+[data-terrain-art="door-broken"]{background-image:url("../assets/battlefield/door-broken.svg");}
+[data-terrain-art="window-shattered"]{background-image:url("../assets/battlefield/window-shattered.svg");}

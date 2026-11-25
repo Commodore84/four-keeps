@@ -1,4 +1,6 @@
 import {battlefieldBlocked,battlefieldDifficult,battlefieldCover,battlefieldOpeningWithinReach,toggleBattlefieldOpening,type Battlefield} from './battlefield';
+import {attemptFixtureCheck,strikeBattlefieldFixture,type FixtureResolution} from './battlefieldFixtures';
+import {playerToolTraining} from './playerSheetSummary';
 import type {TemporaryEffect} from './temporaryEffects';
 import type {MagicEquipmentState} from './magicEquipment';
 import {advanceProvisionsClock} from './provisionsClock';
@@ -627,6 +629,58 @@ export function interactDuelBattlefieldOpening(campaign:Campaign,id:string):Camp
 export function interactDuelBattlefieldDoor(campaign:Campaign,id:string):Campaign{
  if(campaign.combat?.battlefield?.objects.find(o=>o.id===id)?.kind!=='door')throw Error('Select an interactive door.');
  return interactDuelBattlefieldOpening(campaign,id);
+}
+/** Verified 2024 Utilize/Attack actions for physical fixtures. A successful
+ * forced opening uses the Action; picking a lock leaves opening as a separate
+ * free object interaction. No DM narrative may override these transactions. */
+export type DuelFixtureAction='pick'|'force'|'strike';
+export function useDuelFixtureAction(campaign:Campaign,id:string,action:DuelFixtureAction):Campaign{
+ requireLegacyNighthawk(campaign);
+ const c=campaign.combat;
+ if(!c||c.status!=='initiative-set'||c.order?.[c.turnIndex??0]!=='Nighthawk')throw Error('Fixture action requires your turn.');
+ if(c.actionUsed||c.attack)throw Error('Your Action was already used this turn.');
+ if(c.playerOpportunity||c.steadyAim)throw Error('Resolve the pending combat event first.');
+ const map=c.battlefield;if(!map)throw Error('There is no physical battlefield.');
+ const object=map.objects.find(o=>o.id===id);
+ if(!object||!['door','window','crate','cargo','table'].includes(object.kind))throw Error('Select a physical fixture.');
+ if(!battlefieldOpeningWithinReach(object,c.playerPosition??{x:2,y:4}))throw Error('Move within five feet of the fixture.');
+ const ch=campaign.character??prototypeNighthawk;
+ const roll=(sides:number)=>crypto.getRandomValues(new Uint32Array(1))[0]%sides+1;
+ let result:FixtureResolution,detail:string;
+ if(action==='pick'){
+  const hasTools=(campaign.inventoryLedger?.gear??[]).some(g=>g.quantity>0&&g.name.toLowerCase().replace(/[’']/g,'').replace(/[^a-z]/g,'')==='thievestools');
+  if(!hasTools)throw Error('Thieves’ Tools must be in your inventory to pick this lock.');
+  const skill:'Sleight of Hand'='Sleight of Hand',toolProficient=playerToolTraining(campaign).toolNames.some(name=>name.toLowerCase().replace(/[’']/g,'').replace(/[^a-z]/g,'')==='thievestools');
+  const skillProficient=ch.proficientSkills.includes(skill),expert=ch.expertiseSkills?.includes(skill)??false;
+  const bonus=abilityModifier(ch.scores.dex)+(expert?2:toolProficient||skillProficient?1:0)*ch.proficiencyBonus;
+  if(object.lockComplexity==='complex'&&(object.lockProgress??0)<9){
+   result=attemptFixtureCheck(map,id,'pick',0);detail='Utilize · Thieves’ Tools. '+result.detail;
+  }else{
+  const a=roll(20),b=toolProficient&&skillProficient?roll(20):undefined,die=b===undefined?a:Math.max(a,b);
+  const total=die+bonus;
+  result=attemptFixtureCheck(map,id,'pick',total,die);
+  detail='Utilize · Thieves’ Tools: '+(b===undefined?String(a):a+'/'+b+' (Advantage)')+' + '+bonus+' = '+total+
+   ' vs DC '+result.dc+'. '+result.detail;
+  }
+ }else if(action==='force'){
+  const proficient=ch.proficientSkills.includes('Athletics'),expert=ch.expertiseSkills?.includes('Athletics')??false;
+  const bonus=abilityModifier(ch.scores.str)+(expert?2:proficient?1:0)*ch.proficiencyBonus;
+  const die=roll(20),total=die+bonus;
+  result=attemptFixtureCheck(map,id,'force',total,die);
+  detail='Utilize · Strength (Athletics): '+die+' + '+bonus+' = '+total+' vs DC '+result.dc+'. '+result.detail;
+ }else{
+  if((c.daggersAvailable??campaign.equipment?.daggers??2)<1)throw Error('A dagger is required for this fixture attack.');
+  const proficient=(ch.weaponProficiencies??['Dagger']).some(w=>w.toLowerCase()==='dagger')||ch.classId==='rogue';
+  const modifier=abilityModifier(ch.scores.dex),bonus=modifier+(proficient?ch.proficiencyBonus:0);
+  const die=roll(20),attackTotal=die+bonus;
+  const damageDie=roll(4),criticalDie=die===20?roll(4):0,damage=Math.max(0,damageDie+criticalDie+modifier);
+  result=strikeBattlefieldFixture(map,id,attackTotal,damage,'piercing',die);
+  detail='Attack · Dagger: '+die+' + '+bonus+' = '+attackTotal+' vs AC '+result.dc+
+   '. Damage '+damageDie+(criticalDie?' + '+criticalDie+' (critical)':'')+' + '+modifier+' = '+damage+'. '+result.detail;
+ }
+ const now=new Date().toISOString();
+ return {...campaign,combat:{...c,battlefield:result.map,actionUsed:true,lastAction:action==='strike'?'Attack fixture':'Utilize fixture'},
+  updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:detail,createdAt:now}]};
 }
 export function moveDuelToken(campaign:Campaign,x:number,y:number):Campaign {
   requireLegacyNighthawk(campaign);

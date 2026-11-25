@@ -5,6 +5,8 @@ import type {Battlefield,BattlefieldObject} from '../game/battlefield';
  * inside every cell's inline style on multi-thousand-square battlefields. */
 export function battlefieldTileName(map:Battlefield,object?:BattlefieldObject,x?:number,y?:number):string{
  if(object){
+  if(object.destroyed)return object.kind==='door'?'door-broken':object.kind==='window'?'window-shattered':'rubble';
+  if(object.kind==='door'&&object.locked)return 'door-locked';
   if((object.kind==='door'||object.kind==='window')&&object.open)return object.kind+'-open';
   const variant=x===undefined||y===undefined?-1:battlefieldTileVariant(x,y,object.kind);
   if(variant===3&&object.kind==='tree')return 'tree-deep';
