@@ -62,18 +62,20 @@ describe('authoritative rectangular battlefield',()=>{
 });
 describe('spread encounter starts and optional player deployment',()=>{
  for(const id of ['warehouse-vermin','roadside-bandit','ruins-goblin-scouts'] as const){
-  it(id+' places enemies in distinct distant zones across varied seeds',()=>{
-   const seen=new Set<string>();
-   for(let i=0;i<40;i++){
+  it(id+' varies enemy distance with both close ambushes and typical distant encounters',()=>{
+   const seen=new Set<string>(),distances:number[]=[];
+   for(let i=0;i<100;i++){
     const g=generateBattlefield(id,'spread-seed-'+i),[a,b]=g.enemyStarts;
     const range=Math.max(Math.abs(a.x-b.x),Math.abs(a.y-b.y));
-    expect(range).toBeGreaterThanOrEqual(13);
-    expect(g.starts.every(p=>g.enemyStarts.every(e=>Math.max(Math.abs(p.x-e.x),Math.abs(p.y-e.y))>=10))).toBe(true);
+    expect(range).toBeGreaterThan(0);
+    distances.push(Math.min(...g.enemyStarts.map(e=>Math.max(Math.abs(g.starts[0].x-e.x),Math.abs(g.starts[0].y-e.y)))));
     expect(validateGeneratedBattlefield(g)).toBe(true);
     expect(g.battlefield.objects.some(o=>o.kind==='door'||o.kind==='tree'||o.kind==='wall')).toBe(true);
     seen.add(a.x+','+a.y+':'+b.x+','+b.y);
    }
-   expect(seen.size).toBeGreaterThan(22);
+   expect(seen.size).toBeGreaterThan(55);
+   expect(distances.filter(n=>n<=7).length).toBeGreaterThan(0);
+   expect(distances.filter(n=>n>=12).length).toBeGreaterThan(60);
   });
  }
  it('allows selecting an authored open entry before initiative, retaining it after the roll and save',()=>{
