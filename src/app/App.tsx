@@ -1,6 +1,7 @@
 import {resolveDmBattlefield} from '../game/encounterDirector';
 import {knownMonsterFacts} from '../game/monsterKnowledge';
 import {TacticalBattlefield} from './TacticalBattlefield';
+import {shouldRenderTacticalBattlefield} from './encounterRouting';
 import {executeDmTactics} from '../game/tacticalCombat';
 import {statsWithTemporaryEffects} from '../game/temporaryEffects';
 import {adventureEquipmentRequest,adventureHealingPotionRequest} from '../game/adventureEquipment';
@@ -177,7 +178,7 @@ function Adventure({ campaign, fullHistory, onToggleHistory, onAdventureChange, 
   const turns = fullHistory ? allTurns : allTurns.slice(-6);
   if(development)return <section className="space-y-4" aria-label="Classic adventure testing">{campaign&&<details className="rounded-xl border border-white/10 p-3" open><summary className="cursor-pointer text-sm text-gold">Classic adventure and encounter tools</summary><AdventureSessionPanel campaign={campaign} saving={saving} onChange={onAdventureChange}/></details>}</section>;
   const encounterCampaign=campaign?recoverWarehouseRatEncounter(campaign):null;
-  if(encounterCampaign&&(encounterCampaign.adventureSession?.pendingEncounter?.scenario||encounterCampaign.adventureSession?.status==='encounter'&&encounterCampaign.companionEncounter?.phaseThree)){
+  if(shouldRenderTacticalBattlefield(encounterCampaign)){
     return <TacticalBattlefield key={encounterCampaign.id} campaign={encounterCampaign} saving={saving} onChange={onAdventureChange} onDm={onTacticalDm}/>;
   }
   if(campaign?.merchantShopOpen && campaign.adventureSession?.site==='frontier' && campaign.adventureSession.status==='exploring')return <section aria-label="Adventure storefront" className="h-full min-h-0 pb-0"><MerchantShop showDmRecommendations={showDmRecommendations} campaign={campaign} saving={saving} onClose={onShopClose} onPrepare={onShopPrepare} onRevise={onShopRevise} onSettle={onShopSettle} onDiscuss={onShopDiscuss} onSupplyChange={onAdventureChange}/></section>;
