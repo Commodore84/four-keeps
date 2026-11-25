@@ -1,0 +1,233 @@
+import {describe,it,expect} from 'vitest';
+import {newCampaign} from './campaign';
+import {applyImportedLevelUp,importedLevelUpIssues} from './importedLevelUp';
+import {xpThresholds} from './campaign';
+import {rogueSheetReference} from './creationProgression';
+import type {Campaign} from './campaign';
+function fixture(level=1,xp=0):Campaign{const c=newCampaign('Imported');return {...c,xp,character:{...c.character!,level,classId:'rogue'},characterIdentity:{name:'Test',speciesId:'elf',backgroundId:'sage',classId:'rogue',draftId:'test',pronouns:'',appearance:'',personality:'',backstory:''},characterBuild:{rules:{allowCompatibleLegacy:false}} as Campaign['characterBuild']}}
+describe('imported level up',()=>{
+ it('Rogue level eight requires an eligible improvement, applies ASI and preserves source',()=>{const c=fixture(7,34000);expect(importedLevelUpIssues(c,{hpGain:5,confirm:true}).join(' ')).toContain('valid feat');const next=applyImportedLevelUp(c,{hpGain:5,confirm:true,featPlan:'Ability Score Improvement',abilityIncreases:{Dex:2}});expect(next.character!.level).toBe(8);expect(next.character!.scores.dex).toBe(c.character!.scores.dex+2);expect(next.character!.maxHitPoints).toBe(c.character!.maxHitPoints!+5);expect(c.character!.level).toBe(7);expect(()=>applyImportedLevelUp(c,{hpGain:5,confirm:true,featPlan:'Ability Score Improvement',abilityIncreases:{Dex:3}})).toThrow();});
+ it('Rogue level eight rejects advancement without sufficient XP',()=>{const c=fixture(7,23000);expect(importedLevelUpIssues(c,{hpGain:5,confirm:true,featPlan:'Ability Score Improvement',abilityIncreases:{Dex:2}}).join(' ')).toContain('34000 XP');});
+
+ it('permits Rogue level seven advancement while retaining existing Expertise',()=>{const c=fixture(6,23000);const next=applyImportedLevelUp(c,{hpGain:5,confirm:true});expect(next.character!.level).toBe(7);expect(next.character!.maxHitPoints).toBe(c.character!.maxHitPoints!+5);expect(c.character!.level).toBe(6);});
+
+ it('requires XP and explicit confirmation, and never mutates source',()=>{const c=fixture();const choice={hpGain:5,confirm:true};expect(importedLevelUpIssues(c,choice).join(' ')).toContain('300 XP');expect(()=>applyImportedLevelUp(c,choice)).toThrow();const eligible=fixture(1,300);expect(importedLevelUpIssues(eligible,{hpGain:5,confirm:false})).toContain('Explicit confirmation required.');const next=applyImportedLevelUp(eligible,choice);expect(next.character?.level).toBe(2);expect(eligible.character?.level).toBe(1);expect(next.character!.maxHitPoints).toBe(eligible.character!.maxHitPoints!+5)});
+ it('unlocks Rogue levels five and six but rejects missing or duplicate Expertise',()=>{const five=fixture(4,6500);five.importedSubclassId='rogue-arcane-trickster';five.character!.spellSlots={level1:2,usedLevel1:1};const advanced=applyImportedLevelUp(five,{hpGain:5,confirm:true});expect(advanced.character!.level).toBe(5);expect(advanced.character!.spellSlots?.level1).toBe(3);expect(five.character!.level).toBe(4);const six={...advanced,xp:14000};expect(importedLevelUpIssues(six,{hpGain:5,confirm:true}).join(' ')).toContain('two distinct');const candidates=six.character!.proficientSkills.filter(skill=>!six.character!.expertiseSkills?.includes(skill)).slice(0,2);const result=applyImportedLevelUp(six,{hpGain:5,confirm:true,rogueExpertise:candidates});expect(result.character!.level).toBe(6);expect(result.character!.expertiseSkills).toEqual(expect.arrayContaining(candidates));expect(applyImportedLevelUp({...result,xp:23000},{hpGain:5,confirm:true}).character!.level).toBe(7);});
+ it('requires valid subclass at level three',()=>{const c=fixture(2,900);expect(importedLevelUpIssues(c,{hpGain:5,confirm:true})).toContain('Choose a valid subclass.');expect(importedLevelUpIssues(c,{hpGain:5,confirm:true,subclassId:'rogue-thief'}).join(' ')).toContain('unsupported mechanics');const next=applyImportedLevelUp(c,{hpGain:5,confirm:true,subclassId:'rogue-arcane-trickster',arcaneCantrips:['Minor Illusion','Message'],arcaneSpells:['Shield','Magic Missile','Disguise Self']});expect(next.importedSubclassId).toBe('rogue-arcane-trickster');expect(next.character?.level).toBe(3);expect(next.character?.cantrips).toContain('Mage Hand');expect(next.character?.spellSlots?.level1).toBe(2)});
+ it('validates ASI points and updates ability scores at level four',()=>{const c=fixture(3,2700);expect(importedLevelUpIssues(c,{hpGain:5,confirm:true,featPlan:'Ability Score Improvement',abilityIncreases:{Dex:1}})).toContain('Allocate exactly two ASI points.');const next=applyImportedLevelUp(c,{hpGain:5,confirm:true,featPlan:'Ability Score Improvement',abilityIncreases:{Dex:2}});expect(next.character?.scores.dex).toBe(c.character!.scores.dex+2);expect(next.character?.level).toBe(4)});
+ it('rejects incomplete feat application rather than silently granting only ability bonuses',()=>{const c=fixture(3,2700);expect(importedLevelUpIssues(c,{hpGain:5,confirm:true,featPlan:'Fey-Touched',featAbility:'Int'}).join(' ')).toContain('not yet implemented')});
+});
+describe('complete feat and Constitution progression',()=>{
+ it('grants Skill Expert proficiency, expertise and +1 ability only with valid selections',()=>{
+  const c=fixture(3,2700);c.character!.scores.dex=17;
+  const base={hpGain:5,confirm:true,featPlan:'Skill Expert',featAbility:'Dex' as const,skillProficiency:'Acrobatics' as const,skillExpertise:'Acrobatics' as const};
+  expect(importedLevelUpIssues(c,base)).toEqual([]);
+  const next=applyImportedLevelUp(c,base);
+  expect(next.character!.scores.dex).toBe(18);
+  expect(next.character!.proficientSkills).toContain('Acrobatics');
+  expect(next.character!.expertiseSkills).toContain('Acrobatics');
+  expect(c.character!.proficientSkills).not.toContain('Acrobatics');
+  expect(importedLevelUpIssues(c,{...base,skillExpertise:'Arcana'}).join(' ')).toContain('Choose one proficient skill');
+ });
+ it('retroactively updates maximum HP for a Constitution ASI',()=>{
+  const c=fixture(3,2700);c.character!.scores.con=13;
+  const next=applyImportedLevelUp(c,{hpGain:5,confirm:true,featPlan:'Ability Score Improvement',abilityIncreases:{Con:2}});
+  expect(next.character!.scores.con).toBe(15);
+  expect(next.character!.maxHitPoints).toBe(c.character!.maxHitPoints!+5+4);
+ });
+});
+describe('Arcane Trickster progression gates',()=>{
+ it('rejects duplicate and non-Wizard spells without changing the campaign',()=>{
+  const c=fixture(2,900);const choice={hpGain:5,confirm:true,subclassId:'rogue-arcane-trickster',arcaneCantrips:['Minor Illusion','Minor Illusion'],arcaneSpells:['Shield','Magic Missile','Cure Wounds']};
+  const before=JSON.stringify(c);
+  expect(importedLevelUpIssues(c,choice).join(' ')).toContain('two distinct Wizard cantrips');
+  expect(importedLevelUpIssues(c,choice).join(' ')).toContain('three distinct level-1 Wizard spells');
+  expect(()=>applyImportedLevelUp(c,choice)).toThrow();expect(JSON.stringify(c)).toBe(before);
+ });
+ it('retains Mage Hand and prepared spells when advancing to level four',()=>{
+  const c=applyImportedLevelUp(fixture(2,900),{hpGain:5,confirm:true,subclassId:'rogue-arcane-trickster',arcaneCantrips:['Minor Illusion','Message'],arcaneSpells:['Shield','Magic Missile','Disguise Self']});
+  const next=applyImportedLevelUp({...c,xp:2700},{hpGain:5,confirm:true,featPlan:'Ability Score Improvement',abilityIncreases:{Dex:2}});
+  expect(next.character?.level).toBe(4);expect(next.character?.cantrips).toContain('Mage Hand');expect(next.character?.preparedSpells).toContain('Shield');expect(next.character?.spellSlots?.level1).toBe(2);
+ });
+});
+
+describe('Rogue level nine and ten advancement',()=>{
+ it('advances level nine only with XP and keeps other class caps',()=>{
+  const c=fixture(8,48000);
+  expect(importedLevelUpIssues(c,{hpGain:5,confirm:true})).toEqual([]);
+  const next=applyImportedLevelUp(c,{hpGain:5,confirm:true});
+  expect(next.character?.level).toBe(9);
+  expect(c.character?.level).toBe(8);
+  expect(importedLevelUpIssues(fixture(8,34000),{hpGain:5,confirm:true})).toContain('Requires 48000 XP for level 9.');
+ });
+ it('level ten requires and persists ASI',()=>{
+  const c=fixture(9,64000);
+  expect(importedLevelUpIssues(c,{hpGain:5,confirm:true})).toContain('Choose a valid feat or ASI.');
+  const next=applyImportedLevelUp(c,{hpGain:5,confirm:true,featPlan:'Ability Score Improvement',abilityIncreases:{Dex:2}});
+  expect(next.character?.level).toBe(10);
+  expect(next.character?.scores.dex).toBe(c.character!.scores.dex+2);
+ });
+ it('Arcane Trickster requires distinct prepared spells and upgrades slots',()=>{
+  const c=fixture(8,48000);c.importedSubclassId='rogue-arcane-trickster';
+  c.character!.preparedSpells=['Shield','Magic Missile','Sleep','Charm Person','Disguise Self'];
+  const spells=['Detect Magic'];
+  expect(importedLevelUpIssues(c,{hpGain:5,confirm:true,arcaneSpells:spells})).toEqual([]);
+  const next=applyImportedLevelUp(c,{hpGain:5,confirm:true,arcaneSpells:spells});
+  expect(next.character!.preparedSpells).toContain('Detect Magic');
+  expect(next.character!.spellSlots?.level2).toBe(2);
+  expect(c.character!.preparedSpells).not.toContain('Detect Magic');
+ });
+});
+
+ describe('Rogue level eleven advancement',()=>{
+  it('requires XP and confirmation, then advances without adding forecast feats',()=>{
+   const atTen=fixture(10,85000);atTen.importedSubclassId='rogue-arcane-trickster';
+   const choice={hpGain:5,confirm:true};
+   expect(importedLevelUpIssues({...atTen,xp:84999},choice).join(' ')).toContain('85000 XP');
+   expect(importedLevelUpIssues(atTen,{...choice,confirm:false}).join(' ')).toContain('Explicit confirmation');
+   const next=applyImportedLevelUp(atTen,choice);
+   expect(next.character!.level).toBe(11);
+   expect(next.character!.proficiencyBonus).toBe(4);
+   expect(next.importedEarnedFeats??[]).toEqual(atTen.importedEarnedFeats??[]);
+   expect(atTen.character!.level).toBe(10);
+   expect(importedLevelUpIssues(next,choice).join(' ')).toContain('Requires 100000 XP');
+  });
+ });
+
+ describe('Rogue levels twelve through fourteen',()=>{
+  it('requires a level-12 improvement and persists earned scores without applying subclass effects',()=>{
+   const twelve=fixture(11,100000);twelve.importedSubclassId='rogue-arcane-trickster';
+   expect(importedLevelUpIssues(twelve,{hpGain:5,confirm:true}).join(' ')).toContain('Choose a valid feat or ASI');
+   const advanced=applyImportedLevelUp(twelve,{hpGain:5,confirm:true,featPlan:'Ability Score Improvement',abilityIncreases:{Dex:2}});
+   expect(advanced.character!.level).toBe(12);
+   expect(advanced.character!.scores.dex).toBe(twelve.character!.scores.dex+2);
+   expect(twelve.character!.level).toBe(11);
+  });
+  it('advances at XP thresholds 120000 and 140000 without granting unsupported spells or resources',()=>{
+   const thirteen=fixture(12,120000);thirteen.importedSubclassId='rogue-arcane-trickster';
+   const after13=applyImportedLevelUp(thirteen,{hpGain:5,confirm:true});
+   expect(after13.character!.level).toBe(13);
+   expect(after13.character!.preparedSpells).toEqual(thirteen.character!.preparedSpells);
+   expect(after13.character!.resources).toEqual(thirteen.character!.resources);
+   const after14=applyImportedLevelUp({...after13,xp:140000},{hpGain:5,confirm:true});
+   expect(after14.character!.level).toBe(14);
+   expect(after14.character!.proficiencyBonus).toBe(5);
+   expect(importedLevelUpIssues({...after14,xp:164999},{hpGain:5,confirm:true}).join(' ')).toContain('165000 XP');
+  });
+ });
+
+ describe('Rogue levels fifteen through seventeen',()=>{
+  it('grants Slippery Mind saving throw proficiency once, with XP and confirmation checks',()=>{
+   const at14=fixture(14,165000);at14.character!.savingThrowProficiencies=['dex','int'];
+   expect(importedLevelUpIssues({...at14,xp:164999},{hpGain:5,confirm:true}).join(' ')).toContain('165000 XP');
+   expect(importedLevelUpIssues(at14,{hpGain:5,confirm:false}).join(' ')).toContain('Explicit confirmation');
+   const next=applyImportedLevelUp(at14,{hpGain:5,confirm:true});
+   expect(next.character!.savingThrowProficiencies).toEqual(['dex','int','wis','cha']);
+   expect(next.character!.proficiencyBonus).toBe(5);
+   expect(at14.character!.savingThrowProficiencies).toEqual(['dex','int']);
+  });
+  it('requires level sixteen improvement and advances level seventeen without subclass resource grants',()=>{
+   const at15=fixture(15,195000);at15.importedSubclassId='rogue-arcane-trickster';
+   expect(importedLevelUpIssues(at15,{hpGain:5,confirm:true}).join(' ')).toContain('valid feat');
+   const at16=applyImportedLevelUp(at15,{hpGain:5,confirm:true,featPlan:'Ability Score Improvement',abilityIncreases:{Dex:2}});
+   expect(at16.character!.level).toBe(16);
+   const at17=applyImportedLevelUp({...at16,xp:225000},{hpGain:5,confirm:true});
+   expect(at17.character!.level).toBe(17);
+   expect(at17.character!.proficiencyBonus).toBe(6);
+   expect(at17.character!.resources).toEqual(at16.character!.resources);
+   expect(at17.character!.preparedSpells).toEqual(at16.character!.preparedSpells);
+   expect(importedLevelUpIssues({...at17,xp:264999},{hpGain:5,confirm:true}).join(' ')).toContain('265000 XP');
+  });
+ });
+
+ describe('Rogue levels eighteen to twenty',()=>{
+  it('gates level 19 Epic Boon selection and persists the selected reference without granting effects',()=>{
+   const at18=fixture(18,305000);
+   expect(importedLevelUpIssues(at18,{hpGain:5,confirm:true}).join(' ')).toContain('Epic Boon');
+   expect(importedLevelUpIssues(at18,{hpGain:5,confirm:true,featPlan:'Boon of Imaginary Power'}).join(' ')).toContain('Epic Boon');
+   const advanced=applyImportedLevelUp(at18,{hpGain:5,confirm:true,featPlan:'Boon of Speed'});
+   expect(advanced.character!.level).toBe(19);
+   expect(advanced.importedEarnedFeats?.at(-1)?.name).toBe('Boon of Speed');
+   expect(advanced.character!.speed).toBe(at18.character!.speed);
+   expect(at18.importedEarnedFeats).toBeUndefined();
+  });
+  it('applies level 18 and 20 confirmed progression and prevents level 21',()=>{
+   const at17=fixture(17,265000);
+   const at18=applyImportedLevelUp(at17,{hpGain:5,confirm:true});
+   expect(at18.character!.level).toBe(18);
+   const at19=applyImportedLevelUp({...at18,xp:305000},{hpGain:5,confirm:true,featPlan:'Boon of Fate'});
+   const at20=applyImportedLevelUp({...at19,xp:355000},{hpGain:5,confirm:true});
+   expect(at20.character!.level).toBe(20);
+   expect(at20.character!.proficiencyBonus).toBe(6);
+   expect(at20.character!.resources).toEqual(at17.character!.resources);
+   expect(importedLevelUpIssues(at20,{hpGain:5,confirm:true}).join(' ')).toContain('supports Rogue levels 2–20');
+  });
+ });
+
+ describe('integrated imported Rogue progression 1–20',()=>{
+  it('validates each XP gate and confirmed choice, preserves immutable snapshots and all earned milestones',()=>{
+   let current=fixture();
+   current.hitDiceRemaining=1;
+   const levels:Campaign[]=[current];
+   for(let target=2;target<=20;target++){
+    const base={hpGain:5,confirm:true};
+    const choice:any={...base};
+    if(target===3)Object.assign(choice,{subclassId:'rogue-arcane-trickster',arcaneCantrips:['Minor Illusion','Message'],arcaneSpells:['Shield','Magic Missile','Disguise Self']});
+    if([4,8,10,12,16].includes(target))Object.assign(choice,{featPlan:'Ability Score Improvement',abilityIncreases:{Str:2}});
+    if(target===6)choice.rogueExpertise=current.character!.proficientSkills.filter(skill=>!current.character!.expertiseSkills?.includes(skill)).slice(0,2);
+    if(target===9)choice.arcaneSpells=['Sleep','Charm Person','Detect Magic'];
+    if(target===10)choice.arcaneSpells=['Feather Fall'];
+    if(target===19)choice.featPlan='Boon of Speed';
+    const xp=xpThresholds[target-1];
+    expect(importedLevelUpIssues({...current,xp:xp-1},choice).join(' '),`XP gate for ${target}`).toContain(`${xp} XP`);
+    expect(importedLevelUpIssues({...current,xp},{...choice,confirm:false}).join(' ')).toContain('Explicit confirmation');
+    const prior=current;
+    const next=applyImportedLevelUp({...current,xp},choice);
+    expect(next.character!.level).toBe(target);
+    expect(next.character!.proficiencyBonus).toBe(Math.ceil(target/4)+1);
+    expect(next.character!.maxHitPoints).toBe(prior.character!.maxHitPoints!+5);
+    expect(next.hitDiceRemaining).toBe(target);
+    expect(rogueSheetReference(target).sneakAttack).toBe(`${Math.ceil(target/2)}d6`);
+    expect(prior.character!.level).toBe(target-1);
+    expect(next.character!.resources).toEqual(prior.character!.resources);
+    if(target>=15)expect(next.character!.savingThrowProficiencies).toEqual(expect.arrayContaining(['wis','cha']));
+    if(target>=19)expect(next.importedEarnedFeats?.some(feat=>feat.level===19&&feat.name==='Boon of Speed')).toBe(true);
+    current=JSON.parse(JSON.stringify(next)) as Campaign;
+    levels.push(current);
+   }
+   expect(levels).toHaveLength(20);
+   expect(levels[2].importedSubclassId).toBe('rogue-arcane-trickster');
+   expect(levels[5].character!.expertiseSkills?.length).toBeGreaterThanOrEqual(2);
+   expect(levels[19].character!.level).toBe(20);
+   expect(importedLevelUpIssues(current,{hpGain:5,confirm:true}).join(' ')).toContain('supports Rogue levels 2–20');
+  });
+ });
+
+ describe('Rogue hit dice on confirmed advancement',()=>{
+  it('adds one unspent hit die without restoring previously spent dice',()=>{
+   const c=fixture(7,34000);c.hitDiceRemaining=2;
+   const next=applyImportedLevelUp(c,{hpGain:5,confirm:true,featPlan:'Ability Score Improvement',abilityIncreases:{Str:2}});
+   expect(next.hitDiceRemaining).toBe(3);
+   expect(c.hitDiceRemaining).toBe(2);
+   expect(next.character!.level).toBe(8);
+  });
+ });
+
+describe('Arcane Trickster high-level spell slot progression',()=>{
+ it('grants third-level slots at Rogue 13 and preserves spent lower-level slots',()=>{
+  const c=fixture(12,xpThresholds[12]);c.importedSubclassId='rogue-arcane-trickster';c.character!.spellSlots={level1:4,usedLevel1:2,level2:3,usedLevel2:1};
+  const next=applyImportedLevelUp(c,{hpGain:5,confirm:true});
+  expect(next.character?.spellSlots).toMatchObject({level1:4,usedLevel1:2,level2:3,usedLevel2:1,level3:2,usedLevel3:0});
+  expect(c.character?.spellSlots?.level3).toBeUndefined();
+ });
+ it('increases third-level slots at Rogue 16 without restoring already used slots',()=>{
+  const c=fixture(15,xpThresholds[15]);c.importedSubclassId='rogue-arcane-trickster';c.character!.spellSlots={level1:4,usedLevel1:3,level2:3,usedLevel2:2,level3:2,usedLevel3:1};
+  const next=applyImportedLevelUp(c,{hpGain:5,confirm:true,featPlan:'Ability Score Improvement',abilityIncreases:{Dex:2}});
+  expect(next.character?.spellSlots).toMatchObject({level3:3,usedLevel3:1,level2:3,usedLevel2:2});
+ });
+ it('retains fourth-level spell slot at Rogue 20 after reload',()=>{
+  const c=fixture(19,xpThresholds[19]);c.importedSubclassId='rogue-arcane-trickster';c.character!.spellSlots={level1:4,usedLevel1:3,level2:3,usedLevel2:1,level3:3,usedLevel3:2,level4:1,usedLevel4:1};
+  const next=applyImportedLevelUp(JSON.parse(JSON.stringify(c)),{hpGain:5,confirm:true});
+  expect(next.character?.spellSlots).toMatchObject({level4:1,usedLevel4:1,level3:3,usedLevel3:2});
+ });
+});

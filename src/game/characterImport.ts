@@ -1,0 +1,56 @@
+import {initialPlayerResources} from './playerRecovery';
+import type {CharacterDraft} from '../app/CharacterCreator';
+import {reviewCharacter,reviewErrors} from './creationReview';
+import {newCampaign,type Campaign} from './campaign';
+import type {CharacterStats,Skill} from './checks';
+import {ITEM_BY_ID} from './creationEquipment';
+import {expandInventoryPacks} from './equipmentPacks';
+import {SPELL_BY_ID} from './creationMagic';
+import {classSummary,spellcastingAtLevel} from './creationClasses';
+const skillNames=new Set<Skill>(['Acrobatics','Animal Handling','Arcana','Athletics','Deception','History','Insight','Intimidation','Investigation','Medicine','Nature','Perception','Performance','Persuasion','Religion','Sleight of Hand','Stealth','Survival']);
+const lower=(value:string)=>value.toLowerCase() as keyof CharacterStats['scores'];
+export function campaignFromCharacterDraft(draft:CharacterDraft,title:string,id:string=crypto.randomUUID(),now=new Date().toISOString()):Campaign{
+ if(draft.schemaVersion!==1||draft.status!=='draft'||draft.rules.edition!=='2024')throw Error('Unsupported character draft');
+ const errors=reviewErrors(draft);
+ if(errors.length)throw Error('Character is incomplete: '+errors.join(' '));
+ const review=reviewCharacter(draft);
+ if(!review.hitPoints||review.hitPoints<1||!Number.isFinite(review.armorClass)||!review.origins.speed)throw Error('Invalid level-one character statistics');
+ const scores=Object.fromEntries(review.scores.map(({ability,score})=>[lower(ability),score])) as CharacterStats['scores'];
+ const expertise=(draft.selections.classId==='rogue'?draft.selections.classChoices?.expertise??[]:[]).filter((skill):skill is Skill=>skillNames.has(skill as Skill));
+ const slots=spellcastingAtLevel(draft.selections.classId!,1)?.slots[0]??0;
+ const cls=classSummary(draft.selections.classId!);
+ const character:CharacterStats={classId:cls!.id,savingThrowProficiencies:cls!.savingThrows.map(s=>s.toLowerCase()) as CharacterStats['savingThrowProficiencies'],weaponProficiencies:[...cls!.weapons,...((cls!.id==='cleric'&&(draft.selections.classChoices?.['divine-order']??[]).includes('Protector'))||(cls!.id==='druid'&&(draft.selections.classChoices?.['primal-order']??[]).includes('Warden'))?['Martial']:[])],resources:{...initialPlayerResources(cls!.id,scores.cha),...(draft.selections.originMagic?.spell?{'Magic Initiate':{maximum:1,used:0,recovery:'long' as const}}:{})},scores,proficiencyBonus:2,proficientSkills:review.skills.filter((skill):skill is Skill=>skillNames.has(skill as Skill)),expertiseSkills:expertise,spellSlots:slots?{level1:slots,usedLevel1:0}:undefined,level:1,maxHitPoints:review.hitPoints,currentHitPoints:review.hitPoints,armorClass:review.armorClass,speed:review.origins.speed,
+ cantrips:[...new Set([...review.spells.cantrips,...review.spells.originCantrips,...review.spells.innate])],
+ preparedSpells:[...new Set([...review.spells.prepared,...(review.spells.originSpell?[review.spells.originSpell]:[])])]};
+ const eq=draft.selections.equipment!;
+ const items=review.equipment;
+ // Expand packs into canonical gear once; never count the pack itself as extra weight.
+ const gear=expandInventoryPacks(items.map(item=>({name:item.name,quantity:item.quantity})));
+ const ledger={currency:startingCurrency(Math.round(review.remainingGold*100)),gear};
+ const counted=(id:string)=>items.find(item=>item.name===ITEM_BY_ID[id]?.name)?.quantity??0;
+ const base=newCampaign(title,id,now);
+ return {...base,location:'Dasahi',character,hitDiceRemaining:1,characterBuild:structuredClone(draft),characterIdentity:{name:draft.identity.name.trim(),speciesId:draft.selections.speciesId!,lineageId:draft.selections.lineageId,backgroundId:draft.selections.backgroundId!,classId:draft.selections.classId!,draftId:draft.id,pronouns:draft.identity.pronouns,appearance:draft.identity.appearance,personality:draft.identity.personality,backstory:draft.identity.backstory},
+ inventoryLedger:ledger,equipment:{daggers:counted('dagger'),arrows:counted('arrows'),caltrops:counted('caltrops'),ballBearings:counted('ball-bearings')},
+ encounterLoadout:{weaponId:eq.equipped.weapons[0],armorId:eq.equipped.armor,shieldId:eq.equipped.shield},
+ journal:[{id:id+'-intro',kind:'system',text:draft.identity.name.trim()+' begins a new adventure in Dasahi.',createdAt:now}]};
+}
+export function characterDraftImportOptions(drafts:CharacterDraft[]):{id:string;name:string;classId:string;valid:boolean;errors:string[]}[]{
+ return drafts.filter(d=>d?.schemaVersion===1&&d.status==='draft').map(d=>{try{const errors=reviewErrors(d);return {id:d.id,name:d.identity.name||'Unnamed character',classId:d.selections.classId??'unselected',valid:errors.length===0,errors};}catch{return {id:d.id,name:d.identity?.name||'Unnamed character',classId:'unselected',valid:false,errors:['Draft could not be validated']};}});
+}
+export function preparedSpellNamesFromDraft(draft:CharacterDraft):string[]{
+ return (draft.selections.magic?.prepared??[]).map(id=>SPELL_BY_ID[id]?.name??id);
+}
+
+/** Starting money is issued in gold and small change, not copper-only. */
+export function startingCurrency(copper:number){
+ return {CP:copper%10,SP:Math.floor(copper%100/10),EP:0,GP:Math.floor(copper/100),PP:0};
+}
+/** Repair the legacy import representation without changing wallet value or mixed wallets. */
+export function reconcileStartingCurrency(campaign:Campaign):Campaign{
+ const ledger=campaign.inventoryLedger,c=ledger?.currency;
+ if(!campaign.characterBuild||!ledger||!c||c.CP<100||c.SP||c.EP||c.GP||c.PP)return campaign;
+ try{
+  if(c.CP!==Math.round(reviewCharacter(campaign.characterBuild).remainingGold*100))return campaign;
+ }catch{return campaign;}
+ return {...campaign,inventoryLedger:{...ledger,currency:startingCurrency(c.CP)}};
+}
