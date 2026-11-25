@@ -1866,14 +1866,22 @@ test('iPhone DM warehouse template restores exact original practice combat contr
  await expect.poll(async()=>camera.evaluate(el=>el.scrollHeight-el.clientHeight)).toBeLessThan(3);
  await page.screenshot({path:'test-results/dynamic-warehouse-fit-iphone.png'});
  // Restore normal scale through a one-handed double tap/drag.
+ await camera.scrollIntoViewIfNeeded();
  const rect=await camera.boundingBox();
  if(!rect)throw Error('Missing map frame');
+
  const client=await page.context().newCDPSession(page);
  const x=rect.x+rect.width/2,y=rect.y+rect.height/2;
+ // Simulate real thumb timing: instantaneous CDP packets can be coalesced
+ // when the CI runner is busy, which does not represent an actual double tap.
  await client.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x,y}]});
+ await page.waitForTimeout(70);
  await client.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
+ await page.waitForTimeout(120);
  await client.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x,y}]});
+ await page.waitForTimeout(70);
  await client.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x,y:y-170}]});
+ await page.waitForTimeout(70);
  await client.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
  await expect.poll(async()=>camera.evaluate(el=>el.scrollWidth/el.clientWidth)).toBeGreaterThan(2);
  // Actual two-finger pinch must zoom while the original grid stays interactive.

@@ -1333,7 +1333,7 @@ export function App() {
     const points=combatTouches(e.touches),mid=combatMid(points);
     if(points.length<2){
       combatGesture.current=null;
-      if(dynamicMap){const now=Date.now();singleCombatGesture.current={x:mid.x,y:mid.y,left:el.scrollLeft,top:el.scrollTop,zoom:combatZoom,zooming:now-lastCombatTap.current<300,moved:false};}
+      if(dynamicMap){const now=Date.now();singleCombatGesture.current={x:mid.x,y:mid.y,left:el.scrollLeft,top:el.scrollTop,zoom:combatZoom,zooming:now-lastCombatTap.current<900,moved:false};}
       return;
     }
     singleCombatGesture.current=null;
