@@ -2173,6 +2173,23 @@ export function App() {
                 </div>
               </div>;
             })()}
+  {dynamicMap&&<details className="rounded-lg border border-white/20 bg-ink/30 px-3 py-2 text-sm" aria-label="Battlefield terrain key">
+    <summary className="cursor-pointer font-semibold text-parchment">Map key · Terrain &amp; cover</summary>
+    <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-3 sm:grid-cols-3">
+      {([
+        ['rubble','Difficult terrain','Costs extra movement'],
+        ['table','Half cover','+2 AC and DEX saves'],
+        ['cargo','Three-quarter cover','+5 AC and DEX saves'],
+        ['pillar','Total cover','Blocks direct targeting'],
+        ['door','Door / opening','May be opened or blocked'],
+        ['floor-warehouse','Open ground','Normal movement']
+      ] as const).map(([art,label,description])=><div key={label} className="flex items-center gap-2">
+        <span data-terrain-art={art} aria-hidden="true" className="h-9 w-9 shrink-0 rounded border border-white/30"/>
+        <span className="min-w-0"><strong className="block text-xs">{label}</strong><span className="block text-[11px] leading-snug text-parchment/70">{description}</span></span>
+      </div>)}
+    </div>
+    <p className="mt-3 text-xs text-parchment/70">Scenery can vary: a table, crate or chair may provide half cover; a large stack or rock may provide three-quarter cover. The saved battlefield rules, not the artwork, determine movement and protection.</p>
+  </details>}
   <ClassicCombatMapFrame ref={combatMapRef} style={dynamicMap?{touchAction:'none',overflow:'auto'}:undefined} onScroll={persistCamera} onTouchStart={startCombatTouch} onTouchMove={moveCombatTouch} onTouchEnd={endCombatTouch} onTouchCancel={endCombatTouch} onClickCapture={e=>{if(suppressCombatTap.current){e.stopPropagation();e.preventDefault();suppressCombatTap.current=false;}}}><ClassicCombatGrid size={campaign.combat.battlefield?.width??trainingMapSize}
               height={campaign.combat.battlefield?.height??trainingMapSize} theme={dynamicMap?.theme}
               dynamic={!!dynamicMap} zoom={combatZoom}
