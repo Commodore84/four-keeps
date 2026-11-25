@@ -1,9 +1,9 @@
 import {describe,it,expect,vi,afterEach} from 'vitest';
-import {battlefieldBlocked,battlefieldContains,battlefieldCover,battlefieldDifficult,validateBattlefield,toggleBattlefieldDoor,battlefieldDoorWithinReach,type Battlefield} from './battlefield';
+import {battlefieldBlocked,battlefieldContains,battlefieldCover,battlefieldDifficult,validateBattlefield,toggleBattlefieldDoor,toggleBattlefieldOpening,battlefieldDoorWithinReach,type Battlefield} from './battlefield';
 import {generateBattlefield,validateBattlefieldAccess,validateGeneratedBattlefield,battlefieldApproachCount,battlefieldTacticalProfile,battlefieldAlternativeApproaches} from './battlefieldGenerator';
 import {buildSoloEncounter} from './encounterDirector';
 import {fitsBattlefield,validateCombatScenario} from './combatScenario';
-import {newCampaign,moveDuelToken,interactDuelBattlefieldDoor,tacticalRoute,takeDuelTurnAction,rollDuelAttack,trainingRouteCost,type Campaign} from './campaign';
+import {newCampaign,moveDuelToken,interactDuelBattlefieldDoor,interactDuelBattlefieldOpening,tacticalRoute,takeDuelTurnAction,rollDuelAttack,trainingRouteCost,type Campaign} from './campaign';
 import {restorePracticeEncounter} from './practiceEncounterBridge';
 
 const map:Battlefield={width:60,height:80,objects:[
@@ -99,6 +99,28 @@ describe('three permanent encounter generators',()=>{
   expect(()=>validateBattlefield({...g.battlefield,objects:g.battlefield.objects.map(o=>o.id===door.id?{...o,kind:'crate',open:true}:o)})).toThrow();
   const moved=moveDuelToken(opened,door.x,door.y);
   expect(moved.combat!.playerPosition).toEqual({x:door.x,y:door.y});
+ });
+ it('opening a window changes movement, terrain costs, cover, and persisted state',()=>{
+  const m:Battlefield={width:12,height:10,objects:[{id:'casement',kind:'window',x:4,y:4,width:1,height:1}],theme:'ruins'};
+  const c=arena({x:3,y:4},{x:8,y:4});
+  const campaign={...c,combat:{...c.combat!,battlefield:m}};
+  expect(battlefieldBlocked(m,{x:4,y:4})).toBe(true);
+  expect(battlefieldCover(m,{x:2,y:4},{x:7,y:4})).toBe(5);
+  const opened=interactDuelBattlefieldOpening(campaign,'casement');
+  expect(opened.combat!.objectInteractionUsed).toBe(true);
+  expect(opened.combat!.actionUsed).toBeFalsy();
+  expect(battlefieldBlocked(opened.combat!.battlefield!,{x:4,y:4})).toBe(false);
+  expect(battlefieldDifficult(opened.combat!.battlefield!,{x:4,y:4})).toBe(true);
+  expect(battlefieldCover(opened.combat!.battlefield!,{x:2,y:4},{x:7,y:4})).toBe(0);
+  expect(JSON.parse(JSON.stringify(opened.combat!.battlefield))).toEqual(opened.combat!.battlefield);
+  expect(()=>toggleBattlefieldOpening(opened.combat!.battlefield!,'casement',[{x:4,y:4}])).toThrow('window opening');
+  expect(()=>interactDuelBattlefieldOpening(opened,'casement')).toThrow('free object interaction');
+  const closed=toggleBattlefieldOpening(opened.combat!.battlefield!,'casement');
+  expect(battlefieldBlocked(closed,{x:4,y:4})).toBe(true);
+  expect(battlefieldDifficult(closed,{x:4,y:4})).toBe(false);
+  expect(battlefieldCover(closed,{x:2,y:4},{x:7,y:4})).toBe(5);
+  expect(()=>interactDuelBattlefieldDoor(campaign,'casement')).toThrow('interactive door');
+  expect(validateBattlefield(opened.combat!.battlefield!)).toEqual(opened.combat!.battlefield);
  });
  it('windows obstruct movement but permit attacks with three-quarter cover',()=>{
   const m:Battlefield={width:9,height:7,objects:[{id:'pane',kind:'window',x:4,y:3,width:1,height:1}]};

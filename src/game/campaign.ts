@@ -1,4 +1,4 @@
-import {battlefieldBlocked,battlefieldDifficult,battlefieldCover,battlefieldDoorWithinReach,toggleBattlefieldDoor,type Battlefield} from './battlefield';
+import {battlefieldBlocked,battlefieldDifficult,battlefieldCover,battlefieldOpeningWithinReach,toggleBattlefieldOpening,type Battlefield} from './battlefield';
 import type {TemporaryEffect} from './temporaryEffects';
 import type {MagicEquipmentState} from './magicEquipment';
 import {advanceProvisionsClock} from './provisionsClock';
@@ -606,7 +606,7 @@ export function tacticalOpportunityEnemies(combat:NonNullable<Campaign['combat']
 }
 /** A once-per-turn nearby door interaction, separate from the character's Action.
  * All physical rules consume the same immutable battlefield state as the grid. */
-export function interactDuelBattlefieldDoor(campaign:Campaign,id:string):Campaign{
+export function interactDuelBattlefieldOpening(campaign:Campaign,id:string):Campaign{
  requireLegacyNighthawk(campaign);
  const c=campaign.combat;
  if(!c||c.status!=='initiative-set'||c.order?.[c.turnIndex??0]!=='Nighthawk')throw Error('Interact with a door on your turn.');
@@ -614,14 +614,19 @@ export function interactDuelBattlefieldDoor(campaign:Campaign,id:string):Campaig
  if(c.objectInteractionUsed)throw Error('One free object interaction has already been used this turn.');
  if(c.playerOpportunity||c.attack&&c.attack.phase!=='resolved')throw Error('Resolve the pending combat event first.');
  const door=c.battlefield.objects.find(o=>o.id===id);
- if(!door||door.kind!=='door')throw Error('Select an interactive door.');
- if(!battlefieldDoorWithinReach(door,c.playerPosition??{x:2,y:4}))throw Error('Move within five feet of the door first.');
+ if(!door||(door.kind!=='door'&&door.kind!=='window'))throw Error('Select an interactive door or window.');
+ if(!battlefieldOpeningWithinReach(door,c.playerPosition??{x:2,y:4}))throw Error('Move within five feet of the opening first.');
  const occupied=[c.playerPosition,(c.enemyHp??12)>0?c.enemyPosition:undefined,c.secondEnemy&&c.secondEnemy.hp>0?c.secondEnemy.position:undefined,c.owl?.hp&&c.owl.hp>0?c.owl.position:undefined].filter((point):point is {x:number;y:number}=>!!point);
- const battlefield=toggleBattlefieldDoor(c.battlefield,id,occupied);
- const text='Nighthawk '+(door.open?'closes':'opens')+' the door.';
+ const battlefield=toggleBattlefieldOpening(c.battlefield,id,occupied);
+ const text='Nighthawk '+(door.open?'closes':'opens')+' the '+door.kind+'.';
  const now=new Date().toISOString();
  return {...campaign,combat:{...c,battlefield,objectInteractionUsed:true,lastAction:text},updatedAt:now,
  journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text,createdAt:now}]};
+}
+/** The previous door-only entry point remains compatible with past callers. */
+export function interactDuelBattlefieldDoor(campaign:Campaign,id:string):Campaign{
+ if(campaign.combat?.battlefield?.objects.find(o=>o.id===id)?.kind!=='door')throw Error('Select an interactive door.');
+ return interactDuelBattlefieldOpening(campaign,id);
 }
 export function moveDuelToken(campaign:Campaign,x:number,y:number):Campaign {
   requireLegacyNighthawk(campaign);

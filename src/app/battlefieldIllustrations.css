@@ -18,3 +18,21 @@
 [data-terrain-art="wall"]{background-image:url("../assets/battlefield/wall.svg");}
 [data-terrain-art="water"]{background-image:url("../assets/battlefield/water.svg");}
 [data-terrain-art="window"]{background-image:url("../assets/battlefield/window.svg");}
+
+/* Subtle authored texture offsets, stable by cell coordinate and asset key. */
+[data-terrain-variant="0"]{background-position:45% 45%;}
+[data-terrain-variant="1"]{background-position:12% 80%;background-size:108% 108%;}
+[data-terrain-variant="2"]{background-position:88% 15%;background-size:112% 112%;}
+[data-terrain-variant="3"]{background-position:66% 91%;background-size:105% 105%;}
+[data-battlefield-theme="warehouse"]{background-image:url("../assets/battlefield/floor-warehouse.svg");}
+[data-battlefield-theme="roadside"]{background-image:url("../assets/battlefield/floor-roadside.svg");}
+[data-battlefield-theme="ruins"]{background-image:url("../assets/battlefield/floor-ruins.svg");}
+[data-battlefield-theme]{background-repeat:repeat;background-size:max(8px,var(--battlefield-cell-size,21px)) max(8px,var(--battlefield-cell-size,21px));}
+[data-battlefield-object]{background-size:100% 100%;background-repeat:no-repeat;pointer-events:none;}
+[data-terrain-art="window-open"]{background-image:url("../assets/battlefield/window-open.svg");}
+[data-terrain-art="tree-deep"]{background-image:url("../assets/battlefield/tree-deep.svg");}
+[data-terrain-art="rock-moss"]{background-image:url("../assets/battlefield/rock-moss.svg");}
+[data-terrain-art="crate-weathered"]{background-image:url("../assets/battlefield/crate-weathered.svg");}
+[data-terrain-art="cargo-rusted"]{background-image:url("../assets/battlefield/cargo-rusted.svg");}
+[data-terrain-art="floor-roadside-mud"]{background-image:url("../assets/battlefield/floor-roadside-mud.svg");}
+[data-terrain-art="floor-ruins-cracked"]{background-image:url("../assets/battlefield/floor-ruins-cracked.svg");}

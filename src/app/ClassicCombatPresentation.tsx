@@ -1,5 +1,5 @@
 import {Droplet} from 'lucide-react';
-import type {CSSProperties,ReactNode} from 'react';
+import type {CSSProperties,ReactNode,MouseEvent} from 'react';
 
 /** The historical combat initiative roster. Both the legacy duel and Phase 3
  * now render this same component. Initiative and HP stay in the rule engine. */
@@ -25,8 +25,9 @@ export function ClassicCombatResources({action,bonus,move,reaction}:{action:bool
 }
 
 /** Original combat board's 21px-per-square grid and zoom behavior. */
-export function ClassicCombatGrid({size,zoom=1,backgroundImage,dynamic=false,children,ariaLabel='Combat movement grid',role='grid'}:{size:number;zoom?:number;dynamic?:boolean;backgroundImage?:string;children:ReactNode;ariaLabel?:string;role?:'grid'|'group'}){
- const style:CSSProperties={gridTemplateColumns:`repeat(${size},minmax(0,1fr))`,width:`${size*21*zoom}px`,minWidth:dynamic?'0':'100%',backgroundImage:backgroundImage?`url(${backgroundImage})`:undefined,backgroundSize:'100% 100%'};
- return <div role={role} aria-label={ariaLabel} data-classic-combat-grid="true" className="grid gap-0 p-0" style={style}>{children}</div>;
+export function ClassicCombatGrid({size,height=size,zoom=1,backgroundImage,dynamic=false,children,ariaLabel='Combat movement grid',role='grid',onClick,theme}:{size:number;height?:number;zoom?:number;dynamic?:boolean;backgroundImage?:string;children:ReactNode;ariaLabel?:string;role?:'grid'|'group';onClick?:(event:MouseEvent<HTMLDivElement>)=>void;theme?:string}){
+ const style:CSSProperties={position:'relative',gridTemplateRows:dynamic?`repeat(${height},minmax(0,1fr))`:undefined,height:dynamic?`${height*21*zoom}px`:undefined,gridTemplateColumns:`repeat(${size},minmax(0,1fr))`,width:`${size*21*zoom}px`,minWidth:dynamic?'0':'100%',backgroundImage:backgroundImage?`url(${backgroundImage})`:undefined,backgroundSize:dynamic?undefined:'100% 100%'};
+ if(dynamic)(style as CSSProperties & Record<'--battlefield-cell-size',string>)['--battlefield-cell-size']=`${21*zoom}px`;
+ return <div role={role} aria-label={ariaLabel} data-classic-combat-grid="true" aria-colcount={dynamic?size:undefined} aria-rowcount={dynamic?height:undefined} data-battlefield-theme={theme} onClick={onClick} className="grid gap-0 p-0" style={style}>{children}</div>;
 }
 export const classicCombatCellBase='aspect-square rounded border text-xs font-bold min-w-0';

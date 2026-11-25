@@ -1848,17 +1848,20 @@ test('iPhone DM warehouse template restores exact original practice combat contr
  await expect(page.getByLabel('Combat turn summary')).toBeVisible();
  await expect(page.getByRole('region',{name:'Tactical battlefield'})).toHaveCount(0);
  const board=page.getByRole('grid',{name:'Combat movement grid'});
- await expect(board.getByRole('gridcell')).toHaveCount(1280);
+ await expect.poll(async()=>board.getByRole('gridcell').count()).toBeLessThan(700);
+ await expect.poll(async()=>board.getByRole('gridcell').count()).toBeGreaterThan(70);
+ expect(await board.getAttribute('data-battlefield-theme')).toBe('warehouse');
  const stateBefore=await saved(page);
  expect(stateBefore.combat.battlefield).toMatchObject({width:40,height:32});
  const camera=board.locator('..');
  await board.scrollIntoViewIfNeeded();
  await expect.poll(async()=>camera.evaluate(el=>el.scrollWidth/el.clientWidth)).toBeGreaterThan(3);
- const cellWidth=await board.locator('[data-battlefield-x="0"][data-battlefield-y="0"]').evaluate(el=>el.getBoundingClientRect().width);
+ const cellWidth=await board.getByRole('gridcell').first().evaluate(el=>el.getBoundingClientRect().width);
  expect(cellWidth).toBeGreaterThan(24);
  expect(cellWidth).toBeLessThan(50);
  await page.screenshot({path:'test-results/dynamic-warehouse-iphone.png'});
  await page.getByRole('button',{name:'Fit entire map'}).click();
+ await expect(board.getByRole('gridcell')).toHaveCount(1280);
  await expect.poll(async()=>camera.evaluate(el=>el.scrollWidth-el.clientWidth)).toBeLessThan(3);
  await expect.poll(async()=>camera.evaluate(el=>el.scrollHeight-el.clientHeight)).toBeLessThan(3);
  await page.screenshot({path:'test-results/dynamic-warehouse-fit-iphone.png'});
@@ -1874,11 +1877,11 @@ test('iPhone DM warehouse template restores exact original practice combat contr
  await client.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
  await expect.poll(async()=>camera.evaluate(el=>el.scrollWidth/el.clientWidth)).toBeGreaterThan(2);
  // Actual two-finger pinch must zoom while the original grid stays interactive.
- const sizeBeforePinch=await board.locator('[data-battlefield-x="0"][data-battlefield-y="0"]').evaluate(el=>el.getBoundingClientRect().width);
+ const sizeBeforePinch=await board.getByRole('gridcell').first().evaluate(el=>el.getBoundingClientRect().width);
  await client.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:x-34,y},{x:x+34,y}]});
  await client.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:x-76,y},{x:x+76,y}]});
  await client.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
- await expect.poll(async()=>board.locator('[data-battlefield-x="0"][data-battlefield-y="0"]').evaluate(el=>el.getBoundingClientRect().width)).toBeGreaterThan(sizeBeforePinch*1.1);
+ await expect.poll(async()=>board.getByRole('gridcell').first().evaluate(el=>el.getBoundingClientRect().width)).toBeGreaterThan(sizeBeforePinch*1.1);
  // Two fingers moving together pan the camera without selecting a combat square.
  await camera.evaluate(el=>el.scrollTo(440,340));
  await expect.poll(async()=>camera.evaluate(el=>el.scrollLeft)).toBe(440);
@@ -1949,8 +1952,79 @@ test('iPhone illustrated warehouse door opens, persists, and ignores corrupted c
  await page.getByRole('button',{name:'Continue Adventure'}).click();
  await expect(board.locator('[data-terrain-art="door-open"]')).toHaveCount(1);
  expect((await saved(page)).combat.battlefield).toEqual(savedCampaign.combat.battlefield);
- await expect.poll(async()=>board.locator('[data-battlefield-x="0"][data-battlefield-y="0"]').evaluate(el=>el.getBoundingClientRect().width)).toBeGreaterThan(22);
+ await expect.poll(async()=>board.getByRole('gridcell').first().evaluate(el=>el.getBoundingClientRect().width)).toBeGreaterThan(22);
  await expect(page.getByLabel('Combat turn summary')).toBeVisible();
+});
+test('iPhone opens a window and virtualizes a 256×256 illustrated battlefield at Fit',async({page})=>{
+ test.setTimeout(90000);
+ await createAndImport(page,'rogue');
+ await page.evaluate(()=>{localStorage.setItem('four-keeps-access-code','browser-test-code');localStorage.setItem('four-keeps-dm-mode','on');});
+ await page.route('**/api/dm',async route=>{
+  const request=route.request().postDataJSON(),shared={worldUpdates:{},newFacts:[]};
+  await route.fulfill({json:{...shared,narration:request.opening?'The warehouse waits.':'Rats emerge near the crates.',
+   ...(request.opening?{}:{combatStart:{enemyName:'Warehouse rats',templateId:'warehouse-vermin'}})}});
+ });
+ await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();
+ await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await expect.poll(async()=> (await saved(page))?.journal?.some((entry:any)=>entry.id?.endsWith('-dm-opening'))).toBe(true);
+ await page.getByLabel('Message the Dungeon Master').fill('Approach the warehouse.');
+ await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
+ await expect(page.getByRole('button',{name:'Roll initiative (d20 + DEX)'})).toBeVisible();
+ await page.evaluate(()=>{const original=crypto.getRandomValues.bind(crypto);let count=0;crypto.getRandomValues=((a:ArrayBufferView|null)=>{if(a instanceof Uint32Array&&a.length===1&&count<2){a[0]=count++===0?19:0;return a;}return original(a);}) as typeof crypto.getRandomValues;});
+ await page.getByRole('button',{name:'Roll initiative (d20 + DEX)'}).click();
+ // Change only the physical encounter's persisted geometry; game state, actor
+ // locations and original classic combat controls remain the same.
+ await page.evaluate(async()=>{
+  const db=await new Promise<IDBDatabase>((resolve,reject)=>{const r=indexedDB.open('four-keeps-local',1);r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});
+  const tx=db.transaction('campaigns','readwrite'),store=tx.objectStore('campaigns');
+  const campaigns=await new Promise<any[]>(resolve=>{const r=store.getAll();r.onsuccess=()=>resolve(r.result);});
+  const c=campaigns[0];
+  c.combat.battlefield.objects.push({id:'nearby-casement',kind:'window',x:3,y:15,width:1,height:1});
+  store.put(c);
+  await new Promise<void>((resolve,reject)=>{tx.oncomplete=()=>resolve();tx.onerror=()=>reject(tx.error);});
+  db.close();
+ });
+ await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();
+ await page.getByRole('button',{name:'Continue Adventure'}).click();
+ const board=page.getByRole('grid',{name:'Combat movement grid'});
+ await expect(board.getByRole('gridcell',{name:'Open window at 4, 16'})).toBeEnabled();
+ await board.getByRole('gridcell',{name:'Open window at 4, 16'}).click();
+ await expect.poll(async()=> (await saved(page)).combat.battlefield.objects.find((o:any)=>o.id==='nearby-casement')?.open).toBe(true);
+ await expect(board.locator('[data-terrain-art="window-open"]')).toHaveCount(1);
+ // A 256-square-wide, 65,536-cell map can be navigated without 65,536 DOM nodes.
+ await page.evaluate(async()=>{
+  const db=await new Promise<IDBDatabase>((resolve,reject)=>{const r=indexedDB.open('four-keeps-local',1);r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});
+  const tx=db.transaction('campaigns','readwrite'),store=tx.objectStore('campaigns');
+  const campaigns=await new Promise<any[]>(resolve=>{const r=store.getAll();r.onsuccess=()=>resolve(r.result);});
+  campaigns[0].combat.battlefield.width=256;
+  campaigns[0].combat.battlefield.height=256;
+  store.put(campaigns[0]);
+  await new Promise<void>((resolve,reject)=>{tx.oncomplete=()=>resolve();tx.onerror=()=>reject(tx.error);});
+  db.close();
+ });
+ await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();
+ await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await expect(board).toBeVisible();
+ await expect.poll(async()=>board.getByRole('gridcell').count()).toBeLessThan(800);
+ await expect(board.getByRole('gridcell',{name:'Nighthawk',exact:true})).toBeVisible();
+ const camera=board.locator('..');
+ await camera.evaluate(el=>el.scrollTo(100000,100000));
+ await expect.poll(async()=>board.locator('[data-battlefield-x="255"][data-battlefield-y="255"]').count()).toBe(1);
+ await expect.poll(async()=>board.getByRole('gridcell').count()).toBeLessThan(800);
+ await expect(board.locator('[data-battlefield-x="0"]')).toHaveCount(0);
+ await page.getByRole('button',{name:'Center on character'}).click();
+ await expect(board.getByRole('gridcell',{name:'Nighthawk',exact:true})).toBeVisible();
+ await page.getByRole('button',{name:'Fit entire map'}).click();
+ await expect.poll(async()=>board.getByRole('gridcell').count()).toBeLessThan(2500);
+ await expect.poll(async()=>board.locator('[data-battlefield-object]').count()).toBeGreaterThan(4);
+ await expect(board.locator('[data-battlefield-marker="player"]')).toHaveCount(1);
+ await expect.poll(async()=>board.locator('[data-battlefield-marker="enemy"]').count()).toBeGreaterThanOrEqual(1);
+ await expect(board.getByRole('gridcell',{name:'Nighthawk',exact:true})).toBeVisible();
+ await expect(page.getByLabel('Combat turn summary')).toBeVisible();
+ await board.scrollIntoViewIfNeeded();
+ await page.screenshot({path:'test-results/dynamic-virtualized-256-iphone.png'});
+ await board.screenshot({path:'test-results/dynamic-virtualized-256-board.png'});
+ expect((await saved(page)).combat.battlefield).toMatchObject({width:256,height:256});
 });
 for(const scenario of [
  {id:'roadside-bandit',width:32,height:60,label:'roadside'},
@@ -1977,7 +2051,7 @@ for(const scenario of [
   expect(before.combat.battlefield).toMatchObject({width:scenario.width,height:scenario.height});
   await page.getByRole('button',{name:'Roll initiative (d20 + DEX)'}).click();
   const board=page.getByRole('grid',{name:'Combat movement grid'});
-  await expect(board.getByRole('gridcell')).toHaveCount(scenario.width*scenario.height);
+  await expect.poll(async()=>board.getByRole('gridcell').count()).toBeLessThan(1100);
   await expect(board.locator('[data-terrain-art="floor-'+scenario.label+'"]').first()).toBeVisible();
   await expect(page.getByLabel('Combat turn summary')).toBeVisible();
   await expect(page.getByRole('region',{name:'Tactical battlefield'})).toHaveCount(0);
@@ -1985,6 +2059,7 @@ for(const scenario of [
   await board.scrollIntoViewIfNeeded();
   await page.screenshot({path:'test-results/dynamic-'+scenario.label+'-iphone.png'});
   await page.getByRole('button',{name:'Fit entire map'}).click();
+  await expect(board.getByRole('gridcell')).toHaveCount(scenario.width*scenario.height);
   await expect.poll(async()=>frame.evaluate(el=>el.scrollWidth-el.clientWidth)).toBeLessThan(3);
   await expect.poll(async()=>frame.evaluate(el=>el.scrollHeight-el.clientHeight)).toBeLessThan(3);
   await page.screenshot({path:'test-results/dynamic-'+scenario.label+'-fit-iphone.png'});
