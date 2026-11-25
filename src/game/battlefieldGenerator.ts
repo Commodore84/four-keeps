@@ -64,8 +64,6 @@ export function validateGeneratedBattlefield(result:GeneratedBattlefield):boolea
  const {battlefield,starts,enemyStarts,exits}=result;
  if(!validateBattlefieldAccess(battlefield,[...starts,...enemyStarts,...exits]))return false;
  if(new Set([...starts,...enemyStarts].map(p=>p.x+','+p.y)).size!==starts.length+enemyStarts.length)return false;
- if(starts.some(p=>enemyStarts.some(q=>Math.max(Math.abs(p.x-q.x),Math.abs(p.y-q.y))<10)))return false;
- if(enemyStarts.length>1&&enemyStarts.some((p,i)=>enemyStarts.slice(i+1).some(q=>Math.max(Math.abs(p.x-q.x),Math.abs(p.y-q.y))<13)))return false;
  if(![...starts,...enemyStarts].every(p=>battlefieldApproachCount(battlefield,p)>=2))return false;
  const profile=battlefieldTacticalProfile(result);
  return profile.coverKinds>=2&&profile.roughTiles>=1&&profile.alternativeApproaches>=2;
@@ -133,14 +131,17 @@ export function generateBattlefield(environment:BattlefieldEnvironment,seed:stri
      [...starts,...enemyStarts].every(point=>battlefieldApproachCount(battlefield,point)>=2))added++;
   else objects.pop();
  }
- // Place foes in contrasting parts of the actual map, not in a two-cell
- // cluster next to the player. These ranges include differing lanes and
- // distances across the three encounter environments.
+ // Most encounters begin with foes roughly 60 feet or more from the default
+ // entry. Seeded ambushes put a foe as close as a few squares away. There is
+ // no universal minimum player/foe or foe/foe distance.
+ const ambush=pick(0,99)<20;
+ const near={x0:5,x1:10,y0:mid-5,y1:mid+5};
  const regions=environment==='warehouse-vermin'
    ?[{x0:15,x1:24,y0:9,y1:14},{x0:27,x1:35,y0:18,y1:22}]
    :environment==='roadside-bandit'
    ?[{x0:11,x1:26,y0:7,y1:23},{x0:12,x1:27,y0:38,y1:53}]
    :[{x0:17,x1:29,y0:7,y1:17},{x0:31,x1:43,y0:24,y1:35}];
+ if(ambush)regions[0]=near;
  const candidates=regions.map(zone=>{
   const choices:BattlefieldPoint[]=[];
   const seen=new Set<string>();
@@ -149,7 +150,7 @@ export function generateBattlefield(environment:BattlefieldEnvironment,seed:stri
    const key=point.x+','+point.y;
    if(seen.has(key))continue;seen.add(key);
    if(battlefieldBlocked(battlefield,point)||battlefieldApproachCount(battlefield,point)<2)continue;
-   if(starts.some(start=>Math.max(Math.abs(start.x-point.x),Math.abs(start.y-point.y))<10))continue;
+   if(starts.some(start=>start.x===point.x&&start.y===point.y))continue;
    choices.push(point);
   }
   return choices;
@@ -157,7 +158,7 @@ export function generateBattlefield(environment:BattlefieldEnvironment,seed:stri
  let located=false;
  for(const first of candidates[0]){
   for(const second of candidates[1]){
-   if(Math.max(Math.abs(first.x-second.x),Math.abs(first.y-second.y))<13)continue;
+   if(first.x===second.x&&first.y===second.y)continue;
    const trial={battlefield,starts,enemyStarts:[first,second],exits};
    if(!validateGeneratedBattlefield(trial))continue;
    enemyStarts.splice(0,2,first,second);
@@ -165,7 +166,7 @@ export function generateBattlefield(environment:BattlefieldEnvironment,seed:stri
   }
   if(located)break;
  }
- if(!located)throw Error('Generated encounter cannot place separated enemies on valid tactical routes.');
+ if(!located)throw Error('Generated encounter cannot place enemies on valid tactical routes.');
  const result={battlefield,starts,enemyStarts,exits};
  return result;
 }
