@@ -309,7 +309,9 @@ export function finishTacticalEncounter(campaign:Campaign,outcome:EncounterOutco
  if(outcome==='escape'&&!state.scenario.exits.some(exit=>distanceFeet(exit,player)===0))throw Error('Reach an exit before escaping.');
  const ended=finishCompanionEncounter(campaign);
  const battleResult={...ended.companionEncounter!,phaseThree:{...state,outcome,note}};
- const settled=settleEncounterRewards({...ended,companionEncounter:battleResult},{xp:0,gold:0,items:[]});
+ const xp=outcome==='victory'?state.scenario.actors.filter(actor=>actor.side==='enemies')
+   .reduce((sum,actor)=>sum+(getMonster(actor.profile)?.xp??0),0):0;
+ const settled=settleEncounterRewards({...ended,companionEncounter:battleResult},{xp,gold:0,items:[]});
  const resumed=resumeAdventureExploration(settled);
  const now=new Date().toISOString();
  return {...resumed,journal:[...resumed.journal,{id:crypto.randomUUID(),kind:'system',createdAt:now,text:'Encounter ended by '+outcome+(note.trim()?'. '+note.slice(0,300):'.')}]};

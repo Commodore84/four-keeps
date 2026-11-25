@@ -17,7 +17,7 @@ export function levelOneEncounterBudget(ids:readonly MonsterId[],playerCount=1):
 }
 export type SoloEncounterId='warehouse-vermin'|'roadside-bandit'|'ruins-goblin-scouts';
 export type EncounterTemplate={
- id:SoloEncounterId;name:string;hook:string;shopkeeperClue:string;risk:'Low'|'Moderate'|'High';objective:string;monsterIds:readonly MonsterId[];
+ id:SoloEncounterId;name:string;hook:string;shopkeeperClue:string;risk:'Low'|'Moderate'|'High';objective:string;monsterIds:readonly MonsterId[];contract:{payer:string;amountGp:number;location:string};
  battlefield:Omit<CombatScenario,'locationKey'|'actors'>;
  alternatives:readonly ('fight'|'withdraw'|'negotiate'|'investigate'|'retrieve-objective')[];
 };
@@ -28,17 +28,17 @@ const map=(objective:string,actors:number):EncounterTemplate['battlefield']=>({
 });
 export const SOLO_ROGUE_ENCOUNTERS:Record<SoloEncounterId,EncounterTemplate>={
  'warehouse-vermin':{
-  id:'warehouse-vermin',name:'Vermin in the Warehouse',hook:'Damaged cargo invites investigation.',shopkeeperClue:'A warehouse owner has a rat problem. Two big ones, from what I hear. Not pleasant, but probably the safest work I have.',risk:'Low',
+  id:'warehouse-vermin',name:'Vermin in the Warehouse',contract:{payer:'Harl Mesk',amountGp:5,location:'Dasahi'},hook:'Damaged cargo invites investigation.',shopkeeperClue:'A warehouse owner has a rat problem. Two big ones, from what I hear. Not pleasant, but probably the safest work I have.',risk:'Low',
   objective:'Investigate the damaged cargo and return safely.',monsterIds:['giant-rat','giant-rat'],
   battlefield:map('Investigate damaged cargo.',1),alternatives:['fight','withdraw','investigate']
  },
  'roadside-bandit':{
-  id:'roadside-bandit',name:'The Roadside Robber',hook:'A traveler describes a robbery beyond Dasahi.',shopkeeperClue:'There is a robber outside town and he has got a goblin helping him. I would not underestimate either of them.',risk:'Moderate',
+  id:'roadside-bandit',name:'The Roadside Robber',contract:{payer:'Dasahi watch',amountGp:12,location:'Dasahi'},hook:'A traveler describes a robbery beyond Dasahi.',shopkeeperClue:'There is a robber outside town and he has got a goblin helping him. I would not underestimate either of them.',risk:'Moderate',
   objective:'Resolve or report the robbery.',monsterIds:['bandit','goblin-warrior'],
   battlefield:map('Resolve or report the robbery.',1),alternatives:['fight','withdraw','negotiate','investigate']
  },
  'ruins-goblin-scouts':{
-  id:'ruins-goblin-scouts',name:'Trouble at the Ruins',hook:'A missing delivery may be hidden in roadside ruins.',shopkeeperClue:'Two armed goblins have taken over the ruins. They have driven off everyone sent to investigate. I would not recommend going alone.',risk:'High',
+  id:'ruins-goblin-scouts',name:'Trouble at the Ruins',contract:{payer:'Dasahi caravan office',amountGp:20,location:'Dasahi'},hook:'A missing delivery may be hidden in roadside ruins.',shopkeeperClue:'Two armed goblins have taken over the ruins. They have driven off everyone sent to investigate. I would not recommend going alone.',risk:'High',
   objective:'Recover the missing parcel or discover its fate.',monsterIds:['goblin-warrior','goblin-warrior'],
   battlefield:map('Recover or locate the missing parcel.',2),alternatives:['fight','withdraw','negotiate','retrieve-objective','investigate']
  }

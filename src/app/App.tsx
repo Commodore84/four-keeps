@@ -34,6 +34,7 @@ import {mergeWorld} from '../game/world';
 import {travelAdventure,proposeAdventureEncounter,recoverWarehouseRatEncounter,type AdventureSite} from '../game/adventureSession';
 import {restorePracticeEncounter} from '../game/practiceEncounterBridge';
 import {queuePostCombatFollowUp,recoverPostCombatFollowUp,commitPostCombatFollowUp} from '../game/postCombatFollowUp';
+import {settleClassicVictory,recoverClassicVictoryRewards,claimQuestPayment} from '../game/encounterRewardResolution';
 import {openingIntentForCampaign,prepareAdventureOpening,commitAdventureOpening,needsAdventureOpening,adventureMemory,prepareAdventureAction, pauseAdventureForClarification, answerAdventureClarification,commitAdventureAction} from '../game/adventureOrchestrator';
 import {campaignPlayerContext} from '../game/campaignContext';
 import {ImportedCharacterSheet} from './ImportedCharacterSheet';
@@ -755,7 +756,7 @@ export function App() {
       const history = locked.journal.filter(entry => entry.kind === 'player' || entry.kind === 'dm').slice(-12)
         .map(entry => ({ role: entry.kind === 'player' ? 'user' : 'assistant', content: entry.text }));
       const response = await fetch('/api/dm', { method:'POST', headers:{ 'Content-Type':'application/json','x-four-keeps-access':accessCode },
-        body:JSON.stringify({ checkToken:pending.token, dice, character:locked.character ?? prototypeNighthawk, gameState:{ magicWishlist:magicWishlistNames(locked.id), ...campaignPlayerContext(locked), familiar:locked.familiar ?? null, elapsedMinutes:locked.elapsedMinutes ?? 0, concentration:locked.concentration??null, spellEffects:(locked.spellEffects??[]).slice(-12), recentEvents:locked.journal.filter(e=>e.kind==='system').slice(-8).map(e=>e.text) }, history, worldFacts:locked.worldFacts ?? [], world:locked.world ?? emptyWorld() }) });
+        body:JSON.stringify({ checkToken:pending.token, dice, character:locked.character ?? prototypeNighthawk, gameState:{ questPayouts:locked.questPayouts??[],magicWishlist:magicWishlistNames(locked.id), ...campaignPlayerContext(locked), familiar:locked.familiar ?? null, elapsedMinutes:locked.elapsedMinutes ?? 0, concentration:locked.concentration??null, spellEffects:(locked.spellEffects??[]).slice(-12), recentEvents:locked.journal.filter(e=>e.kind==='system').slice(-8).map(e=>e.text) }, history, worldFacts:locked.worldFacts ?? [], world:locked.world ?? emptyWorld() }) });
       const result: { narration?:string; newFacts?:string[]; worldUpdates?:unknown; combatStart?:{enemyName:string;templateId?:string;battlefield?:unknown}|null;checkResult?:{skill:string;tool?:string;dice:number[];kept:number;modifier:number;total:number;success:boolean}; error?:string } = await response.json();
       if (!response.ok || !result.narration || !result.checkResult) throw new Error(result.error || 'Check resolution failed');
       const r = result.checkResult;
@@ -1161,7 +1162,7 @@ export function App() {
       const memory=adventureMemory(prepared);
       const history=memory.recentConversation;
       const response = await fetch('/api/dm', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-four-keeps-access': accessCode },
-        body: JSON.stringify({ message:aiSession?prepared.pendingAdventureAction!.message:message, clarification:prepared.pendingClarification??null, actionId, character:statsWithTemporaryEffects(current) ?? prototypeNighthawk, gameState:{ magicWishlist:magicWishlistNames(current.id),magicSaleInventory:(current.inventoryLedger?.gear??[]).filter(item=>item.quantity>0).slice(0,40).map(item=>({name:item.name,quantity:item.quantity})), ...campaignPlayerContext(current), adventureSession:current.adventureSession??null, merchant:frontierMerchantContext(current), characterIdentity:current.characterIdentity??null, location:current.location, combat:current.combat??null, familiar:current.familiar ?? null, elapsedMinutes:current.elapsedMinutes ?? 0, concentration:current.concentration??null, spellEffects:(current.spellEffects??[]).slice(-12), recentEvents:current.journal.filter(e=>e.kind==='system').slice(-8).map(e=>e.text) }, history, worldFacts: memory.establishedFacts, world: current.world ?? emptyWorld(), anchamida:current.characterBuild?{predefined:anchamidaLocations.map(s=>({id:s.id,name:s.name,x:s.x,y:s.y,notes:s.notes})),discovered:current.mapDiscovered??[],dynamic:current.mapDynamicSites??[]}:null, adventureMemory:memory }) });
+        body: JSON.stringify({ message:aiSession?prepared.pendingAdventureAction!.message:message, clarification:prepared.pendingClarification??null, actionId, character:statsWithTemporaryEffects(current) ?? prototypeNighthawk, gameState:{ questPayouts:current.questPayouts??[],magicWishlist:magicWishlistNames(current.id),magicSaleInventory:(current.inventoryLedger?.gear??[]).filter(item=>item.quantity>0).slice(0,40).map(item=>({name:item.name,quantity:item.quantity})), ...campaignPlayerContext(current), adventureSession:current.adventureSession??null, merchant:frontierMerchantContext(current), characterIdentity:current.characterIdentity??null, location:current.location, combat:current.combat??null, familiar:current.familiar ?? null, elapsedMinutes:current.elapsedMinutes ?? 0, concentration:current.concentration??null, spellEffects:(current.spellEffects??[]).slice(-12), recentEvents:current.journal.filter(e=>e.kind==='system').slice(-8).map(e=>e.text) }, history, worldFacts: memory.establishedFacts, world: current.world ?? emptyWorld(), anchamida:current.characterBuild?{predefined:anchamidaLocations.map(s=>({id:s.id,name:s.name,x:s.x,y:s.y,notes:s.notes})),discovered:current.mapDiscovered??[],dynamic:current.mapDynamicSites??[]}:null, adventureMemory:memory }) });
       const result: { narration?: string; newFacts?: string[]; worldUpdates?: unknown; checkRequest?: { skill:string; tool?:string; mode:'normal'|'advantage'|'disadvantage'; reason:string; token:string } | null; combatStart?:{enemyName:string;battlefield?:unknown;templateId?:string}|null; magicSaleOffer?:{buyer:string;questId:string;itemName:string;quantity:number;proceedsCp:number}|null; merchantDiscount?:{itemId:string;percent:number}|null; clarificationRequest?:{question:string}|null; travelDestination?:string|null; mapActions?:unknown; error?: string } = await response.json();
       if (!response.ok || !result.narration) throw new Error(result.error || 'DM request failed');
       // Do not trust the network boundary to enforce mutually exclusive gameplay transitions.
@@ -1512,7 +1513,7 @@ export function App() {
         'Content-Type':'application/json','x-four-keeps-access':accessCode
       },body:JSON.stringify({postCombat:true,message:message.slice(0,1500),
         character:statsWithTemporaryEffects(current)??prototypeNighthawk,history,
-        world:current.world,gameState:{...campaignPlayerContext(current),
+        world:current.world,gameState:{...campaignPlayerContext(current),questPayouts:current.questPayouts??[],
           adventureSession:current.adventureSession??null,
           characterIdentity:current.characterIdentity??null,
           location:current.location,currentHitPoints:current.character?.currentHitPoints,
@@ -1533,7 +1534,8 @@ export function App() {
   }
   useEffect(()=>{
     if(!campaign||loading||saving||adventureRequestRef.current||campaign.combat)return;
-    const recovered=recoverPostCombatFollowUp(campaign);
+    const earned=recoverClassicVictoryRewards(campaign);
+    const recovered=recoverPostCombatFollowUp(earned);
     if(recovered!==campaign){
       if(postCombatMigrationRef.current===campaign.id)return;
       postCombatMigrationRef.current=campaign.id;
@@ -1549,6 +1551,19 @@ export function App() {
     postCombatAttemptRef.current=pending.id;
     void narratePostCombat(campaign);
   },[campaign,loading,saving,accessCode,postCombatRetry]);
+  async function collectPostedQuestPayment(id:string){
+    if(!campaign||saving)return;
+    setSaving(true);
+    try{
+      const next=claimQuestPayment(campaign,id);
+      if(next===campaign)return;
+      await localCampaignStorage.save(next);
+      setCampaign(next);setCampaigns(items=>items.map(item=>item.id===next.id?next:item));
+      const payout=campaign.questPayouts?.find(entry=>entry.id===id);
+      setNotice('Payment received: '+(payout?.amountGp??0)+' GP. Gold added to inventory.');
+    }catch(error){setNotice('Payment could not be saved: '+String(error));}
+    finally{setSaving(false);}
+  }
   async function finishDefeatedDuel() {
     if(!campaign||saving||(campaign.combat?.enemyHp!==0&&campaign.combat?.outcome!=='player-defeated'))return;
     const opponent=campaign.combat.enemyName;
@@ -1568,7 +1583,9 @@ export function App() {
           +(campaign.combat.stats?'Attacks '+campaign.combat.stats.attacks+', hits '+campaign.combat.stats.hits
             +', damage '+campaign.combat.stats.damage+'. ':'')
           +campaign.journal.filter(entry=>entry.kind==='system').slice(-6).map(entry=>entry.text).join(' ').slice(-550);
-        const next=queuePostCombatFollowUp(resolved,opponent,playerDefeated,recap,now);
+        const completion=resolved.journal.at(-1)!;
+        const rewarded=settleClassicVictory(resolved,campaign.combat,completion.id,now);
+        const next=queuePostCombatFollowUp(rewarded,opponent,playerDefeated,recap,now);
         await localCampaignStorage.save(next);
         setCampaign(next);setCampaigns(items=>items.map(item=>item.id===next.id?next:item));
         setPendingCombatAction(null);
@@ -1878,6 +1895,19 @@ export function App() {
           </section>;
         })()}
         {content[activeView]}
+        {activeView==='adventure' && !!campaign?.questPayouts?.some(payout=>payout.status==='available') && !campaign.combat &&
+          <div aria-label="Earned quest rewards" className="mt-3 rounded-xl border border-gold/50 bg-panel p-3 space-y-2">
+            <p className="text-sm font-semibold text-gold">Completed work · payment due</p>
+            {campaign.questPayouts.filter(payout=>payout.status==='available').map(payout=>
+              <div key={payout.id} className="flex items-center justify-between gap-2 text-sm">
+                <span>{payout.payer} · {payout.amountGp} GP owed</span>
+                <button type="button" disabled={saving} onClick={()=>void collectPostedQuestPayment(payout.id)}
+                  className="shrink-0 rounded-lg border border-gold/50 px-3 py-2 text-gold disabled:opacity-50">
+                  Collect {payout.amountGp} GP
+                </button>
+              </div>)}
+            <p className="text-xs text-parchment/65">XP has already been awarded. Extra gold or treasure requires separate discovery or agreement.</p>
+          </div>}
         {activeView==='adventure' && campaign?.postCombatFollowUp && !campaign.combat &&
           <div className="mt-4 rounded-xl border border-gold/40 bg-panel p-4 space-y-2" role="status" aria-label="After combat">
             <p className="font-semibold text-gold">The encounter has ended</p>

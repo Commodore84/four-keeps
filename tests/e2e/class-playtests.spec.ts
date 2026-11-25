@@ -2099,3 +2099,46 @@ test('iPhone post-combat DM outage keeps the recap saved and offers an exact ret
  expect((await saved(page)).postCombatFollowUp).toBeUndefined();
  expect(followUps).toBe(2);
 });
+
+test('iPhone completed warehouse contract awards 50 XP once and allows a clear 5 GP payout',async({page})=>{
+ test.setTimeout(90000);
+ await page.setViewportSize({width:390,height:844});
+ await createAndImport(page,'rogue');
+ await page.evaluate(async()=>{
+  const db=await new Promise<IDBDatabase>((resolve,reject)=>{const r=indexedDB.open('four-keeps-local',1);r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});
+  const tx=db.transaction('campaigns','readwrite'),store=tx.objectStore('campaigns');
+  const all=await new Promise<any[]>(resolve=>{const r=store.getAll();r.onsuccess=()=>resolve(r.result);});
+  const c=all[0];
+  c.location='Dasahi';
+  c.adventureSession={...(c.adventureSession??{site:'frontier',characterSource:'campaign-character',visited:[],interactions:[]}),status:'exploring',pendingEncounter:undefined};
+  c.combat=undefined;
+  c.postCombatFollowUp=undefined;
+  const now=new Date().toISOString();
+  c.journal.push({id:'warehouse-open',kind:'system',text:'Encounter opened in the original practice-combat interface. Giant Rat and Giant Rat are present.',createdAt:now});
+  c.journal.push({id:'warehouse-victory',kind:'system',text:'The encounter is won. Exploration resumes; the DM may adjudicate recovered loot and rewards.',createdAt:now});
+  c.journal.push({id:'harl-dialogue',kind:'dm',text:'Harl Mesk frowns at your request for fifty gold.',createdAt:now});
+  store.put(c);
+  await new Promise<void>((resolve,reject)=>{tx.oncomplete=()=>resolve();tx.onerror=()=>reject(tx.error);});db.close();
+ });
+ await page.reload();
+ await page.getByRole('button',{name:'Campaigns',exact:true}).click();
+ await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await expect.poll(async()=> (await saved(page))?.xp).toBe(50);
+ await expect(page.getByLabel('Earned quest rewards')).toContainText('Harl Mesk · 5 GP owed');
+ await expect(page.getByRole('button',{name:'Collect 5 GP'})).toBeVisible();
+ const before=await saved(page);
+ const startingGold=before.inventoryLedger?.currency.GP??0;
+ expect(before.xpAwards.filter((award:any)=>award.id==='classic-encounter-warehouse-victory')).toHaveLength(1);
+ await page.screenshot({path:'/tmp/fk-warehouse-rewards-iphone.png',fullPage:true});
+ await page.getByRole('button',{name:'Collect 5 GP'}).click();
+ await expect.poll(async()=> (await saved(page))?.inventoryLedger?.currency.GP).toBe(startingGold+5);
+ await expect(page.getByLabel('Earned quest rewards')).toHaveCount(0);
+ await page.reload();
+ await page.getByRole('button',{name:'Campaigns',exact:true}).click();
+ await page.getByRole('button',{name:'Continue Adventure'}).click();
+ const again=await saved(page);
+ expect(again.xp).toBe(50);
+ expect(again.inventoryLedger.currency.GP).toBe(startingGold+5);
+ expect(again.questPayouts.filter((p:any)=>p.status==='collected')).toHaveLength(1);
+ expect(again.xpAwards.filter((award:any)=>award.id==='classic-encounter-warehouse-victory')).toHaveLength(1);
+});
