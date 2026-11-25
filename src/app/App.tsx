@@ -1196,7 +1196,7 @@ export function App() {
       setCampaigns((items) => items.map((item) => item.id === mapped.id ? mapped : item));
       setDraft('');
       setActiveView('adventure');
-      setNotice(next.adventureSession?.pendingEncounter?'The DM initiated combat. Confirm enemy statistics and initiative below.':next.combat?.status==='awaiting-initiative'?'Combat started. Tap Roll initiative.':'The DM replied. Conversation saved locally.');
+      setNotice(next.adventureSession?.pendingEncounter?(next.adventureSession.pendingEncounter.scenario?'Combat ready. Choose your position and roll initiative.':'Combat initiated. Open the encounter setup above.'):next.combat?.status==='awaiting-initiative'?'Combat started. Tap Roll initiative.':'The DM replied. Conversation saved locally.');
     } catch (error) { setNotice('DM error: ' + String(error)); }
     finally { adventureRequestRef.current=false; if(!alreadySaving)setSaving(false); }
   }
