@@ -1969,7 +1969,10 @@ test('iPhone tactical combat opens from Adventure, previews movement, runs NPC t
  await square(1,1).click();
  await panel.getByRole('button',{name:'Roll initiative'}).click();
  await expect(panel.getByLabel('Initiative order')).toContainText('You:');
+ await expect(panel.getByLabel('Combat initiative tracker')).toBeVisible();
  await expect(panel.getByRole('button',{name:'Attack target'})).toBeVisible();
+ await expect(panel.getByRole('button',{name:'Find character or enemies'})).toHaveAttribute('aria-expanded','false');
+ await panel.getByRole('button',{name:'Find character or enemies'}).click();
  await expect(panel.getByRole('button',{name:'Find me'})).toBeVisible();
  await expect(panel.getByRole('button',{name:'Show whole map'})).toBeVisible();
  await panel.getByRole('button',{name:'Focus Road bandit 1'}).click();
@@ -1978,9 +1981,10 @@ test('iPhone tactical combat opens from Adventure, previews movement, runs NPC t
  await expect(panel.getByRole('button',{name:'Confirm move'})).toBeVisible();
  await expect(panel.getByRole('button',{name:'Finish turn'})).toBeVisible();
  const tileWidth=await square(1,1).evaluate(element=>element.getBoundingClientRect().width);
- expect(tileWidth).toBeGreaterThanOrEqual(60);
+ expect(tileWidth).toBeGreaterThan(30);
+ expect(tileWidth).toBeLessThan(52);
  const viewportSize=await panel.getByLabel('Battle map viewport').evaluate(element=>({scrollWidth:element.scrollWidth,clientWidth:element.clientWidth}));
- expect(viewportSize.scrollWidth).toBeGreaterThan(viewportSize.clientWidth);
+ expect(viewportSize.scrollWidth-viewportSize.clientWidth).toBeLessThanOrEqual(2);
  await page.screenshot({path:'/tmp/fk-classic-combat-iphone.png',fullPage:true});
  await square(2,1).click();
  await expect(panel.getByLabel('Movement preview')).toContainText('10 ft');
