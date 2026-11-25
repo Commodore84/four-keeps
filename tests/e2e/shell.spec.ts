@@ -1610,6 +1610,9 @@ async function readAllCampaigns(page:Page){
    db.close();return result;
  });
 }
+async function readScopedLab(page:Page,originId:string){
+ return page.evaluate(id=>JSON.parse(localStorage.getItem('four-keeps-combat-lab-session:'+id)??'null'),originId);
+}
 test('Generate Random Encounter uses the real combat engine, cycles environments, and protects a real campaign',async({page})=>{
  test.setTimeout(110000);
  await page.setViewportSize({width:390,height:844});
@@ -1640,14 +1643,14 @@ test('Generate Random Encounter uses the real combat engine, cycles environments
    await expect(page.getByLabel('Combat Lab session')).toContainText('lab-'+n.toString(16).padStart(8,'0'));
    await expect(page.getByLabel('Combat turn summary')).toBeVisible();
    await expect(page.getByLabel('Combat movement grid')).toHaveAttribute('data-battlefield-theme',['warehouse','roadside','ruins'][n]);
-   await page.getByRole('button',{name:'Fit entire map'}).click();
-   await expect(board.getByRole('gridcell')).toHaveCount([1280,1920,1920][n]);
-   await page.getByRole('button',{name:'Center on character'}).click();
+   await expect(page.getByRole('button',{name:'Fit entire map'})).toHaveCount(0);
+   await expect(page.getByRole('button',{name:'Center on character'})).toHaveCount(0);
+   await expect(page.getByRole('group',{name:'Nearby fixture controls'})).toHaveCount(0);
    const after=await readAllCampaigns(page);
-   expect(after).toHaveLength(2);
+   expect(after).toHaveLength(1);
    const source=after.find(c=>c.id===actual.id);
    expect(source).toEqual(actual);
-   const session=after.find(c=>c.combatLab);
+   const session=await readScopedLab(page,actual.id);
    expect(session.combatLab).toMatchObject({environment:['warehouse-vermin','roadside-bandit','ruins-goblin-scouts'][n],seed:'lab-'+n.toString(16).padStart(8,'0'),originCampaignId:actual.id});
    expect(session.combat?.classicAdventure?.origin).toBe('dm');
    expect(session.combat?.battlefield?.objects.length).toBeGreaterThan(4);
@@ -1658,12 +1661,19 @@ test('Generate Random Encounter uses the real combat engine, cycles environments
      await page.screenshot({path:'test-results/combat-lab-random-ruins-iphone.png'});
      await page.reload();
      await page.getByRole('button',{name:'Campaigns',exact:true}).click();
-     const labCard=page.getByText('TEST SESSION').first();
-     await expect(labCard).toBeVisible();
-     await labCard.locator('..').getByRole('button',{name:'Continue Adventure'}).click();
+     await expect(page.getByRole('button',{name:'Continue Adventure'})).toHaveCount(1);
+     await page.getByRole('button',{name:'Resume test encounter'}).click();
      await expect(page.getByLabel('Combat Lab session')).toContainText('lab-00000002');
      await page.getByRole('button',{name:'Return to adventure'}).click();
      await expect(page.getByLabel('Combat Lab session')).toHaveCount(0);
+     await expect(page.getByRole('button',{name:'Refresh Four Keeps'})).toHaveCount(0);
+     const composer=page.getByLabel('Message the Dungeon Master');
+     await expect(composer).toBeVisible();
+     const mobileType=await composer.evaluate(el=>({font:parseFloat(getComputedStyle(el).fontSize),height:el.getBoundingClientRect().height,footer:el.closest('form')?.getBoundingClientRect().height??0}));
+     expect(mobileType.font).toBeGreaterThanOrEqual(16);
+     expect(mobileType.height).toBeLessThanOrEqual(56);
+     expect(mobileType.footer).toBeLessThanOrEqual(92);
+     await page.screenshot({path:'test-results/combat-lab-compact-composer-iphone.png'});
      await navigate(page,'Adventure');
      await expect(page.getByRole('grid',{name:'Combat movement grid'})).toHaveCount(0);
    }
@@ -1696,25 +1706,19 @@ test('Combat Lab shows and resolves a thrown dagger at 30 feet without touching 
  await page.getByRole('button',{name:'Roll initiative (d20 + DEX)'}).click();
  // Explicitly position the first target 30 feet from Nighthawk to reproduce
  // the exact screen and avoid relying on randomly selected warehouse spawns.
- await page.evaluate(async()=>{
-  const db=await new Promise<IDBDatabase>((resolve,reject)=>{
-   const r=indexedDB.open('four-keeps-local',1);r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);
-  });
-  const tx=db.transaction('campaigns','readwrite'),store=tx.objectStore('campaigns');
-  const all=await new Promise<any[]>(resolve=>{const r=store.getAll();r.onsuccess=()=>resolve(r.result);});
-  const session=all.find(c=>c.combatLab);
+ await page.evaluate(id=>{
+  const key='four-keeps-combat-lab-session:'+id;
+  const session=JSON.parse(localStorage.getItem(key)!);
   const p=session.combat.playerPosition;
   session.combat.enemyPosition={x:p.x+6,y:p.y};
   session.combat.selectedEnemy='first';
   session.combat.order=['Nighthawk',session.combat.enemyName];
   session.combat.turnIndex=0;
-  store.put(session);
-  await new Promise<void>((resolve,reject)=>{tx.oncomplete=()=>resolve();tx.onerror=()=>reject(tx.error);});
-  db.close();
- });
+  localStorage.setItem(key,JSON.stringify(session));
+ },before.id);
  await page.reload();
  await page.getByRole('button',{name:'Campaigns',exact:true}).click();
- await page.getByText('TEST SESSION').first().locator('..').getByRole('button',{name:'Continue Adventure'}).click();
+ await page.getByRole('button',{name:'Resume test encounter'}).click();
  await page.getByLabel('2024 D&D actions').getByRole('button',{name:'Attack',exact:true}).click();
  const action=page.getByRole('region',{name:'Confirm combat action'});
  await expect(action).toContainText('Target: 30 ft away');
@@ -1724,8 +1728,11 @@ test('Combat Lab shows and resolves a thrown dagger at 30 feet without touching 
  await page.screenshot({path:'test-results/iphone-thrown-dagger-30ft.png'});
  await action.getByRole('button',{name:/Dagger \(Throw\)/}).click();
  await action.getByRole('button',{name:'Confirm'}).click();
- await expect.poll(async()=> (await readAllCampaigns(page)).find(c=>c.combatLab)?.combat?.daggersAvailable).toBe(1);
+ await expect.poll(async()=> (await readScopedLab(page,before.id))?.combat?.daggersAvailable).toBe(1);
  expect((await readAllCampaigns(page)).find(c=>!c.combatLab)?.equipment?.daggers).toBe(0);
- expect((await readAllCampaigns(page)).find(c=>c.combatLab)?.combat?.daggersThrown).toBe(1);
+ expect((await readScopedLab(page,before.id))?.combat?.daggersThrown).toBe(1);
+ const labNow=await readScopedLab(page,before.id);
+ await expect(page.getByText('Thrown dagger → '+labNow.combat.enemyName)).toBeVisible();
+ await expect(page.getByText(/Thrown dagger → Training Dummy/)).toHaveCount(0);
  await expect(page.getByLabel('Combat Lab session')).toBeVisible();
 });

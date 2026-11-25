@@ -59,3 +59,6 @@ A new isolated feat/combat-lab-random-generation candidate provides a seeded **G
 
 ### Development speed and release process (2026-11-25)
 Read the **Faster development and release workflow** section in RELEASE_CHECKS.md before making changes. The production build no longer invokes Vitest. Iterate via one isolated worktree with TypeScript, affected Vitest and iPhone Playwright checks; stress fragile tests and inspect relevant screenshots before one final exact-SHA full CI. Do not duplicate full suites locally or use repeated release candidates for small edits. All gameplay/UI changes still require the complete one-time verify ref, full Vitest, full iPhone browser suite, uploaded artifacts, Vercel READY, and protected foundation fast-forward.
+
+### Embedded practice encounter UX (2026-11-25)
+The next Dynamic Battlefields batch scopes disposable random encounters under their real parent adventure without a second saved campaign card, while preserving physical rules and original classic combat. See DYNAMIC_BATTLEFIELDS.md section "Embedded disposable encounters and simplified mobile combat interface". The combat camera uses drag/pinch only; no Fixture/Center/Fit toolbar, no composer refresh, and no hardcoded dummy monster name in hit results. Run full exact-SHA release checks and update the foundation only after green CI and READY.

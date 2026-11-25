@@ -1824,6 +1824,32 @@ test('iPhone Stealth check resolution opens original practice encounter instead 
  await page.getByRole('button',{name:'Continue Adventure'}).click();
  await expect(page.getByLabel('Combat turn summary')).toBeVisible();
 });
+/** Pinch through actual touch events: the player UI has no camera toolbar. */
+async function pinchCombatMap(page:Page,mode:'in'|'out'){
+ const board=page.getByRole('grid',{name:'Combat movement grid'});
+ const camera=board.locator('..');
+ await camera.scrollIntoViewIfNeeded();
+ const rect=await camera.boundingBox();
+ if(!rect)throw Error('Missing combat map frame');
+ const x=rect.x+rect.width/2,y=rect.y+rect.height/2;
+ const start=mode==='out'?Math.min(110,rect.width/3):34;
+ const end=mode==='out'?5:76;
+ const client=await page.context().newCDPSession(page);
+ await client.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:x-start,y},{x:x+start,y}]});
+ await page.waitForTimeout(65);
+ await client.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:x-end,y},{x:x+end,y}]});
+ await page.waitForTimeout(65);
+ await client.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
+ await page.waitForTimeout(100);
+}
+async function focusCombatPlayer(page:Page){
+ const c=(await saved(page)).combat,board=page.getByRole('grid',{name:'Combat movement grid'});
+ const camera=board.locator('..'),p=c.playerPosition;
+ await camera.evaluate((el,{x,y,w,h})=>{
+  const cellW=el.scrollWidth/w,cellH=el.scrollHeight/h;
+  el.scrollTo({left:(x+.5)*cellW-el.clientWidth/2,top:(y+.5)*cellH-el.clientHeight/2});
+ },{x:p.x,y:p.y,w:c.battlefield?.width??13,h:c.battlefield?.height??13});
+}
 test('iPhone DM warehouse template restores exact original practice combat controls',async({page})=>{
  test.setTimeout(90000);
  await createAndImport(page,'rogue');
@@ -1860,29 +1886,31 @@ test('iPhone DM warehouse template restores exact original practice combat contr
  expect(cellWidth).toBeGreaterThan(24);
  expect(cellWidth).toBeLessThan(50);
  await page.screenshot({path:'test-results/dynamic-warehouse-iphone.png'});
- await page.getByRole('button',{name:'Fit entire map'}).click();
- await expect(board.getByRole('gridcell')).toHaveCount(1280);
+ await pinchCombatMap(page,'out');
+ await expect.poll(async()=>board.getByRole('gridcell').count()).toBeLessThanOrEqual(1280);
  await expect.poll(async()=>camera.evaluate(el=>el.scrollWidth-el.clientWidth)).toBeLessThan(3);
  await expect.poll(async()=>camera.evaluate(el=>el.scrollHeight-el.clientHeight)).toBeLessThan(3);
  await page.screenshot({path:'test-results/dynamic-warehouse-fit-iphone.png'});
- // Restore normal scale through a one-handed double tap/drag.
+ // Double tap and drag no longer zooms; it behaves only as a normal drag.
  await camera.scrollIntoViewIfNeeded();
  const rect=await camera.boundingBox();
  if(!rect)throw Error('Missing map frame');
-
  const client=await page.context().newCDPSession(page);
  const x=rect.x+rect.width/2,y=rect.y+rect.height/2;
- // Simulate real thumb timing: instantaneous CDP packets can be coalesced
- // when the CI runner is busy, which does not represent an actual double tap.
+ const sizeBeforeDouble=await board.getByRole('gridcell').first().evaluate(el=>el.getBoundingClientRect().width);
  await client.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x,y}]});
- await page.waitForTimeout(70);
+ await page.waitForTimeout(65);
  await client.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
- await page.waitForTimeout(120);
+ await page.waitForTimeout(100);
  await client.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x,y}]});
- await page.waitForTimeout(70);
- await client.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x,y:y-170}]});
- await page.waitForTimeout(70);
+ await page.waitForTimeout(65);
+ await client.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x,y:y-65}]});
+ await page.waitForTimeout(65);
  await client.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
+ const sizeAfterDouble=await board.getByRole('gridcell').first().evaluate(el=>el.getBoundingClientRect().width);
+ expect(sizeAfterDouble).toBeCloseTo(sizeBeforeDouble,1);
+ // Pinch is the only zoom gesture; a separate two-finger pan is preserved.
+ await pinchCombatMap(page,'in');
  await expect.poll(async()=>camera.evaluate(el=>el.scrollWidth/el.clientWidth)).toBeGreaterThan(2);
  // Actual two-finger pinch must zoom while the original grid stays interactive.
  const sizeBeforePinch=await board.getByRole('gridcell').first().evaluate(el=>el.getBoundingClientRect().width);
@@ -1897,7 +1925,7 @@ test('iPhone DM warehouse template restores exact original practice combat contr
  await client.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:x-85,y:y-25},{x:x-25,y:y-25}]});
  await client.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
  await expect.poll(async()=>camera.evaluate(el=>el.scrollLeft)).toBeGreaterThan(455);
- await page.getByRole('button',{name:'Center on character'}).click();
+ await focusCombatPlayer(page);
  // Actual one-finger drag, followed by deterministic persistence coordinates.
  await client.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x,y}]});
  await client.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:x-100,y:y-40}]});
@@ -1910,18 +1938,20 @@ test('iPhone DM warehouse template restores exact original practice combat contr
  await expect(board).toBeVisible();
  await expect.poll(async()=>camera.evaluate(el=>el.scrollLeft)).toBe(140);
  expect((await saved(page)).combat.battlefield).toEqual(stateBefore.combat.battlefield);
- await page.getByRole('button',{name:'Center on character'}).click();
+ await focusCombatPlayer(page);
  const p=stateBefore.combat.playerPosition;
  await board.locator(`[data-battlefield-x="${p.x+1}"][data-battlefield-y="${p.y}"]`).click();
  await expect(page.getByRole('button',{name:'Confirm Move',exact:true})).toBeVisible();
  await page.getByRole('button',{name:'Confirm Move',exact:true}).click();
  await expect.poll(async()=> (await saved(page)).combat.playerPosition).toEqual({x:p.x+1,y:p.y});
  const enemy=stateBefore.combat.enemyPosition;
- // The viewport deliberately unmounts off-screen squares. Fit is a real
- // player camera control that makes the distant enemy target selectable.
- await page.getByRole('button',{name:'Fit entire map'}).click();
- await expect(board.getByRole('gridcell')).toHaveCount(1280);
- await board.locator(`[data-battlefield-x="${enemy.x}"][data-battlefield-y="${enemy.y}"]`).click();
+ // Viewport culling intentionally removes distant squares. Pan to the enemy
+ // using authoritative geometry rather than the removed Fit toolbar.
+ await camera.evaluate((el,{x,y,w,h})=>{
+  el.scrollTo({left:(x+.5)*el.scrollWidth/w-el.clientWidth/2,top:(y+.5)*el.scrollHeight/h-el.clientHeight/2});
+ },{x:enemy.x,y:enemy.y,w:40,h:32});
+ await page.waitForTimeout(400);
+ await board.locator('[data-battlefield-x="'+enemy.x+'"][data-battlefield-y="'+enemy.y+'"]').click();
  await expect.poll(async()=> (await saved(page)).combat.selectedEnemy).toBe('first');
 
 
@@ -2024,9 +2054,9 @@ test('iPhone opens a window and virtualizes a 256×256 illustrated battlefield a
  await expect.poll(async()=>board.locator('[data-battlefield-x="255"][data-battlefield-y="255"]').count()).toBe(1);
  await expect.poll(async()=>board.getByRole('gridcell').count()).toBeLessThan(800);
  await expect(board.locator('[data-battlefield-x="0"]')).toHaveCount(0);
- await page.getByRole('button',{name:'Center on character'}).click();
+ await focusCombatPlayer(page);
  await expect(board.getByRole('gridcell',{name:'Nighthawk',exact:true})).toBeVisible();
- await page.getByRole('button',{name:'Fit entire map'}).click();
+ await pinchCombatMap(page,'out');
  await expect.poll(async()=>board.getByRole('gridcell').count()).toBeLessThan(2500);
  await expect.poll(async()=>board.locator('[data-battlefield-object]').count()).toBeGreaterThan(4);
  await expect(board.locator('[data-battlefield-marker="player"]')).toHaveCount(1);
@@ -2086,9 +2116,8 @@ test('iPhone locked wooden door requires an Action to pick, then a free interact
  const target=board.getByRole('gridcell',{name:'Inspect locked door at 5, 18'});
  await expect(target).toBeEnabled();
  await target.click();
- const controls=page.getByRole('group',{name:'Nearby fixture controls'});
- await expect(controls.getByLabel('Fixture condition')).toContainText('Locked');
- await expect(controls.getByLabel('Fixture condition')).toContainText('AC 15');
+ const controls=page.getByRole('dialog',{name:'Selected battlefield object'});
+ await expect(controls).toContainText('Locked door');
  await page.evaluate(()=>{const original=crypto.getRandomValues.bind(crypto);crypto.getRandomValues=((a:ArrayBufferView|null)=>{
   if(a instanceof Uint32Array&&a.length===1){a[0]=19;return a;}return original(a);
  }) as typeof crypto.getRandomValues;});
@@ -2096,7 +2125,7 @@ test('iPhone locked wooden door requires an Action to pick, then a free interact
  await expect.poll(async()=> (await saved(page)).combat.battlefield.objects.find((o:any)=>o.kind==='door')?.locked).toBe(false);
  expect((await saved(page)).combat.actionUsed).toBe(true);
  expect((await saved(page)).combat.objectInteractionUsed).toBeFalsy();
- await expect(controls.getByRole('button',{name:'Strike fixture (Action)'})).toBeDisabled();
+ await expect(controls.getByRole('button',{name:'Strike object (Action)'})).toBeDisabled();
  await controls.getByRole('button',{name:'Open (Free)'}).click();
  await expect.poll(async()=> (await saved(page)).combat.battlefield.objects.find((o:any)=>o.kind==='door')?.open).toBe(true);
  await expect(board.locator('[data-terrain-art="door-open"]')).toHaveCount(1);
@@ -2111,13 +2140,13 @@ test('iPhone dagger attack shatters a glass window and removes physical cover',a
  await provisionFixtureScenario(page,'window');
  const board=page.getByRole('grid',{name:'Combat movement grid'});
  await board.scrollIntoViewIfNeeded();
- const controls=page.getByRole('group',{name:'Nearby fixture controls'});
- await controls.getByLabel('Select nearby fixture').selectOption('fragile-pane');
- await expect(controls.getByLabel('Fixture condition')).toContainText('AC 13');
+ const controls=page.getByRole('dialog',{name:'Selected battlefield object'});
+ await board.locator('[data-battlefield-x="3"][data-battlefield-y="15"]').click();
+ await expect(controls).toContainText('window');
  await page.evaluate(()=>{const original=crypto.getRandomValues.bind(crypto);crypto.getRandomValues=((a:ArrayBufferView|null)=>{
   if(a instanceof Uint32Array&&a.length===1){a[0]=19;return a;}return original(a);
  }) as typeof crypto.getRandomValues;});
- await controls.getByRole('button',{name:'Strike fixture (Action)'}).click();
+ await controls.getByRole('button',{name:'Strike object (Action)'}).click();
  await expect.poll(async()=> (await saved(page)).combat.battlefield.objects.find((o:any)=>o.id==='fragile-pane')?.destroyed).toBe(true);
  const c=await saved(page);expect(c.combat.actionUsed).toBe(true);
  expect(c.combat.battlefield.objects.find((o:any)=>o.id==='fragile-pane').hp).toBe(0);
@@ -2159,12 +2188,12 @@ for(const scenario of [
   const frame=board.locator('..');
   await board.scrollIntoViewIfNeeded();
   await page.screenshot({path:'test-results/dynamic-'+scenario.label+'-iphone.png'});
-  await page.getByRole('button',{name:'Fit entire map'}).click();
-  await expect(board.getByRole('gridcell')).toHaveCount(scenario.width*scenario.height);
+  await pinchCombatMap(page,'out');
+  await expect.poll(async()=>board.getByRole('gridcell').count()).toBeLessThanOrEqual(scenario.width*scenario.height);
   await expect.poll(async()=>frame.evaluate(el=>el.scrollWidth-el.clientWidth)).toBeLessThan(3);
   await expect.poll(async()=>frame.evaluate(el=>el.scrollHeight-el.clientHeight)).toBeLessThan(3);
   await page.screenshot({path:'test-results/dynamic-'+scenario.label+'-fit-iphone.png'});
-  await page.getByRole('button',{name:'Center on character'}).click();
+  await focusCombatPlayer(page);
   await page.reload();
   await page.getByRole('button',{name:'Campaigns',exact:true}).click();
   await page.getByRole('button',{name:'Continue Adventure'}).click();
