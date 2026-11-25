@@ -29,6 +29,7 @@ export function TacticalBattlefield({campaign,saving,onChange,onDm}:Props){
  const [error,setError]=useState('');
  const [zoom,setZoom]=useState(1);
  const [showKey,setShowKey]=useState(false);
+ const [showNavigation,setShowNavigation]=useState(false);
  const viewport=useRef<HTMLDivElement>(null);
  const actionPanel=useRef<HTMLDivElement>(null);
  const gesture=useRef<{distance:number;x:number;y:number;left:number;top:number;scale:number}>();
@@ -113,7 +114,7 @@ export function TacticalBattlefield({campaign,saving,onChange,onDm}:Props){
   const start=gesture.current,element=viewport.current;
   if(!start||!element||event.touches.length!==2)return;
   const [a,b]=Array.from(event.touches);
-  setZoom(Math.max(0.7,Math.min(2.5,start.scale*Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY)/Math.max(start.distance,1))));
+  setZoom(Math.max(1,Math.min(2.5,start.scale*Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY)/Math.max(start.distance,1))));
   element.scrollLeft=start.left+start.x-(a.clientX+b.clientX)/2;
   element.scrollTop=start.top+start.y-(a.clientY+b.clientY)/2;
  }
@@ -124,26 +125,24 @@ export function TacticalBattlefield({campaign,saving,onChange,onDm}:Props){
  const selectedOpponent=current&&target!=='nighthawk';
  const lastNarration=[...campaign.journal].reverse().find(entry=>entry.kind==='dm')?.text;
  return <section aria-label="Tactical battlefield" className="space-y-2" data-encounter={battle?.id}>
-  <header className="sticky top-0 z-20 rounded-xl border border-gold/35 bg-[#22272b]/95 px-3 py-3 shadow-lg backdrop-blur-sm" aria-label="Combat status">
-   <div className="flex items-center justify-between gap-2">
-    <div className="min-w-0">
-     <p className="text-xs font-semibold uppercase tracking-wide text-gold/85">{setup?'Before initiative':'Tactical encounter · Round '+(battle?.round??1)}</p>
-     <strong className="text-lg text-parchment">{setup?'The warehouse':awaitingPlayer?'Your reaction':active==='nighthawk'?'Your turn':active?label(active)+' acting':'Combat'}</strong>
-    </div>
-    <div className="flex items-center gap-2 text-sm">
-     <span className="rounded-md border border-red-400/25 bg-red-950/30 px-2 py-1 text-red-100" aria-label="Enemies remaining">{activeCount}/{enemyCount} foes</span>
-     {!setup&&player&&<span className="rounded-md border border-sky-400/30 bg-sky-950/40 px-2 py-1 font-semibold text-sky-100" aria-label="Player hit points">{player.hp}/{player.maxHp} HP</span>}
+  <header aria-label="Combat initiative tracker" className="rounded-xl border border-gold/40 bg-panel p-3 space-y-2">
+   <div className="flex flex-wrap items-center justify-between gap-2">
+    <div><p className="text-sm font-semibold text-gold">Initiative · Round {battle?.round??1}</p>
+     <p className="font-semibold">{setup?'Choose your starting position':awaitingPlayer?'Reaction available':active==='nighthawk'?'Nighthawk’s turn':active?label(active)+' acts':'Combat'}</p></div>
+    <div className="flex items-center gap-3 text-sm">
+     {!setup&&player&&<span aria-label="Player hit points"><strong>{player.hp}/{player.maxHp}</strong> HP</span>}
+     <span aria-label="Enemies remaining">{activeCount}/{enemyCount} foes</span>
     </div>
    </div>
-   {setup?<p className="mt-1 text-xs leading-relaxed text-parchment/80">{scenario.objective||lastNarration} · Choose where to enter, then roll initiative.</p>:<>
-    <div aria-label="Combat resources" className="mt-3 grid grid-cols-2 gap-2 text-center text-sm">
-     <span className="rounded-md border border-white/10 bg-black/25 p-2">Move <strong className="block text-base text-parchment">{Math.max(0,(player?.speedFeet??0)+(player?.dashFeet??0)-(player?.movementSpentFeet??0))} ft</strong></span>
-     <span className="rounded-md border border-white/10 bg-black/25 p-2">Action <strong className={'block text-base '+(player?.actionUsed?'text-parchment/45':'text-emerald-300')}>{player?.actionUsed?'Spent':'Ready'}</strong></span>
-     <span className="rounded-md border border-white/10 bg-black/25 p-2">Bonus <strong className={'block text-base '+(player?.bonusActionUsed?'text-parchment/45':'text-emerald-300')}>{player?.bonusActionUsed?'Spent':'Ready'}</strong></span>
-     <span className="rounded-md border border-white/10 bg-black/25 p-2">Reaction <strong className={'block text-base '+(player?.reactionUsed?'text-parchment/45':'text-emerald-300')}>{player?.reactionUsed?'Spent':'Ready'}</strong></span>
+   {setup?<p className="text-sm text-parchment/80">{scenario.objective||lastNarration} · Choose where to enter, then roll initiative.</p>:<>
+    <div aria-label="Combat resources" className="flex flex-wrap gap-x-3 gap-y-1 text-sm text-parchment/85">
+     <span>Move <strong>{Math.max(0,(player?.speedFeet??0)+(player?.dashFeet??0)-(player?.movementSpentFeet??0))} ft</strong></span>
+     <span>Action <strong className={player?.actionUsed?'text-parchment/50':'text-emerald-300'}>{player?.actionUsed?'Spent':'Ready'}</strong></span>
+     <span>Bonus <strong className={player?.bonusActionUsed?'text-parchment/50':'text-emerald-300'}>{player?.bonusActionUsed?'Spent':'Ready'}</strong></span>
+     <span>Reaction <strong className={player?.reactionUsed?'text-parchment/50':'text-emerald-300'}>{player?.reactionUsed?'Spent':'Ready'}</strong></span>
     </div>
-    {!!player?.conditions.length&&<p className="mt-1 text-xs">{player.conditions.join(' · ')}</p>}
-    <p aria-label="Initiative order" className="mt-2 text-sm leading-snug text-parchment/75">{visibleOrder?.map(label).join(' → ')}{initiative?' · You: '+initiative.dice.join('/')+' + '+initiative.modifier+' = '+initiative.total:''}</p>
+    {!!player?.conditions.length&&<p className="text-sm">{player.conditions.join(' · ')}</p>}
+    <p aria-label="Initiative order" className="text-sm text-parchment/75">{visibleOrder?.map(label).join(' → ')}{initiative?' · You: '+initiative.dice.join('/')+' + '+initiative.modifier+' = '+initiative.total:''}</p>
    </>}
   </header>
   {setup&&<div className="space-y-2 rounded-lg border border-gold/25 bg-panel/70 p-3" aria-label="Combat setup controls">
@@ -157,17 +156,19 @@ export function TacticalBattlefield({campaign,saving,onChange,onDm}:Props){
      onClick={()=>activeStart&&void apply(()=>startTacticalEncounter(campaign,activeStart),'Initiative rolled.')}>Roll initiative and begin combat</button>
     <p className="text-xs text-parchment/60">Red tokens are enemies · ◢ cover · ▧ obstacle · ≈ difficult terrain · ↗ exit</p>
    </div>}
-  <p className="px-1 text-sm leading-snug text-parchment/80" aria-label="Battlefield navigation instructions">Large squares are tappable. Drag to pan the battlefield; zoom out to see more of the map.</p>
+  <p className="px-1 text-sm leading-snug text-parchment/80" aria-label="Battlefield navigation instructions">Pinch to zoom · Two fingers to pan · Tap to select · Map fits at 100%.</p>
   {!setup&&isPlayer&&!awaitingPlayer&&<div aria-label="Quick combat controls" className="grid grid-cols-3 gap-2 rounded-xl border border-gold/25 bg-[#22272b] p-2">
-   <button type="button" className="min-h-12 rounded-lg bg-gold px-2 text-sm font-semibold text-ink disabled:opacity-40"
+   <button type="button" className="min-h-11 rounded-lg bg-gold px-2 text-sm font-semibold text-ink disabled:opacity-40"
     disabled={saving||!current||!equipment||!!player?.actionUsed&&((player.primaryAttacks??0)===0||(player.primaryAttacks??0)>=primaryAttackLimit(campaign))}
     onClick={()=>void apply(()=>tacticalPlayerAttack(campaign,target,{offhand:false,thrown:false,sneak:false}),'Attack resolved.')}>Attack target</button>
-   <button type="button" className="min-h-12 rounded-lg border border-gold/50 px-2 text-sm font-semibold disabled:opacity-40"
+   <button type="button" className="min-h-11 rounded-lg border border-gold/50 px-2 text-sm font-semibold disabled:opacity-40"
     disabled={saving||!destination||!preview||!!preview.error}
     onClick={()=>destination&&void apply(()=>tacticalMove(campaign,'nighthawk',destination),'Movement resolved.')}>Confirm move</button>
-   <button type="button" className="min-h-12 rounded-lg border border-white/30 px-2 text-sm font-semibold disabled:opacity-40"
+   <button type="button" className="min-h-11 rounded-lg border border-white/30 px-2 text-sm font-semibold disabled:opacity-40"
     disabled={saving||!!webSave} onClick={()=>void apply(()=>tacticalEndTurn(campaign),'Turn ended.')}>Finish turn</button>
   </div>}
+  <div className="flex gap-2 px-1"><button type="button" className="min-h-9 rounded-md border border-white/20 px-3 text-sm" aria-expanded={showNavigation} onClick={()=>setShowNavigation(v=>!v)}>{showNavigation?'Hide navigation':'Find character or enemies'}</button></div>
+  {showNavigation&&<>
   <div className="flex flex-wrap items-center gap-2 px-1" aria-label="Battlefield navigation">
    <button type="button" className="min-h-11 rounded-lg border border-sky-400/50 bg-sky-950/35 px-3 text-sm font-semibold"
     onClick={()=>{const cell=setup?activeStart:player;if(cell)centerView(cell);}}>Find me</button>
@@ -176,6 +177,7 @@ export function TacticalBattlefield({campaign,saving,onChange,onDm}:Props){
    {visibleFoes.map((foe,index)=><button key={foe.id} type="button" className={'min-h-11 rounded-lg border px-3 text-sm font-semibold '+(target===foe.id?'border-amber-300 bg-amber-900/40':'border-red-400/40 bg-red-950/30')}
     onClick={()=>{setTarget(foe.id);const cell=foeSquare(foe.id);if(cell)centerView(cell);}} aria-label={'Focus '+foe.label+' '+(index+1)}>{foe.label} {index+1}</button>)}
   </div>
+  </>}
   <div className="flex items-center justify-between gap-2 px-1 text-xs text-parchment/75">
    <span className="font-semibold text-parchment">Battlefield <span className="font-normal text-parchment/55">· 5 ft squares</span></span>
    <div className="flex items-center gap-1">
@@ -189,7 +191,7 @@ export function TacticalBattlefield({campaign,saving,onChange,onDm}:Props){
   <div className="relative overflow-hidden rounded-xl border border-gold/45 bg-[#19201e] shadow-[inset_0_0_40px_rgba(0,0,0,0.4)]">
    <div ref={viewport} aria-label="Battle map viewport" className="max-h-[55dvh] overflow-auto overscroll-contain touch-pan-x touch-pan-y" onTouchStart={touchStart} onTouchMove={touchMove} onTouchEnd={()=>{gesture.current=undefined;}}>
     <div role="group" aria-label="Battle map" className="grid aspect-square bg-cover bg-center"
-     style={{width:'max('+zoom*100+'%, '+Math.round(scenario.size*64*zoom)+'px)',gridTemplateColumns:'repeat('+scenario.size+', minmax(0,1fr))',
+     style={{width:zoom*100+'%',gridTemplateColumns:'repeat('+scenario.size+', minmax(0,1fr))',
       backgroundImage:scenario.artwork?'linear-gradient(#151d2055,#151d2055), url('+scenario.artwork+')':undefined}}>
      {board.map(cell=>{
       const key=squareKey(cell),id=occupied.get(key);
@@ -216,7 +218,7 @@ export function TacticalBattlefield({campaign,saving,onChange,onDm}:Props){
     </div>
    </div>
    <div className="absolute bottom-1 right-1 flex gap-1">
-    <button type="button" className={button} aria-label="Zoom out" disabled={zoom<=0.7} onClick={()=>setZoom(value=>Math.max(0.7,value-0.25))}>−</button>
+    <button type="button" className={button} aria-label="Zoom out" disabled={zoom<=1} onClick={()=>setZoom(value=>Math.max(1,value-0.25))}>−</button>
     <button type="button" className={button} aria-label="Zoom in" disabled={zoom>=2.5} onClick={()=>setZoom(value=>Math.min(2.5,value+0.25))}>+</button>
    </div>
   </div>
