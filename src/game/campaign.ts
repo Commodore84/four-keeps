@@ -953,7 +953,8 @@ export function resolveDuelEnemyTurn(campaign:Campaign):Campaign {
  const isBlocked=(p:{x:number;y:number})=>p.x<0||p.x>=trainingMapSize||p.y<0||p.y>=trainingMapSize||isTrainingPillar(p.x,p.y)||p.x===playerPosition.x&&p.y===playerPosition.y||!!otherPosition&&p.x===otherPosition.x&&p.y===otherPosition.y;
  const standing=!!(secondEnemyTurn?combat.secondEnemy?.prone:combat.enemyProne);
  const grappled=!!(secondEnemyTurn?combat.secondEnemy?.grappled:combat.enemyGrappled);
- const speed=grappled?0:standing?1:2; // Training-only: slow dummies allow ranged testing.
+ const opponent=secondEnemyTurn?combat.classicAdventure?.second:combat.classicAdventure?.first;
+ const speed=grappled?0:standing?Math.max(0,Math.ceil((opponent?.speed??10)/5)-3):Math.max(1,Math.ceil((opponent?.speed??10)/5));
  let position={...startingPosition};
  // Move at most Speed/5 squares along a shortest walkable route.
  const queue=[{pos:startingPosition,steps:0}],seen=new Set([startingPosition.x+','+startingPosition.y]);
@@ -983,17 +984,21 @@ export function resolveDuelEnemyTurn(campaign:Campaign):Campaign {
  const dodging=targetOwl?false:combat.lastAction==='Dodge'||!!combat.playerHidden;
  const second=dodging?die(20):undefined;
  const attackRoll=second===undefined?first:Math.min(first,second);
- const total=attackRoll+4;
- const ac=targetOwl?11:14; // Owl AC 11; temporary Nighthawk training AC 14.
+ const attackBonus=opponent?.attackBonus??4;
+ const total=attackRoll+attackBonus;
+ const ac=targetOwl?11:character.armorClass??14;
  const hit=canAttack&&(attackRoll===20||(attackRoll!==1&&total>=ac));
  const critical=attackRoll===20;
- const damage=hit?(targetOwl?die(2)+2+(critical?die(2):0):die(2)+(critical?die(2):0)):0; // Training-only strikes.
+ const dice=opponent?.damageDice.match(/^(\d+)d(\d+)$/i);
+ const diceCount=dice?Math.min(8,Number(dice[1])):1,dieFaces=dice?Number(dice[2]):2;
+ const rollDamage=()=>Array.from({length:diceCount},()=>die(dieFaces)).reduce((a,b)=>a+b,0);
+ const damage=hit?Math.max(0,rollDamage()+(critical?rollDamage():0)+(opponent?.damageModifier??(targetOwl?2:0))):0;
  const before=character.currentHitPoints??character.maxHitPoints??10;
  const owlAfter=targetOwl?Math.max(0,(combat.owl?.hp??1)-damage):undefined;
  const owlDestroyed=targetOwl&&hit&&owlAfter===0;
  const after=targetOwl?before:Math.max(0,before-damage);
  const defeated=!targetOwl&&hit&&after===0;
- const detail=(targetOwl?'Owl is within melee reach. ':standDescription)+(combat.order[combat.turnIndex??0]??combat.enemyName)+(canAttack?(targetOwl?' attacks Owl: ':' training attack: '):' waits out of range. ')+(canAttack?(dodging?'disadvantage ('+first+', '+second+') → ':'d20 ')+attackRoll+' + 4 = '+total+' vs temporary AC '+ac+': '+(hit?'HIT':'MISS')+'.'+(hit?(targetOwl?' Damage: '+damage+'. Owl HP: '+(combat.owl?.hp??1)+' → '+owlAfter+'.'+(owlDestroyed?' Familiar disappears at 0 HP; Find Familiar must be cast again.':''):' Nonlethal damage: '+damage+'. Nighthawk HP: '+before+' → '+after+'/'+(character.maxHitPoints??10)+'.'):'')+(defeated?' Nighthawk is knocked unconscious; sparring ends.':''):'');
+ const detail=(targetOwl?'Owl is within melee reach. ':standDescription)+(combat.order[combat.turnIndex??0]??combat.enemyName)+(canAttack?(targetOwl?' attacks Owl: ':combat.classicAdventure?' attacks: ':' training attack: '):' waits out of range. ')+(canAttack?(dodging?'disadvantage ('+first+', '+second+') → ':'d20 ')+attackRoll+ ' +attackBonus+' = '+total+' vs AC '+ac+': '+(hit?'HIT':'MISS')+'.'+(hit?(targetOwl?' Damage: '+damage+'. Owl HP: '+(combat.owl?.hp??1)+' → '+owlAfter+'.'+(owlDestroyed?' Familiar disappears at 0 HP; Find Familiar must be cast again.':''):combat.classicAdventure?' Damage: ':' Nonlethal damage: '+damage+'. Nighthawk HP: '+before+' → '+after+'/'+(character.maxHitPoints??10)+'.'):'')+(defeated?combat.classicAdventure?' Nighthawk falls unconscious.':' Nighthawk is knocked unconscious; sparring ends.':''):'');
  const turn=nextActiveTurn(combat);
  const followingIndex=turn.index;
  const nextRound=turn.round;
