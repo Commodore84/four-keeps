@@ -1,6 +1,8 @@
 import {useEffect,useMemo,useRef,useState,type TouchEvent} from 'react';
 import type {Campaign} from '../game/campaign';
 import {ClassicCombatMapFrame} from './ClassicCombatMapFrame';
+import {ClassicCombatGrid,ClassicCombatResources,ClassicInitiativeList,classicCombatCellBase} from './ClassicCombatPresentation';
+import {UserRound,Swords} from 'lucide-react';
 import {distanceFeet,squareKey,type Square} from '../game/combatScenario';
 import {nighthawkEquippedAttack,pendingWebSave,previewCompanionMovement,primaryAttackLimit,resolveWebTurnSave,setPlayerLoadout,standCompanionFromProne} from '../game/companionEncounter';
 import {ITEM_BY_ID} from '../game/creationEquipment';
@@ -134,7 +136,7 @@ export function TacticalBattlefield({campaign,saving,onChange,onDm}:Props){
   element.scrollLeft=start.left+start.x-(a.clientX+b.clientX)/2;
   element.scrollTop=start.top+start.y-(a.clientY+b.clientY)/2;
  }
- const rollout=tactical?.lastRoll, initiative=tactical?.initiative.find(roll=>roll.actor==='nighthawk');
+ const rollout=tactical?.lastRoll;
  const visibleOrder=battle?.order.filter(id=>id==='nighthawk'||[...occupied.values()].includes(id));
  const enemyCount=scenario?.actors.filter(actor=>actor.side==='enemies').length??0;
  const activeCount=scenario?.actors.filter(actor=>actor.side==='enemies'&&(setup||!!battle?.participants[actor.id]?.hp)).length??0;
@@ -151,14 +153,8 @@ export function TacticalBattlefield({campaign,saving,onChange,onDm}:Props){
     </div>
    </div>
    {setup?<p className="text-sm text-parchment/80">{scenario.objective||lastNarration} · Choose where to enter, then roll initiative.</p>:<>
-    <div aria-label="Combat resources" className="flex flex-wrap gap-x-3 gap-y-1 text-sm text-parchment/85">
-     <span>Move <strong>{Math.max(0,(player?.speedFeet??0)+(player?.dashFeet??0)-(player?.movementSpentFeet??0))} ft</strong></span>
-     <span>Action <strong className={player?.actionUsed?'text-parchment/50':'text-emerald-300'}>{player?.actionUsed?'Spent':'Ready'}</strong></span>
-     <span>Bonus <strong className={player?.bonusActionUsed?'text-parchment/50':'text-emerald-300'}>{player?.bonusActionUsed?'Spent':'Ready'}</strong></span>
-     <span>Reaction <strong className={player?.reactionUsed?'text-parchment/50':'text-emerald-300'}>{player?.reactionUsed?'Spent':'Ready'}</strong></span>
-    </div>
+    <ClassicCombatResources action={!!player?.actionUsed} bonus={!!player?.bonusActionUsed} move={(player?.speedFeet??0)+(player?.dashFeet??0)-(player?.movementSpentFeet??0)} reaction={!!player?.reactionUsed}/>
     {!!player?.conditions.length&&<p className="text-sm">{player.conditions.join(' · ')}</p>}
-    <p aria-label="Initiative order" className="text-sm text-parchment/75">{visibleOrder?.map(label).join(' → ')}{initiative?' · You: '+initiative.dice.join('/')+' + '+initiative.modifier+' = '+initiative.total:''}</p>
    </>}
   </header>
   {setup&&<div className="space-y-2 rounded-lg border border-gold/25 bg-panel/70 p-3" aria-label="Combat setup controls">
@@ -173,6 +169,59 @@ export function TacticalBattlefield({campaign,saving,onChange,onDm}:Props){
     <p className="text-xs text-parchment/60">Red tokens are enemies · ◢ cover · ▧ obstacle · ≈ difficult terrain · ↗ exit</p>
    </div>}
   <p className="px-1 text-sm leading-snug text-parchment/80" aria-label="Battlefield navigation instructions">Pinch to zoom · Two fingers to pan · Tap to select · Map fits at 100%.</p>
+  <div className="flex gap-2 px-1"><button type="button" className="min-h-9 rounded-md border border-white/20 px-3 text-sm" aria-expanded={showNavigation} onClick={()=>setShowNavigation(v=>!v)}>{showNavigation?'Hide navigation':'Find character or enemies'}</button></div>
+  {showNavigation&&<>
+  <div className="flex flex-wrap items-center gap-2 px-1" aria-label="Battlefield navigation">
+   <button type="button" className="min-h-11 rounded-lg border border-sky-400/50 bg-sky-950/35 px-3 text-sm font-semibold"
+    onClick={()=>{const cell=setup?activeStart:player;if(cell)centerView(cell);}}>Find me</button>
+   <button type="button" className="min-h-11 rounded-lg border border-white/30 px-3 text-sm font-semibold"
+    onClick={()=>{setZoom(0.7);viewport.current?.scrollTo({left:0,top:0,behavior:'smooth'});}}>Show whole map</button>
+   {visibleFoes.map((foe,index)=><button key={foe.id} type="button" className={'min-h-11 rounded-lg border px-3 text-sm font-semibold '+(target===foe.id?'border-amber-300 bg-amber-900/40':'border-red-400/40 bg-red-950/30')}
+    onClick={()=>{setTarget(foe.id);const cell=foeSquare(foe.id);if(cell)centerView(cell);}} aria-label={'Focus '+foe.label+' '+(index+1)}>{foe.label} {index+1}</button>)}
+  </div>
+  </>}
+  <div className="flex items-center justify-between gap-2 px-1 text-xs text-parchment/75">
+   <span className="font-semibold text-parchment">Battlefield <span className="font-normal text-parchment/55">· 5 ft squares</span></span>
+   <div className="flex items-center gap-1">
+   {!setup&&isPlayer&&<button type="button" className="min-h-9 rounded-md border border-gold/45 bg-gold/10 px-2 font-semibold text-gold" onClick={()=>actionPanel.current?.scrollIntoView({behavior:'smooth',block:'center'})}>Advanced options</button>}
+   <button type="button" className="min-h-9 rounded-md border border-white/20 px-2" aria-expanded={showKey} onClick={()=>setShowKey(value=>!value)}>{showKey?'Hide terrain key':'Terrain key'}</button>
+   </div>
+  </div>
+  {showKey&&<div className="grid grid-cols-2 gap-1 rounded-lg border border-white/15 p-2 text-[11px] text-parchment/80" aria-label="Terrain key">
+   <span>Blue: your character</span><span>Red: hostile creatures</span><span>Dark: blocked terrain</span><span>Green: difficult ground</span><span>Gold outline: selected</span><span>Arrow: exit</span>
+  </div>}
+  <ClassicCombatMapFrame className="border-gold/45 shadow-[inset_0_0_40px_rgba(0,0,0,0.4)]">
+   <div ref={viewport} aria-label="Battle map viewport" className="max-h-[55dvh] overflow-auto overscroll-contain touch-pan-x touch-pan-y" onTouchStart={touchStart} onTouchMove={touchMove} onTouchEnd={()=>{gesture.current=undefined;}}>
+    <ClassicCombatGrid role="group" ariaLabel="Battle map" size={scenario.size} zoom={zoom} backgroundImage={scenario.artwork}>
+     {board.map(cell=>{
+      const key=squareKey(cell),id=occupied.get(key);
+      const obstacle=scenario.obstacles.some(tile=>squareKey(tile)===key);
+      const rough=scenario.difficult.some(tile=>squareKey(tile)===key)||!!web&&cell.x>=web.x&&cell.x<web.x+4&&cell.y>=web.y&&cell.y<web.y+4;
+      const cover=scenario.cover.some(tile=>squareKey(tile)===key);
+      const hazard=battle?.groundOil?.some(tile=>squareKey(tile)===key)||battle?.groundSupplies?.some(tile=>squareKey(tile)===key);
+      const dark=scenario.darkness?.some(tile=>squareKey(tile)===key);
+      const height=scenario.elevation?.[key];
+      const exit=scenario.exits.some(tile=>squareKey(tile)===key);
+      const start=!!setup&&scenario.starts.some(tile=>squareKey(tile)===key);
+      const selected=id!==undefined&&id===target||!!destination&&squareKey(destination)===key;
+      const ally=id==='nighthawk'||scenario.actors.some(actor=>actor.id===id&&actor.side==='allies');
+      const terrain=obstacle?'bg-[#303235]':dark?'bg-[#171c23]':rough?'bg-[#31483a]':cover?'bg-[#544a3b]':height?'bg-[#46463d]':'bg-[#344039]';
+      const decoration=(obstacle?'bg-stone-500/70 border-stone-300':id==='nighthawk'?'bg-gold text-ink border-gold':id&&!ally?'bg-red-700 text-white border-red-500':id?'bg-sky-700 text-white border-sky-300':selected?'bg-amber-200/85 border-white text-stone-950':reachable.has(key)?'bg-amber-300/20 border-amber-300/80':terrain+' border-white/15')+(selected?' ring-2 ring-inset ring-gold':start?' ring-1 ring-inset ring-teal-300/75':'')+(path.has(key)?' outline outline-2 outline-amber-300':'');
+      const playerStart=!!setup&&!!activeStart&&start&&squareKey(activeStart)===key;
+      const summary=[playerStart?'Nighthawk selected starting position':'',id?label(id):'',obstacle?'obstacle':'',rough?'difficult terrain':'',dark?'darkness':'',height?height+' ft elevation':'',cover?'cover':'',hazard?'hazard':'',exit?'exit':'',start?'starting square':''].filter(Boolean).join(', ');
+      return <button key={key} type="button" aria-label={'Square '+cell.x+', '+cell.y+(summary?', '+summary:'')} aria-pressed={selected}
+       onClick={()=>pick(cell)} disabled={saving||obstacle||(!!setup&&!start)} className={classicCombatCellBase+' relative transition-colors '+(start?'touch-manipulation ':'')+decoration}>
+       {playerStart?<span className="absolute inset-[8%] grid place-items-center rounded-full bg-sky-700 text-xs font-bold text-white ring-2 ring-amber-300 shadow-lg">You</span>:id?<span title={label(id)} className="relative grid h-full w-full place-items-center">{ally?<UserRound size={16} aria-label={label(id)}/>:<Swords size={16} aria-label={label(id)}/>} {battle?.participants[id]?.conditions.includes('Prone')&&<span aria-hidden="true" className="absolute -right-0.5 -top-1 rounded bg-amber-300 px-0.5 text-[9px] leading-3 font-extrabold text-black">P</span>}</span>:
+        <span aria-hidden="true" className={'text-lg font-bold '+(obstacle?'text-slate-300':exit?'text-amber-200':cover?'text-amber-200':'text-parchment/45')}>{obstacle?'▣':hazard?'!':exit?'↗':cover?'◢':rough?'≋':start?'●':''}</span>}
+      </button>;
+     })}
+    </ClassicCombatGrid>
+   </div>
+   <div className="absolute bottom-1 right-1 flex gap-1">
+    <button type="button" className={button} aria-label="Zoom out" disabled={zoom<=1} onClick={()=>setZoom(value=>Math.max(1,value-0.25))}>−</button>
+    <button type="button" className={button} aria-label="Zoom in" disabled={zoom>=2.5} onClick={()=>setZoom(value=>Math.min(2.5,value+0.25))}>+</button>
+   </div>
+  </ClassicCombatMapFrame>
   {!setup&&isPlayer&&!awaitingPlayer&&<>
    {(!equipment||!!current&&!quickInRange)&&<div aria-label="Equip weapon for combat" className="rounded-lg border border-amber-400/50 bg-panel p-2 text-sm space-y-2">
     <p>{equipment?'Target is beyond this weapon’s range. Move closer or switch to another owned weapon.':'Equip an owned weapon to attack. Your other combat actions remain available.'}</p>
@@ -202,61 +251,19 @@ export function TacticalBattlefield({campaign,saving,onChange,onDm}:Props){
     {rogue&&level>=3&&<button type="button" className={button+' w-full min-h-11'} disabled={saving||!!player?.bonusActionUsed} onClick={()=>void apply(()=>tacticalAction(campaign,'nighthawk','Steady Aim',{bonus:true,target}),'Steady Aim resolved.')}>Steady Aim (bonus action)</button>}
    </div>}
   </>}
-  <div className="flex gap-2 px-1"><button type="button" className="min-h-9 rounded-md border border-white/20 px-3 text-sm" aria-expanded={showNavigation} onClick={()=>setShowNavigation(v=>!v)}>{showNavigation?'Hide navigation':'Find character or enemies'}</button></div>
-  {showNavigation&&<>
-  <div className="flex flex-wrap items-center gap-2 px-1" aria-label="Battlefield navigation">
-   <button type="button" className="min-h-11 rounded-lg border border-sky-400/50 bg-sky-950/35 px-3 text-sm font-semibold"
-    onClick={()=>{const cell=setup?activeStart:player;if(cell)centerView(cell);}}>Find me</button>
-   <button type="button" className="min-h-11 rounded-lg border border-white/30 px-3 text-sm font-semibold"
-    onClick={()=>{setZoom(0.7);viewport.current?.scrollTo({left:0,top:0,behavior:'smooth'});}}>Show whole map</button>
-   {visibleFoes.map((foe,index)=><button key={foe.id} type="button" className={'min-h-11 rounded-lg border px-3 text-sm font-semibold '+(target===foe.id?'border-amber-300 bg-amber-900/40':'border-red-400/40 bg-red-950/30')}
-    onClick={()=>{setTarget(foe.id);const cell=foeSquare(foe.id);if(cell)centerView(cell);}} aria-label={'Focus '+foe.label+' '+(index+1)}>{foe.label} {index+1}</button>)}
-  </div>
-  </>}
-  <div className="flex items-center justify-between gap-2 px-1 text-xs text-parchment/75">
-   <span className="font-semibold text-parchment">Battlefield <span className="font-normal text-parchment/55">· 5 ft squares</span></span>
-   <div className="flex items-center gap-1">
-   {!setup&&isPlayer&&<button type="button" className="min-h-9 rounded-md border border-gold/45 bg-gold/10 px-2 font-semibold text-gold" onClick={()=>actionPanel.current?.scrollIntoView({behavior:'smooth',block:'center'})}>Advanced options</button>}
-   <button type="button" className="min-h-9 rounded-md border border-white/20 px-2" aria-expanded={showKey} onClick={()=>setShowKey(value=>!value)}>{showKey?'Hide terrain key':'Terrain key'}</button>
-   </div>
-  </div>
-  {showKey&&<div className="grid grid-cols-2 gap-1 rounded-lg border border-white/15 p-2 text-[11px] text-parchment/80" aria-label="Terrain key">
-   <span>Blue: your character</span><span>Red: hostile creatures</span><span>Dark: blocked terrain</span><span>Green: difficult ground</span><span>Gold outline: selected</span><span>Arrow: exit</span>
-  </div>}
-  <ClassicCombatMapFrame className="border-gold/45 shadow-[inset_0_0_40px_rgba(0,0,0,0.4)]">
-   <div ref={viewport} aria-label="Battle map viewport" className="max-h-[55dvh] overflow-auto overscroll-contain touch-pan-x touch-pan-y" onTouchStart={touchStart} onTouchMove={touchMove} onTouchEnd={()=>{gesture.current=undefined;}}>
-    <div role="group" aria-label="Battle map" className="grid aspect-square bg-cover bg-center"
-     style={{width:zoom*100+'%',gridTemplateColumns:'repeat('+scenario.size+', minmax(0,1fr))',
-      backgroundImage:scenario.artwork?'linear-gradient(#151d2055,#151d2055), url('+scenario.artwork+')':undefined}}>
-     {board.map(cell=>{
-      const key=squareKey(cell),id=occupied.get(key);
-      const obstacle=scenario.obstacles.some(tile=>squareKey(tile)===key);
-      const rough=scenario.difficult.some(tile=>squareKey(tile)===key)||!!web&&cell.x>=web.x&&cell.x<web.x+4&&cell.y>=web.y&&cell.y<web.y+4;
-      const cover=scenario.cover.some(tile=>squareKey(tile)===key);
-      const hazard=battle?.groundOil?.some(tile=>squareKey(tile)===key)||battle?.groundSupplies?.some(tile=>squareKey(tile)===key);
-      const dark=scenario.darkness?.some(tile=>squareKey(tile)===key);
-      const height=scenario.elevation?.[key];
-      const exit=scenario.exits.some(tile=>squareKey(tile)===key);
-      const start=!!setup&&scenario.starts.some(tile=>squareKey(tile)===key);
-      const selected=id!==undefined&&id===target||!!destination&&squareKey(destination)===key;
-      const ally=id==='nighthawk'||scenario.actors.some(actor=>actor.id===id&&actor.side==='allies');
-      const terrain=obstacle?'bg-[#303235]':dark?'bg-[#171c23]':rough?'bg-[#31483a]':cover?'bg-[#544a3b]':height?'bg-[#46463d]':'bg-[#344039]';
-      const decoration=terrain+(selected?' ring-2 ring-inset ring-amber-300 bg-amber-600/35':start?' ring-1 ring-inset ring-teal-300/75':'')+(path.has(key)?' outline outline-2 outline-emerald-300':'')+(reachable.has(key)?' shadow-[inset_0_0_0_2px_rgba(52,211,153,0.25)]':'');
-      const playerStart=!!setup&&!!activeStart&&start&&squareKey(activeStart)===key;
-      const summary=[playerStart?'Nighthawk selected starting position':'',id?label(id):'',obstacle?'obstacle':'',rough?'difficult terrain':'',dark?'darkness':'',height?height+' ft elevation':'',cover?'cover':'',hazard?'hazard':'',exit?'exit':'',start?'starting square':''].filter(Boolean).join(', ');
-      return <button key={key} type="button" aria-label={'Square '+cell.x+', '+cell.y+(summary?', '+summary:'')} aria-pressed={selected}
-       onClick={()=>pick(cell)} disabled={saving||obstacle||(!!setup&&!start)} className={'relative aspect-square min-w-0 border border-black/25 text-xs transition-colors '+(start?'touch-manipulation ':'')+decoration}>
-       {playerStart?<span className="absolute inset-[8%] grid place-items-center rounded-full bg-sky-700 text-base font-bold text-white ring-2 ring-amber-300 shadow-lg">You</span>:id?<span title={label(id)} className={'absolute inset-[8%] grid place-items-center rounded-full border-2 text-base font-bold text-white shadow-md '+(ally?'border-sky-200 bg-sky-800':'border-red-300 bg-red-900')}>{id==='nighthawk'?'You':id.startsWith('giant-rat-')?'Rat':label(id).slice(0,5)}</span>:
-        <span aria-hidden="true" className={'text-lg font-bold '+(obstacle?'text-slate-300':exit?'text-amber-200':cover?'text-amber-200':'text-parchment/45')}>{obstacle?'▣':hazard?'!':exit?'↗':cover?'◢':rough?'≋':start?'●':''}</span>}
-      </button>;
-     })}
+
+    <div aria-label="Combat turn summary" className="rounded-xl border border-gold/40 bg-gold/5 p-3 space-y-2 text-sm">
+     <p className="text-sm font-semibold text-gold">Initiative · Round {battle?.round??1}</p>
+     <ClassicInitiativeList activeId={active} entries={(visibleOrder??[]).map(id=>{
+      const actor=battle?.participants[id],roll=tactical?.initiative.find(entry=>entry.actor===id);
+      const hp=actor?.hp??0,maxHp=actor?.maxHp??0;
+      const status=hp<=0?'Defeated':maxHp>0&&hp<=maxHp/2?'Bloodied':'';
+      const last=id==='nighthawk'&&roll?'You: '+roll.dice.join('/')+' + '+roll.modifier+' = '+roll.total+(rollout?.actor===id?' · Last roll: '+rollout.dice.join('/'):''):rollout?.actor===id?'Last roll: '+rollout.dice.join('/'):
+       id===active?'Taking turn':roll?'Initiative '+roll.total:'Awaiting initiative';
+      return {id,name:label(id),initiative:roll?.total,status:status as 'Defeated'|'Bloodied'|'',conditions:actor?.conditions??[],summary:last};
+     })}/>
     </div>
-   </div>
-   <div className="absolute bottom-1 right-1 flex gap-1">
-    <button type="button" className={button} aria-label="Zoom out" disabled={zoom<=1} onClick={()=>setZoom(value=>Math.max(1,value-0.25))}>−</button>
-    <button type="button" className={button} aria-label="Zoom in" disabled={zoom>=2.5} onClick={()=>setZoom(value=>Math.min(2.5,value+0.25))}>+</button>
-   </div>
-  </ClassicCombatMapFrame>
+
   {!setup&&selectedOpponent&&<div aria-label="Selected creature details" className="flex items-center justify-between gap-3 rounded-xl border border-red-400/25 bg-[#292629] px-3 py-3 text-base">
    <div className="min-w-0"><p className="text-xs uppercase tracking-wider text-red-200/75">Selected target</p><strong className="block truncate">{label(target)}</strong><p className="text-xs text-parchment/70">{targetDistance} ft away · {current?.conditions.length?current.conditions.join(', '):'No observed conditions'}</p></div>
    <button type="button" className="min-h-10 rounded-md border border-white/20 px-3 text-xs" onClick={()=>setTarget('')}>Clear target</button>
