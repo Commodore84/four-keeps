@@ -53,3 +53,6 @@ Shopping is conversational: no dedicated Shop/Browse Shop button. Natural browse
 
 ### Dynamic battlefield work (2026-11-25)
 See [DYNAMIC_BATTLEFIELDS.md](DYNAMIC_BATTLEFIELDS.md) for the isolated candidate, local verification, scope and remaining work. Check live exact-SHA CI and Vercel status before any publication.
+
+### Combat Lab entry-point development (2026-11-25)
+A new isolated feat/combat-lab-random-generation candidate provides a seeded **Generate Random Encounter** action in Developer, using the exact same buildSoloEncounter → restorePracticeEncounter → original classic combat UI as the DM's live encounters. No duplicate combat implementation. Test sessions persist separately and do not change live campaigns. Developer legacy controls are collapsed by default, and the map generator shares additional seeded scenery and enemy position variation with production. See DYNAMIC_BATTLEFIELDS.md. Confirm exact SHA and release gates before publication; never assume a prior run suffices.

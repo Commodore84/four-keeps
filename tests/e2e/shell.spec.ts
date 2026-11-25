@@ -1307,6 +1307,8 @@ test('mobile hamburger navigation includes magic items and separate developer to
  await expect(panel).toHaveCount(0);
  await menu.click();
  await page.getByRole('navigation',{name:'Primary navigation'}).getByRole('button',{name:'Developer'}).click();
+ await expect(page.getByLabel('Combat Lab')).toBeVisible();
+ await page.getByLabel('Development section').locator('summary').first().click();
  await expect(page.getByLabel('Development section').getByLabel('Legacy campaign creation')).toBeVisible();
  const bounds=await menu.boundingBox();
  expect(bounds).not.toBeNull();
@@ -1593,4 +1595,77 @@ test('Settings Reload App restarts the standalone shell without clearing saved c
   await expect(page.getByRole('heading',{name:'Four Keeps'})).toBeVisible();
   await page.getByRole('button',{name:'Campaigns',exact:true}).click();
   await expect(page.getByText('Reload App regression')).toBeVisible();
+});
+
+async function readAllCampaigns(page:Page){
+ return page.evaluate(async()=>{
+   const db=await new Promise<IDBDatabase>((resolve,reject)=>{
+     const request=indexedDB.open('four-keeps-local',1);
+     request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(request.error);
+   });
+   const result=await new Promise<any[]>((resolve,reject)=>{
+     const request=db.transaction('campaigns','readonly').objectStore('campaigns').getAll();
+     request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(request.error);
+   });
+   db.close();return result;
+ });
+}
+test('Generate Random Encounter uses the real combat engine, cycles environments, and protects a real campaign',async({page})=>{
+ test.setTimeout(110000);
+ await page.setViewportSize({width:390,height:844});
+ await page.goto('/four-keeps/');
+ await createLegacyCampaign(page,'A real saved campaign');
+ const before=await readAllCampaigns(page);
+ expect(before).toHaveLength(1);
+ const actual=before[0];
+ for(let n=0;n<3;n++){
+   await navigate(page,'Developer');
+   const lab=page.getByLabel('Combat Lab');
+   await expect(lab.getByRole('button',{name:'Generate Random Encounter'})).toBeVisible();
+   if(n===0)await page.screenshot({path:'test-results/combat-lab-developer-iphone.png'});
+   await page.evaluate(value=>{
+     const original=crypto.getRandomValues.bind(crypto);
+     let used=false;
+     crypto.getRandomValues=((a:ArrayBufferView|null)=>{
+       if(!used&&a instanceof Uint32Array&&a.length===1){used=true;a[0]=value;return a;}
+       return original(a);
+     }) as typeof crypto.getRandomValues;
+   },n);
+   await lab.getByRole('button',{name:'Generate Random Encounter'}).click();
+   await expect(page.getByRole('button',{name:'Roll initiative (d20 + DEX)'})).toBeVisible();
+   await page.getByRole('button',{name:'Roll initiative (d20 + DEX)'}).click();
+   const board=page.getByRole('grid',{name:'Combat movement grid'});
+   await expect(board).toBeVisible();
+   await expect(page.getByRole('region',{name:'Tactical battlefield'})).toHaveCount(0);
+   await expect(page.getByLabel('Combat Lab session')).toContainText('lab-'+n.toString(16).padStart(8,'0'));
+   await expect(page.getByLabel('Combat turn summary')).toBeVisible();
+   await expect(page.getByLabel('Combat movement grid')).toHaveAttribute('data-battlefield-theme',['warehouse','roadside','ruins'][n]);
+   await page.getByRole('button',{name:'Fit entire map'}).click();
+   await expect(board.getByRole('gridcell')).toHaveCount([1280,1920,1920][n]);
+   await page.getByRole('button',{name:'Center on character'}).click();
+   const after=await readAllCampaigns(page);
+   expect(after).toHaveLength(2);
+   const source=after.find(c=>c.id===actual.id);
+   expect(source).toEqual(actual);
+   const session=after.find(c=>c.combatLab);
+   expect(session.combatLab).toMatchObject({environment:['warehouse-vermin','roadside-bandit','ruins-goblin-scouts'][n],seed:'lab-'+n.toString(16).padStart(8,'0'),originCampaignId:actual.id});
+   expect(session.combat?.classicAdventure?.origin).toBe('dm');
+   expect(session.combat?.battlefield?.objects.length).toBeGreaterThan(4);
+   expect(session.combat?.battlefield?.width).toBe([40,32,48][n]);
+   expect(session.combat?.battlefield?.height).toBe([32,60,40][n]);
+   if(n===2){
+     await board.scrollIntoViewIfNeeded();
+     await page.screenshot({path:'test-results/combat-lab-random-ruins-iphone.png'});
+     await page.reload();
+     await page.getByRole('button',{name:'Campaigns',exact:true}).click();
+     const labCard=page.getByText('TEST SESSION').first();
+     await expect(labCard).toBeVisible();
+     await labCard.locator('..').getByRole('button',{name:'Continue Adventure'}).click();
+     await expect(page.getByLabel('Combat Lab session')).toContainText('lab-00000002');
+     await page.getByRole('button',{name:'Return to adventure'}).click();
+     await expect(page.getByLabel('Combat Lab session')).toHaveCount(0);
+     await navigate(page,'Adventure');
+     await expect(page.getByRole('grid',{name:'Combat movement grid'})).toHaveCount(0);
+   }
+ }
 });

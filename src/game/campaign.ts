@@ -16,6 +16,8 @@ import { emptyWorld, mergeWorld, normalizeWorld, type WorldState } from './world
 export type ClassicAdventureOpponent={id:string;name:string;hp:number;maxHp:number;speed:number;attackBonus:number;damageDice:string;damageModifier:number;ac:number};
 export interface JournalEntry { id: string; text: string; createdAt: string; kind: 'note' | 'system' | 'player' | 'dm' }
 export interface Campaign {
+  /** Disposable seed-tagged encounter generated through the normal DM combat bridge. */
+  combatLab?:{environment:'warehouse-vermin'|'roadside-bandit'|'ruins-goblin-scouts';seed:string;createdAt:string;originCampaignId?:string};
   healingPotionUseIds?:string[];
   consumableUseIds?:string[];
   provisionTracking?:{nextDay:number;missedFood:number;foodLevels:number;waterLevels:number};

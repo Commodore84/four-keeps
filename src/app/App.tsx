@@ -38,6 +38,7 @@ import {frontierMerchantContext} from '../game/frontierShop';
 import {mergeWorld} from '../game/world';
 import {travelAdventure,proposeAdventureEncounter,recoverWarehouseRatEncounter,type AdventureSite} from '../game/adventureSession';
 import {restorePracticeEncounter} from '../game/practiceEncounterBridge';
+import {makeCombatLabEncounter,sampleRandomCombatLab,isCombatLab} from '../game/combatLab';
 import {queuePostCombatFollowUp,recoverPostCombatFollowUp,commitPostCombatFollowUp} from '../game/postCombatFollowUp';
 import {settleClassicVictory,recoverClassicVictoryRewards,claimQuestPayment} from '../game/encounterRewardResolution';
 import {openingIntentForCampaign,prepareAdventureOpening,commitAdventureOpening,needsAdventureOpening,adventureMemory,prepareAdventureAction, pauseAdventureForClarification, answerAdventureClarification,commitAdventureAction} from '../game/adventureOrchestrator';
@@ -1100,7 +1101,7 @@ export function App() {
   const [openingError,setOpeningError]=useState<string|null>(null);
   const openingInFlightRef=useRef(false);
   async function startAiAdventure() {
-    if (!campaign || saving || openingInFlightRef.current || !campaign.characterIdentity || campaign.journal.some(entry=>entry.kind==='dm')) return;
+    if (!campaign || campaign.combatLab || saving || openingInFlightRef.current || !campaign.characterIdentity || campaign.journal.some(entry=>entry.kind==='dm')) return;
     if (!accessCode) { setOpeningError('Connection unavailable'); return; }
     openingInFlightRef.current=true;
     setOpeningError(null);
@@ -1139,7 +1140,7 @@ export function App() {
 
   const openingAttemptRef=useRef<string | null>(null);
   useEffect(()=>{
-    if(portalScreen!=='adventure'||!campaign?.characterIdentity||!accessCode||saving)return;
+    if(portalScreen!=='adventure'||!campaign?.characterIdentity||campaign.combatLab||!accessCode||saving)return;
     if(campaign.journal.some(entry=>entry.kind==='dm'))return;
     if(openingAttemptRef.current===campaign.id)return;
     openingAttemptRef.current=campaign.id;
@@ -1247,6 +1248,39 @@ export function App() {
     try{const next={...campaign,inventoryLedger:ledger,updatedAt:new Date().toISOString()};await localCampaignStorage.save(next);setCampaign(next);setCampaigns(items=>items.map(entry=>entry.id===next.id?next:entry));}
     catch(error){setNotice('Inventory: '+String(error));}finally{setSaving(false);}
   }
+  async function generateRandomTestEncounter(){
+    if(saving||loading)return;
+    setSaving(true);
+    try{
+      const oldLabs=campaigns.filter(item=>isCombatLab(item));
+      const source=campaign?.combatLab
+        ?campaigns.find(item=>item.id===campaign.combatLab?.originCampaignId)
+        :campaign;
+      const {environment,seed}=sampleRandomCombatLab(()=>crypto.getRandomValues(new Uint32Array(1))[0]);
+      const next=makeCombatLabEncounter(environment,seed,source);
+      // Saving the new isolated session precedes deleting the previous one:
+      // an error must never mutate or erase an ordinary campaign.
+      await localCampaignStorage.save(next);
+      for(const oldLab of oldLabs){
+        if(oldLab.id===next.id)continue;
+        try{await localCampaignStorage.remove(oldLab.id)}
+        catch(error){console.warn('Could not retire old Combat Lab session',error);}
+      }
+      setCampaigns(items=>[next,...items.filter(item=>!isCombatLab(item))]);
+      setCampaign(next);setActiveView('adventure');setPortalScreen('adventure');
+      setGridDestination(null);setCombatView(null);setNotice('');
+    }catch(error){setNotice('Could not generate test encounter: '+String(error));}
+    finally{setSaving(false);}
+  }
+
+  function returnFromCombatLab(){
+    if(!campaign?.combatLab)return;
+    const original=campaigns.find(item=>item.id===campaign.combatLab?.originCampaignId&&!isCombatLab(item));
+    if(original){setCampaign(original);setActiveView('adventure');setPortalScreen('adventure');}
+    else {setCampaign(null);setPortalScreen('home');setActiveView('adventure');}
+    setNotice('');setGridDestination(null);setCombatView(null);
+  }
+
   async function startTrainingCombatTest() {
     if(!campaign||saving||campaign.combat||campaign.pendingAftermath)return;
     setSaving(true);
@@ -1866,7 +1900,7 @@ export function App() {
     catch(error){setNotice('Consumable rejected: '+String(error));return false}
     finally{setSaving(false)}
   }
-  const content = { 'magic-items': <MagicItemCompendium campaignId={campaign?.id??null}/>, adventure: campaign?.combat && campaign.combat.status!=='completed' ? null : <Adventure campaign={campaign} fullHistory={fullHistory} onToggleHistory={() => setFullHistory(value => !value)} onAdventureChange={saveSubclassActor} onTacticalDm={runTacticalDm} showDmRecommendations={dmEquipmentRecommendations} onStartOpening={startAiAdventure} onRetryAction={()=>sendToDM()} onShopClose={closeMerchantShop} onShopPrepare={prepareShopPurchase} onShopRevise={reviseShopPurchase} onShopSettle={settleShopPurchase} onShopDiscuss={discussShopCart} onUsePotion={usePotion} saving={saving} openingError={openingError} narrationSpeed={narrationSpeed}/>, party: <Party campaign={campaign} saving={saving} onRoll={(skill,mode) => void saveSkillRoll(skill,mode)} onSaveRoll={(ability,mode) => void saveSavingThrow(ability,mode)} onAwardXP={(amount,reason) => void updateProgress('award',amount,reason)} onLevelUp={hp => void updateProgress('level',hp)} onLevelThree={(hp,cantrips,spells) => void updateProgress('level3',hp,'',cantrips,spells)} onReconcile={() => void updateProgress('reconcile')} onUndoReconcile={() => void updateProgress('undoReconcile')} onRestore={() => void updateProgress('restore')} onCastSpell={(spell,ritual,components,target)=>void castSpell(spell,ritual,components,target)} onEndConcentration={()=>void endConcentration()} onAdjustEquipment={(item,delta)=>void changeEquipment(item,delta)} onUpdateInventory={ledger=>void updateInventoryLedger(ledger)} onSubclassChange={saveSubclassActor} onUseConsumable={useConsumable}/> , journal: <Journal campaign={campaign}/>, map: campaign?.characterBuild ? <AnchamidaRegionMap campaign={campaign}/> : <WorldMap campaign={campaign}/>, settings: <section className="space-y-4"><h2 className="font-serif text-2xl">Settings</h2><p className="text-sm text-parchment/60">Manage campaigns, backups, and Dungeon Master access below.</p></section>, development: campaign?.characterIdentity?<ImportedCharacterSheet campaign={campaign} saving={saving} onChange={saveSubclassActor} development/>:<section aria-label="Developer tools"><h2 className="font-serif text-2xl">Developer tools</h2><p>Legacy testing remains available through the existing development controls.</p></section> };
+  const content = { 'magic-items': <MagicItemCompendium campaignId={campaign?.id??null}/>, adventure: campaign?.combat && campaign.combat.status!=='completed' ? null : <Adventure campaign={campaign} fullHistory={fullHistory} onToggleHistory={() => setFullHistory(value => !value)} onAdventureChange={saveSubclassActor} onTacticalDm={runTacticalDm} showDmRecommendations={dmEquipmentRecommendations} onStartOpening={startAiAdventure} onRetryAction={()=>sendToDM()} onShopClose={closeMerchantShop} onShopPrepare={prepareShopPurchase} onShopRevise={reviseShopPurchase} onShopSettle={settleShopPurchase} onShopDiscuss={discussShopCart} onUsePotion={usePotion} saving={saving} openingError={openingError} narrationSpeed={narrationSpeed}/>, party: <Party campaign={campaign} saving={saving} onRoll={(skill,mode) => void saveSkillRoll(skill,mode)} onSaveRoll={(ability,mode) => void saveSavingThrow(ability,mode)} onAwardXP={(amount,reason) => void updateProgress('award',amount,reason)} onLevelUp={hp => void updateProgress('level',hp)} onLevelThree={(hp,cantrips,spells) => void updateProgress('level3',hp,'',cantrips,spells)} onReconcile={() => void updateProgress('reconcile')} onUndoReconcile={() => void updateProgress('undoReconcile')} onRestore={() => void updateProgress('restore')} onCastSpell={(spell,ritual,components,target)=>void castSpell(spell,ritual,components,target)} onEndConcentration={()=>void endConcentration()} onAdjustEquipment={(item,delta)=>void changeEquipment(item,delta)} onUpdateInventory={ledger=>void updateInventoryLedger(ledger)} onSubclassChange={saveSubclassActor} onUseConsumable={useConsumable}/> , journal: <Journal campaign={campaign}/>, map: campaign?.characterBuild ? <AnchamidaRegionMap campaign={campaign}/> : <WorldMap campaign={campaign}/>, settings: <section className="space-y-4"><h2 className="font-serif text-2xl">Settings</h2><p className="text-sm text-parchment/60">Manage campaigns, backups, and Dungeon Master access below.</p></section>, development: campaign?.characterIdentity?<ImportedCharacterSheet campaign={campaign} saving={saving} onChange={saveSubclassActor} development/>:null };
   if(portalScreen!=='adventure')return <div className="min-h-dvh bg-ink text-parchment">
     <div className="mx-auto min-h-dvh w-full max-w-3xl space-y-5 px-5 pb-12 pt-[max(2rem,env(safe-area-inset-top))]">
       <header className="flex flex-col items-center gap-2 border-b border-gold/20 pb-6">
@@ -1895,7 +1929,7 @@ export function App() {
         {!loading&&campaigns.length===0&&<p className="text-sm text-parchment/65">No adventures saved on this device.</p>}
         {[...campaigns].sort((a,b)=>Date.parse(b.updatedAt)-Date.parse(a.updatedAt)).map(item=><div key={item.id} className="space-y-3 rounded-xl border border-white/20 bg-panel p-4">
           <div className="flex items-start justify-between gap-3"><h3 className="min-w-0 font-serif text-xl">{item.characterIdentity?.name||item.characterBuild?.identity.name||'Nighthawk'}</h3><span className="shrink-0 text-sm text-gold">Level {item.character?.level??1} {(item.characterIdentity?.classId||item.character?.classId||'Rogue').replace(/^./,c=>c.toUpperCase())}</span></div>
-          <p className="text-sm text-parchment/85">{item.title}</p>
+          <p className="text-sm text-parchment/85">{item.title}{item.combatLab?' · TEST SESSION':''}</p>
           <p className="text-sm text-parchment/80">⌖ {item.location||'Location unknown'}</p>
           <p className="text-xs text-parchment/60">Started {Number.isFinite(Date.parse(item.createdAt))?new Date(item.createdAt).toLocaleString():'date unavailable'}</p>
           <button type="button" onClick={()=>{setCampaign(item);setDeleteCampaignId(null);setActiveView('adventure');setPortalScreen('adventure');}} className="w-full rounded-lg bg-gold px-4 py-3 font-semibold text-ink">Continue Adventure</button>
@@ -1935,6 +1969,11 @@ export function App() {
         <div className="flex items-start justify-between gap-3"><div><p className="font-bold">{hideToast.hidden?'Hide succeeded — Hidden':'Hide failed — Spotted'}</p><p className="mt-1 text-xs">{hideToast.detail}</p></div><button type="button" aria-label="Dismiss hide notification" onClick={()=>setHideToast(null)}>×</button></div>
       </div>}
       <main ref={mainScrollRef} className={activeView==='map'?"min-h-0 flex-1 overflow-hidden px-3 py-3":activeView==='adventure'&&campaign?.merchantShopOpen?"min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-0 [-webkit-overflow-scrolling:touch]":"min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-6 pb-6 [-webkit-overflow-scrolling:touch]"} id="main-content">
+        {activeView==='adventure'&&campaign?.combatLab&&<div aria-label="Combat Lab session" className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-gold/40 bg-panel p-2 text-xs">
+           <div className="min-w-0"><strong className="text-gold">TEST ENCOUNTER</strong><span className="ml-2 text-parchment/70">Seed: {campaign.combatLab.seed} · {campaign.combatLab.environment.replaceAll('-', ' ')}</span></div>
+           <button type="button" className="rounded border border-white/30 px-2 py-1" onClick={returnFromCombatLab}>Return to adventure</button>
+        </div>}
+
         {activeView === 'settings' && <>
         <div className="sticky top-0 z-40 mb-3 flex items-center justify-between gap-2 rounded-lg border border-white/15 bg-ink px-3 py-2"><h2 className="font-semibold">Settings</h2><button type="button" onClick={()=>{setNavigationOpen(false);setActiveView("adventure");if(!campaign)setPortalScreen("home");}} className="min-h-11 rounded-lg border border-gold/40 px-3 text-sm font-semibold text-gold">{campaign?"Back to adventure":"Back to home"}</button></div>
         <section aria-label="App controls" className="mb-5 rounded-xl border border-white/15 bg-panel p-4 space-y-3">
@@ -1990,10 +2029,17 @@ export function App() {
           <button type="button" onClick={() => { setAccessCode(''); setDmConnection(''); setNotice('Saved access code cleared from this browser.'); }} className="rounded-lg border border-white/20 px-3 py-2 text-xs text-parchment/70">Forget access code</button><p className="text-xs text-parchment/55">Your access code stays in this browser until you clear it. Do not use this on a shared device. The rules engine resolves skill checks; combat and inventory are not yet connected.</p></>}
         </section>}
         </>}
-        {activeView === 'development' && <details aria-label="Development section" open className="mb-5 rounded-xl border border-white/15 bg-panel p-4">
-          <summary className="cursor-pointer font-serif text-lg">Development</summary>
+        {activeView === 'development' && <section aria-label="Combat Lab" className="mb-3 rounded-xl border border-gold/35 bg-panel p-3 space-y-2">
+          <h2 className="font-serif text-lg">Combat Lab</h2>
+          <p className="text-xs text-parchment/70">A random warehouse, roadside or ruins with varied enemy positions and physical objects. Runs on the main encounter engine, using your Rogue sheet or the prototype Rogue. Test saves never alter your adventure.</p>
+          <button type="button" disabled={saving||loading} onClick={()=>void generateRandomTestEncounter()} className="w-full min-h-11 rounded-lg bg-gold px-3 py-2 font-semibold text-ink disabled:opacity-40">Generate Random Encounter</button>
+          {campaign?.combatLab&&<div className="space-y-1 text-xs text-parchment/70" aria-label="Current test seed"><p>Active test · {campaign.combatLab.environment.replaceAll('-', ' ')} · Seed: <code>{campaign.combatLab.seed}</code></p><button type="button" onClick={returnFromCombatLab} className="rounded border border-white/20 px-3 py-2 text-parchment">Return to adventure</button></div>}
+        </section>}
+        {activeView === 'development' && <details aria-label="Development section" className="mb-5 rounded-xl border border-white/15 bg-panel p-4">
+          <summary className="cursor-pointer font-serif text-lg">Legacy tools and diagnostics</summary>
           <div className="mt-4 space-y-4">
         <section className="space-y-4" aria-label="Development tools"><h2 className="font-serif text-2xl">Development tools</h2><p className="text-sm text-parchment/65">Test-only features. Normal adventures and character sheets remain separate.</p><div className="rounded-xl border border-gold/30 bg-panel p-3 space-y-2" aria-label="Legacy campaign creation"><h3 className="font-semibold">Legacy prototype campaign (testing only)</h3><p className="text-xs text-parchment/65">Creates an isolated Nighthawk prototype for legacy regression testing. Normal new adventures require a validated character.</p><label className="block text-sm">New campaign name<input value={newTitle} onChange={event=>setNewTitle(event.target.value)} className="mt-2 w-full rounded-lg border border-white/20 bg-ink p-3"/></label><button type="button" onClick={()=>void createLegacyDevelopmentCampaign()} disabled={saving||loading||!newTitle.trim()} className="rounded-lg bg-gold px-3 py-2 font-semibold text-ink disabled:opacity-40">New</button></div>{content.adventure && cloneElement(content.adventure,{development:true})}{!campaign?.characterIdentity && cloneElement(content.party,{development:true})}</section>
+        {content.development}
         {campaign && !campaign.characterIdentity && !campaign.combat && !campaign.pendingAftermath && <div className="mx-4 my-4 rounded-xl border border-gold/40 bg-panel p-3 space-y-2"><p className="text-sm font-semibold text-gold">Encounter training</p><p className="text-xs text-parchment/70">Start a standard two-opponent sparring encounter. Use the tactical grid and normal combat actions.</p><button type="button" disabled={saving} className="w-full rounded-lg border border-gold/70 p-3 font-semibold disabled:opacity-40" onClick={()=>{setActiveView('adventure');void startTrainingCombatTest()}}>Start encounter training</button></div>}
           </div>
         </details>}
@@ -2019,7 +2065,7 @@ export function App() {
             </details>}
           </section>;
         })()}
-        {content[activeView]}
+        {activeView==='development'?null:content[activeView]}
         {activeView==='adventure' && !!campaign?.questPayouts?.some(payout=>payout.status==='available') && !campaign.combat &&
           <div aria-label="Earned quest rewards" className="mt-3 rounded-xl border border-gold/50 bg-panel p-3 space-y-2">
             <p className="text-sm font-semibold text-gold">Completed work · payment due</p>

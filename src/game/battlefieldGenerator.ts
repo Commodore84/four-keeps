@@ -76,7 +76,10 @@ export function generateBattlefield(environment:BattlefieldEnvironment,seed:stri
  const add=(kind:BattlefieldObjectKind,x:number,y:number,w=1,h=1)=>objects.push({id:kind+'-'+objects.length,kind,x,y,width:w,height:h,asset:kind});
  const mid=Math.floor(height/2);
  const starts=[{x:3,y:mid},{x:3,y:mid+1}];
- const enemyStarts=[{x:9,y:mid-2},{x:11,y:mid+3}];
+ // Place foes from the same deterministic seed as physical geometry.
+ // Keep the player's entrance stable so the original combat controls and
+ // nearby-door interaction remain consistent across tests and real encounters.
+ const enemyStarts=[{x:pick(9,10),y:mid-pick(1,3)},{x:pick(11,12),y:mid+pick(2,3)}];
  const exits=[{x:0,y:mid},{x:width-1,y:mid}];
  if(environment==='warehouse-vermin'){
   // Perimeter and two entrances; repeated cargo bays separated by generous aisles.
@@ -109,6 +112,20 @@ export function generateBattlefield(environment:BattlefieldEnvironment,seed:stri
   add('window',24,mid-1);Object.assign(objects[objects.length-1],{hp:4,material:'glass'});
  }
  const battlefield:Battlefield={width,height,objects,theme:environment==='warehouse-vermin'?'warehouse':environment==='roadside-bandit'?'roadside':'ruins'};
+ // Seeded clutter is authored through the same physical object schema as
+ // production DM encounters, not painted into the map as decorative pixels.
+ // Try a few small props; only retain additions that preserve actual routes.
+ const extras:BattlefieldObjectKind[]=environment==='warehouse-vermin'?['crate','cargo','chair']:
+    environment==='roadside-bandit'?['rock','tree','undergrowth']:['rubble','rock','pillar'];
+ const goal=pick(2,5);
+ let added=0;
+ for(let attempt=0;attempt<20&&added<goal;attempt++){
+  const kind=extras[pick(0,extras.length-1)],x=pick(15,width-6),y=pick(4,height-5);
+  if(objects.some(o=>x<o.x+o.width&&x+1>o.x&&y<o.y+o.height&&y+1>o.y))continue;
+  add(kind,x,y);
+  if(validateGeneratedBattlefield({battlefield,starts,enemyStarts,exits}))added++;
+  else objects.pop();
+ }
  const result={battlefield,starts,enemyStarts,exits};
  if(!validateGeneratedBattlefield(result))throw Error('Generated battlefield has inaccessible, overlapping or trapped starting positions.');
  return result;
