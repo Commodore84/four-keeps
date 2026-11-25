@@ -62,6 +62,8 @@ test('training encounter starts, rolls initiative, and survives reload', async (
   await expect(page.getByRole('button', { name: 'Roll initiative (d20 + DEX)' })).toBeVisible();
   await page.getByRole('button', { name: 'Roll initiative (d20 + DEX)' }).click();
   await expect(page.locator('[aria-label="Combat turn summary"]')).toBeVisible();
+  await expect(page.locator('[data-classic-initiative="true"]')).toHaveCount(1);
+  await expect(page.locator('[data-classic-combat-grid="true"]')).toHaveCount(1);
   await page.reload();
   await page.getByRole('button',{name:'Campaigns',exact:true}).click();await page.getByRole('button', { name: 'Continue Adventure' }).click();
   await expect(page.locator('[aria-label="Combat turn summary"]')).toBeVisible();
