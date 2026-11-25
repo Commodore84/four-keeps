@@ -52,10 +52,10 @@ export function startTacticalEncounter(campaign:Campaign,start:Square,random=rol
  })];
  // The shared initializer accepts only verified positive legacy totals. The tactical
  // order below uses the actual checks, including totals of zero and below.
- let next=startUnifiedEncounter(campaign,{nighthawk:Math.max(1,entry.total)},{nighthawk:start},{});
+ let next=startUnifiedEncounter(campaign,{nighthawk:Math.max(1,entry.total)},{nighthawk:start},{},scenario);
  for(const actor of scenario.actors){
   const profile=TACTICAL_PROFILES[actor.profile],weapon=profile.weapons[0];
-  next=addCompanionEnemy(next,actor.id,1,actor.square,profile.hp,profile.ac,weapon.bonus,profile.speed,weapon.reach,weapon.modifier,weapon.dice);
+  next=addCompanionEnemy(next,actor.id,1,actor.square,profile.hp,profile.ac,weapon.bonus,profile.speed,weapon.reach,weapon.modifier,weapon.dice,scenario);
  }
  const battle=next.companionEncounter!,participants={...battle.participants};
  const species=campaign.characterIdentity?.speciesId;
@@ -125,7 +125,7 @@ function npcAbility(campaign:Campaign,id:string,ability:'str'|'dex'|'con'):numbe
 
 export function tacticalMove(campaign:Campaign,id:string,destination:Square,random=rollDie):Campaign{
  const {state}=requireTurn(campaign,id);
- if(!fitsBattlefield(destination,state.scenario.size))throw Error('Destination outside this battlefield.');
+ if(!fitsBattlefield(destination,state.scenario))throw Error('Destination outside this battlefield.');
  const moved=moveCompanion(campaign,id,destination.x,destination.y,die(random,20)+npcAbility(campaign,id,'dex'),die(random,4));
  return markReadiedTrigger(campaign,moved,id);
 }
@@ -322,7 +322,7 @@ function castTacticalNpcSpell(campaign:Campaign,id:string,name:unknown,destinati
  if(profileActor(campaign,id)?.profile!=='mage'||name!=='Fireball'&&name!=='Misty Step')throw Error('This actor cannot cast that supported spell.');
  const uses=resources.spellUses?.[name]??0;
  if(!uses)throw Error('No uses of this spell remain.');
- if(!fitsBattlefield(destination,state.scenario.size)||!companionCanSee(battle,caster,destination))throw Error('Choose a visible destination on the map.');
+ if(!fitsBattlefield(destination,state.scenario)||!companionCanSee(battle,caster,destination))throw Error('Choose a visible destination on the map.');
  let next=campaign;
  let participants=battle.participants;
  if(name==='Misty Step'){

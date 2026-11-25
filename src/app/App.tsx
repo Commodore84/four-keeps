@@ -1,3 +1,4 @@
+import {objectAt} from '../game/battlefield';
 import {resolveDmBattlefield} from '../game/encounterDirector';
 import {knownMonsterFacts} from '../game/monsterKnowledge';
 import {TacticalBattlefield} from './TacticalBattlefield';
@@ -1264,6 +1265,49 @@ export function App() {
   const [gridDestination,setGridDestination]=useState<{x:number;y:number}|null>(null);
   const [combatZoom,setCombatZoom]=useState(1);
   const combatMapRef=useRef<HTMLDivElement>(null);
+  const dynamicMap=campaign?.combat?.battlefield;
+  const cameraKey=dynamicMap&&campaign?'four-keeps-camera:'+campaign.id+':'+(campaign.combat?.classicAdventure?.actionId??'practice'):undefined;
+  const lastCombatTap=useRef(0);
+  const manualCameraUntil=useRef(0);
+  const previousPlayerSquare=useRef<string>();
+  const singleCombatGesture=useRef<{x:number;y:number;left:number;top:number;zoom:number;zooming:boolean;moved:boolean}|null>(null);
+  const cameraInitialized=useRef<string>();
+  const cameraRestoring=useRef(false);
+  const persistCamera=()=>{const el=combatMapRef.current;if(cameraKey&&el&&!cameraRestoring.current)try{localStorage.setItem(cameraKey,JSON.stringify({zoom:combatZoom,left:el.scrollLeft,top:el.scrollTop}));}catch{/* storage unavailable */}};
+  function centerCombatCharacter(){
+    manualCameraUntil.current=0;
+    const el=combatMapRef.current,p=campaign?.combat?.playerPosition;
+    if(el&&p){const cell=21*combatZoom;el.scrollTo({left:(p.x+.5)*cell-el.clientWidth/2,top:(p.y+.5)*cell-el.clientHeight/2});}
+  }
+  function fitCombatMap(){
+    manualCameraUntil.current=Date.now()+10000;
+    const el=combatMapRef.current;if(!el||!dynamicMap)return;
+    setCombatZoom(Math.min(el.clientWidth/(21*dynamicMap.width),el.clientHeight/(21*dynamicMap.height)));
+    el.scrollTo(0,0);
+  }
+  useEffect(()=>{
+    if(!cameraKey||activeView!=='adventure'||portalScreen!=='adventure'||!combatMapRef.current){if(!cameraKey&&cameraInitialized.current)setCombatZoom(1);cameraInitialized.current=undefined;return;}
+    if(cameraInitialized.current===cameraKey)return;
+    cameraRestoring.current=true;
+    cameraInitialized.current=cameraKey;
+    const el=combatMapRef.current;let saved:{zoom:number;left:number;top:number}|undefined;
+    try{saved=JSON.parse(localStorage.getItem(cameraKey)??'null')??undefined;}catch{/* use default */}
+    const zoom=saved&&Number.isFinite(saved.zoom)&&saved.zoom>0?saved.zoom:el.clientWidth/(21*10);
+    setCombatZoom(zoom);
+    const p=campaign?.combat?.playerPosition??{x:0,y:0};
+    requestAnimationFrame(()=>{el.scrollTo(saved?.left??(p.x+.5)*21*zoom-el.clientWidth/2,saved?.top??(p.y+.5)*21*zoom-el.clientHeight/2);cameraRestoring.current=false;});
+  },[cameraKey,campaign?.combat?.status,activeView,portalScreen]);
+  useEffect(()=>{if(cameraKey&&cameraInitialized.current===cameraKey)persistCamera();},[combatZoom]);
+  useEffect(()=>{
+    const el=combatMapRef.current,p=campaign?.combat?.playerPosition;
+    if(!cameraKey||!el||!p)return;
+    const key=p.x+','+p.y,previous=previousPlayerSquare.current;previousPlayerSquare.current=key;
+    if(!previous||previous===key||cameraRestoring.current||Date.now()<manualCameraUntil.current)return;
+    const cell=21*combatZoom,x=(p.x+.5)*cell,y=(p.y+.5)*cell;
+    if(x-el.scrollLeft<cell||x-el.scrollLeft>el.clientWidth-cell||y-el.scrollTop<cell||y-el.scrollTop>el.clientHeight-cell)
+      el.scrollTo({left:x-el.clientWidth/2,top:y-el.clientHeight/2,behavior:'smooth'});
+  },[cameraKey,campaign?.combat?.playerPosition?.x,campaign?.combat?.playerPosition?.y]);
+
   const combatGesture=useRef<{points:{x:number;y:number}[];startDistance:number;startZoom:number;startScrollX:number;startScrollY:number;startMidX:number;startMidY:number;moved:boolean}|null>(null);
   const suppressCombatTap=useRef(false);
   const combatTouches=(touches:React.TouchList)=>Array.from(touches,t=>({x:t.clientX,y:t.clientY}));
@@ -1272,36 +1316,61 @@ export function App() {
   function startCombatTouch(e:React.TouchEvent<HTMLDivElement>){
     const el=combatMapRef.current;if(!el)return;
     const points=combatTouches(e.touches),mid=combatMid(points);
-    if(points.length<2){combatGesture.current=null;return;}
+    if(points.length<2){
+      combatGesture.current=null;
+      if(dynamicMap){const now=Date.now();singleCombatGesture.current={x:mid.x,y:mid.y,left:el.scrollLeft,top:el.scrollTop,zoom:combatZoom,zooming:now-lastCombatTap.current<300,moved:false};}
+      return;
+    }
+    singleCombatGesture.current=null;
     suppressCombatTap.current=true;
     combatGesture.current={points,startDistance:combatDistance(points),startZoom:combatZoom,startScrollX:el.scrollLeft,startScrollY:el.scrollTop,startMidX:mid.x,startMidY:mid.y,moved:true};
   }
   function moveCombatTouch(e:React.TouchEvent<HTMLDivElement>){
-    const el=combatMapRef.current;if(!el||e.touches.length<2)return;
+    const el=combatMapRef.current;if(!el)return;
+    if(e.touches.length===1){
+      const g=singleCombatGesture.current;if(!dynamicMap||!g)return;
+      const touch=e.touches[0],dx=touch.clientX-g.x,dy=touch.clientY-g.y;
+      if(!g.moved&&Math.hypot(dx,dy)<7)return;
+      g.moved=true;suppressCombatTap.current=true;manualCameraUntil.current=Date.now()+3500;
+      if(g.zooming){
+        const min=Math.min(el.clientWidth/(21*dynamicMap.width),el.clientHeight/(21*dynamicMap.height));
+        const z=Math.max(min,Math.min(5,g.zoom*Math.exp(-dy/130)));
+        const rect=el.getBoundingClientRect(),ax=g.left+g.x-rect.left,ay=g.top+g.y-rect.top;
+        setCombatZoom(z);requestAnimationFrame(()=>el.scrollTo(ax*z/g.zoom-(g.x-rect.left),ay*z/g.zoom-(g.y-rect.top)));
+      }else el.scrollTo(g.left-dx,g.top-dy);
+      return;
+    }
+    if(e.touches.length<2)return;
     e.preventDefault();
     const points=combatTouches(e.touches),mid=combatMid(points);
     let g=combatGesture.current;
     if(!g||g.points.length<2){g={points,startDistance:combatDistance(points),startZoom:combatZoom,startScrollX:el.scrollLeft,startScrollY:el.scrollTop,startMidX:mid.x,startMidY:mid.y,moved:true};combatGesture.current=g;}
-    suppressCombatTap.current=true;
-    const next=Math.max(1,Math.min(4,g.startZoom*combatDistance(points)/g.startDistance));
+    suppressCombatTap.current=true;manualCameraUntil.current=Date.now()+3500;
+    const min=dynamicMap?Math.min(el.clientWidth/(21*dynamicMap.width),el.clientHeight/(21*dynamicMap.height)):1;
+    const next=Math.max(min,Math.min(5,g.startZoom*combatDistance(points)/g.startDistance));
     const rect=el.getBoundingClientRect();
     const anchorX=g.startScrollX+g.startMidX-rect.left,anchorY=g.startScrollY+g.startMidY-rect.top;
     setCombatZoom(next);
     requestAnimationFrame(()=>{if(combatMapRef.current){combatMapRef.current.scrollLeft=anchorX*next/g.startZoom-(mid.x-rect.left);combatMapRef.current.scrollTop=anchorY*next/g.startZoom-(mid.y-rect.top);}});
   }
   function endCombatTouch(e:React.TouchEvent<HTMLDivElement>){
-    if(e.touches.length<2){combatGesture.current=null;return;}
+    if(e.touches.length<2){combatGesture.current=null;
+      const g=singleCombatGesture.current;if(g&&!g.moved)lastCombatTap.current=Date.now();else lastCombatTap.current=0;
+      singleCombatGesture.current=null;persistCamera();
+      if(suppressCombatTap.current)window.setTimeout(()=>{suppressCombatTap.current=false;},350);
+      return;
+    }
     const points=combatTouches(e.touches),mid=combatMid(points),el=combatMapRef.current;
     combatGesture.current={points,startDistance:combatDistance(points),startZoom:combatZoom,startScrollX:el?.scrollLeft??0,startScrollY:el?.scrollTop??0,startMidX:mid.x,startMidY:mid.y,moved:true};
   }
 
   const [activeCombatToken,setActiveCombatToken]=useState<'nighthawk'|'owl'>('nighthawk');
   const previewRoute=activeCombatToken==='owl'&&campaign?.combat?.owl&&gridDestination?(()=>{const start=campaign.combat!.owl!.position;const dx=gridDestination.x-start.x,dy=gridDestination.y-start.y,steps=Math.max(Math.abs(dx),Math.abs(dy));return Array.from({length:steps+1},(_,i)=>({x:start.x+Math.sign(dx)*Math.min(i,Math.abs(dx)),y:start.y+Math.sign(dy)*Math.min(i,Math.abs(dy))}));})():campaign?.combat&&gridDestination?tacticalRoute(campaign.combat,gridDestination):null;
-  const previewCost=activeCombatToken==='owl'&&campaign?.combat?.owl&&gridDestination?5*Math.max(Math.abs(gridDestination.x-campaign.combat.owl.position.x),Math.abs(gridDestination.y-campaign.combat.owl.position.y)):previewRoute?(previewRoute.length-1)*5:0;
+  const previewCost=activeCombatToken==='owl'&&campaign?.combat?.owl&&gridDestination?5*Math.max(Math.abs(gridDestination.x-campaign.combat.owl.position.x),Math.abs(gridDestination.y-campaign.combat.owl.position.y)):previewRoute?trainingRouteCost(previewRoute,campaign?.combat?.battlefield):0;
   const previewAttacks=activeCombatToken==='owl'?[]:campaign?.combat&&previewRoute?tacticalOpportunityEnemies(campaign.combat,previewRoute):[];
   const activeOwlTarget=campaign?.combat?.selectedEnemy??'first';
   const sightPosition=campaign?.combat?.playerPosition??{x:2,y:4};
-  const sightEnemies=campaign?.combat?[{name:'Dummy 1',alive:(campaign.combat.enemyHp??0)>0,blocked:trainingCoverBlocksSight(sightPosition,campaign.combat.enemyPosition??{x:6,y:4})},...(campaign.combat.secondEnemy?[{name:'Dummy 2',alive:campaign.combat.secondEnemy.hp>0,blocked:trainingCoverBlocksSight(sightPosition,campaign.combat.secondEnemy.position)}]:[])].filter(e=>e.alive):[];
+  const sightEnemies=campaign?.combat?[{name:'Dummy 1',alive:(campaign.combat.enemyHp??0)>0,blocked:trainingCoverBlocksSight(sightPosition,campaign.combat.enemyPosition??{x:6,y:4},campaign.combat.battlefield)},...(campaign.combat.secondEnemy?[{name:'Dummy 2',alive:campaign.combat.secondEnemy.hp>0,blocked:trainingCoverBlocksSight(sightPosition,campaign.combat.secondEnemy.position,campaign.combat.battlefield)}]:[])].filter(e=>e.alive):[];
   const visibleEnemies=sightEnemies.filter(e=>!e.blocked);
   const hideStatus=campaign?.combat?combatHideStatus(campaign.combat):null;
   const owlHelpTargetAlive=activeOwlTarget==='second'?(campaign?.combat?.secondEnemy?.hp??0)>0:(campaign?.combat?.enemyHp??0)>0;
@@ -1977,15 +2046,15 @@ export function App() {
           {campaign.combat.lastPlayerGrappleResult&&<div role="status" className="rounded-lg border-2 border-gold p-3"><p className="font-semibold">Grapple Result · Current Turn</p><p>{campaign.combat.lastPlayerGrappleResult}</p></div>}
           {campaign.combat.enemySearchResult&&<p role="status" className="rounded-lg border border-gold p-3 text-sm">{campaign.combat.enemySearchResult}</p>}
           <div className="rounded-xl border border-white/20 p-2 space-y-2">
-            {campaign.combat.owl&&(campaign.character?.level??1)>=3&&campaign.familiar?.status!=='dismissed'&&campaign.familiar?.status!=='destroyed'&&<div className={`space-y-2 rounded-lg border-2 p-2 transition-colors ${activeCombatToken==='nighthawk'?'border-gold':'border-sky-500'}`}><div className="flex gap-2"><button type="button" onClick={()=>{setActiveCombatToken('nighthawk');setGridDestination(null);setPendingCombatAction(null);}} className={`flex-1 rounded p-2 text-xs ${activeCombatToken==='nighthawk'?'bg-gold text-ink':'border border-white/30'}`}>Nighthawk</button><button type="button" onClick={()=>{setActiveCombatToken('owl');setGridDestination(null);setPendingCombatAction(null);}} className={`flex-1 rounded p-2 text-xs ${activeCombatToken==='owl'?'bg-sky-700 text-white':'border border-white/30'}`}>Owl · {campaign.combat.owl.hp} HP</button></div>{activeCombatToken==='owl'?<><p className="text-xs">Flyby · Target: {activeOwlTarget==='first'?'Dummy 1':'Dummy 2'} · {owlHelpInRange?'Within Help range':'Fly within 5 ft to use Help'}</p>{campaign.combat.owl.helpTarget&&<p className="text-xs text-emerald-300">Help active on {campaign.combat.owl.helpTarget==='first'?'Dummy 1':'Dummy 2'}</p>}</>:<p className="text-xs">Daggers: {campaign.combat.daggersAvailable??2} · Arrows: {campaign.combat.arrowsRemaining??20} · Target: {activeOwlTarget==='first'?'Dummy 1':'Dummy 2'}</p>}</div>}<ClassicCombatMapFrame ref={combatMapRef} onTouchStart={startCombatTouch} onTouchMove={moveCombatTouch} onTouchEnd={endCombatTouch} onTouchCancel={endCombatTouch} onClickCapture={e=>{if(suppressCombatTap.current){e.stopPropagation();e.preventDefault();suppressCombatTap.current=false;}}}><ClassicCombatGrid size={trainingMapSize} zoom={combatZoom} backgroundImage="/forest-ruins-test.svg">
-              {Array.from({length:trainingMapSize*trainingMapSize},(_,i)=>{
-                const x=i%trainingMapSize,y=Math.floor(i/trainingMapSize),p=campaign.combat!.playerPosition??{x:2,y:4},e=campaign.combat!.enemyPosition??{x:6,y:4};
-                const owl=campaign.combat!.owl,owlHere=!!owl&&x===owl.position.x&&y===owl.position.y;const own=x===p.x&&y===p.y,firstDown=x===e.x&&y===e.y&&campaign.combat!.enemyHp===0,secondDown=!!campaign.combat!.secondEnemy&&campaign.combat!.secondEnemy.hp===0&&x===campaign.combat!.secondEnemy.position.x&&y===campaign.combat!.secondEnemy.position.y,enemy=x===e.x&&y===e.y&&(campaign.combat!.enemyHp??12)>0,secondEnemy=!!campaign.combat!.secondEnemy&&campaign.combat!.secondEnemy.hp>0&&x===campaign.combat!.secondEnemy.position.x&&y===campaign.combat!.secondEnemy.position.y,cover=isTrainingPillar(x,y);
-                const path=activeCombatToken==='owl'?null:tacticalRoute(campaign.combat!,{x,y});const cost=activeCombatToken==='owl'&&owl?5*Math.max(Math.abs(x-owl.position.x),Math.abs(y-owl.position.y)):path?trainingRouteCost(path):Infinity;
+            {campaign.combat.owl&&(campaign.character?.level??1)>=3&&campaign.familiar?.status!=='dismissed'&&campaign.familiar?.status!=='destroyed'&&<div className={`space-y-2 rounded-lg border-2 p-2 transition-colors ${activeCombatToken==='nighthawk'?'border-gold':'border-sky-500'}`}><div className="flex gap-2"><button type="button" onClick={()=>{setActiveCombatToken('nighthawk');setGridDestination(null);setPendingCombatAction(null);}} className={`flex-1 rounded p-2 text-xs ${activeCombatToken==='nighthawk'?'bg-gold text-ink':'border border-white/30'}`}>Nighthawk</button><button type="button" onClick={()=>{setActiveCombatToken('owl');setGridDestination(null);setPendingCombatAction(null);}} className={`flex-1 rounded p-2 text-xs ${activeCombatToken==='owl'?'bg-sky-700 text-white':'border border-white/30'}`}>Owl · {campaign.combat.owl.hp} HP</button></div>{activeCombatToken==='owl'?<><p className="text-xs">Flyby · Target: {activeOwlTarget==='first'?'Dummy 1':'Dummy 2'} · {owlHelpInRange?'Within Help range':'Fly within 5 ft to use Help'}</p>{campaign.combat.owl.helpTarget&&<p className="text-xs text-emerald-300">Help active on {campaign.combat.owl.helpTarget==='first'?'Dummy 1':'Dummy 2'}</p>}</>:<p className="text-xs">Daggers: {campaign.combat.daggersAvailable??2} · Arrows: {campaign.combat.arrowsRemaining??20} · Target: {activeOwlTarget==='first'?'Dummy 1':'Dummy 2'}</p>}</div>}{dynamicMap&&<div className="flex justify-end gap-2"><button type="button" aria-label="Center on character" className="min-h-8 rounded border border-white/20 px-2 py-1 text-xs" onClick={centerCombatCharacter}>Center</button><button type="button" aria-label="Fit entire map" className="min-h-8 rounded border border-white/20 px-2 py-1 text-xs" onClick={fitCombatMap}>Fit</button></div>}<ClassicCombatMapFrame ref={combatMapRef} style={dynamicMap?{touchAction:'none',overflow:'auto'}:undefined} onScroll={persistCamera} onTouchStart={startCombatTouch} onTouchMove={moveCombatTouch} onTouchEnd={endCombatTouch} onTouchCancel={endCombatTouch} onClickCapture={e=>{if(suppressCombatTap.current){e.stopPropagation();e.preventDefault();suppressCombatTap.current=false;}}}><ClassicCombatGrid size={campaign.combat.battlefield?.width??trainingMapSize} dynamic={!!dynamicMap} zoom={combatZoom} backgroundImage={campaign.combat.battlefield?undefined:"/forest-ruins-test.svg"}>
+              {Array.from({length:(campaign.combat!.battlefield?.width??trainingMapSize)*(campaign.combat!.battlefield?.height??trainingMapSize)},(_,i)=>{
+                const width=campaign.combat!.battlefield?.width??trainingMapSize,x=i%width,y=Math.floor(i/width),p=campaign.combat!.playerPosition??{x:2,y:4},e=campaign.combat!.enemyPosition??{x:6,y:4};
+                const owl=campaign.combat!.owl,owlHere=!!owl&&x===owl.position.x&&y===owl.position.y;const own=x===p.x&&y===p.y,firstDown=x===e.x&&y===e.y&&campaign.combat!.enemyHp===0,secondDown=!!campaign.combat!.secondEnemy&&campaign.combat!.secondEnemy.hp===0&&x===campaign.combat!.secondEnemy.position.x&&y===campaign.combat!.secondEnemy.position.y,enemy=x===e.x&&y===e.y&&(campaign.combat!.enemyHp??12)>0,secondEnemy=!!campaign.combat!.secondEnemy&&campaign.combat!.secondEnemy.hp>0&&x===campaign.combat!.secondEnemy.position.x&&y===campaign.combat!.secondEnemy.position.y,cover=isTrainingPillar(x,y,campaign.combat!.battlefield);const physicalObject=dynamicMap?objectAt(dynamicMap,{x,y})[0]:undefined;
+                const path=activeCombatToken==='owl'||(campaign.combat!.battlefield&&5*Math.max(Math.abs(x-p.x),Math.abs(y-p.y))>(campaign.combat!.movementAllowance??35)-(campaign.combat!.movementUsed??0))?null:tacticalRoute(campaign.combat!,{x,y});const cost=activeCombatToken==='owl'&&owl?5*Math.max(Math.abs(x-owl.position.x),Math.abs(y-owl.position.y)):path?trainingRouteCost(path,campaign.combat!.battlefield):Infinity;
                 const remaining=activeCombatToken==='owl'?60-(owl?.movementUsed??0):(campaign.combat!.movementAllowance??35)-(campaign.combat!.movementUsed??0);
                 const reachable=cost>0&&cost<=remaining&&(activeCombatToken==='owl'||!campaign.combat!.playerGrappled)&&(activeCombatToken==='owl'||(!campaign.combat!.playerProne&&!cover&&!campaign.combat!.steadyAim&&(!campaign.combat!.attack||campaign.combat!.attack.phase==='resolved')))&&!enemy&&!secondEnemy&&!firstDown&&!secondDown&&!(own&&activeCombatToken==='nighthawk')&&!(owlHere&&activeCombatToken==='owl');
-                const firstBloodied=enemy&&(campaign.combat!.enemyHp??12)<=(campaign.combat!.enemyMaxHp??12)/2;const secondBloodied=secondEnemy&&campaign.combat!.secondEnemy!.hp<=campaign.combat!.secondEnemy!.maxHp/2;const chosen=gridDestination?.x===x&&gridDestination?.y===y;const owlChosen=activeCombatToken==='owl'&&((enemy&&activeOwlTarget==='first')||(secondEnemy&&activeOwlTarget==='second'));const onRoute=false;
-                return <button key={i} type="button" role="gridcell" aria-label={own&&owlHere?'Nighthawk and owl familiar':owlHere?'Owl familiar':own?`Nighthawk${campaign.combat!.playerProne?' (Prone)':''}${campaign.combat!.playerGrappled?' (Grappled)':''}`:secondEnemy?`Select Training Dummy 2${campaign.combat!.secondEnemy?.prone?' (Prone)':''}${campaign.combat!.secondEnemy?.grappled?' (Grappled)':''}`:enemy?`${campaign.combat!.enemyName}${campaign.combat!.enemyProne?' (Prone)':''}${campaign.combat!.enemyGrappled?' (Grappled)':''}`:`Square ${x+1}, ${y+1}; ${trainingTerrain(x,y)} terrain; ${cost} feet`} disabled={saving||!!campaign.combat!.playerOpportunity||(own&&activeCombatToken==='nighthawk')||(owlHere&&activeCombatToken==='owl')||(cover&&activeCombatToken!=='owl')||firstDown||secondDown||(!enemy&&!secondEnemy&&!reachable)} onClick={()=>{if(enemy)void chooseTrainingTarget('first');else if(secondEnemy)void chooseTrainingTarget('second');else if(!enemy&&!secondEnemy)setGridDestination({x,y});}} className={`${classicCombatCellBase} ${owlChosen?'bg-red-700 text-white border-sky-300 ring-2 ring-inset ring-sky-300':own&&owlHere?'bg-gradient-to-br from-amber-300 to-sky-700 text-ink border-sky-300':owlHere?'bg-sky-700 text-white border-sky-300':own?'bg-gold text-ink border-gold':firstDown||secondDown?'bg-stone-800 text-stone-400 border-stone-600 opacity-60':enemy?(campaign.combat!.selectedEnemy!=='second'?'bg-red-700 text-white border-red-500 ring-2 ring-inset ring-gold':'bg-red-700 text-white border-red-500'):secondEnemy?(campaign.combat!.selectedEnemy==='second'?'bg-red-700 text-white border-red-500 ring-2 ring-inset ring-gold':'bg-red-700 text-white border-red-500'):cover?'bg-stone-500/70 border-stone-300' :chosen?(activeCombatToken==='owl'?'bg-sky-300/80 border-white ring-2 ring-inset ring-white shadow-[0_0_0_2px_rgba(125,211,252,0.9)] text-sky-950':'bg-amber-200/85 border-white ring-2 ring-inset ring-white shadow-[0_0_0_2px_rgba(251,191,36,0.9)] text-stone-950'):onRoute?(activeCombatToken==='owl'?'bg-sky-400/45 border-sky-300':'bg-amber-300/45 border-amber-200'):reachable?(activeCombatToken==='owl'?'bg-sky-500/20 border-sky-400/80':'bg-amber-300/20 border-amber-300/80'):'bg-transparent border-white/15'}`}  >{chosen?null:own&&owlHere?<span className="flex items-center justify-center text-[9px] leading-none font-bold"><UserRound size={12}/><Bird size={12} className="text-sky-950"/></span>:owlHere?<Bird size={16} aria-label="Owl"/>:own?<span className="relative inline-flex items-center justify-center w-full h-full"><UserRound size={16} aria-label="Nighthawk"/>{campaign.combat!.playerProne&&<span aria-hidden="true" className="absolute -right-0.5 -top-1 rounded bg-amber-300 px-0.5 text-[9px] leading-3 font-extrabold text-black shadow">P</span>}{campaign.combat!.playerGrappled&&<span aria-hidden="true" className="absolute -left-0.5 -top-1 rounded bg-orange-300 px-0.5 text-[9px] leading-3 font-extrabold text-black shadow">G</span>}</span>:firstDown||secondDown?null:enemy?<span className="relative inline-flex items-center justify-center w-full h-full"><Swords size={16} aria-label="Enemy 1"/>{campaign.combat!.enemyProne&&<span aria-hidden="true" className="absolute -right-0.5 -top-1 rounded bg-amber-300 px-0.5 text-[9px] leading-3 font-extrabold text-black shadow">P</span>}{firstBloodied&&<Droplet aria-label="Bloodied" fill="currentColor" className="absolute -bottom-1 -right-1 h-3 w-3 text-red-300 drop-shadow-[0_0_1px_#000] [paint-order:stroke] [stroke:#000] [stroke-width:2px]"/>}{campaign.combat!.enemyGrappled&&<span aria-hidden="true" className="absolute -left-0.5 -top-1 rounded bg-orange-300 px-0.5 text-[9px] leading-3 font-extrabold text-black shadow">G</span>}</span>:secondEnemy?<span className="relative inline-flex h-full w-full items-center justify-center"><Swords size={16} aria-label="Enemy 2"/>{campaign.combat!.secondEnemy?.prone&&<span className="absolute -right-0.5 -top-1 rounded bg-amber-300 px-0.5 text-[9px] font-bold text-black">P</span>}{secondBloodied&&<Droplet aria-label="Bloodied" fill="currentColor" className="absolute -bottom-1 -right-1 h-3 w-3 text-red-300 drop-shadow-[0_0_1px_#000] [paint-order:stroke] [stroke:#000] [stroke-width:2px]"/>}{campaign.combat!.secondEnemy?.grappled&&<span className="absolute -left-0.5 -top-1 rounded bg-orange-300 px-0.5 text-[9px] font-bold text-black">G</span>}</span>:chosen?'✓':onRoute?'·':secondEnemy?<Swords size={16}/>:cover?<Blocks size={16} aria-label="Obstacle"/>:''}</button>;
+                const firstBloodied=enemy&&(campaign.combat!.enemyHp??12)<=(campaign.combat!.enemyMaxHp??12)/2;const secondBloodied=secondEnemy&&campaign.combat!.secondEnemy!.hp<=campaign.combat!.secondEnemy!.maxHp/2;const chosen=gridDestination?.x===x&&gridDestination?.y===y;const owlChosen=activeCombatToken==='owl'&&((enemy&&activeOwlTarget==='first')||(secondEnemy&&activeOwlTarget==='second'));const onRoute=!!dynamicMap&&!!previewRoute?.some(point=>point.x===x&&point.y===y);
+                return <button key={i} type="button" role="gridcell" data-battlefield-x={dynamicMap?x:undefined} data-battlefield-y={dynamicMap?y:undefined} data-terrain-object={physicalObject?.kind} title={physicalObject?.kind} style={dynamicMap?{borderRadius:0,minHeight:0,overflow:'hidden'}:undefined} aria-label={own&&owlHere?'Nighthawk and owl familiar':owlHere?'Owl familiar':own?`Nighthawk${campaign.combat!.playerProne?' (Prone)':''}${campaign.combat!.playerGrappled?' (Grappled)':''}`:secondEnemy?`Select ${dynamicMap?campaign.combat!.secondEnemy?.name:'Training Dummy 2'}${campaign.combat!.secondEnemy?.prone?' (Prone)':''}${campaign.combat!.secondEnemy?.grappled?' (Grappled)':''}`:enemy?`${campaign.combat!.enemyName}${campaign.combat!.enemyProne?' (Prone)':''}${campaign.combat!.enemyGrappled?' (Grappled)':''}`:`Square ${x+1}, ${y+1}; ${physicalObject?.kind??trainingTerrain(x,y,campaign.combat!.battlefield)} terrain; ${cost} feet`} disabled={saving||!!campaign.combat!.playerOpportunity||(own&&activeCombatToken==='nighthawk')||(owlHere&&activeCombatToken==='owl')||(cover&&activeCombatToken!=='owl')||firstDown||secondDown||(!enemy&&!secondEnemy&&!reachable)} onClick={()=>{if(enemy)void chooseTrainingTarget('first');else if(secondEnemy)void chooseTrainingTarget('second');else if(!enemy&&!secondEnemy)setGridDestination({x,y});}} className={`${classicCombatCellBase} ${owlChosen?'bg-red-700 text-white border-sky-300 ring-2 ring-inset ring-sky-300':own&&owlHere?'bg-gradient-to-br from-amber-300 to-sky-700 text-ink border-sky-300':owlHere?'bg-sky-700 text-white border-sky-300':own?'bg-gold text-ink border-gold':firstDown||secondDown?'bg-stone-800 text-stone-400 border-stone-600 opacity-60':enemy?(campaign.combat!.selectedEnemy!=='second'?'bg-red-700 text-white border-red-500 ring-2 ring-inset ring-gold':'bg-red-700 text-white border-red-500'):secondEnemy?(campaign.combat!.selectedEnemy==='second'?'bg-red-700 text-white border-red-500 ring-2 ring-inset ring-gold':'bg-red-700 text-white border-red-500'):cover?(physicalObject?.kind==='cargo'||physicalObject?.kind==='crate'||physicalObject?.kind==='table'?'bg-amber-900/90 border-amber-800':physicalObject?.kind==='tree'?'bg-green-900 border-green-800':'bg-stone-500/70 border-stone-300') :chosen?(activeCombatToken==='owl'?'bg-sky-300/80 border-white ring-2 ring-inset ring-white shadow-[0_0_0_2px_rgba(125,211,252,0.9)] text-sky-950':'bg-amber-200/85 border-white ring-2 ring-inset ring-white shadow-[0_0_0_2px_rgba(251,191,36,0.9)] text-stone-950'):onRoute?(activeCombatToken==='owl'?'bg-sky-400/45 border-sky-300':'bg-amber-300/45 border-amber-200'):reachable?(activeCombatToken==='owl'?'bg-sky-500/20 border-sky-400/80':'bg-amber-300/20 border-amber-300/80'):physicalObject?'bg-green-900/50 border-white/15':'bg-transparent border-white/15'}`}  >{chosen?null:own&&owlHere?<span className="flex items-center justify-center text-[9px] leading-none font-bold"><UserRound size={12}/><Bird size={12} className="text-sky-950"/></span>:owlHere?<Bird size={16} aria-label="Owl"/>:own?<span className="relative inline-flex items-center justify-center w-full h-full"><UserRound size={16} aria-label="Nighthawk"/>{campaign.combat!.playerProne&&<span aria-hidden="true" className="absolute -right-0.5 -top-1 rounded bg-amber-300 px-0.5 text-[9px] leading-3 font-extrabold text-black shadow">P</span>}{campaign.combat!.playerGrappled&&<span aria-hidden="true" className="absolute -left-0.5 -top-1 rounded bg-orange-300 px-0.5 text-[9px] leading-3 font-extrabold text-black shadow">G</span>}</span>:firstDown||secondDown?null:enemy?<span className="relative inline-flex items-center justify-center w-full h-full"><Swords size={16} aria-label="Enemy 1"/>{campaign.combat!.enemyProne&&<span aria-hidden="true" className="absolute -right-0.5 -top-1 rounded bg-amber-300 px-0.5 text-[9px] leading-3 font-extrabold text-black shadow">P</span>}{firstBloodied&&<Droplet aria-label="Bloodied" fill="currentColor" className="absolute -bottom-1 -right-1 h-3 w-3 text-red-300 drop-shadow-[0_0_1px_#000] [paint-order:stroke] [stroke:#000] [stroke-width:2px]"/>}{campaign.combat!.enemyGrappled&&<span aria-hidden="true" className="absolute -left-0.5 -top-1 rounded bg-orange-300 px-0.5 text-[9px] leading-3 font-extrabold text-black shadow">G</span>}</span>:secondEnemy?<span className="relative inline-flex h-full w-full items-center justify-center"><Swords size={16} aria-label="Enemy 2"/>{campaign.combat!.secondEnemy?.prone&&<span className="absolute -right-0.5 -top-1 rounded bg-amber-300 px-0.5 text-[9px] font-bold text-black">P</span>}{secondBloodied&&<Droplet aria-label="Bloodied" fill="currentColor" className="absolute -bottom-1 -right-1 h-3 w-3 text-red-300 drop-shadow-[0_0_1px_#000] [paint-order:stroke] [stroke:#000] [stroke-width:2px]"/>}{campaign.combat!.secondEnemy?.grappled&&<span className="absolute -left-0.5 -top-1 rounded bg-orange-300 px-0.5 text-[9px] font-bold text-black">G</span>}</span>:chosen?'✓':onRoute?'·':secondEnemy?<Swords size={16}/>:physicalObject?<span aria-hidden="true" className="text-[9px] leading-none uppercase">{({wall:'W',pillar:'P',table:'T',chair:'Ch',crate:'C',cargo:'Cg',rock:'R',tree:'Tr',door:'D',window:'Wi',rubble:'Rb',water:'~',undergrowth:'U'})[physicalObject.kind]}</span>:cover?<Blocks size={16} aria-label="Obstacle"/>:''}</button>;
               })}
             </ClassicCombatGrid></ClassicCombatMapFrame>
             {campaign.combat.playerOpportunity&&<div className="rounded-lg border border-gold p-3 space-y-2 text-sm">

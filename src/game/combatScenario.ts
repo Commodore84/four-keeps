@@ -1,3 +1,4 @@
+import {validateBattlefield,battlefieldBlocked,battlefieldDifficult, type Battlefield} from './battlefield';
 import type {DamageType} from './subclassCombatRules';
 import {MONSTER_COMPENDIUM} from './monsterCompendium';
 
@@ -28,7 +29,7 @@ export const TACTICAL_PROFILES={
 export type TacticalProfile=keyof typeof TACTICAL_PROFILES;
 export type ScenarioActor={id:string;label:string;profile:TacticalProfile;side:'enemies'|'allies';square:Square;surprised?:boolean};
 export type CombatScenario={
- locationKey:string;size:number;objective:string;actors:ScenarioActor[];starts:Square[];obstacles:Square[];
+ locationKey:string;size:number; battlefield?:Battlefield; objective:string;actors:ScenarioActor[];starts:Square[];obstacles:Square[];
  cover:Square[];difficult:Square[];exits:Square[];surprised:boolean;
  darkness?:Square[];elevation?:Record<string,number>;artwork?:'forest-ruins-test.svg';
 };
@@ -46,16 +47,17 @@ export type TacticalState={
 };
 export const squareKey=(s:Square)=>s.x+','+s.y;
 export const distanceFeet=(a:Square,b:Square)=>Math.max(Math.abs(a.x-b.x),Math.abs(a.y-b.y))*5;
-export const fitsBattlefield=(square:Square,size:number)=>Number.isInteger(square.x)&&Number.isInteger(square.y)&&square.x>=0&&square.y>=0&&square.x<size&&square.y<size;
+export const fitsBattlefield=(square:Square,size:number|CombatScenario)=>Number.isInteger(square.x)&&Number.isInteger(square.y)&&square.x>=0&&square.y>=0&&square.x<(typeof size==='number'?size:size.battlefield?.width??size.size)&&square.y<(typeof size==='number'?size:size.battlefield?.height??size.size);
 
 export function validateCombatScenario(value:unknown,locationKey:string):CombatScenario{
  if(!value||typeof value!=='object')throw Error('The DM has not established a battlefield.');
  const input=value as Record<string,unknown>;
- const size=input.size;
- if(typeof size!=='number'||!Number.isInteger(size)||size<6||size>12)throw Error('Battlefield must be 6–12 squares wide.');
+ const battlefield=input.battlefield===undefined?undefined:validateBattlefield(input.battlefield);
+ const size=battlefield?.width??input.size;
+ if(typeof size!=='number'||!Number.isInteger(size)||size<6||(!battlefield&&size>12))throw Error('Battlefield must be 6–12 squares wide.');
  const square=(raw:unknown):Square=>{
   const cell=raw as Square;
-  if(!cell||!fitsBattlefield(cell,size))throw Error('Battlefield square is outside the grid.');
+  if(!cell||!fitsBattlefield(cell,{size,battlefield} as CombatScenario))throw Error('Battlefield square is outside the grid.');
   return {x:cell.x,y:cell.y};
  };
  const cells=(raw:unknown,max:number):Square[]=>{
@@ -63,11 +65,18 @@ export function validateCombatScenario(value:unknown,locationKey:string):CombatS
   if(!Array.isArray(raw)||raw.length>max)throw Error('Invalid battlefield layer.');
   return [...new Map(raw.map(rawCell=>{const cell=square(rawCell);return [squareKey(cell),cell];})).values()];
  };
- const obstacles=cells(input.obstacles,35),cover=cells(input.cover,35),difficult=cells(input.difficult,50),exits=cells(input.exits,24),starts=cells(input.starts,24);
- const darkness=cells(input.darkness,144);
+ const area=battlefield?battlefield.width*battlefield.height:144;
+ const obstacles=cells(input.obstacles,battlefield?area:35),cover=cells(input.cover,battlefield?area:35),difficult=cells(input.difficult,battlefield?area:50),exits=cells(input.exits,24),starts=cells(input.starts,24);
+ if(battlefield){
+  obstacles.length=0;cover.length=0;difficult.length=0;
+  for(let y=0;y<battlefield.height;y++)for(let x=0;x<battlefield.width;x++){
+   const p={x,y};if(battlefieldBlocked(battlefield,p))obstacles.push(p);else if(battlefieldDifficult(battlefield,p))difficult.push(p);
+  }
+ }
+ const darkness=cells(input.darkness,area);
  const elevation:Record<string,number>={};
  if(input.elevation!==undefined){
-  if(!Array.isArray(input.elevation)||input.elevation.length>144)throw Error('Invalid elevation layer.');
+  if(!Array.isArray(input.elevation)||input.elevation.length>area)throw Error('Invalid elevation layer.');
   for(const raw of input.elevation){
    const cell=square(raw);
    const feet=(raw as Square&{feet?:number}).feet;
@@ -89,9 +98,9 @@ export function validateCombatScenario(value:unknown,locationKey:string):CombatS
   return {id,label:label.trim(),profile:profile as TacticalProfile,side,square:position,surprised:actor.surprised===true};
  });
  if(!actors.some(actor=>actor.side==='enemies')||starts.some(start=>walls.has(squareKey(start))||occupied.has(squareKey(start))))throw Error('Starting squares must be open and at least one hostile actor is required.');
- if(exits.some(exit=>walls.has(squareKey(exit))||!([0,size-1].includes(exit.x)||[0,size-1].includes(exit.y))))throw Error('Exits must be open perimeter squares.');
+ if(exits.some(exit=>walls.has(squareKey(exit))||!([0,size-1].includes(exit.x)||[0,(battlefield?.height??size)-1].includes(exit.y))))throw Error('Exits must be open perimeter squares.');
  const objective=typeof input.objective==='string'?input.objective.trim().slice(0,180):'';
- return {locationKey,size,objective,actors,starts,obstacles,cover,difficult,exits,surprised:input.surprised===true,
+ return {locationKey,size,...(battlefield?{battlefield}:{}),objective,actors,starts,obstacles,cover,difficult,exits,surprised:input.surprised===true,
   ...(darkness.length?{darkness}:{}),...(Object.keys(elevation).length?{elevation}:{}),
   ...(input.artwork==='forest-ruins-test.svg'?{artwork:input.artwork}:{})};
 }

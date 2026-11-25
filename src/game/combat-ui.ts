@@ -10,8 +10,8 @@ export function availableCombatMovement(c: Combat): number {
 export function combatHideStatus(c: Combat): { available:boolean; reason:string; visibleTo:string[] } {
   const p=c.playerPosition??{x:2,y:4};
   const visibleTo=[
-    ...((c.enemyHp??12)>0&&!trainingCoverBlocksSight(p,c.enemyPosition??{x:6,y:4})?['Dummy 1']:[]),
-    ...(c.secondEnemy&&c.secondEnemy.hp>0&&!trainingCoverBlocksSight(p,c.secondEnemy.position)?['Dummy 2']:[]),
+    ...((c.enemyHp??12)>0&&!trainingCoverBlocksSight(p,c.enemyPosition??{x:6,y:4},c.battlefield)?['Dummy 1']:[]),
+    ...(c.secondEnemy&&c.secondEnemy.hp>0&&!trainingCoverBlocksSight(p,c.secondEnemy.position,c.battlefield)?['Dummy 2']:[]),
   ];
   const resourcesSpent=!!c.bonusActionUsed&&(!!c.actionUsed||!!c.attack);
   const available=canNighthawkHide(c)&&!resourcesSpent&&!c.playerHidden;

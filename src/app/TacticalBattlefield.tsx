@@ -51,7 +51,7 @@ export function TacticalBattlefield({campaign,saving,onChange,onDm}:Props){
  const occupied=new Map(Object.entries(battle?.participants??{}).filter(([id,actor])=>actor.hp>0&&(id==='nighthawk'||mask.has(id))&&
   (!actor.rogueHidden||id==='nighthawk'||actor.rogueDetectedBy?.includes('nighthawk'))).map(([id,actor])=>[squareKey(actor),id]));
  if(setup){occupied.clear();for(const actor of setup.actors)occupied.set(squareKey(actor.square),actor.id);}
- const board=useMemo(()=>scenario?Array.from({length:scenario.size**2},(_,index)=>({x:index%scenario.size,y:Math.floor(index/scenario.size)})):[],[scenario]);
+ const board=useMemo(()=>scenario?Array.from({length:(scenario.battlefield?.width??scenario.size)*(scenario.battlefield?.height??scenario.size)},(_,index)=>({x:index%(scenario.battlefield?.width??scenario.size),y:Math.floor(index/(scenario.battlefield?.width??scenario.size))})):[],[scenario]);
  const reachable=useMemo(()=>{
   if(!canMove||!player)return new Set<string>();
   const limit=Math.max(0,player.speedFeet+player.dashFeet-player.movementSpentFeet);
@@ -192,7 +192,7 @@ export function TacticalBattlefield({campaign,saving,onChange,onDm}:Props){
   </div>}
   <ClassicCombatMapFrame className="border-gold/45 shadow-[inset_0_0_40px_rgba(0,0,0,0.4)]">
    <div ref={viewport} aria-label="Battle map viewport" className="max-h-[55dvh] overflow-auto overscroll-contain touch-pan-x touch-pan-y" onTouchStart={touchStart} onTouchMove={touchMove} onTouchEnd={()=>{gesture.current=undefined;}}>
-    <ClassicCombatGrid role="group" ariaLabel="Battle map" size={scenario.size} zoom={zoom} backgroundImage={scenario.artwork}>
+    <ClassicCombatGrid role="group" ariaLabel="Battle map" size={scenario.battlefield?.width??scenario.size} zoom={zoom} backgroundImage={scenario.artwork}>
      {board.map(cell=>{
       const key=squareKey(cell),id=occupied.get(key);
       const obstacle=scenario.obstacles.some(tile=>squareKey(tile)===key);

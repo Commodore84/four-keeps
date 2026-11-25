@@ -1,3 +1,4 @@
+import {generateBattlefield} from './battlefieldGenerator';
 import {getMonster,type MonsterId} from './monsterCompendium';
 import {validateCombatScenario,type CombatScenario} from './combatScenario';
 
@@ -43,28 +44,29 @@ export const SOLO_ROGUE_ENCOUNTERS:Record<SoloEncounterId,EncounterTemplate>={
   battlefield:map('Recover or locate the missing parcel.',2),alternatives:['fight','withdraw','negotiate','retrieve-objective','investigate']
  }
 };
-export function buildSoloEncounter(id:SoloEncounterId,locationKey:string):{scenario:CombatScenario;assessment:EncounterBudget}{
+export function buildSoloEncounter(id:SoloEncounterId,locationKey:string,seed=locationKey):{scenario:CombatScenario;assessment:EncounterBudget}{
  const template=SOLO_ROGUE_ENCOUNTERS[id];
  if(!template)throw Error('Unknown encounter template.');
+ const generated=generateBattlefield(id,seed);
  const positions=template.monsterIds.map((monsterId,index)=>({
   id:monsterId+'-'+(index+1),label:getMonster(monsterId)!.name,profile:monsterId,
-  side:'enemies' as const,square:{x:5+index,y:2}
+  side:'enemies' as const,square:generated.enemyStarts[index]
  }));
- const scenario=validateCombatScenario({...template.battlefield,actors:positions},locationKey);
+ const scenario=validateCombatScenario({...template.battlefield,battlefield:generated.battlefield,starts:generated.starts,exits:generated.exits,actors:positions,darkness:undefined},locationKey);
  return {scenario,assessment:levelOneEncounterBudget(template.monsterIds)};
 }
 
 /** A DM can improvise a complete valid battlefield, or choose a tested template.
  * Never silently create a combat map from narrative text or an unverified enemy name.
  */
-export function resolveDmBattlefield(input:unknown,locationKey:string):CombatScenario{
+export function resolveDmBattlefield(input:unknown,locationKey:string,seed=locationKey):CombatScenario{
  if(!input||typeof input!=='object')throw Error('The DM must supply a verified encounter template or complete battlefield.');
  const request=input as Record<string,unknown>;
  if(request.templateId!==undefined){
   if(typeof request.templateId!=='string'||!Object.prototype.hasOwnProperty.call(SOLO_ROGUE_ENCOUNTERS,request.templateId))
    throw Error('Unknown DM encounter template.');
   if(request.battlefield!==undefined)throw Error('Choose either a tested template or a custom battlefield.');
-  return buildSoloEncounter(request.templateId as SoloEncounterId,locationKey).scenario;
+  return buildSoloEncounter(request.templateId as SoloEncounterId,locationKey,seed).scenario;
  }
  if(request.battlefield===undefined)throw Error('The DM must provide a complete battlefield.');
  return validateCombatScenario(request.battlefield,locationKey);

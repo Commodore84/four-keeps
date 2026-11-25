@@ -25,8 +25,8 @@ export function ClassicCombatResources({action,bonus,move,reaction}:{action:bool
 }
 
 /** Original combat board's 21px-per-square grid and zoom behavior. */
-export function ClassicCombatGrid({size,zoom=1,backgroundImage,children,ariaLabel='Combat movement grid',role='grid'}:{size:number;zoom?:number;backgroundImage?:string;children:ReactNode;ariaLabel?:string;role?:'grid'|'group'}){
- const style:CSSProperties={gridTemplateColumns:`repeat(${size},minmax(0,1fr))`,width:`${size*21*zoom}px`,minWidth:'100%',backgroundImage:backgroundImage?`url(${backgroundImage})`:undefined,backgroundSize:'100% 100%'};
+export function ClassicCombatGrid({size,zoom=1,backgroundImage,dynamic=false,children,ariaLabel='Combat movement grid',role='grid'}:{size:number;zoom?:number;dynamic?:boolean;backgroundImage?:string;children:ReactNode;ariaLabel?:string;role?:'grid'|'group'}){
+ const style:CSSProperties={gridTemplateColumns:`repeat(${size},minmax(0,1fr))`,width:`${size*21*zoom}px`,minWidth:dynamic?'0':'100%',backgroundImage:backgroundImage?`url(${backgroundImage})`:undefined,backgroundSize:'100% 100%'};
  return <div role={role} aria-label={ariaLabel} data-classic-combat-grid="true" className="grid gap-0 p-0" style={style}>{children}</div>;
 }
 export const classicCombatCellBase='aspect-square rounded border text-xs font-bold min-w-0';

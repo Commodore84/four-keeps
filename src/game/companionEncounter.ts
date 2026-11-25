@@ -1,4 +1,5 @@
-import {fitsBattlefield,type TacticalState} from './combatScenario';
+import {battlefieldCover} from './battlefield';
+import {fitsBattlefield,type TacticalState,type CombatScenario} from './combatScenario';
 import {effectiveStrength,gameSeconds,resistsTemporaryDamage} from './temporaryEffects';
 import {advanceProvisionsClock} from './provisionsClock';
 import {ammunitionNamesForWeapon,weaponAttackProfile} from './weaponAttackProfile';
@@ -118,7 +119,7 @@ export function castItemMagicMissile(campaign:Campaign,rank:number,targets:strin
 export function castItemWeb(campaign:Campaign,placement:WebPlacement,dc:number):Campaign{
  const {battle,actor}=itemMagicActor(campaign);
  const {x,y,anchored}=placement;
- if(!valid({x,y})||x+4>20||y+4>20||typeof anchored!=='boolean'||!Number.isInteger(dc)||dc<1||dc>30||
+ if(!(battle.phaseThree?fitsBattlefield({x,y},battle.phaseThree.scenario)&&fitsBattlefield({x:x+3,y:y+3},battle.phaseThree.scenario):valid({x,y})&&x+4<=20&&y+4<=20)||typeof anchored!=='boolean'||!Number.isInteger(dc)||dc<1||dc>30||
   Math.max(Math.abs(actor.x-x),Math.abs(actor.y-y))*5>60||!companionLineOfSight(battle,actor,{x,y}))
   throw Error('Choose a 20-foot Web cube origin within 60 feet with a clear path.');
  const otherConcentration=actor.concentratingOn;
@@ -248,7 +249,7 @@ function pathRoute(battle:CompanionEncounter,from:Cell,to:Cell,actorId:string):C
   for(let dx=-1;dx<=1;dx++)for(let dy=-1;dy<=1;dy++){
    if(!dx&&!dy)continue;
    const next={x:current.x+dx,y:current.y+dy},id=key(next);
-   if(!valid(next)||blocked.has(id)||battle.phaseThree&&!fitsBattlefield(next,battle.phaseThree.scenario.size))continue;
+   if(!(battle.phaseThree?fitsBattlefield(next,battle.phaseThree.scenario):valid(next))||blocked.has(id))continue;
    if(dx&&dy&&blocked.has(key({x:current.x+dx,y:current.y}))&&blocked.has(key({x:current.x,y:current.y+dy})))continue;
    const cost=costs.get(key(current))!+(battle.phaseThree?(battle.participants[actorId]?.conditions.includes('Prone')?10:5)+terrainFeet(battle,current,next):5);
    if((costs.get(id)??Infinity)<=cost)continue;
@@ -273,7 +274,7 @@ export function previewCompanionMovement(campaign:Campaign,actorId:string,x:numb
  if(battle.pendingOpportunity?.moverId===actorId&&battle.pendingOpportunity.attackerIds.length)return {...initial,error:'Resolve pending opportunity reactions'};
  if(actor.hp<=0||actor.caltropsStopped||battle.groundSupplies?.some(supply=>supply.trappedActor===actorId)||actor.conditions.some(c=>IMMOBILE.includes(c)))return {...initial,error:'Actor cannot move'};
  if(actor.rogueSteadyAim)return {...initial,error:'Steady Aim prevents movement this turn'};
- if(!valid({x,y}))return {...initial,error:'Destination outside encounter grid'};
+ if(!(battle.phaseThree?fitsBattlefield({x,y},battle.phaseThree.scenario):valid({x,y})))return {...initial,error:'Destination outside encounter grid'};
  try{
   const path=pathRoute(battle,actor,{x,y},actorId).map(p=>({x:p.x,y:p.y}));
   const costFeet=path.slice(1).reduce((sum,cell,index)=>sum+(actor.conditions.includes('Prone')?10:5)+terrainFeet(battle,path[index],cell),0);
@@ -292,6 +293,7 @@ export function setCompanionObstacles(campaign:Campaign,obstacles:Cell[]):Campai
 }
 /** Solid occupied squares block sight. Other terrain and partial cover require DM judgment. */
 export function companionLineOfSight(battle:CompanionEncounter,from:Cell,to:Cell):boolean{
+ if(battle.phaseThree?.scenario.battlefield)return battlefieldCover(battle.phaseThree.scenario.battlefield,from,to)!=='total';
  const blocked=new Set((battle.obstacles??[]).map(key));
  const steps=Math.max(Math.abs(to.x-from.x),Math.abs(to.y-from.y))*4;
  if(!steps)return true;
@@ -338,7 +340,7 @@ export function companionOpportunityAttackEligible(campaign:Campaign,actorId:str
  return !actor.disengaged;
 }
 /** Opt-in unified skirmish. Nighthawk's existing Campaign.combat remains untouched. */
-export function startUnifiedEncounter(campaign:Campaign,initiative:Record<string,number>,positions:Record<string,{x:number;y:number}>,hitPoints:Record<string,number>):Campaign{
+export function startUnifiedEncounter(campaign:Campaign,initiative:Record<string,number>,positions:Record<string,{x:number;y:number}>,hitPoints:Record<string,number>,scenario?:CombatScenario):Campaign{
  if(!campaign.character)throw Error('Nighthawk character statistics unavailable');
  if(!Object.hasOwn(initiative,'nighthawk'))throw Error('Unified encounter requires Nighthawk');
  const companionIds=Object.keys(initiative).filter(id=>id!=='nighthawk');
@@ -349,7 +351,7 @@ export function startUnifiedEncounter(campaign:Campaign,initiative:Record<string
  const character=campaign.character;
  const hp=character.currentHitPoints??character.maxHitPoints;
  const maxHp=character.maxHitPoints,speed=effectiveEquipmentSpeed(campaign);
- if(!position||!valid(position)||Object.values(battle.participants).some(p=>p.x===position.x&&p.y===position.y))throw Error('Invalid Nighthawk position');
+ if(!position||!(scenario?fitsBattlefield(position,scenario):valid(position))||Object.values(battle.participants).some(p=>p.x===position.x&&p.y===position.y))throw Error('Invalid Nighthawk position');
  if(!Number.isInteger(roll)||roll<1||roll>40||!Number.isInteger(hp)||!Number.isInteger(maxHp)||hp!<1||maxHp!<1||hp!>maxHp!||!Number.isInteger(speed)||speed!<0||speed!>120||speed!%5!==0)throw Error('Invalid Nighthawk character statistics');
  const participants:CompanionEncounter['participants']={...battle.participants,nighthawk:{...position,hp:hp!,maxHp:maxHp!,initiative:roll,conditions:(character.conditions??[]) as CompanionCondition[],deathSaves:character.deathSaves,armorClass:character.armorClass,actorKind:'party',faction:'party',speedFeet:speed!,movementSpentFeet:0,actionUsed:false,bonusActionUsed:false,dashFeet:0,disengaged:false,dodging:false,reactionUsed:false}};
  const order=Object.keys(participants).sort((a,b)=>participants[b].initiative-participants[a].initiative||a.localeCompare(b));
@@ -364,10 +366,10 @@ export function companionOpportunityCandidates(battle:CompanionEncounter,moverId
 }
 /** Explicit faction and melee reach configuration. Unset factions remain unknown. */
 /** Explicit DM-defined enemy. Statistics are required; no monster stat block is invented. */
-export function addCompanionEnemy(campaign:Campaign,id:string,initiative:number,position:Cell,hp:number,armorClass:number,attackModifier:number,speedFeet=30,reachFeet=5,damageModifier=0,damageDice?:string):Campaign{
+export function addCompanionEnemy(campaign:Campaign,id:string,initiative:number,position:Cell,hp:number,armorClass:number,attackModifier:number,speedFeet=30,reachFeet=5,damageModifier=0,damageDice?:string,scenario?:CombatScenario):Campaign{
  const battle=encounter(campaign),name=id.trim();
  if(!/^[a-zA-Z][a-zA-Z0-9_-]{1,39}$/.test(name)||battle.participants[name]||Object.hasOwn(battle.objects??{},name)||campaign.subclassActors?.[name]||name==='nighthawk')throw Error('Invalid or duplicate enemy ID');
- if(!valid(position)||Object.values(battle.participants).some(p=>p.hp>0&&p.x===position.x&&p.y===position.y))throw Error('Invalid or occupied enemy position');
+ if(!(scenario?fitsBattlefield(position,scenario):valid(position))||Object.values(battle.participants).some(p=>p.hp>0&&p.x===position.x&&p.y===position.y))throw Error('Invalid or occupied enemy position');
  if(![initiative,hp,armorClass,attackModifier,speedFeet,reachFeet,damageModifier].every(Number.isInteger)||initiative<1||initiative>40||hp<1||hp>500||armorClass<1||armorClass>40||attackModifier< -20||attackModifier>30||damageModifier< -20||damageModifier>30||!!damageDice&&!/^\d{1,2}d\d{1,3}(?:\s+[a-z]+)?$/i.test(damageDice)||speedFeet<0||speedFeet>120||speedFeet%5!==0||reachFeet<5||reachFeet>30||reachFeet%5!==0)throw Error('Invalid enemy statistics');
  const participants={...battle.participants,[name]:{...position,hp,maxHp:hp,initiative,armorClass,attackModifier,damageModifier,damageDice,speedFeet,reachFeet,actorKind:'enemy' as const,faction:'enemies',conditions:[] as CompanionCondition[],movementSpentFeet:0,actionUsed:false,bonusActionUsed:false,dashFeet:0,disengaged:false,dodging:false,reactionUsed:false}};
  const currentId=battle.order[battle.turnIndex];
@@ -469,7 +471,7 @@ export function resumeEnemyInterruptedMovement(campaign:Campaign,enemyId:string)
  // without re-triggering the same opportunity; subsequent edges remain checked.
  const step=pending.to;
  const cost=(actor.conditions.includes('Prone')?10:5)+terrainFeet(battle,actor,step);
- if(!valid(step)||Math.max(Math.abs(actor.x-step.x),Math.abs(actor.y-step.y))!==1||actor.movementSpentFeet+cost>actor.speedFeet+actor.dashFeet||Object.entries(battle.participants).some(([id,p])=>id!==enemyId&&p.hp>0&&p.x===step.x&&p.y===step.y)||(battle.obstacles??[]).some(p=>p.x===step.x&&p.y===step.y))throw Error('Interrupted reach-exit square no longer traversable');
+ if(!(battle.phaseThree?fitsBattlefield(step,battle.phaseThree.scenario):valid(step))||Math.max(Math.abs(actor.x-step.x),Math.abs(actor.y-step.y))!==1||actor.movementSpentFeet+cost>actor.speedFeet+actor.dashFeet||Object.entries(battle.participants).some(([id,p])=>id!==enemyId&&p.hp>0&&p.x===step.x&&p.y===step.y)||(battle.obstacles??[]).some(p=>p.x===step.x&&p.y===step.y))throw Error('Interrupted reach-exit square no longer traversable');
  const crossed=save(cleared,{...cleared.companionEncounter!,participants:{...battle.participants,[enemyId]:{...actor,x:step.x,y:step.y,movementSpentFeet:actor.movementSpentFeet+cost}},log:[...battle.log,enemyId+' crossed DM-adjudicated reach-exit edge to '+step.x+','+step.y]});
  if(step.x===pending.destination.x&&step.y===pending.destination.y)return crossed;
  return moveCompanion(crossed,enemyId,pending.destination.x,pending.destination.y);
@@ -577,7 +579,7 @@ export function moveCompanion(campaign:Campaign,actorId:string,x:number,y:number
  if(actor.rogueDazeTurns!==undefined&&(actor.rogueDazeChoice==='action'||actor.actionUsed||actor.bonusActionUsed))throw Error('Dazed: cannot move after taking an action or bonus action');
  if(actor.conditions.some(c=>IMMOBILE.includes(c)))throw Error('Condition prevents movement');
  if(actor.rogueSteadyAim)throw Error('Steady Aim prevents movement this turn');
- if(!valid({x,y}))throw Error('Destination outside 20×20 arena');
+ if(!(battle.phaseThree?fitsBattlefield({x,y},battle.phaseThree.scenario):valid({x,y})))throw Error('Destination outside encounter arena');
  if(Object.entries(battle.participants).some(([id,p])=>id!==actorId&&p.hp>0&&p.x===x&&p.y===y))throw Error('Square occupied');
  if(battle.pendingOpportunity?.moverId===actorId&&battle.pendingOpportunity.attackerIds.length)throw Error('Resolve pending opportunity reactions before moving');
  const route=pathRoute(battle,actor,{x,y},actorId);
@@ -1264,7 +1266,9 @@ export function attackCompanion(campaign:Campaign,attackerId:string,targetId:str
   !ITEMS.find(item=>item.id===verifiedWeaponId)?.properties?.includes('Loading')))throw Error('Action already used this turn');
  if(attacker.rogueDazeTurns!==undefined&&(attacker.rogueDazeChoice==='movement'||attacker.movementSpentFeet>0||attacker.bonusActionUsed))throw Error('Dazed: choose movement or one action or bonus action');
  if(cannotAct(attacker))throw Error('Condition prevents action');
- if((battle.cover??[]).some(p=>p.x===target.x&&p.y===target.y)){
+ const physicalMap=battle.phaseThree?.scenario.battlefield;
+ if(physicalMap){const cover=battlefieldCover(physicalMap,attacker,target);if(cover==='total')throw Error('Target has total cover.');targetAC+=cover;}
+ else if((battle.cover??[]).some(p=>p.x===target.x&&p.y===target.y)){
   if(!battle.phaseThree)throw Error('Target has annotated cover: DM must supply adjusted AC and clear cover annotation before attack');
   targetAC+=2;
  }

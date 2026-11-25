@@ -1841,10 +1841,62 @@ test('iPhone DM warehouse template restores exact original practice combat contr
  await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
  await expect.poll(async()=> Boolean((await saved(page))?.combat?.classicAdventure)).toBe(true);
  await expect(page.getByRole('button',{name:'Roll initiative (d20 + DEX)'})).toBeVisible();
+ // Force the initiative roll only; preserve normal randomness elsewhere.
+ await page.evaluate(()=>{const original=crypto.getRandomValues.bind(crypto);let count=0;crypto.getRandomValues=((a:ArrayBufferView|null)=>{if(a instanceof Uint32Array&&a.length===1&&count<2){a[0]=count++===0?19:0;return a;}return original(a);}) as typeof crypto.getRandomValues;});
  await page.getByRole('button',{name:'Roll initiative (d20 + DEX)'}).click();
  await expect(page.getByLabel('Combat movement grid')).toBeVisible();
  await expect(page.getByLabel('Combat turn summary')).toBeVisible();
  await expect(page.getByRole('region',{name:'Tactical battlefield'})).toHaveCount(0);
+ const board=page.getByRole('grid',{name:'Combat movement grid'});
+ await expect(board.getByRole('gridcell')).toHaveCount(1280);
+ const stateBefore=await saved(page);
+ expect(stateBefore.combat.battlefield).toMatchObject({width:40,height:32});
+ const camera=board.locator('..');
+ await board.scrollIntoViewIfNeeded();
+ await expect.poll(async()=>camera.evaluate(el=>el.scrollWidth/el.clientWidth)).toBeGreaterThan(3);
+ const cellWidth=await board.locator('[data-battlefield-x="0"][data-battlefield-y="0"]').evaluate(el=>el.getBoundingClientRect().width);
+ expect(cellWidth).toBeGreaterThan(24);
+ expect(cellWidth).toBeLessThan(50);
+ await page.screenshot({path:'test-results/dynamic-warehouse-iphone.png'});
+ await page.getByRole('button',{name:'Fit entire map'}).click();
+ await expect.poll(async()=>camera.evaluate(el=>el.scrollWidth-el.clientWidth)).toBeLessThan(3);
+ await expect.poll(async()=>camera.evaluate(el=>el.scrollHeight-el.clientHeight)).toBeLessThan(3);
+ await page.screenshot({path:'test-results/dynamic-warehouse-fit-iphone.png'});
+ // Restore normal scale through a one-handed double tap/drag.
+ const rect=await camera.boundingBox();
+ if(!rect)throw Error('Missing map frame');
+ const client=await page.context().newCDPSession(page);
+ const x=rect.x+rect.width/2,y=rect.y+rect.height/2;
+ await client.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x,y}]});
+ await client.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
+ await client.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x,y}]});
+ await client.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x,y:y-170}]});
+ await client.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
+ await expect.poll(async()=>camera.evaluate(el=>el.scrollWidth/el.clientWidth)).toBeGreaterThan(2);
+ await page.getByRole('button',{name:'Center on character'}).click();
+ // Actual one-finger drag, followed by deterministic persistence coordinates.
+ await client.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x,y}]});
+ await client.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:x-100,y:y-40}]});
+ await client.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
+ await expect.poll(async()=>camera.evaluate(el=>el.scrollLeft)).toBeGreaterThan(25);
+ await camera.evaluate(el=>el.scrollTo(140,200));
+ await expect.poll(async()=>page.evaluate(()=>Object.keys(localStorage).filter(k=>k.startsWith('four-keeps-camera:')).map(k=>JSON.parse(localStorage.getItem(k)??'{}'))[0]?.left)).toBe(140);
+ await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();
+ await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await expect(board).toBeVisible();
+ await expect.poll(async()=>camera.evaluate(el=>el.scrollLeft)).toBe(140);
+ expect((await saved(page)).combat.battlefield).toEqual(stateBefore.combat.battlefield);
+ await page.getByRole('button',{name:'Center on character'}).click();
+ const p=stateBefore.combat.playerPosition;
+ await board.locator(`[data-battlefield-x="${p.x+1}"][data-battlefield-y="${p.y}"]`).click();
+ await expect(page.getByRole('button',{name:'Confirm Move',exact:true})).toBeVisible();
+ await page.getByRole('button',{name:'Confirm Move',exact:true}).click();
+ await expect.poll(async()=> (await saved(page)).combat.playerPosition).toEqual({x:p.x+1,y:p.y});
+ const enemy=stateBefore.combat.enemyPosition;
+ await board.locator(`[data-battlefield-x="${enemy.x}"][data-battlefield-y="${enemy.y}"]`).click();
+ await expect.poll(async()=> (await saved(page)).combat.selectedEnemy).toBe('first');
+
+
  await navigate(page,'Journal');await page.getByRole('button',{name:'Bestiary'}).click();
  await expect(page.getByLabel('Bestiary')).toContainText('Creatures you encounter');
 });

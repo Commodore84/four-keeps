@@ -93,7 +93,7 @@ export function proposeAdventureEncounter(campaign:Campaign,enemyName:unknown,ac
  if(session.pendingEncounter)return campaign;
  if(typeof enemyName!=='string'||!enemyName.trim()||enemyName.trim().length>80||!actionId.trim())return campaign;
  const locationKey=(campaign.location??session.site).trim().toLowerCase();
- const scenario=templateId!==undefined||battlefield!==undefined?resolveDmBattlefield(templateId!==undefined?{templateId}: {battlefield},locationKey):undefined;
+ const scenario=templateId!==undefined||battlefield!==undefined?resolveDmBattlefield(templateId!==undefined?{templateId}: {battlefield},locationKey,campaign.id+":"+actionId):undefined;
  if(scenario&&!scenario.artwork&&campaign.tacticalArtwork?.[locationKey])scenario.artwork=campaign.tacticalArtwork[locationKey];
  return {...campaign,updatedAt:now,adventureSession:{...session,pendingEncounter:{enemyName:enemyName.trim(),actionId,...(scenario?{scenario}:{})}}};
 }
@@ -110,7 +110,7 @@ export function recoverWarehouseRatEncounter(campaign:Campaign):Campaign{
  const city=/(dasahi)/i.test(campaign.location??'')||session.site==='frontier';
  if(!warehouse||!rats||!city)return campaign;
  const locationKey=(campaign.location??session.site).trim().toLowerCase();
- const scenario=resolveDmBattlefield({templateId:'warehouse-vermin'},locationKey);
+ const scenario=resolveDmBattlefield({templateId:'warehouse-vermin'},locationKey,campaign.id+':'+pending.actionId);
  return {...campaign,adventureSession:{...session,pendingEncounter:{...pending,scenario}}};
 }
 

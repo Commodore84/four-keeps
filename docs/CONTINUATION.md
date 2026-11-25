@@ -50,3 +50,6 @@ Every new-chat handoff should include:
 
 ## Current merchant UX intent (v20)
 Shopping is conversational: no dedicated Shop/Browse Shop button. Natural browse requests and affirmative replies to merchant offers should open the existing catalog immediately in the same DM turn, without lengthy inventory narration or redundant confirmation. Ordinary conversation must remain ordinary conversation. Preserve the existing catalog, subgroups, full descriptions, magic item rules, cart, checkout, persistence, and campaigns. Validate the Dasahi merchant flow with deterministic tests and iPhone-emulated Playwright before claiming implementation.
+
+### Dynamic battlefield work (2026-11-25)
+See [DYNAMIC_BATTLEFIELDS.md](DYNAMIC_BATTLEFIELDS.md) for the isolated candidate, local verification, scope and remaining work. Check live exact-SHA CI and Vercel status before any publication.

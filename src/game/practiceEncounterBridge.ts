@@ -33,6 +33,7 @@ export function restorePracticeEncounter(campaign:Campaign):Campaign {
  const position=(actorId:string,fallback:{x:number;y:number})=>{
   const p=active?stored?.participants[actorId]:undefined;
   if(!p)return fallback;
+  if(scenario.battlefield)return {x:p.x,y:p.y};
   // Keep player movement when migrating an encounter already in progress.
   const x=Math.max(0,Math.min(12,p.x+2)),y=Math.max(0,Math.min(12,p.y+2));
   return {x,y};
@@ -53,8 +54,9 @@ export function restorePracticeEncounter(campaign:Campaign):Campaign {
   status:active?'initiative-set':'awaiting-initiative',
   enemyName:first.name,enemyInitiative:initiative(first.id)??1,
   enemyHp:current(first.id,first.hp),enemyMaxHp:first.maxHp,
-  enemyPosition:position(first.id,{x:10,y:10}),
-  playerPosition:position('nighthawk',{x:2,y:10}),
+  enemyPosition:position(first.id,scenario.battlefield?foes[0].square:{x:10,y:10}),
+  playerPosition:position('nighthawk',scenario.battlefield?scenario.starts[0]:{x:2,y:10}),
+  ...(scenario.battlefield?{battlefield:scenario.battlefield,secondStart:foes[1]?.square}:{}),
   round:active?stored?.round??1:1,
   ...(active?{
    playerInitiative:initiative('nighthawk')??1,
@@ -66,7 +68,7 @@ export function restorePracticeEncounter(campaign:Campaign):Campaign {
    bonusActionUsed:player?.bonusActionUsed??false,
    reactionUsed:player?.reactionUsed??false,
    ...(second?{secondEnemy:{name:second.name,
-     initiative:initiative(second.id)??1,position:position(second.id,{x:10,y:2}),
+     initiative:initiative(second.id)??1,position:position(second.id,scenario.battlefield?foes[1].square:{x:10,y:2}),
      hp:current(second.id,second.hp),maxHp:second.maxHp,detected:true}}:{}),
   }:{}),
   classicAdventure:{
