@@ -1926,6 +1926,7 @@ test('iPhone combat setup has visible start position, selectable alternatives an
 });
 test('iPhone tactical combat opens from Adventure, previews movement, runs NPC turns and persists escape',async({page})=>{
  test.setTimeout(90000);
+ await page.setViewportSize({width:390,height:844});
  await page.addInitScript(()=>{Math.random=()=>0.5;});
  await createAndImport(page,'rogue');
  await page.evaluate(()=>{
@@ -1968,6 +1969,19 @@ test('iPhone tactical combat opens from Adventure, previews movement, runs NPC t
  await square(1,1).click();
  await panel.getByRole('button',{name:'Roll initiative'}).click();
  await expect(panel.getByLabel('Initiative order')).toContainText('You:');
+ await expect(panel.getByRole('button',{name:'Attack target'})).toBeVisible();
+ await expect(panel.getByRole('button',{name:'Find me'})).toBeVisible();
+ await expect(panel.getByRole('button',{name:'Show whole map'})).toBeVisible();
+ await panel.getByRole('button',{name:'Focus Road bandit 1'}).click();
+ await expect(panel.getByLabel('Selected creature details')).toContainText('Road bandit');
+ await panel.getByRole('button',{name:'Find me'}).click();
+ await expect(panel.getByRole('button',{name:'Confirm move'})).toBeVisible();
+ await expect(panel.getByRole('button',{name:'Finish turn'})).toBeVisible();
+ const tileWidth=await square(1,1).evaluate(element=>element.getBoundingClientRect().width);
+ expect(tileWidth).toBeGreaterThanOrEqual(60);
+ const viewportSize=await panel.getByLabel('Battle map viewport').evaluate(element=>({scrollWidth:element.scrollWidth,clientWidth:element.clientWidth}));
+ expect(viewportSize.scrollWidth).toBeGreaterThan(viewportSize.clientWidth);
+ await page.screenshot({path:'/tmp/fk-classic-combat-iphone.png',fullPage:true});
  await square(2,1).click();
  await expect(panel.getByLabel('Movement preview')).toContainText('10 ft');
  await square(2,1).click();
