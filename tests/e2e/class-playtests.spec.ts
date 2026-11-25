@@ -1891,6 +1891,7 @@ test('iPhone existing mapless warehouse rat combat opens the tactical board and 
 });
 test('iPhone combat setup has visible start position, selectable alternatives and usable initiative',async({page})=>{
  test.setTimeout(90000);
+ await page.setViewportSize({width:390,height:844});
  await createAndImport(page,'rogue');
  await page.evaluate(()=>{
   localStorage.setItem('four-keeps-access-code','browser-test-code');
@@ -1911,10 +1912,11 @@ test('iPhone combat setup has visible start position, selectable alternatives an
  await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
  const panel=page.getByRole('region',{name:'Tactical battlefield'});
  await expect(panel).toBeVisible();
- await expect(panel.getByText('Nighthawk versus Giant Rat and Giant Rat.')).toBeVisible();
+ await expect(panel.getByText('Choose where to enter, then roll initiative.',{exact:false})).toBeVisible();
  await expect(panel.getByRole('button',{name:'Position 1 · Selected'})).toBeVisible();
  await expect(panel.getByRole('button',{name:'Roll initiative and begin combat'})).toBeEnabled();
  await expect(panel.getByText('You', {exact:true})).toBeVisible();
+ await page.screenshot({path:'/tmp/fk-combat-setup-iphone.png',fullPage:true});
  await panel.getByRole('button',{name:'Position 2'}).click();
  await expect(panel.getByRole('button',{name:'Position 2 · Selected'})).toHaveAttribute('aria-pressed','true');
  await panel.getByRole('button',{name:'Roll initiative and begin combat'}).click();
