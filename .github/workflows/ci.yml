@@ -32,10 +32,17 @@ jobs:
           cache: npm
       - name: Install locked dependencies
         run: npm ci
-      - name: Production build and TypeScript
-        run: npm run build
+      # Run unit tests exactly once. The build script is strictly
+      # TypeScript + Vite; it must not invoke the unit suite again.
       - name: Full Vitest suite
         run: npm test
+      - name: Production build and TypeScript
+        run: npm run build
+      - name: Restore Playwright Chromium browser cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: chromium-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
       - name: Install Chromium for iPhone-emulated browser tests
         run: npx playwright install --with-deps chromium
       - name: Full iPhone-emulated Playwright suite
