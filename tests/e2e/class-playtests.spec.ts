@@ -1816,11 +1816,13 @@ test('iPhone Stealth check resolution opens original practice encounter instead 
  const state=await saved(page);
  expect(state.pendingCheck).toBeUndefined();
  expect(state.combat.classicAdventure.second).toBeDefined();
+ await expect(page.getByRole('button',{name:'Roll initiative (d20 + DEX)'})).toBeVisible();
+ await page.getByRole('button',{name:'Roll initiative (d20 + DEX)'}).click();
  await expect(page.getByLabel('Combat movement grid')).toBeVisible();
  await expect(page.getByRole('region',{name:'Tactical battlefield'})).toHaveCount(0);
  await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();
  await page.getByRole('button',{name:'Continue Adventure'}).click();
- await expect(page.getByRole('button',{name:'Roll initiative (d20 + DEX)'})).toBeVisible();
+ await expect(page.getByLabel('Combat turn summary')).toBeVisible();
 });
 test('iPhone DM warehouse template restores exact original practice combat controls',async({page})=>{
  test.setTimeout(90000);
@@ -1838,6 +1840,8 @@ test('iPhone DM warehouse template restores exact original practice combat contr
  await page.getByLabel('Message the Dungeon Master').fill('I enter the warehouse and the rats attack.');
  await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
  await expect.poll(async()=> Boolean((await saved(page))?.combat?.classicAdventure)).toBe(true);
+ await expect(page.getByRole('button',{name:'Roll initiative (d20 + DEX)'})).toBeVisible();
+ await page.getByRole('button',{name:'Roll initiative (d20 + DEX)'}).click();
  await expect(page.getByLabel('Combat movement grid')).toBeVisible();
  await expect(page.getByRole('button',{name:'Roll initiative (d20 + DEX)'})).toBeVisible();
  await expect(page.getByRole('region',{name:'Tactical battlefield'})).toHaveCount(0);
@@ -1860,10 +1864,12 @@ test('iPhone existing mapless warehouse rat job reopens in original practice com
  await page.getByLabel('Message the Dungeon Master').fill('I move until I see the rat so I can attack.');
  await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
  await expect.poll(async()=> Boolean((await saved(page))?.combat?.classicAdventure)).toBe(true);
+ await expect(page.getByRole('button',{name:'Roll initiative (d20 + DEX)'})).toBeVisible();
+ await page.getByRole('button',{name:'Roll initiative (d20 + DEX)'}).click();
  await expect(page.getByLabel('Combat movement grid')).toBeVisible();
  await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();
  await page.getByRole('button',{name:'Continue Adventure'}).click();
- await expect(page.getByRole('button',{name:'Roll initiative (d20 + DEX)'})).toBeVisible();
+ await expect(page.getByLabel('Combat turn summary')).toBeVisible();
 });
 test('iPhone practice combat uses original initiative tracker, action economy, and tactical map',async({page})=>{
  test.setTimeout(90000);
@@ -1882,10 +1888,10 @@ test('iPhone practice combat uses original initiative tracker, action economy, a
  await page.getByLabel('Message the Dungeon Master').fill('I draw my bow as the rats charge.');
  await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
  await expect.poll(async()=> Boolean((await saved(page))?.combat?.classicAdventure)).toBe(true);
- await expect(page.getByLabel('Combat movement grid')).toBeVisible();
  await expect(page.getByRole('button',{name:'Roll initiative (d20 + DEX)'})).toBeVisible();
- await page.screenshot({path:'/tmp/fk-practice-restored-iphone.png',fullPage:true});
  await page.getByRole('button',{name:'Roll initiative (d20 + DEX)'}).click();
+ await expect(page.getByLabel('Combat movement grid')).toBeVisible();
+ await page.screenshot({path:'/tmp/fk-practice-restored-iphone.png',fullPage:true});
  await expect(page.getByLabel('Combat turn summary')).toBeVisible();
  await expect(page.getByLabel('Combat resources')).toBeVisible();
  await expect(page.getByLabel('Initiative order')).toContainText('Nighthawk');
