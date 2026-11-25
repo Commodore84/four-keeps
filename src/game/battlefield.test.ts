@@ -1,6 +1,6 @@
 import {describe,it,expect,vi,afterEach} from 'vitest';
 import {battlefieldBlocked,battlefieldContains,battlefieldCover,battlefieldDifficult,validateBattlefield,type Battlefield} from './battlefield';
-import {generateBattlefield,validateBattlefieldAccess} from './battlefieldGenerator';
+import {generateBattlefield,validateBattlefieldAccess,validateGeneratedBattlefield,battlefieldApproachCount} from './battlefieldGenerator';
 import {buildSoloEncounter} from './encounterDirector';
 import {fitsBattlefield,validateCombatScenario} from './combatScenario';
 import {newCampaign,moveDuelToken,tacticalRoute,takeDuelTurnAction,rollDuelAttack,trainingRouteCost,type Campaign} from './campaign';
@@ -78,6 +78,25 @@ describe('three permanent encounter generators',()=>{
    expect(validateCombatScenario(JSON.parse(JSON.stringify(scenario)),'dasahi')).toEqual(scenario);
   });
  }
+ it('rejects overlapping or obstructed starting positions',()=>{
+  const g=generateBattlefield('warehouse-vermin','validation');
+  expect(validateGeneratedBattlefield({...g,enemyStarts:[g.starts[0],g.enemyStarts[1]]})).toBe(false);
+  const p=g.starts[0];
+  expect(validateGeneratedBattlefield({...g,battlefield:{...g.battlefield,objects:[...g.battlefield.objects,{id:'sealed',kind:'wall',x:p.x-1,y:p.y-1,width:3,height:3}]}})).toBe(false);
+ });
+ it('checks 450 seeded battlefields for stable persistence and tactical access',()=>{
+  for(const id of ['warehouse-vermin','roadside-bandit','ruins-goblin-scouts'] as const){
+   const layouts=new Set<string>();
+   for(let i=0;i<150;i++){
+    const generated=generateBattlefield(id,'campaign-'+i);
+    expect(validateGeneratedBattlefield(generated)).toBe(true);
+    expect(battlefieldApproachCount(generated.battlefield,generated.starts[0])).toBeGreaterThanOrEqual(2);
+    expect(generateBattlefield(id,'campaign-'+i)).toEqual(JSON.parse(JSON.stringify(generated)));
+    layouts.add(JSON.stringify(generated.battlefield.objects));
+   }
+   expect(layouts.size).toBeGreaterThan(100);
+  }
+ });
  it('classic encounter handoff keeps world positions and full saved map without regeneration',()=>{
   const {scenario}=buildSoloEncounter('warehouse-vermin','dasahi','persistent');
   const c={...newCampaign('Dynamic handoff','handoff'),characterIdentity:{classId:'rogue'},

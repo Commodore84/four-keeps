@@ -26,3 +26,9 @@
 - Generator proves start/exit connectivity, not formal multiple-route diversity or tactical-interest scoring; positions are environment-specific and layouts vary. Explicit DM-provided geometry/positions are honored, but deeper exploration-to-battlefield continuity is outstanding.
 - Illustrated reusable assets, subtle grid overlays and rendering performance improvements are next. Fog of war, concealment, advanced visibility, sound, and multi-floor exploration remain explicitly deferred.
 - Keep original classic encounter UI, prior saves, and reward/character/inventory mechanics intact. Do not replace the combat interface.
+
+## Follow-up release correction and scenario verification (2026-11-25)
+- Exact-SHA verification of candidate 08f540c reported 156/157 iPhone Playwright tests passing; the sole regression was the original companion 20x20 out-of-bounds message. The legacy message was restored without changing dynamic scenario boundaries.
+- Added generation validation for non-overlapping starts, at least two cardinal movement options per spawn, and start-to-exit connectivity. Tested 450 deterministic scenario seeds, including JSON save/reload round trips and layout variation.
+- Added iPhone-emulated roadside (32x60) and ruins (48x40) browser tests for classic interface preservation, rectangular geometry, camera Fit and reload persistence. Both passed; inspected their normal and fit screenshots. Legacy companion out-of-bounds browser regression passed after correction.
+- The follow-up candidate requires a NEW exact-SHA full CI run and Vercel READY before protected publication. Previous failed run 45635161237 does not authorize publication.

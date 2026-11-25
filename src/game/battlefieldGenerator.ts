@@ -22,6 +22,17 @@ export function validateBattlefieldAccess(map:Battlefield,points:BattlefieldPoin
  }
  return points.every(p=>visited.has(key(p)));
 }
+/** Conservative measure of immediate tactical routes from a spawn. */
+export function battlefieldApproachCount(map:Battlefield,start:BattlefieldPoint):number{
+ return [[0,1],[0,-1],[1,0],[-1,0]].filter(([dx,dy])=>!battlefieldBlocked(map,{x:start.x+dx,y:start.y+dy})).length;
+}
+export function validateGeneratedBattlefield(result:GeneratedBattlefield):boolean{
+ const {battlefield,starts,enemyStarts,exits}=result;
+ if(!validateBattlefieldAccess(battlefield,[...starts,...enemyStarts,...exits]))return false;
+ if(new Set([...starts,...enemyStarts].map(p=>p.x+','+p.y)).size!==starts.length+enemyStarts.length)return false;
+ if(starts.some(p=>enemyStarts.some(q=>Math.max(Math.abs(p.x-q.x),Math.abs(p.y-q.y))<2)))return false;
+ return [...starts,...enemyStarts].every(p=>battlefieldApproachCount(battlefield,p)>=2);
+}
 export function generateBattlefield(environment:BattlefieldEnvironment,seed:string):GeneratedBattlefield{
  const pick=random(environment+':'+seed);
  const [width,height]=environment==='warehouse-vermin'?[40,32]:environment==='roadside-bandit'?[32,60]:[48,40];
@@ -58,6 +69,7 @@ export function generateBattlefield(environment:BattlefieldEnvironment,seed:stri
   add('rubble',6,mid+1,2,2);add('rock',10,mid+5,2,1);
  }
  const battlefield={width,height,objects};
- if(!validateBattlefieldAccess(battlefield,[...starts,...enemyStarts,...exits]))throw Error('Generated battlefield has inaccessible starts or exits.');
- return {battlefield,starts,enemyStarts,exits};
+ const result={battlefield,starts,enemyStarts,exits};
+ if(!validateGeneratedBattlefield(result))throw Error('Generated battlefield has inaccessible, overlapping or trapped starting positions.');
+ return result;
 }

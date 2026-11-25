@@ -1900,6 +1900,49 @@ test('iPhone DM warehouse template restores exact original practice combat contr
  await navigate(page,'Journal');await page.getByRole('button',{name:'Bestiary'}).click();
  await expect(page.getByLabel('Bestiary')).toContainText('Creatures you encounter');
 });
+for(const scenario of [
+ {id:'roadside-bandit',width:32,height:60,label:'roadside'},
+ {id:'ruins-goblin-scouts',width:48,height:40,label:'ruins'}
+] as const){
+ test('iPhone dynamic '+scenario.label+' rectangular battlefield keeps classic controls, camera and save',async({page})=>{
+  test.setTimeout(90000);
+  await createAndImport(page,'rogue');
+  await page.evaluate(()=>{localStorage.setItem('four-keeps-access-code','browser-test-code');localStorage.setItem('four-keeps-dm-mode','on');});
+  await page.route('**/api/dm',async route=>{
+   const request=route.request().postDataJSON(),shared={worldUpdates:{},newFacts:[]};
+   if(request.opening){await route.fulfill({json:{...shared,narration:'The city wakes.'}});return;}
+   await route.fulfill({json:{...shared,narration:'Enemies emerge from cover.',
+    combatStart:{enemyName:'Ambushers',templateId:scenario.id}}});
+  });
+  await page.reload();
+  await page.getByRole('button',{name:'Campaigns',exact:true}).click();
+  await page.getByRole('button',{name:'Continue Adventure'}).click();
+  await expect.poll(async()=> (await saved(page))?.journal?.some((entry:any)=>entry.id?.endsWith('-dm-opening'))).toBe(true);
+  await page.getByLabel('Message the Dungeon Master').fill('I approach the encounter.');
+  await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
+  await expect.poll(async()=>Boolean((await saved(page))?.combat?.classicAdventure)).toBe(true);
+  const before=await saved(page);
+  expect(before.combat.battlefield).toMatchObject({width:scenario.width,height:scenario.height});
+  await page.getByRole('button',{name:'Roll initiative (d20 + DEX)'}).click();
+  const board=page.getByRole('grid',{name:'Combat movement grid'});
+  await expect(board.getByRole('gridcell')).toHaveCount(scenario.width*scenario.height);
+  await expect(page.getByLabel('Combat turn summary')).toBeVisible();
+  await expect(page.getByRole('region',{name:'Tactical battlefield'})).toHaveCount(0);
+  const frame=board.locator('..');
+  await board.scrollIntoViewIfNeeded();
+  await page.screenshot({path:'test-results/dynamic-'+scenario.label+'-iphone.png'});
+  await page.getByRole('button',{name:'Fit entire map'}).click();
+  await expect.poll(async()=>frame.evaluate(el=>el.scrollWidth-el.clientWidth)).toBeLessThan(3);
+  await expect.poll(async()=>frame.evaluate(el=>el.scrollHeight-el.clientHeight)).toBeLessThan(3);
+  await page.screenshot({path:'test-results/dynamic-'+scenario.label+'-fit-iphone.png'});
+  await page.getByRole('button',{name:'Center on character'}).click();
+  await page.reload();
+  await page.getByRole('button',{name:'Campaigns',exact:true}).click();
+  await page.getByRole('button',{name:'Continue Adventure'}).click();
+  await expect(board).toBeVisible();
+  expect((await saved(page)).combat.battlefield).toEqual(before.combat.battlefield);
+ });
+}
 test('iPhone existing mapless warehouse rat job reopens in original practice combat without reset',async({page})=>{
  test.setTimeout(90000);
  await createAndImport(page,'rogue');

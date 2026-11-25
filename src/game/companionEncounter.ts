@@ -579,7 +579,7 @@ export function moveCompanion(campaign:Campaign,actorId:string,x:number,y:number
  if(actor.rogueDazeTurns!==undefined&&(actor.rogueDazeChoice==='action'||actor.actionUsed||actor.bonusActionUsed))throw Error('Dazed: cannot move after taking an action or bonus action');
  if(actor.conditions.some(c=>IMMOBILE.includes(c)))throw Error('Condition prevents movement');
  if(actor.rogueSteadyAim)throw Error('Steady Aim prevents movement this turn');
- if(!(battle.phaseThree?fitsBattlefield({x,y},battle.phaseThree.scenario):valid({x,y})))throw Error('Destination outside encounter arena');
+ if(!(battle.phaseThree?fitsBattlefield({x,y},battle.phaseThree.scenario):valid({x,y})))throw Error(battle.phaseThree?'Destination outside encounter arena':'Destination outside 20×20 arena');
  if(Object.entries(battle.participants).some(([id,p])=>id!==actorId&&p.hp>0&&p.x===x&&p.y===y))throw Error('Square occupied');
  if(battle.pendingOpportunity?.moverId===actorId&&battle.pendingOpportunity.attackerIds.length)throw Error('Resolve pending opportunity reactions before moving');
  const route=pathRoute(battle,actor,{x,y},actorId);
