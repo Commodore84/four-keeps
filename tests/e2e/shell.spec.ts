@@ -1666,6 +1666,12 @@ test('Generate Random Encounter uses the real combat engine, cycles environments
    await expect(selection).toHaveCount(0);
    const board=page.getByRole('grid',{name:'Combat movement grid'});
    await expect(board).toBeVisible();
+   const terrainKey=page.getByLabel('Battlefield terrain key');
+   await expect(terrainKey).toBeVisible();
+   await terrainKey.locator('summary').click();
+   for(const category of ['Difficult terrain','Half cover','Three-quarter cover','Total cover','Door / opening','Open ground'])await expect(terrainKey.getByText(category,{exact:true})).toBeVisible();
+   await terrainKey.locator('summary').click();
+
    await expect(page.getByRole('region',{name:'Tactical battlefield'})).toHaveCount(0);
    await expect(page.getByLabel('Combat Lab session')).toContainText('lab-'+n.toString(16).padStart(8,'0'));
    await expect(page.getByLabel('Combat turn summary')).toBeVisible();
