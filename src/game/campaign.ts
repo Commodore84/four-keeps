@@ -998,7 +998,15 @@ export function resolveDuelEnemyTurn(campaign:Campaign):Campaign {
  const owlDestroyed=targetOwl&&hit&&owlAfter===0;
  const after=targetOwl?before:Math.max(0,before-damage);
  const defeated=!targetOwl&&hit&&after===0;
- const detail=(targetOwl?'Owl is within melee reach. ':standDescription)+(combat.order[combat.turnIndex??0]??combat.enemyName)+(canAttack?(targetOwl?' attacks Owl: ':combat.classicAdventure?' attacks: ':' training attack: '):' waits out of range. ')+(canAttack?(dodging?'disadvantage ('+first+', '+second+') → ':'d20 ')+attackRoll+ ' +attackBonus+' = '+total+' vs AC '+ac+': '+(hit?'HIT':'MISS')+'.'+(hit?(targetOwl?' Damage: '+damage+'. Owl HP: '+(combat.owl?.hp??1)+' → '+owlAfter+'.'+(owlDestroyed?' Familiar disappears at 0 HP; Find Familiar must be cast again.':''):combat.classicAdventure?' Damage: ':' Nonlethal damage: '+damage+'. Nighthawk HP: '+before+' → '+after+'/'+(character.maxHitPoints??10)+'.'):'')+(defeated?combat.classicAdventure?' Nighthawk falls unconscious.':' Nighthawk is knocked unconscious; sparring ends.':''):'');
+ const damageDescription=targetOwl
+  ?' Damage: '+damage+'. Owl HP: '+(combat.owl?.hp??1)+' → '+owlAfter+'.'+(owlDestroyed?' Familiar disappears at 0 HP; Find Familiar must be cast again.':'')
+  :(combat.classicAdventure?' Damage: ':' Nonlethal damage: ')+damage+'. Nighthawk HP: '+before+' → '+after+'/'+(character.maxHitPoints??10)+'.';
+ const detail=(targetOwl?'Owl is within melee reach. ':standDescription)
+  +(combat.order[combat.turnIndex??0]??combat.enemyName)
+  +(canAttack?(targetOwl?' attacks Owl: ':combat.classicAdventure?' attacks: ':' training attack: '):' waits out of range. ')
+  +(canAttack?(dodging?'disadvantage ('+first+', '+second+') → ':'d20 ')+attackRoll+' + '+attackBonus+' = '+total+' vs AC '+ac+': '+(hit?'HIT':'MISS')+'.'
+    +(hit?damageDescription:'')
+    +(defeated?(combat.classicAdventure?' Nighthawk falls unconscious.':' Nighthawk is knocked unconscious; sparring ends.'):''):'');
  const turn=nextActiveTurn(combat);
  const followingIndex=turn.index;
  const nextRound=turn.round;
