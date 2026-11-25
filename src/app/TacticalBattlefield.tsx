@@ -1,7 +1,8 @@
 import {useEffect,useMemo,useRef,useState,type TouchEvent} from 'react';
 import type {Campaign} from '../game/campaign';
+import {ClassicCombatMapFrame} from './ClassicCombatMapFrame';
 import {distanceFeet,squareKey,type Square} from '../game/combatScenario';
-import {pendingWebSave,previewCompanionMovement,primaryAttackLimit,resolveWebTurnSave,standCompanionFromProne} from '../game/companionEncounter';
+import {nighthawkEquippedAttack,pendingWebSave,previewCompanionMovement,primaryAttackLimit,resolveWebTurnSave,setPlayerLoadout,standCompanionFromProne} from '../game/companionEncounter';
 import {ITEM_BY_ID} from '../game/creationEquipment';
 import {weaponAttackProfile} from '../game/weaponAttackProfile';
 import {
@@ -22,7 +23,8 @@ export function TacticalBattlefield({campaign,saving,onChange,onDm}:Props){
  const active=battle?.order[battle.turnIndex];
  const [destination,setDestination]=useState<Square|undefined>(()=>setup?.starts[0]);
  const activeStart=setup&&(destination===undefined||!setup.starts.some(tile=>squareKey(tile)===squareKey(destination)))?setup.starts[0]:destination;
- const [target,setTarget]=useState('');
+ const [target,setTarget]=useState(()=>(setup??tactical?.scenario)?.actors.find(actor=>actor.side==='enemies')?.id??'');
+ const [showActions,setShowActions]=useState(false);
  const [selectedAction,setSelectedAction]=useState<TacticalAction>('Dash');
  const [mode,setMode]=useState('weapon');
  const [spell,setSpell]=useState('');
@@ -56,9 +58,23 @@ export function TacticalBattlefield({campaign,saving,onChange,onDm}:Props){
  const preview=destination&&canMove?previewCompanionMovement(campaign,'nighthawk',destination.x,destination.y):undefined;
  const path=new Set(preview?.path.map(squareKey));
  const current=battle?.participants[target];
- const equipment=ITEM_BY_ID[campaign.encounterLoadout?.weaponId??''];
+ // Keep a valid hostile selected as foes fall, without exposing enemy HP.
+ useEffect(()=>{
+  if(!battle||!scenario)return;
+  const enemies=scenario.actors.filter(actor=>actor.side==='enemies'&&(battle.participants[actor.id]?.hp??0)>0);
+  if(!enemies.some(actor=>actor.id===target))setTarget(enemies[0]?.id??'');
+ },[battle,scenario,target]);
+ const equippedWeapon=nighthawkEquippedAttack(campaign);
+ const equipment=ITEM_BY_ID[equippedWeapon?.weaponId??''];
+ const ownedWeapons=Object.values(ITEM_BY_ID).filter(item=>item.category==='weapon'&&(campaign.inventoryLedger?.gear??[]).some(entry=>entry.quantity>0&&entry.name.toLowerCase()===item.name.toLowerCase()));
  const range=equipment?weaponAttackProfile(equipment,mode==='thrown').maximumRange:undefined;
  const targetDistance=player&&current?distanceFeet(player,current):undefined;
+ // The classic single-tap attack uses a thrown weapon outside melee reach.
+ // Never offer a quick attack against a target beyond that weapon's legal range.
+ const meleeProfile=equipment?weaponAttackProfile(equipment):undefined;
+ const quickThrown=!!equipment&&targetDistance!==undefined&&targetDistance>(meleeProfile?.reach??5)&&!!equipment.properties?.some(property=>property.startsWith('Thrown '));
+ const quickProfile=equipment?weaponAttackProfile(equipment,quickThrown):undefined;
+ const quickInRange=targetDistance!==undefined&&targetDistance<=(quickProfile?.maximumRange??0);
  const rogue=campaign.characterIdentity?.classId==='rogue';
  const level=campaign.character?.level??1;
  const spells=['Fire Bolt','Magic Missile','Web','Cure Wounds'].filter(name=>campaign.character?.cantrips?.includes(name)||campaign.character?.preparedSpells?.includes(name));
@@ -157,16 +173,35 @@ export function TacticalBattlefield({campaign,saving,onChange,onDm}:Props){
     <p className="text-xs text-parchment/60">Red tokens are enemies · ◢ cover · ▧ obstacle · ≈ difficult terrain · ↗ exit</p>
    </div>}
   <p className="px-1 text-sm leading-snug text-parchment/80" aria-label="Battlefield navigation instructions">Pinch to zoom · Two fingers to pan · Tap to select · Map fits at 100%.</p>
-  {!setup&&isPlayer&&!awaitingPlayer&&<div aria-label="Quick combat controls" className="grid grid-cols-3 gap-2 rounded-xl border border-gold/25 bg-[#22272b] p-2">
-   <button type="button" className="min-h-11 rounded-lg bg-gold px-2 text-sm font-semibold text-ink disabled:opacity-40"
-    disabled={saving||!current||!equipment||!!player?.actionUsed&&((player.primaryAttacks??0)===0||(player.primaryAttacks??0)>=primaryAttackLimit(campaign))}
-    onClick={()=>void apply(()=>tacticalPlayerAttack(campaign,target,{offhand:false,thrown:false,sneak:false}),'Attack resolved.')}>Attack target</button>
-   <button type="button" className="min-h-11 rounded-lg border border-gold/50 px-2 text-sm font-semibold disabled:opacity-40"
-    disabled={saving||!destination||!preview||!!preview.error}
-    onClick={()=>destination&&void apply(()=>tacticalMove(campaign,'nighthawk',destination),'Movement resolved.')}>Confirm move</button>
-   <button type="button" className="min-h-11 rounded-lg border border-white/30 px-2 text-sm font-semibold disabled:opacity-40"
-    disabled={saving||!!webSave} onClick={()=>void apply(()=>tacticalEndTurn(campaign),'Turn ended.')}>Finish turn</button>
-  </div>}
+  {!setup&&isPlayer&&!awaitingPlayer&&<>
+   {(!equipment||!!current&&!quickInRange)&&<div aria-label="Equip weapon for combat" className="rounded-lg border border-amber-400/50 bg-panel p-2 text-sm space-y-2">
+    <p>{equipment?'Target is beyond this weapon’s range. Move closer or switch to another owned weapon.':'Equip an owned weapon to attack. Your other combat actions remain available.'}</p>
+    {ownedWeapons.length?<select aria-label="Choose weapon" className="min-h-11 w-full rounded-lg border border-gold/50 bg-panel px-2" value="" disabled={saving}
+     onChange={event=>{const id=event.target.value;if(id)void apply(()=>setPlayerLoadout(campaign,'weaponId',id),'Weapon equipped.');}}>
+      <option value="">Choose a weapon</option>{ownedWeapons.map(item=><option key={item.id} value={item.id}>{item.name}</option>)}
+     </select>:<p className="text-xs text-parchment/70">No owned weapon found. Use magic or other actions, or acquire equipment.</p>}
+   </div>}
+   <div aria-label="Quick combat controls" className="grid grid-cols-2 gap-2 rounded-xl border border-gold/30 bg-panel/70 p-2">
+    <button type="button" aria-label="Attack target" className="min-h-12 rounded-lg bg-gold px-2 text-sm font-semibold text-ink disabled:opacity-40"
+     disabled={saving||!current||!equipment||!quickInRange||!!player?.actionUsed&&((player.primaryAttacks??0)===0||(player.primaryAttacks??0)>=primaryAttackLimit(campaign))}
+     onClick={()=>void apply(()=>tacticalPlayerAttack(campaign,target,{offhand:false,thrown:quickThrown,sneak:false}),'Attack resolved.')}>Attack {current?label(target):'· Select enemy'}</button>
+    <button type="button" className="min-h-12 rounded-lg border border-gold/50 px-2 text-sm font-semibold disabled:opacity-40"
+     disabled={saving||!destination||!preview||!!preview.error}
+     onClick={()=>destination&&void apply(()=>tacticalMove(campaign,'nighthawk',destination),'Movement resolved.')}>Confirm move</button>
+    <button type="button" className="min-h-12 rounded-lg border border-gold/50 bg-gold/10 px-2 text-sm font-semibold" aria-expanded={showActions} aria-controls="classic-combat-actions" onClick={()=>setShowActions(v=>!v)}>Combat actions {showActions?'−':'+'}</button>
+    <button type="button" className="min-h-12 rounded-lg border border-white/30 px-2 text-sm font-semibold disabled:opacity-40"
+     disabled={saving||!!webSave} onClick={()=>void apply(()=>tacticalEndTurn(campaign),'Turn ended.')}>Finish turn</button>
+   </div>
+   {showActions&&<div id="classic-combat-actions" aria-label="Classic combat actions" className="rounded-xl border border-gold/35 bg-panel p-2 space-y-2">
+    <div className="grid grid-cols-3 gap-2">
+     {actionNames.map(action=><button key={action} type="button" className={button+' min-h-11'} disabled={saving||!!player?.actionUsed} onClick={()=>void apply(()=>tacticalAction(campaign,'nighthawk',action,{target}),action+' resolved.')}>{action}</button>)}
+    </div>
+    {rogue&&level>=2&&<div className="grid grid-cols-3 gap-2" aria-label="Rogue bonus actions">
+     {(['Dash','Disengage','Hide'] as const).map(action=><button key={action} type="button" className={button+' min-h-11'} disabled={saving||!!player?.bonusActionUsed} onClick={()=>void apply(()=>tacticalAction(campaign,'nighthawk',action,{bonus:true,target}),action+' bonus action resolved.')}>Cunning {action}</button>)}
+    </div>}
+    {rogue&&level>=3&&<button type="button" className={button+' w-full min-h-11'} disabled={saving||!!player?.bonusActionUsed} onClick={()=>void apply(()=>tacticalAction(campaign,'nighthawk','Steady Aim',{bonus:true,target}),'Steady Aim resolved.')}>Steady Aim (bonus action)</button>}
+   </div>}
+  </>}
   <div className="flex gap-2 px-1"><button type="button" className="min-h-9 rounded-md border border-white/20 px-3 text-sm" aria-expanded={showNavigation} onClick={()=>setShowNavigation(v=>!v)}>{showNavigation?'Hide navigation':'Find character or enemies'}</button></div>
   {showNavigation&&<>
   <div className="flex flex-wrap items-center gap-2 px-1" aria-label="Battlefield navigation">
@@ -181,14 +216,14 @@ export function TacticalBattlefield({campaign,saving,onChange,onDm}:Props){
   <div className="flex items-center justify-between gap-2 px-1 text-xs text-parchment/75">
    <span className="font-semibold text-parchment">Battlefield <span className="font-normal text-parchment/55">· 5 ft squares</span></span>
    <div className="flex items-center gap-1">
-   {!setup&&isPlayer&&<button type="button" className="min-h-9 rounded-md border border-gold/45 bg-gold/10 px-2 font-semibold text-gold" onClick={()=>actionPanel.current?.scrollIntoView({behavior:'smooth',block:'center'})}>Combat actions</button>}
+   {!setup&&isPlayer&&<button type="button" className="min-h-9 rounded-md border border-gold/45 bg-gold/10 px-2 font-semibold text-gold" onClick={()=>actionPanel.current?.scrollIntoView({behavior:'smooth',block:'center'})}>Advanced options</button>}
    <button type="button" className="min-h-9 rounded-md border border-white/20 px-2" aria-expanded={showKey} onClick={()=>setShowKey(value=>!value)}>{showKey?'Hide terrain key':'Terrain key'}</button>
    </div>
   </div>
   {showKey&&<div className="grid grid-cols-2 gap-1 rounded-lg border border-white/15 p-2 text-[11px] text-parchment/80" aria-label="Terrain key">
    <span>Blue: your character</span><span>Red: hostile creatures</span><span>Dark: blocked terrain</span><span>Green: difficult ground</span><span>Gold outline: selected</span><span>Arrow: exit</span>
   </div>}
-  <div className="relative overflow-hidden rounded-xl border border-gold/45 bg-[#19201e] shadow-[inset_0_0_40px_rgba(0,0,0,0.4)]">
+  <ClassicCombatMapFrame className="border-gold/45 shadow-[inset_0_0_40px_rgba(0,0,0,0.4)]">
    <div ref={viewport} aria-label="Battle map viewport" className="max-h-[55dvh] overflow-auto overscroll-contain touch-pan-x touch-pan-y" onTouchStart={touchStart} onTouchMove={touchMove} onTouchEnd={()=>{gesture.current=undefined;}}>
     <div role="group" aria-label="Battle map" className="grid aspect-square bg-cover bg-center"
      style={{width:zoom*100+'%',gridTemplateColumns:'repeat('+scenario.size+', minmax(0,1fr))',
@@ -221,7 +256,7 @@ export function TacticalBattlefield({campaign,saving,onChange,onDm}:Props){
     <button type="button" className={button} aria-label="Zoom out" disabled={zoom<=1} onClick={()=>setZoom(value=>Math.max(1,value-0.25))}>−</button>
     <button type="button" className={button} aria-label="Zoom in" disabled={zoom>=2.5} onClick={()=>setZoom(value=>Math.min(2.5,value+0.25))}>+</button>
    </div>
-  </div>
+  </ClassicCombatMapFrame>
   {!setup&&selectedOpponent&&<div aria-label="Selected creature details" className="flex items-center justify-between gap-3 rounded-xl border border-red-400/25 bg-[#292629] px-3 py-3 text-base">
    <div className="min-w-0"><p className="text-xs uppercase tracking-wider text-red-200/75">Selected target</p><strong className="block truncate">{label(target)}</strong><p className="text-xs text-parchment/70">{targetDistance} ft away · {current?.conditions.length?current.conditions.join(', '):'No observed conditions'}</p></div>
    <button type="button" className="min-h-10 rounded-md border border-white/20 px-3 text-xs" onClick={()=>setTarget('')}>Clear target</button>
