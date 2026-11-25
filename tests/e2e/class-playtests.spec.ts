@@ -1923,8 +1923,59 @@ test('iPhone combat setup has visible start position, selectable alternatives an
  await expect.poll(async()=> (await saved(page))?.companionEncounter?.phaseThree?.scenario?.size).toBe(8);
  await expect(panel.getByText('Choose your starting square')).toHaveCount(0);
  await expect(panel.getByLabel('Combat resources')).toBeVisible();
+ // Force only the test fixture's turn index so an initiative roll cannot make this UX regression flaky.
+ await page.evaluate(async()=>{
+  const db=await new Promise<IDBDatabase>((resolve,reject)=>{const request=indexedDB.open('four-keeps-local',1);request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(request.error);});
+  const tx=db.transaction('campaigns','readwrite'),store=tx.objectStore('campaigns');
+  const current=await new Promise<any>(resolve=>{const request=store.getAll();request.onsuccess=()=>resolve(request.result[0]);});
+  const combat=current.companionEncounter;
+  combat.turnIndex=combat.order.indexOf('nighthawk');
+  combat.participants.nighthawk.actionUsed=false;
+  store.put(current);
+  await new Promise<void>((resolve,reject)=>{tx.oncomplete=()=>resolve();tx.onerror=()=>reject(tx.error);});
+  db.close();
+ });
+ await page.reload();
+ await page.getByRole('button',{name:'Campaigns',exact:true}).click();
+ await page.getByRole('button',{name:'Continue Adventure'}).click();
+ const activeBattle=page.getByRole('region',{name:'Tactical battlefield'});
+ await expect(activeBattle.getByLabel('Quick combat controls')).toBeVisible();
+ await expect(activeBattle.getByRole('button',{name:'Attack target'})).toBeVisible();
+ if(await activeBattle.getByLabel('Choose weapon').count()){
+  const weaponSelect=activeBattle.getByLabel('Choose weapon');
+  expect(await weaponSelect.locator('option').count()).toBeGreaterThan(1);
+  await weaponSelect.selectOption((await weaponSelect.locator('option').filter({hasText:/shortbow/i}).count())?{label:'Shortbow'}:{index:1});
+ }
+ await expect(activeBattle.getByRole('button',{name:'Attack target'})).toBeEnabled();
+ await activeBattle.getByRole('button',{name:'Combat actions +',exact:true}).click();
+ const actions=activeBattle.getByLabel('Classic combat actions');
+ await expect(actions.getByRole('button',{name:'Dodge',exact:true})).toBeEnabled();
+ await expect(actions.getByRole('button',{name:'Dash',exact:true})).toBeVisible();
+ await actions.getByRole('button',{name:'Dodge',exact:true}).click();
+ await expect.poll(async()=>Boolean((await saved(page))?.companionEncounter?.participants?.nighthawk?.actionUsed)).toBe(true);
+ await expect(actions.getByRole('button',{name:'Dodge',exact:true})).toBeDisabled();
+ await page.screenshot({path:'/tmp/fk-unified-combat-iphone.png',fullPage:true});
+ await page.reload();
+ await page.getByRole('button',{name:'Campaigns',exact:true}).click();
+ await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await expect(page.getByRole('region',{name:'Tactical battlefield'}).getByLabel('Combat resources')).toContainText('Spent');
+ // A second simulated turn verifies that the restored attack button resolves real Phase 3 rules.
+ await page.evaluate(async()=>{
+  const db=await new Promise<IDBDatabase>((resolve,reject)=>{const r=indexedDB.open('four-keeps-local',1);r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});
+  const tx=db.transaction('campaigns','readwrite'),store=tx.objectStore('campaigns');
+  const c=await new Promise<any>(resolve=>{const r=store.getAll();r.onsuccess=()=>resolve(r.result[0]);});
+  c.companionEncounter.turnIndex=c.companionEncounter.order.indexOf('nighthawk');
+  c.companionEncounter.participants.nighthawk.actionUsed=false;
+  store.put(c);
+  await new Promise<void>((resolve,reject)=>{tx.oncomplete=()=>resolve();tx.onerror=()=>reject(tx.error);});db.close();
+ });
+ await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();await page.getByRole('button',{name:'Continue Adventure'}).click();
+ const attackButton=page.getByRole('region',{name:'Tactical battlefield'}).getByRole('button',{name:'Attack target'});
+ await expect(attackButton).toBeEnabled();
+ await attackButton.click();
+ await expect.poll(async()=> (await saved(page))?.companionEncounter?.phaseThree?.lastRoll?.actor).toBe('nighthawk');
 });
-test('iPhone tactical combat opens from Adventure, previews movement, runs NPC turns and persists escape',async({page})=>{
+test('iPhone tactical combat opens from Adventure, previews movement, runs NPC turns and persists escape' ,async({page})=>{
  test.setTimeout(90000);
  await page.setViewportSize({width:390,height:844});
  await page.addInitScript(()=>{Math.random=()=>0.5;});
