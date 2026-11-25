@@ -33,6 +33,7 @@ import {frontierMerchantContext} from '../game/frontierShop';
 import {mergeWorld} from '../game/world';
 import {travelAdventure,proposeAdventureEncounter,recoverWarehouseRatEncounter,type AdventureSite} from '../game/adventureSession';
 import {restorePracticeEncounter} from '../game/practiceEncounterBridge';
+import {queuePostCombatFollowUp,recoverPostCombatFollowUp,commitPostCombatFollowUp} from '../game/postCombatFollowUp';
 import {openingIntentForCampaign,prepareAdventureOpening,commitAdventureOpening,needsAdventureOpening,adventureMemory,prepareAdventureAction, pauseAdventureForClarification, answerAdventureClarification,commitAdventureAction} from '../game/adventureOrchestrator';
 import {campaignPlayerContext} from '../game/campaignContext';
 import {ImportedCharacterSheet} from './ImportedCharacterSheet';
@@ -540,6 +541,9 @@ export function App() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const restoringPracticeRef=useRef<string|null>(null);
+  const postCombatAttemptRef=useRef<string|null>(null);
+  const postCombatMigrationRef=useRef<string|null>(null);
+  const [postCombatRetry,setPostCombatRetry]=useState(0);
   useEffect(()=>{
     if(!campaign||loading||saving||campaign.combat||restoringPracticeRef.current===campaign.id)return;
     const restored=restorePracticeEncounter(campaign);
@@ -1140,7 +1144,7 @@ export function App() {
     const current=override??campaign;
     const message=messageOverride??(current?.pendingAdventureAction?.message??draft);
     if (current?.pendingClarification && !current.pendingClarification.answer) {setNotice('Answer the Dungeon Master clarification before continuing.');return;}
-    if ((!alreadySaving && saving) || adventureRequestRef.current || !current || !message.trim() || current.pendingCheck || current.adventureSession?.pendingEncounter || current.characterIdentity && current.adventureSession?.status==='encounter') return;
+    if ((!alreadySaving && saving) || adventureRequestRef.current || !current || !message.trim() || current.pendingCheck || current.postCombatFollowUp || current.adventureSession?.pendingEncounter || current.characterIdentity && current.adventureSession?.status==='encounter') return;
     if (!accessCode) { setNotice('Enter your game access code first.'); return; }
     adventureRequestRef.current=true;
     if(!alreadySaving)setSaving(true);
@@ -1492,6 +1496,59 @@ export function App() {
       setNotice('Encounter training ended. Nighthawk is fully healed; dummy reset. Start a new encounter to test again.');
     }catch(error){setNotice('Training reset: '+String(error));}finally{setSaving(false);}
   }
+  async function narratePostCombat(current:Campaign){
+    const pending=current.postCombatFollowUp;
+    if(!pending||adventureRequestRef.current)return;
+    adventureRequestRef.current=true;
+    setSaving(true);
+    setNotice('The Dungeon Master is considering what happens next…');
+    try{
+      if(!accessCode)throw Error('Enter your game access code to continue with the Dungeon Master.');
+      const history=adventureMemory(current).recentConversation;
+      const message='COMBAT ENGINE EVENT — encounter complete, NOT a player action. Outcome: '
+        +pending.outcome+'. Opponents: '+pending.opponent+'. Saved combat recap: '+pending.recap
+        +'. Narrate the immediate aftermath and offer next possibilities; do not determine the player’s next action.';
+      const response=await fetch('/api/dm',{method:'POST',headers:{
+        'Content-Type':'application/json','x-four-keeps-access':accessCode
+      },body:JSON.stringify({postCombat:true,message:message.slice(0,1500),
+        character:statsWithTemporaryEffects(current)??prototypeNighthawk,history,
+        world:current.world,gameState:{...campaignPlayerContext(current),
+          adventureSession:current.adventureSession??null,
+          characterIdentity:current.characterIdentity??null,
+          location:current.location,currentHitPoints:current.character?.currentHitPoints,
+          maxHitPoints:current.character?.maxHitPoints}})});
+      const result:{narration?:string;error?:string}=await response.json();
+      if(!response.ok||!result.narration?.trim())throw Error(result.error??'DM follow-up unavailable.');
+      const next=commitPostCombatFollowUp(current,pending.id,result.narration);
+      await localCampaignStorage.save(next);
+      setCampaign(latest=>latest?.id===next.id?next:latest);
+      setCampaigns(items=>items.map(item=>item.id===next.id?next:item));
+      setNotice('The Dungeon Master has continued the story.');
+    }catch(error){
+      setNotice('The combat is saved, but the Dungeon Master follow-up could not load: '+String(error)+'. Use Continue with DM to retry.');
+    }finally{
+      adventureRequestRef.current=false;
+      setSaving(false);
+    }
+  }
+  useEffect(()=>{
+    if(!campaign||loading||saving||adventureRequestRef.current||campaign.combat)return;
+    const recovered=recoverPostCombatFollowUp(campaign);
+    if(recovered!==campaign){
+      if(postCombatMigrationRef.current===campaign.id)return;
+      postCombatMigrationRef.current=campaign.id;
+      void localCampaignStorage.save(recovered).then(()=>{
+        setCampaign(current=>current?.id===recovered.id?recovered:current);
+        setCampaigns(items=>items.map(item=>item.id===recovered.id?recovered:item));
+      }).catch(error=>setNotice('Unable to prepare the saved combat follow-up: '+String(error)))
+        .finally(()=>{postCombatMigrationRef.current=null;});
+      return;
+    }
+    const pending=campaign.postCombatFollowUp;
+    if(!pending||!accessCode||postCombatAttemptRef.current===pending.id)return;
+    postCombatAttemptRef.current=pending.id;
+    void narratePostCombat(campaign);
+  },[campaign,loading,saving,accessCode,postCombatRetry]);
   async function finishDefeatedDuel() {
     if(!campaign||saving||(campaign.combat?.enemyHp!==0&&campaign.combat?.outcome!=='player-defeated'))return;
     const opponent=campaign.combat.enemyName;
@@ -1501,15 +1558,21 @@ export function App() {
       const concluded=concludeDuel(campaign);
       if(campaign.combat.classicAdventure){
         const now=new Date().toISOString(),session=concluded.adventureSession;
-        const next:Campaign={...concluded,companionEncounter:undefined,pendingAftermath:undefined,
+        const resolved:Campaign={...concluded,companionEncounter:undefined,pendingAftermath:undefined,
           adventureSession:session?{...session,status:'exploring',pendingEncounter:undefined,encounterActorId:undefined}:undefined,
           updatedAt:now,journal:[...concluded.journal,{id:crypto.randomUUID(),kind:'system',createdAt:now,
             text:playerDefeated?'The combat is finished; Nighthawk is unconscious. The DM must resolve the aftermath.':
               'The encounter is won. Exploration resumes; the DM may adjudicate recovered loot and rewards.'}]};
+        const recap='Round '+campaign.combat.round+'. '
+          +(playerDefeated?'The player was defeated.':'The opponents were defeated.')+' '
+          +(campaign.combat.stats?'Attacks '+campaign.combat.stats.attacks+', hits '+campaign.combat.stats.hits
+            +', damage '+campaign.combat.stats.damage+'. ':'')
+          +campaign.journal.filter(entry=>entry.kind==='system').slice(-6).map(entry=>entry.text).join(' ').slice(-550);
+        const next=queuePostCombatFollowUp(resolved,opponent,playerDefeated,recap,now);
         await localCampaignStorage.save(next);
         setCampaign(next);setCampaigns(items=>items.map(item=>item.id===next.id?next:item));
         setPendingCombatAction(null);
-        setNotice('Original combat encounter finished. Exploration resumed.');
+        setNotice('Combat finished. The Dungeon Master is preparing the aftermath.');
         setSaving(false);
         return;
       }
@@ -1815,6 +1878,16 @@ export function App() {
           </section>;
         })()}
         {content[activeView]}
+        {activeView==='adventure' && campaign?.postCombatFollowUp && !campaign.combat &&
+          <div className="mt-4 rounded-xl border border-gold/40 bg-panel p-4 space-y-2" role="status" aria-label="After combat">
+            <p className="font-semibold text-gold">The encounter has ended</p>
+            <p className="text-sm text-parchment/80">Your combat recap is saved. The Dungeon Master will describe what happens next and return the decision to you.</p>
+            <button type="button" disabled={saving||!accessCode} onClick={()=>{
+              postCombatAttemptRef.current=null;setPostCombatRetry(value=>value+1);
+            }} className="rounded-lg border border-gold/50 px-3 py-2 text-sm text-gold disabled:opacity-50">
+              {saving?'Dungeon Master is responding…':'Continue with DM'}
+            </button>
+          </div>}
         {activeView==='adventure' && campaign?.pendingCheck && <div className="mt-4 rounded-xl border border-gold/40 bg-panel p-4 space-y-2" role="group" aria-label="Pending skill check">
           <p className="eyebrow">Dungeon Master requests a check</p>
           <p className="font-serif text-xl">{campaign.pendingCheck.skill}{campaign.pendingCheck.tool?' · '+campaign.pendingCheck.tool:''} · {campaign.pendingCheck.mode}</p>

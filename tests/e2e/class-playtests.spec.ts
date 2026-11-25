@@ -2004,3 +2004,98 @@ test('iPhone tactical combat opens from Adventure, previews movement, runs NPC t
  await page.getByRole('button',{name:'Bestiary'}).click();
  await expect(page.getByLabel('Bestiary')).toContainText('Bandit');
 });
+
+test('iPhone completed warehouse fight receives one DM aftermath without a phantom player turn',async({page})=>{
+ test.setTimeout(90000);
+ await page.setViewportSize({width:390,height:844});
+ await createAndImport(page,'rogue');
+ await page.evaluate(()=>{
+   localStorage.setItem('four-keeps-access-code','browser-test-code');
+   localStorage.setItem('four-keeps-dm-mode','on');
+ });
+ let postCombatCalls=0;
+ await page.route('**/api/dm',async route=>{
+   const request=route.request().postDataJSON();
+   if(request.postCombat){
+     postCombatCalls++;
+     expect(request.message).toContain('encounter complete');
+     await route.fulfill({json:{narration:'The warehouse falls silent. The surviving dockworker gestures toward a loading manifest and waits for your decision.'}});
+     return;
+   }
+   await route.fulfill({json:{narration:'The streets outside the warehouse are busy.',worldUpdates:{},newFacts:[]}});
+ });
+ // Simulate the persisted result of a previously completed original-engine encounter.
+ // The DM should resume the story without forcing the player to repeat combat.
+ await page.evaluate(async()=>{
+   const db=await new Promise<IDBDatabase>((resolve,reject)=>{
+     const r=indexedDB.open('four-keeps-local',1);r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);
+   });
+   const tx=db.transaction('campaigns','readwrite'),store=tx.objectStore('campaigns');
+   const data=await new Promise<any[]>(resolve=>{const r=store.getAll();r.onsuccess=()=>resolve(r.result);});
+   const campaign=data[0];
+   campaign.adventureSession={...(campaign.adventureSession??{site:'frontier',characterSource:'campaign-character',visited:[],interactions:[]}),status:'exploring',pendingEncounter:undefined};
+   campaign.combat=undefined;
+   campaign.postCombatFollowUp=undefined;
+   campaign.journal.push({id:'test-victory-recap',kind:'system',createdAt:new Date().toISOString(),text:'A giant rat falls. The shortbow is lowered.'});
+   campaign.journal.push({id:'test-victory-handoff',kind:'system',createdAt:new Date().toISOString(),text:'The encounter is won. Exploration resumes; the DM may adjudicate recovered loot and rewards.'});
+   store.put(campaign);
+   await new Promise<void>((resolve,reject)=>{tx.oncomplete=()=>resolve();tx.onerror=()=>reject(tx.error);});
+   db.close();
+ });
+ await page.reload();
+ await page.getByRole('button',{name:'Campaigns',exact:true}).click();
+ await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await expect.poll(async()=> (await saved(page))?.journal?.filter((entry:any)=>entry.id==='dm-post-combat-legacy-test-victory-handoff').length).toBe(1);
+ await expect(page.getByText('The warehouse falls silent.',{exact:false})).toBeVisible();
+ await page.screenshot({path:'/tmp/fk-postcombat-iphone.png',fullPage:true});
+ const first=await saved(page);
+ expect(first.combat).toBeUndefined();
+ expect(first.postCombatFollowUp).toBeUndefined();
+ expect(first.journal.filter((entry:any)=>entry.kind==='player')).toHaveLength(0);
+ expect(postCombatCalls).toBe(1);
+ await page.reload();
+ await page.getByRole('button',{name:'Campaigns',exact:true}).click();
+ await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await expect(page.getByText('The warehouse falls silent.',{exact:false})).toBeVisible();
+ expect(postCombatCalls).toBe(1);
+ await expect(page.getByLabel('Message the Dungeon Master')).toBeEnabled();
+});
+
+test('iPhone post-combat DM outage keeps the recap saved and offers an exact retry',async({page})=>{
+ test.setTimeout(90000);
+ await page.setViewportSize({width:390,height:844});
+ await createAndImport(page,'rogue');
+ await page.evaluate(()=>{localStorage.setItem('four-keeps-access-code','browser-test-code');localStorage.setItem('four-keeps-dm-mode','on');});
+ let followUps=0;
+ await page.route('**/api/dm',async route=>{
+  const request=route.request().postDataJSON();
+  if(request.postCombat){
+   followUps++;
+   if(followUps===1){await route.fulfill({status:503,json:{error:'The DM is temporarily unavailable.'}});return;}
+   await route.fulfill({json:{narration:'The rat is down; the warehouse door opens onto a bustling street. What would you like to do?'}});
+   return;
+  }
+  await route.fulfill({json:{narration:'Welcome to Dasahi.',worldUpdates:{},newFacts:[]}});
+ });
+ await page.evaluate(async()=>{
+  const db=await new Promise<IDBDatabase>((resolve,reject)=>{const r=indexedDB.open('four-keeps-local',1);r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});
+  const tx=db.transaction('campaigns','readwrite'),store=tx.objectStore('campaigns');
+  const data=await new Promise<any[]>(resolve=>{const r=store.getAll();r.onsuccess=()=>resolve(r.result);});
+  const item=data[0];
+  item.adventureSession={...(item.adventureSession??{site:'frontier',characterSource:'campaign-character',visited:[],interactions:[]}),status:'exploring'};
+  item.postCombatFollowUp={id:'warehouse-retry',outcome:'victory',opponent:'Giant rat',recap:'The rat was defeated and the encounter ended.'};
+  store.put(item);
+  await new Promise<void>((resolve,reject)=>{tx.oncomplete=()=>resolve();tx.onerror=()=>reject(tx.error)});
+  db.close();
+ });
+ await page.reload();
+ await page.getByRole('button',{name:'Campaigns',exact:true}).click();
+ await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await expect.poll(async()=>followUps).toBe(1);
+ await expect(page.getByRole('button',{name:'Continue with DM'})).toBeEnabled();
+ expect((await saved(page)).postCombatFollowUp.id).toBe('warehouse-retry');
+ await page.getByRole('button',{name:'Continue with DM'}).click();
+ await expect.poll(async()=> (await saved(page))?.journal?.filter((entry:any)=>entry.id==='dm-post-combat-warehouse-retry').length).toBe(1);
+ expect((await saved(page)).postCombatFollowUp).toBeUndefined();
+ expect(followUps).toBe(2);
+});
