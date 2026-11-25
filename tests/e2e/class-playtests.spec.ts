@@ -1917,6 +1917,10 @@ test('iPhone DM warehouse template restores exact original practice combat contr
  await page.getByRole('button',{name:'Confirm Move',exact:true}).click();
  await expect.poll(async()=> (await saved(page)).combat.playerPosition).toEqual({x:p.x+1,y:p.y});
  const enemy=stateBefore.combat.enemyPosition;
+ // The viewport deliberately unmounts off-screen squares. Fit is a real
+ // player camera control that makes the distant enemy target selectable.
+ await page.getByRole('button',{name:'Fit entire map'}).click();
+ await expect(board.getByRole('gridcell')).toHaveCount(1280);
  await board.locator(`[data-battlefield-x="${enemy.x}"][data-battlefield-y="${enemy.y}"]`).click();
  await expect.poll(async()=> (await saved(page)).combat.selectedEnemy).toBe('first');
 
