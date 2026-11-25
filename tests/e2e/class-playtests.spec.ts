@@ -1843,7 +1843,7 @@ test('iPhone DM warehouse template restores exact original practice combat contr
  await expect(page.getByRole('button',{name:'Roll initiative (d20 + DEX)'})).toBeVisible();
  await page.getByRole('button',{name:'Roll initiative (d20 + DEX)'}).click();
  await expect(page.getByLabel('Combat movement grid')).toBeVisible();
- await expect(page.getByRole('button',{name:'Roll initiative (d20 + DEX)'})).toBeVisible();
+ await expect(page.getByLabel('Combat turn summary')).toBeVisible();
  await expect(page.getByRole('region',{name:'Tactical battlefield'})).toHaveCount(0);
  await navigate(page,'Journal');await page.getByRole('button',{name:'Bestiary'}).click();
  await expect(page.getByLabel('Bestiary')).toContainText('Creatures you encounter');
