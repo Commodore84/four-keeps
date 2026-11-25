@@ -1,9 +1,9 @@
 import {describe,it,expect,vi,afterEach} from 'vitest';
-import {battlefieldBlocked,battlefieldContains,battlefieldCover,battlefieldDifficult,validateBattlefield,type Battlefield} from './battlefield';
-import {generateBattlefield,validateBattlefieldAccess,validateGeneratedBattlefield,battlefieldApproachCount} from './battlefieldGenerator';
+import {battlefieldBlocked,battlefieldContains,battlefieldCover,battlefieldDifficult,validateBattlefield,toggleBattlefieldDoor,battlefieldDoorWithinReach,type Battlefield} from './battlefield';
+import {generateBattlefield,validateBattlefieldAccess,validateGeneratedBattlefield,battlefieldApproachCount,battlefieldTacticalProfile,battlefieldAlternativeApproaches} from './battlefieldGenerator';
 import {buildSoloEncounter} from './encounterDirector';
 import {fitsBattlefield,validateCombatScenario} from './combatScenario';
-import {newCampaign,moveDuelToken,tacticalRoute,takeDuelTurnAction,rollDuelAttack,trainingRouteCost,type Campaign} from './campaign';
+import {newCampaign,moveDuelToken,interactDuelBattlefieldDoor,tacticalRoute,takeDuelTurnAction,rollDuelAttack,trainingRouteCost,type Campaign} from './campaign';
 import {restorePracticeEncounter} from './practiceEncounterBridge';
 
 const map:Battlefield={width:60,height:80,objects:[
@@ -78,6 +78,50 @@ describe('three permanent encounter generators',()=>{
    expect(validateCombatScenario(JSON.parse(JSON.stringify(scenario)),'dasahi')).toEqual(scenario);
   });
  }
+ it('opens and closes doors with persistent physical effects and occupied-door protection',()=>{
+  const g=generateBattlefield('warehouse-vermin','door-test');
+  const door=g.battlefield.objects.find(o=>o.kind==='door')!;
+  const c=arena({x:3,y:16},{x:9,y:14});
+  const campaign={...c,combat:{...c.combat!,battlefield:g.battlefield}};
+  expect(battlefieldDoorWithinReach(door,{x:3,y:16})).toBe(true);
+  expect(battlefieldBlocked(g.battlefield,{x:door.x,y:door.y})).toBe(true);
+  const opened=interactDuelBattlefieldDoor(campaign,door.id);
+  expect(opened.combat!.objectInteractionUsed).toBe(true);
+  expect(opened.combat!.actionUsed).toBeFalsy();
+  expect(opened.combat!.battlefield!.objects.find(o=>o.id===door.id)!.open).toBe(true);
+  expect(battlefieldBlocked(opened.combat!.battlefield!,{x:door.x,y:door.y})).toBe(false);
+  expect(JSON.parse(JSON.stringify(opened.combat!.battlefield))).toEqual(opened.combat!.battlefield);
+  expect(()=>interactDuelBattlefieldDoor(opened,door.id)).toThrow('free object interaction');
+  expect(()=>toggleBattlefieldDoor(opened.combat!.battlefield!,door.id,[{x:door.x,y:door.y}])).toThrow('standing in the doorway');
+  const closed=toggleBattlefieldDoor(opened.combat!.battlefield!,door.id);
+  expect(battlefieldBlocked(closed,{x:door.x,y:door.y})).toBe(true);
+  expect(()=>validateBattlefield({...g.battlefield,objects:g.battlefield.objects.map(o=>o.id===door.id?{...o,open:'yes'}:o)})).toThrow('Invalid battlefield object');
+  expect(()=>validateBattlefield({...g.battlefield,objects:g.battlefield.objects.map(o=>o.id===door.id?{...o,kind:'crate',open:true}:o)})).toThrow();
+  const moved=moveDuelToken(opened,door.x,door.y);
+  expect(moved.combat!.playerPosition).toEqual({x:door.x,y:door.y});
+ });
+ it('windows obstruct movement but permit attacks with three-quarter cover',()=>{
+  const m:Battlefield={width:9,height:7,objects:[{id:'pane',kind:'window',x:4,y:3,width:1,height:1}]};
+  expect(battlefieldBlocked(m,{x:4,y:3})).toBe(true);
+  expect(battlefieldCover(m,{x:2,y:3},{x:7,y:3})).toBe(5);
+  expect(battlefieldCover(m,{x:2,y:1},{x:7,y:1})).toBe(0);
+ });
+ it('open doors permit clear line of sight, while closed doors provide total cover',()=>{
+  const m:Battlefield={width:10,height:8,objects:[{id:'entry',kind:'door',x:4,y:3,width:1,height:1}]};
+  expect(battlefieldCover(m,{x:2,y:3},{x:7,y:3})).toBe('total');
+  const opened=toggleBattlefieldDoor(m,'entry');
+  expect(battlefieldCover(opened,{x:2,y:3},{x:7,y:3})).toBe(0);
+  expect(battlefieldBlocked(opened,{x:4,y:3})).toBe(false);
+  expect(m.objects[0].open).toBeUndefined();
+ });
+ it('does not mistake a dead-end side spur for a second tactical route',()=>{
+  const map:Battlefield={width:8,height:6,objects:[
+   {id:'north-wall',kind:'wall',x:0,y:1,width:8,height:1},
+   {id:'south-wall',kind:'wall',x:0,y:4,width:8,height:1},
+   {id:'spur-wall',kind:'wall',x:2,y:3,width:1,height:1}
+  ]};
+  expect(battlefieldAlternativeApproaches(map,{x:2,y:2},{x:7,y:2})).toBe(1);
+ });
  it('rejects overlapping or obstructed starting positions',()=>{
   const g=generateBattlefield('warehouse-vermin','validation');
   expect(validateGeneratedBattlefield({...g,enemyStarts:[g.starts[0],g.enemyStarts[1]]})).toBe(false);
@@ -90,13 +134,15 @@ describe('three permanent encounter generators',()=>{
    for(let i=0;i<150;i++){
     const generated=generateBattlefield(id,'campaign-'+i);
     expect(validateGeneratedBattlefield(generated)).toBe(true);
+    expect(battlefieldTacticalProfile(generated)).toMatchObject({alternativeApproaches:expect.any(Number),coverKinds:expect.any(Number),roughTiles:expect.any(Number)});
+    expect(battlefieldTacticalProfile(generated).alternativeApproaches).toBeGreaterThanOrEqual(2);
     expect(battlefieldApproachCount(generated.battlefield,generated.starts[0])).toBeGreaterThanOrEqual(2);
     expect(generateBattlefield(id,'campaign-'+i)).toEqual(JSON.parse(JSON.stringify(generated)));
     layouts.add(JSON.stringify(generated.battlefield.objects));
    }
    expect(layouts.size).toBeGreaterThan(100);
   }
- });
+ },60000);
  it('classic encounter handoff keeps world positions and full saved map without regeneration',()=>{
   const {scenario}=buildSoloEncounter('warehouse-vermin','dasahi','persistent');
   const c={...newCampaign('Dynamic handoff','handoff'),characterIdentity:{classId:'rogue'},

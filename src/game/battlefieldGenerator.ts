@@ -1,4 +1,4 @@
-import {battlefieldBlocked,battlefieldContains,type Battlefield,type BattlefieldObject,type BattlefieldObjectKind,type BattlefieldPoint} from './battlefield';
+import {battlefieldBlocked,battlefieldContains,battlefieldObjectBlocks,type Battlefield,type BattlefieldObject,type BattlefieldObjectKind,type BattlefieldPoint} from './battlefield';
 
 export type BattlefieldEnvironment='warehouse-vermin'|'roadside-bandit'|'ruins-goblin-scouts';
 export type GeneratedBattlefield={battlefield:Battlefield;starts:BattlefieldPoint[];enemyStarts:BattlefieldPoint[];exits:BattlefieldPoint[]};
@@ -26,12 +26,48 @@ export function validateBattlefieldAccess(map:Battlefield,points:BattlefieldPoin
 export function battlefieldApproachCount(map:Battlefield,start:BattlefieldPoint):number{
  return [[0,1],[0,-1],[1,0],[-1,0]].filter(([dx,dy])=>!battlefieldBlocked(map,{x:start.x+dx,y:start.y+dy})).length;
 }
+/** Tactical route diversity: how many different initial cardinal lanes can
+ * actually reach a target *without returning through the starting square*.
+ * This rules out dead-end spurs falsely counted as separate routes. */
+export function battlefieldAlternativeApproaches(map:Battlefield,start:BattlefieldPoint,target:BattlefieldPoint):number{
+ if(!battlefieldContains(map,start)||!battlefieldContains(map,target))return 0;
+ const {width,height}=map,size=width*height,blocked=new Uint8Array(size);
+ for(const o of map.objects)if(battlefieldObjectBlocks(o))
+  for(let y=o.y;y<o.y+o.height;y++)for(let x=o.x;x<o.x+o.width;x++)blocked[y*width+x]=1;
+ const first=start.y*width+start.x,last=target.y*width+target.x;
+ if(blocked[first]||blocked[last])return 0;
+ // The start is excluded from the flood fill so a branch requiring a U-turn
+ // through the player cannot be counted as a distinct tactical approach.
+ const visited=new Uint8Array(size),queue=new Int32Array(size),directions=[[0,1],[0,-1],[1,0],[-1,0]];
+ let head=0,tail=1;queue[0]=last;visited[first]=1;visited[last]=1;
+ while(head<tail){
+  const index=queue[head++],x=index%width,y=Math.floor(index/width);
+  for(const [dx,dy] of directions){
+   const nx=x+dx,ny=y+dy;if(nx<0||ny<0||nx>=width||ny>=height)continue;
+   const n=ny*width+nx;if(visited[n]||blocked[n])continue;
+   visited[n]=1;queue[tail++]=n;
+  }
+ }
+ return directions.filter(([dx,dy])=>{
+  const nx=start.x+dx,ny=start.y+dy;
+  return nx>=0&&nx<width&&ny>=0&&ny<height&&visited[ny*width+nx]===1;
+ }).length;
+}
+/** Conservative tactical quality metrics, not a substitute for DM judgment. */
+export function battlefieldTacticalProfile(result:GeneratedBattlefield){
+ const {battlefield,starts,enemyStarts}=result;
+ const coverKinds=new Set(battlefield.objects.filter(o=>['wall','pillar','table','chair','crate','cargo','rock','tree','door','window'].includes(o.kind)).map(o=>o.kind));
+ const roughTiles=battlefield.objects.filter(o=>['chair','rubble','water','undergrowth'].includes(o.kind)).reduce((n,o)=>n+o.width*o.height,0);
+ return {coverKinds:coverKinds.size,roughTiles,alternativeApproaches:Math.min(...starts.flatMap(start=>enemyStarts.map(enemy=>battlefieldAlternativeApproaches(battlefield,start,enemy))))};
+}
 export function validateGeneratedBattlefield(result:GeneratedBattlefield):boolean{
  const {battlefield,starts,enemyStarts,exits}=result;
  if(!validateBattlefieldAccess(battlefield,[...starts,...enemyStarts,...exits]))return false;
  if(new Set([...starts,...enemyStarts].map(p=>p.x+','+p.y)).size!==starts.length+enemyStarts.length)return false;
  if(starts.some(p=>enemyStarts.some(q=>Math.max(Math.abs(p.x-q.x),Math.abs(p.y-q.y))<2)))return false;
- return [...starts,...enemyStarts].every(p=>battlefieldApproachCount(battlefield,p)>=2);
+ if(![...starts,...enemyStarts].every(p=>battlefieldApproachCount(battlefield,p)>=2))return false;
+ const profile=battlefieldTacticalProfile(result);
+ return profile.coverKinds>=2&&profile.roughTiles>=1&&profile.alternativeApproaches>=2;
 }
 export function generateBattlefield(environment:BattlefieldEnvironment,seed:string):GeneratedBattlefield{
  const pick=random(environment+':'+seed);
@@ -50,6 +86,9 @@ export function generateBattlefield(environment:BattlefieldEnvironment,seed:stri
    add('cargo',x,pick(3,5),3,4);add('cargo',x,pick(mid+7,mid+9),3,4);
    add('crate',x+1,mid-6,2,2);
   }
+  // A closable storage partition near the entrance, including an exterior-view window.
+  add('door',4,mid+1);add('wall',4,mid+2);add('wall',4,mid+3);
+  add('window',22,mid-7,2,1);
   add('table',7,mid+1,2,1);add('chair',6,mid+2);add('pillar',18,mid-1);
  }else if(environment==='roadside-bandit'){
   // A broad open road with scattered terrain to either side, not a sealed corridor.
@@ -66,9 +105,9 @@ export function generateBattlefield(environment:BattlefieldEnvironment,seed:stri
    add('rubble',x-2,mid-6,3,2);add('pillar',x+2,mid+1);
   }
   add('wall',7,mid-6,4,1);add('wall',14,mid-2,1,3);
-  add('rubble',6,mid+1,2,2);add('rock',10,mid+5,2,1);
+  add('rubble',6,mid+1,2,2);add('rock',10,mid+5,2,1);add('door',14,mid+1);add('window',24,mid-1);
  }
- const battlefield={width,height,objects};
+ const battlefield:Battlefield={width,height,objects,theme:environment==='warehouse-vermin'?'warehouse':environment==='roadside-bandit'?'roadside':'ruins'};
  const result={battlefield,starts,enemyStarts,exits};
  if(!validateGeneratedBattlefield(result))throw Error('Generated battlefield has inaccessible, overlapping or trapped starting positions.');
  return result;

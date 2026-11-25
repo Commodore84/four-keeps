@@ -1873,6 +1873,19 @@ test('iPhone DM warehouse template restores exact original practice combat contr
  await client.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x,y:y-170}]});
  await client.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
  await expect.poll(async()=>camera.evaluate(el=>el.scrollWidth/el.clientWidth)).toBeGreaterThan(2);
+ // Actual two-finger pinch must zoom while the original grid stays interactive.
+ const sizeBeforePinch=await board.locator('[data-battlefield-x="0"][data-battlefield-y="0"]').evaluate(el=>el.getBoundingClientRect().width);
+ await client.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:x-34,y},{x:x+34,y}]});
+ await client.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:x-76,y},{x:x+76,y}]});
+ await client.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
+ await expect.poll(async()=>board.locator('[data-battlefield-x="0"][data-battlefield-y="0"]').evaluate(el=>el.getBoundingClientRect().width)).toBeGreaterThan(sizeBeforePinch*1.1);
+ // Two fingers moving together pan the camera without selecting a combat square.
+ await camera.evaluate(el=>el.scrollTo(440,340));
+ await expect.poll(async()=>camera.evaluate(el=>el.scrollLeft)).toBe(440);
+ await client.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:x-30,y},{x:x+30,y}]});
+ await client.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:x-85,y:y-25},{x:x-25,y:y-25}]});
+ await client.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
+ await expect.poll(async()=>camera.evaluate(el=>el.scrollLeft)).toBeGreaterThan(455);
  await page.getByRole('button',{name:'Center on character'}).click();
  // Actual one-finger drag, followed by deterministic persistence coordinates.
  await client.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x,y}]});
@@ -1900,6 +1913,45 @@ test('iPhone DM warehouse template restores exact original practice combat contr
  await navigate(page,'Journal');await page.getByRole('button',{name:'Bestiary'}).click();
  await expect(page.getByLabel('Bestiary')).toContainText('Creatures you encounter');
 });
+test('iPhone illustrated warehouse door opens, persists, and ignores corrupted camera storage',async({page})=>{
+ test.setTimeout(90000);
+ await createAndImport(page,'rogue');
+ await page.evaluate(()=>{localStorage.setItem('four-keeps-access-code','browser-test-code');localStorage.setItem('four-keeps-dm-mode','on');});
+ await page.route('**/api/dm',async route=>{
+  const request=route.request().postDataJSON(),shared={worldUpdates:{},newFacts:[]};
+  await route.fulfill({json:{...shared,narration:request.opening?'The warehouse waits.':'Two giant rats emerge.',
+   ...(request.opening?{}:{combatStart:{enemyName:'Warehouse rats',templateId:'warehouse-vermin'}})}});
+ });
+ await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();
+ await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await expect.poll(async()=> (await saved(page))?.journal?.some((entry:any)=>entry.id?.endsWith('-dm-opening'))).toBe(true);
+ await page.getByLabel('Message the Dungeon Master').fill('I enter the warehouse.');
+ await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
+ await expect(page.getByRole('button',{name:'Roll initiative (d20 + DEX)'})).toBeVisible();
+ await page.evaluate(()=>{const original=crypto.getRandomValues.bind(crypto);let count=0;crypto.getRandomValues=((a:ArrayBufferView|null)=>{if(a instanceof Uint32Array&&a.length===1&&count<2){a[0]=count++===0?19:0;return a;}return original(a);}) as typeof crypto.getRandomValues;});
+ await page.getByRole('button',{name:'Roll initiative (d20 + DEX)'}).click();
+ const board=page.getByRole('grid',{name:'Combat movement grid'});
+ const door=board.locator('[data-terrain-art="door"]');
+ await expect(door).toHaveCount(1);
+ const imageUrl=await door.evaluate(el=>getComputedStyle(el).backgroundImage.slice(5,-2));
+ expect(imageUrl).toMatch(/^data:image\/svg\+xml/);
+ await expect(board.locator('[data-terrain-art="floor-warehouse"]').first()).toBeVisible();
+ await expect(board.getByRole('gridcell',{name:'Open door at 5, 18'})).toBeEnabled();
+ await board.getByRole('gridcell',{name:'Open door at 5, 18'}).click();
+ await expect(board.locator('[data-terrain-art="door-open"]')).toHaveCount(1);
+ await expect.poll(async()=> (await saved(page)).combat.battlefield.objects.some((o:any)=>o.kind==='door'&&o.open)).toBe(true);
+ expect((await saved(page)).combat.objectInteractionUsed).toBe(true);
+ const savedCampaign=await saved(page);
+ const cameraKey='four-keeps-camera:'+savedCampaign.id+':'+(savedCampaign.combat.classicAdventure?.actionId??'practice');
+ await page.evaluate(key=>localStorage.setItem(key,JSON.stringify({zoom:100000,left:-300,top:NaN})),cameraKey);
+ await page.screenshot({path:'test-results/illustrated-warehouse-door-iphone.png'});
+ await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();
+ await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await expect(board.locator('[data-terrain-art="door-open"]')).toHaveCount(1);
+ expect((await saved(page)).combat.battlefield).toEqual(savedCampaign.combat.battlefield);
+ await expect.poll(async()=>board.locator('[data-battlefield-x="0"][data-battlefield-y="0"]').evaluate(el=>el.getBoundingClientRect().width)).toBeGreaterThan(22);
+ await expect(page.getByLabel('Combat turn summary')).toBeVisible();
+});
 for(const scenario of [
  {id:'roadside-bandit',width:32,height:60,label:'roadside'},
  {id:'ruins-goblin-scouts',width:48,height:40,label:'ruins'}
@@ -1926,6 +1978,7 @@ for(const scenario of [
   await page.getByRole('button',{name:'Roll initiative (d20 + DEX)'}).click();
   const board=page.getByRole('grid',{name:'Combat movement grid'});
   await expect(board.getByRole('gridcell')).toHaveCount(scenario.width*scenario.height);
+  await expect(board.locator('[data-terrain-art="floor-'+scenario.label+'"]').first()).toBeVisible();
   await expect(page.getByLabel('Combat turn summary')).toBeVisible();
   await expect(page.getByRole('region',{name:'Tactical battlefield'})).toHaveCount(0);
   const frame=board.locator('..');
