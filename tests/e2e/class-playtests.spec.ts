@@ -2021,6 +2021,10 @@ test('iPhone tactical combat opens from Adventure, previews movement, runs NPC t
  await panel.getByRole('button',{name:'Roll initiative'}).click();
  await expect(panel.getByLabel('Initiative order')).toContainText('You:');
  await expect(panel.getByLabel('Combat initiative tracker')).toBeVisible();
+ await expect(panel.locator('[data-classic-initiative="true"]')).toHaveCount(1);
+ await expect(panel.locator('[data-classic-combat-grid="true"]')).toHaveCount(1);
+ const classicBoardY=await panel.locator('[data-classic-combat-grid="true"]').evaluate(element=>element.getBoundingClientRect().top);
+ expect(classicBoardY).toBeLessThan(650);
  await expect(panel.getByRole('button',{name:'Attack target'})).toBeVisible();
  await expect(panel.getByRole('button',{name:'Find character or enemies'})).toHaveAttribute('aria-expanded','false');
  await panel.getByRole('button',{name:'Find character or enemies'}).click();
