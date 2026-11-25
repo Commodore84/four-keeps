@@ -18,7 +18,7 @@ export function restorePracticeEncounter(campaign:Campaign):Campaign {
  const scenario=phase?.scenario??recovered.adventureSession?.pendingEncounter?.scenario;
  if(!scenario)return campaign;
  const foes=scenario.actors.filter(actor=>actor.side==='enemies');
- if(!foes.length||foes.length>2)return campaign;
+ if(!foes.length||foes.length>2||scenario.actors.some(actor=>actor.side==='allies'))return campaign;
  const playerClass=recovered.characterIdentity?.classId??recovered.character?.classId??'rogue';
  if(playerClass!=='rogue')return campaign;
  const stored=recovered.companionEncounter;
@@ -76,8 +76,8 @@ export function restorePracticeEncounter(campaign:Campaign):Campaign {
   journalStartIndex:recovered.journal.length+1,
  };
  const session=recovered.adventureSession;
- return {...recovered,combat:seed,adventureSession:session?
-  {...session,status:'encounter',pendingEncounter:undefined,encounterActorId:first.id}:session,
+ return {...recovered,...(active&&player&&recovered.character?{character:{...recovered.character,currentHitPoints:player.hp}}:{}),combat:seed,adventureSession:session?
+  {...session,status:'encounter' as const,pendingEncounter:undefined,encounterActorId:first.id}:session,
   updatedAt:now,
   journal:[...recovered.journal,{id:crypto.randomUUID(),kind:'system',createdAt:now,
     text:'Encounter opened in the original practice-combat interface. '+foes.map(actor=>actor.label).join(' and ')+' are present.'}]};
