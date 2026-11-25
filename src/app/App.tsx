@@ -32,6 +32,7 @@ import {completePlayerRest,playerLongRestWaitMinutes} from '../game/playerRecove
 import {frontierMerchantContext} from '../game/frontierShop';
 import {mergeWorld} from '../game/world';
 import {travelAdventure,proposeAdventureEncounter,recoverWarehouseRatEncounter,type AdventureSite} from '../game/adventureSession';
+import {restorePracticeEncounter} from '../game/practiceEncounterBridge';
 import {openingIntentForCampaign,prepareAdventureOpening,commitAdventureOpening,needsAdventureOpening,adventureMemory,prepareAdventureAction, pauseAdventureForClarification, answerAdventureClarification,commitAdventureAction} from '../game/adventureOrchestrator';
 import {campaignPlayerContext} from '../game/campaignContext';
 import {ImportedCharacterSheet} from './ImportedCharacterSheet';
@@ -181,6 +182,10 @@ function Adventure({ campaign, fullHistory, onToggleHistory, onAdventureChange, 
   if(development)return <section className="space-y-4" aria-label="Classic adventure testing">{campaign&&<details className="rounded-xl border border-white/10 p-3" open><summary className="cursor-pointer text-sm text-gold">Classic adventure and encounter tools</summary><AdventureSessionPanel campaign={campaign} saving={saving} onChange={onAdventureChange}/></details>}</section>;
   const encounterCampaign=campaign?recoverWarehouseRatEncounter(campaign):null;
   if(shouldRenderTacticalBattlefield(encounterCampaign)){
+    // Never show the replacement battlefield while a supported encounter is
+    // being safely persisted into the original Begin Practice Encounter engine.
+    if(restorePracticeEncounter(encounterCampaign)!==encounterCampaign)
+      return <section role="status" aria-label="Restoring original combat">Opening the original practice encounter…</section>;
     return <TacticalBattlefield key={encounterCampaign.id} campaign={encounterCampaign} saving={saving} onChange={onAdventureChange} onDm={onTacticalDm}/>;
   }
   if(campaign?.merchantShopOpen && campaign.adventureSession?.site==='frontier' && campaign.adventureSession.status==='exploring')return <section aria-label="Adventure storefront" className="h-full min-h-0 pb-0"><MerchantShop showDmRecommendations={showDmRecommendations} campaign={campaign} saving={saving} onClose={onShopClose} onPrepare={onShopPrepare} onRevise={onShopRevise} onSettle={onShopSettle} onDiscuss={onShopDiscuss} onSupplyChange={onAdventureChange}/></section>;
@@ -534,6 +539,22 @@ export function App() {
   const [newTitle, setNewTitle] = useState('The Forgotten Keep');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const restoringPracticeRef=useRef<string|null>(null);
+  useEffect(()=>{
+    if(!campaign||loading||saving||campaign.combat||restoringPracticeRef.current===campaign.id)return;
+    const restored=restorePracticeEncounter(campaign);
+    if(restored===campaign)return;
+    const id=campaign.id;
+    restoringPracticeRef.current=id;
+    setSaving(true);
+    void localCampaignStorage.save(restored).then(()=>{
+      setCampaign(current=>current?.id===id&&!current.combat?restored:current);
+      setCampaigns(items=>items.map(item=>item.id===id?restored:item));
+      setNotice('Original practice-combat interface restored for this encounter.');
+    }).catch(error=>setNotice('Unable to restore combat: '+String(error))).finally(()=>{
+      restoringPracticeRef.current=null;setSaving(false);
+    });
+  },[campaign,loading,saving]);
   const [saveStatus,setSaveStatus]=useState<CampaignSaveStatus|null>(null);
   useEffect(()=>subscribeCampaignSaveStatus(setSaveStatus),[]);
   const adventureRequestRef=useRef(false);
@@ -1478,6 +1499,20 @@ export function App() {
     setSaving(true);
     try {
       const concluded=concludeDuel(campaign);
+      if(campaign.combat.classicAdventure){
+        const now=new Date().toISOString(),session=concluded.adventureSession;
+        const next:Campaign={...concluded,companionEncounter:undefined,pendingAftermath:undefined,
+          adventureSession:session?{...session,status:'exploring',pendingEncounter:undefined,encounterActorId:undefined}:undefined,
+          updatedAt:now,journal:[...concluded.journal,{id:crypto.randomUUID(),kind:'system',createdAt:now,
+            text:playerDefeated?'The combat is finished; Nighthawk is unconscious. The DM must resolve the aftermath.':
+              'The encounter is won. Exploration resumes; the DM may adjudicate recovered loot and rewards.'}]};
+        await localCampaignStorage.save(next);
+        setCampaign(next);setCampaigns(items=>items.map(item=>item.id===next.id?next:item));
+        setPendingCombatAction(null);
+        setNotice('Original combat encounter finished. Exploration resumed.');
+        setSaving(false);
+        return;
+      }
       // Training Dummy is a mechanics-only sandbox, not a character in the story.
       // Never send its knockout to the narrative DM or leave an aftermath request.
       if(opponent==='Training Dummy'){
