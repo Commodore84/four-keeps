@@ -30,6 +30,8 @@ export type TacticalProfile=keyof typeof TACTICAL_PROFILES;
 export type ScenarioActor={id:string;label:string;profile:TacticalProfile;side:'enemies'|'allies';square:Square;surprised?:boolean};
 export type CombatScenario={
  locationKey:string;size:number; battlefield?:Battlefield; objective:string;actors:ScenarioActor[];starts:Square[];obstacles:Square[];
+ /** Optional, authored pre-initiative deployment choices. Default is starts[0]. */
+ entryOptions?:{label:string;square:Square}[];
  cover:Square[];difficult:Square[];exits:Square[];surprised:boolean;
  darkness?:Square[];elevation?:Record<string,number>;artwork?:'forest-ruins-test.svg';
 };
@@ -99,8 +101,28 @@ export function validateCombatScenario(value:unknown,locationKey:string):CombatS
  });
  if(!actors.some(actor=>actor.side==='enemies')||starts.some(start=>walls.has(squareKey(start))||occupied.has(squareKey(start))))throw Error('Starting squares must be open and at least one hostile actor is required.');
  if(exits.some(exit=>walls.has(squareKey(exit))||!([0,size-1].includes(exit.x)||[0,(battlefield?.height??size)-1].includes(exit.y))))throw Error('Exits must be open perimeter squares.');
+ // Only explicitly authored and validated combat starts may be offered to
+ // a player. Ordinary fixed-entry and older saved encounters are unaffected.
+ let entryOptions:CombatScenario['entryOptions'];
+ if(input.entryOptions!==undefined){
+  if(!battlefield||!Array.isArray(input.entryOptions)||input.entryOptions.length<2||input.entryOptions.length>4)
+   throw Error('Entry selection requires two to four verified battlefield starts.');
+  const seenEntries=new Set<string>();
+  entryOptions=input.entryOptions.map(raw=>{
+   if(!raw||typeof raw!=='object')throw Error('Invalid battlefield entry.');
+   const choice=raw as Record<string,unknown>,label=choice.label;
+   const point=square(choice.square);
+   const key=squareKey(point);
+   if(typeof label!=='string'||!label.trim()||label.trim().length>32||seenEntries.has(key)||
+      !starts.some(p=>squareKey(p)===key)||walls.has(key)||occupied.has(key))
+    throw Error('Entries must name unique open starting squares.');
+   seenEntries.add(key);
+   return {label:label.trim(),square:point};
+  });
+ }
  const objective=typeof input.objective==='string'?input.objective.trim().slice(0,180):'';
  return {locationKey,size,...(battlefield?{battlefield}:{}),objective,actors,starts,obstacles,cover,difficult,exits,surprised:input.surprised===true,
   ...(darkness.length?{darkness}:{}),...(Object.keys(elevation).length?{elevation}:{}),
+  ...(entryOptions?{entryOptions}:{}),
   ...(input.artwork==='forest-ruins-test.svg'?{artwork:input.artwork}:{})};
 }

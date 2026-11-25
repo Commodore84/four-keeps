@@ -64,7 +64,8 @@ export function validateGeneratedBattlefield(result:GeneratedBattlefield):boolea
  const {battlefield,starts,enemyStarts,exits}=result;
  if(!validateBattlefieldAccess(battlefield,[...starts,...enemyStarts,...exits]))return false;
  if(new Set([...starts,...enemyStarts].map(p=>p.x+','+p.y)).size!==starts.length+enemyStarts.length)return false;
- if(starts.some(p=>enemyStarts.some(q=>Math.max(Math.abs(p.x-q.x),Math.abs(p.y-q.y))<2)))return false;
+ if(starts.some(p=>enemyStarts.some(q=>Math.max(Math.abs(p.x-q.x),Math.abs(p.y-q.y))<10)))return false;
+ if(enemyStarts.length>1&&enemyStarts.some((p,i)=>enemyStarts.slice(i+1).some(q=>Math.max(Math.abs(p.x-q.x),Math.abs(p.y-q.y))<13)))return false;
  if(![...starts,...enemyStarts].every(p=>battlefieldApproachCount(battlefield,p)>=2))return false;
  const profile=battlefieldTacticalProfile(result);
  return profile.coverKinds>=2&&profile.roughTiles>=1&&profile.alternativeApproaches>=2;
@@ -75,11 +76,14 @@ export function generateBattlefield(environment:BattlefieldEnvironment,seed:stri
  const objects:BattlefieldObject[]=[];
  const add=(kind:BattlefieldObjectKind,x:number,y:number,w=1,h=1)=>objects.push({id:kind+'-'+objects.length,kind,x,y,width:w,height:h,asset:kind});
  const mid=Math.floor(height/2);
- const starts=[{x:3,y:mid},{x:3,y:mid+1}];
- // Place foes from the same deterministic seed as physical geometry.
- // Keep the player's entrance stable so the original combat controls and
- // nearby-door interaction remain consistent across tests and real encounters.
- const enemyStarts=[{x:pick(9,10),y:mid-pick(1,3)},{x:pick(11,12),y:mid+pick(2,3)}];
+ // The central entry preserves existing initial positioning and nearby-door
+ // tests. Warehouse and ruins also have two distinct accessible approaches.
+ // Roadside ambushes remain a fixed entry by design.
+ const starts=environment==='roadside-bandit'?[{x:3,y:mid}]:
+   [{x:3,y:mid},{x:3,y:5},{x:3,y:height-6}];
+ // Temporary positions are used while seeded physical clutter is validated.
+ // Final enemies are selected in separated tactical zones after scenery.
+ const enemyStarts=[{x:9,y:mid-2},{x:11,y:mid+3}];
  const exits=[{x:0,y:mid},{x:width-1,y:mid}];
  if(environment==='warehouse-vermin'){
   // Perimeter and two entrances; repeated cargo bays separated by generous aisles.
@@ -123,10 +127,45 @@ export function generateBattlefield(environment:BattlefieldEnvironment,seed:stri
   const kind=extras[pick(0,extras.length-1)],x=pick(15,width-6),y=pick(4,height-5);
   if(objects.some(o=>x<o.x+o.width&&x+1>o.x&&y<o.y+o.height&&y+1>o.y))continue;
   add(kind,x,y);
-  if(validateGeneratedBattlefield({battlefield,starts,enemyStarts,exits}))added++;
+  // Cheap connectivity preflight for scenery iterations. The complete
+  // tactical approach/spacing gate runs once on each final spawn candidate.
+  if(validateBattlefieldAccess(battlefield,[...starts,...enemyStarts,...exits])&&
+     [...starts,...enemyStarts].every(point=>battlefieldApproachCount(battlefield,point)>=2))added++;
   else objects.pop();
  }
+ // Place foes in contrasting parts of the actual map, not in a two-cell
+ // cluster next to the player. These ranges include differing lanes and
+ // distances across the three encounter environments.
+ const regions=environment==='warehouse-vermin'
+   ?[{x0:15,x1:24,y0:9,y1:14},{x0:27,x1:35,y0:18,y1:22}]
+   :environment==='roadside-bandit'
+   ?[{x0:11,x1:26,y0:7,y1:23},{x0:12,x1:27,y0:38,y1:53}]
+   :[{x0:17,x1:29,y0:7,y1:17},{x0:31,x1:43,y0:24,y1:35}];
+ const candidates=regions.map(zone=>{
+  const choices:BattlefieldPoint[]=[];
+  const seen=new Set<string>();
+  for(let i=0;i<140&&choices.length<24;i++){
+   const point={x:pick(zone.x0,zone.x1),y:pick(zone.y0,zone.y1)};
+   const key=point.x+','+point.y;
+   if(seen.has(key))continue;seen.add(key);
+   if(battlefieldBlocked(battlefield,point)||battlefieldApproachCount(battlefield,point)<2)continue;
+   if(starts.some(start=>Math.max(Math.abs(start.x-point.x),Math.abs(start.y-point.y))<10))continue;
+   choices.push(point);
+  }
+  return choices;
+ });
+ let located=false;
+ for(const first of candidates[0]){
+  for(const second of candidates[1]){
+   if(Math.max(Math.abs(first.x-second.x),Math.abs(first.y-second.y))<13)continue;
+   const trial={battlefield,starts,enemyStarts:[first,second],exits};
+   if(!validateGeneratedBattlefield(trial))continue;
+   enemyStarts.splice(0,2,first,second);
+   located=true;break;
+  }
+  if(located)break;
+ }
+ if(!located)throw Error('Generated encounter cannot place separated enemies on valid tactical routes.');
  const result={battlefield,starts,enemyStarts,exits};
- if(!validateGeneratedBattlefield(result))throw Error('Generated battlefield has inaccessible, overlapping or trapped starting positions.');
  return result;
 }

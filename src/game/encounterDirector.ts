@@ -52,7 +52,12 @@ export function buildSoloEncounter(id:SoloEncounterId,locationKey:string,seed=lo
   id:monsterId+'-'+(index+1),label:getMonster(monsterId)!.name,profile:monsterId,
   side:'enemies' as const,square:generated.enemyStarts[index]
  }));
- const scenario=validateCombatScenario({...template.battlefield,battlefield:generated.battlefield,starts:generated.starts,exits:generated.exits,actors:positions,darkness:undefined},locationKey);
+ const entryLabels=id==='warehouse-vermin'?['West doorway','North loading aisle','South storage aisle']:
+  id==='ruins-goblin-scouts'?['West breach','North courtyard','South rubble approach']:undefined;
+ const entryOptions=entryLabels?.map((label,index)=>({label,square:generated.starts[index]}));
+ const scenario=validateCombatScenario({...template.battlefield,battlefield:generated.battlefield,
+  starts:generated.starts,exits:generated.exits,actors:positions,darkness:undefined,
+  ...(entryOptions?{entryOptions}:{})},locationKey);
  return {scenario,assessment:levelOneEncounterBudget(template.monsterIds)};
 }
 

@@ -57,6 +57,7 @@ export function restorePracticeEncounter(campaign:Campaign):Campaign {
   enemyPosition:position(first.id,scenario.battlefield?foes[0].square:{x:10,y:10}),
   playerPosition:position('nighthawk',scenario.battlefield?scenario.starts[0]:{x:2,y:10}),
   ...(scenario.battlefield?{battlefield:scenario.battlefield,secondStart:foes[1]?.square}:{}),
+  ...(!active&&scenario.entryOptions?{entryOptions:scenario.entryOptions}:{}),
   round:active?stored?.round??1:1,
   ...(active?{
    playerInitiative:initiative('nighthawk')??1,

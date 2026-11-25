@@ -62,3 +62,6 @@ Read the **Faster development and release workflow** section in RELEASE_CHECKS.m
 
 ### Embedded practice encounter UX (2026-11-25)
 The next Dynamic Battlefields batch scopes disposable random encounters under their real parent adventure without a second saved campaign card, while preserving physical rules and original classic combat. See DYNAMIC_BATTLEFIELDS.md section "Embedded disposable encounters and simplified mobile combat interface". The combat camera uses drag/pinch only; no Fixture/Center/Fit toolbar, no composer refresh, and no hardcoded dummy monster name in hit results. Run full exact-SHA release checks and update the foundation only after green CI and READY.
+
+### Wide battlefields and optional entry selection (2026-11-25)
+The shared generator now spreads enemies across physically valid tactical regions, rather than clustering near the entry. Some authored encounters (warehouse/ruins) allow one of three saved pre-initiative player start squares, while roadside retains a fixed entry. All moves after initiative continue through the original engine's 2024 movement rules. See DYNAMIC_BATTLEFIELDS.md. Confirm exact candidate SHA and release checks before publication.

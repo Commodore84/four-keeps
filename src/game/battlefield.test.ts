@@ -5,6 +5,7 @@ import {buildSoloEncounter} from './encounterDirector';
 import {fitsBattlefield,validateCombatScenario} from './combatScenario';
 import {newCampaign,moveDuelToken,interactDuelBattlefieldDoor,interactDuelBattlefieldOpening,tacticalRoute,takeDuelTurnAction,rollDuelAttack,trainingRouteCost,type Campaign} from './campaign';
 import {restorePracticeEncounter} from './practiceEncounterBridge';
+import {chooseDuelEntry,rollDuelInitiative} from './campaign';
 
 const map:Battlefield={width:60,height:80,objects:[
  {id:'wall',kind:'wall',x:30,y:45,width:1,height:4},
@@ -59,6 +60,48 @@ describe('authoritative rectangular battlefield',()=>{
   expect(tacticalRoute(c.combat!,{x:31,y:50})).toBeNull();
  });
 });
+describe('spread encounter starts and optional player deployment',()=>{
+ for(const id of ['warehouse-vermin','roadside-bandit','ruins-goblin-scouts'] as const){
+  it(id+' places enemies in distinct distant zones across varied seeds',()=>{
+   const seen=new Set<string>();
+   for(let i=0;i<40;i++){
+    const g=generateBattlefield(id,'spread-seed-'+i),[a,b]=g.enemyStarts;
+    const range=Math.max(Math.abs(a.x-b.x),Math.abs(a.y-b.y));
+    expect(range).toBeGreaterThanOrEqual(13);
+    expect(g.starts.every(p=>g.enemyStarts.every(e=>Math.max(Math.abs(p.x-e.x),Math.abs(p.y-e.y))>=10))).toBe(true);
+    expect(validateGeneratedBattlefield(g)).toBe(true);
+    expect(g.battlefield.objects.some(o=>o.kind==='door'||o.kind==='tree'||o.kind==='wall')).toBe(true);
+    seen.add(a.x+','+a.y+':'+b.x+','+b.y);
+   }
+   expect(seen.size).toBeGreaterThan(22);
+  });
+ }
+ it('allows selecting an authored open entry before initiative, retaining it after the roll and save',()=>{
+  const scenario=buildSoloEncounter('warehouse-vermin','combat-lab','spread-choice').scenario;
+  expect(scenario.entryOptions?.map(o=>o.label)).toEqual(['West doorway','North loading aisle','South storage aisle']);
+  const pending={...newCampaign('Test','entry-saved'),adventureSession:{status:'exploring',site:'frontier',characterSource:'campaign-character',visited:['frontier'],interactions:[],pendingEncounter:{enemyName:'Giant Rats',actionId:'choice',scenario}}} as Campaign;
+  const combat=restorePracticeEncounter(pending);
+  expect(combat.combat?.status).toBe('awaiting-initiative');
+  expect(combat.combat?.entryOptions).toEqual(scenario.entryOptions);
+  const moved=chooseDuelEntry(combat,2);
+  expect(moved.combat?.playerPosition).toEqual(scenario.starts[2]);
+  expect(moved.combat?.movementUsed??0).toBe(0);
+  expect(JSON.parse(JSON.stringify(moved.combat?.playerPosition))).toEqual(scenario.starts[2]);
+  const rolled=rollDuelInitiative(moved);
+  expect(rolled.combat?.playerPosition).toEqual(scenario.starts[2]);
+  expect(()=>chooseDuelEntry(rolled,0)).toThrow('before initiative');
+  expect(()=>chooseDuelEntry(combat,99)).toThrow('before initiative');
+  expect(()=>chooseDuelEntry(combat,-1)).toThrow('before initiative');
+ });
+ it('keeps the roadside encounter fixed and rejects unverified or blocked deployment options',()=>{
+  const fixed=buildSoloEncounter('roadside-bandit','combat-lab','roadside-fixed').scenario;
+  expect(fixed.entryOptions).toBeUndefined();
+  const sample=buildSoloEncounter('ruins-goblin-scouts','combat-lab','ruins-deployment').scenario;
+  expect(sample.entryOptions).toHaveLength(3);
+  expect(()=>validateCombatScenario({...sample,entryOptions:[{label:'Forbidden',square:sample.actors[0].square},{label:'West',square:sample.starts[0]}]},'test')).toThrow('Entries must name unique');
+  expect(()=>validateCombatScenario({...sample,entryOptions:[{label:'Duplicate',square:sample.starts[0]},{label:'Again',square:sample.starts[0]}]},'test')).toThrow('Entries must name unique');
+ });
+});
 describe('three permanent encounter generators',()=>{
  const environments=[['warehouse-vermin',40,32,50],['roadside-bandit',32,60,75],['ruins-goblin-scouts',48,40,100]] as const;
  for(const [id,width,height,xp] of environments){
@@ -68,7 +111,7 @@ describe('three permanent encounter generators',()=>{
     expect(g.battlefield).toMatchObject({width,height});
     expect(generateBattlefield(id,seed)).toEqual(g);
     expect(validateBattlefieldAccess(g.battlefield,[...g.starts,...g.enemyStarts,...g.exits])).toBe(true);
-    expect(new Set([...g.starts,...g.enemyStarts].map(p=>p.x+','+p.y)).size).toBe(4);
+    expect(new Set([...g.starts,...g.enemyStarts].map(p=>p.x+','+p.y)).size).toBe(g.starts.length+g.enemyStarts.length);
    }
    expect(generateBattlefield(id,'a').battlefield).not.toEqual(generateBattlefield(id,'b').battlefield);
    const {scenario,assessment}=buildSoloEncounter(id,'dasahi','playthrough-a');

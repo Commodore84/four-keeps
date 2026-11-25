@@ -1636,7 +1636,34 @@ test('Generate Random Encounter uses the real combat engine, cycles environments
    },n);
    await lab.getByRole('button',{name:'Generate Random Encounter'}).click();
    await expect(page.getByRole('button',{name:'Roll initiative (d20 + DEX)'})).toBeVisible();
+   const precombat=await readScopedLab(page,actual.id);
+   const firstSpawn=precombat.combat.enemyPosition,secondSpawn=precombat.combat.secondStart;
+   expect(secondSpawn).toBeDefined();
+   expect(Math.max(Math.abs(firstSpawn.x-secondSpawn.x),Math.abs(firstSpawn.y-secondSpawn.y))).toBeGreaterThanOrEqual(13);
+   expect(precombat.combat.battlefield.objects.length).toBeGreaterThan(4);
+   const selection=page.getByRole('group',{name:'Choose starting position'});
+   if(n===1){
+     await expect(selection).toHaveCount(0);
+   }else{
+     const option=n===0?'North loading aisle':'South rubble approach';
+     await expect(selection).toBeVisible();
+     await expect(selection.getByRole('button')).toHaveCount(3);
+     await selection.getByRole('button',{name:new RegExp(option)}).click();
+     const beforeInitiative=await readScopedLab(page,actual.id);
+     const selected=beforeInitiative.combat.entryOptions.find((entry:any)=>entry.label===option);
+     expect(beforeInitiative.combat.playerPosition).toEqual(selected.square);
+     expect(beforeInitiative.combat.status).toBe('awaiting-initiative');
+     if(n===0){
+       await page.screenshot({path:'test-results/dynamic-entry-choice-iphone.png'});
+       await page.reload();
+       await page.getByRole('button',{name:'Campaigns',exact:true}).click();
+       await expect(page.getByRole('button',{name:'Resume test encounter'})).toBeVisible();
+       await page.getByRole('button',{name:'Resume test encounter'}).click();
+       await expect(selection.getByRole('button',{name:new RegExp(option)})).toHaveAttribute('aria-pressed','true');
+     }
+   }
    await page.getByRole('button',{name:'Roll initiative (d20 + DEX)'}).click();
+   await expect(selection).toHaveCount(0);
    const board=page.getByRole('grid',{name:'Combat movement grid'});
    await expect(board).toBeVisible();
    await expect(page.getByRole('region',{name:'Tactical battlefield'})).toHaveCount(0);
@@ -1651,6 +1678,9 @@ test('Generate Random Encounter uses the real combat engine, cycles environments
    const source=after.find(c=>c.id===actual.id);
    expect(source).toEqual(actual);
    const session=await readScopedLab(page,actual.id);
+   // Once initiative is rolled an enemy may immediately move, so measure
+   // *spawn* separation above, before its first turn can change positions.
+   expect(session.combat.secondEnemy).toBeDefined();
    expect(session.combatLab).toMatchObject({environment:['warehouse-vermin','roadside-bandit','ruins-goblin-scouts'][n],seed:'lab-'+n.toString(16).padStart(8,'0'),originCampaignId:actual.id});
    expect(session.combat?.classicAdventure?.origin).toBe('dm');
    expect(session.combat?.battlefield?.objects.length).toBeGreaterThan(4);
