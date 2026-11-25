@@ -3,7 +3,7 @@ import {
   newCampaign, takeDuelTurnAction, rollDuelAttack, resolveDuelEnemyTurn,
   owlHelp, moveOwl, moveDuelToken, canNighthawkHide, standNighthawk, beginEnemyShove, rollPlayerShoveSave, beginEnemyGrapple, rollPlayerGrappleSave, beginPlayerGrappleEscape, rollPlayerGrappleEscape, resolveEnemyOpportunity, type Campaign,
 } from './campaign';
-import { availableCombatMovement, combatHideStatus, combatAttackRollPreview } from './combat-ui';
+import { availableCombatMovement, combatHideStatus, combatAttackRollPreview, combatWeaponChoices } from './combat-ui';
 
 type Combat = NonNullable<Campaign['combat']>;
 const combat=(c:Campaign)=>c.combat!;
@@ -28,6 +28,35 @@ function dice(...rolls:number[]) {
   return ()=>expect(index).toBe(rolls.length);
 }
 afterEach(()=>vi.restoreAllMocks());
+
+describe('combat weapon picker with finite ammunition',()=>{
+ it('offers thrown dagger at 30 ft with long-range Disadvantage and records spent daggers',()=>{
+  const c=arena({playerPosition:{x:2,y:10},enemyPosition:{x:8,y:10},daggersAvailable:2,arrowsRemaining:10});
+  const model=combatWeaponChoices(c.combat!);
+  expect(model.distance).toBe(30);
+  expect(model.choices.map(choice=>choice.label)).toEqual(['Dagger (Throw)','Shortbow']);
+  expect(model.choices[0]).toMatchObject({eligible:true,roll:'Disadvantage',count:2});
+  expect(model.choices[1]).toMatchObject({eligible:true,count:10});
+  const aimed=combatWeaponChoices({...c.combat!,steadyAim:true});
+  expect(aimed.choices[0].roll).toBe('Normal roll');
+  expect(aimed.choices[1].roll).toBe('Advantage');
+  const chosen=takeDuelTurnAction(c,'throw-dagger');
+  expect(chosen.combat?.attack?.thrown).toBe(true);
+  expect(chosen.combat?.actionUsed).toBe(true);
+  const consume=dice(11,3);
+  const rolled=rollDuelAttack(chosen,'hit');
+  expect(rolled.combat?.daggersAvailable).toBe(1);
+  expect(rolled.combat?.daggersThrown).toBe(1);
+  consume();
+ });
+ it('keeps unavailable thrown dagger visible with a reason, never enabled at zero stock or beyond 60 ft',()=>{
+  const c=arena({playerPosition:{x:2,y:10},enemyPosition:{x:8,y:10},daggersAvailable:0,arrowsRemaining:10});
+  expect(combatWeaponChoices(c.combat!).choices[0]).toMatchObject({eligible:false,reason:'No daggers available'});
+  const far=arena({playerPosition:{x:2,y:10},enemyPosition:{x:15,y:10},daggersAvailable:2});
+  expect(combatWeaponChoices(far.combat!).choices[0]).toMatchObject({eligible:false,reason:'Out of range (60 ft maximum)'});
+  expect(combatWeaponChoices(far.combat!).choices[1].eligible).toBe(true);
+ });
+});
 
 describe('deterministic attack and Sneak Attack outcomes',()=>{
   it('natural 20 hits, rolls 2d6 weapon + 4d6 Sneak Attack at level 3, and never doubles DEX',()=>{

@@ -41,9 +41,15 @@ export function makeCombatLabEncounter(environment:SoloEncounterId,seed:string,o
    }
  };
  const ready=restorePracticeEncounter(staged);
- if(!ready.combat?.battlefield||ready.combat.classicAdventure?.origin!=='dm'||ready.combat.status!=='awaiting-initiative')
+ // Combat Lab is a disposable rules test, not a copy of depleted live supplies.
+ // Keep at least two practice daggers available without touching the player's
+ // real campaign. All further throws consume these via the normal combat rules.
+ const labEquipment={daggers:Math.max(2,ready.equipment?.daggers??0),arrows:ready.equipment?.arrows??20,caltrops:ready.equipment?.caltrops??0,ballBearings:ready.equipment?.ballBearings??0};
+ const supplied:Campaign={...ready,equipment:labEquipment,
+   combat:ready.combat?{...ready.combat,daggersAvailable:labEquipment.daggers}:undefined};
+ if(!supplied.combat?.battlefield||supplied.combat.classicAdventure?.origin!=='dm'||supplied.combat.status!=='awaiting-initiative')
    throw Error('The shared encounter engine could not start this generated scenario.');
- return ready;
+ return supplied;
 }
 
 export function sampleRandomCombatLab(nextUint32:()=>number):{environment:SoloEncounterId;seed:string}{

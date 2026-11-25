@@ -51,6 +51,17 @@ describe('shared Combat Lab test entry point',()=>{
   expect(rogue).toEqual(before);
   expect(lab.combat?.classicAdventure?.origin).toBe('dm');
  });
+ it('provides isolated practice daggers when the source Rogue owns none',()=>{
+  const source=newCampaign('Empty inventory','out-of-daggers');
+  const depleted={...source,characterIdentity:{name:'Nighthawk',classId:'rogue'} as NonNullable<typeof source.characterIdentity>,
+    equipment:{...source.equipment!,daggers:0},inventoryLedger:source.inventoryLedger};
+  const before=structuredClone(depleted);
+  const lab=makeCombatLabEncounter('warehouse-vermin','lab-1234aaaa',depleted);
+  expect(lab.equipment?.daggers).toBe(2);
+  expect(lab.combat?.daggersAvailable).toBe(2);
+  expect(lab.combatLab?.originCampaignId).toBe(depleted.id);
+  expect(depleted).toEqual(before);
+ });
  it('retains generated positions and objects after initiative and moving a character',()=>{
   const lab=makeCombatLabEncounter('roadside-bandit','lab-11112222');
   const rolled=rollDuelInitiative(lab);

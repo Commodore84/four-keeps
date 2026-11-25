@@ -1669,3 +1669,63 @@ test('Generate Random Encounter uses the real combat engine, cycles environments
    }
  }
 });
+
+test('Combat Lab shows and resolves a thrown dagger at 30 feet without touching the original campaign',async({page})=>{
+ test.setTimeout(100000);
+ await page.setViewportSize({width:390,height:844});
+ await page.goto('/four-keeps/');
+ await createLegacyCampaign(page,'Rogue practice source');
+ const before=(await readAllCampaigns(page))[0];
+ // Check the reported defect: source equipment can have zero daggers,
+ // but the isolated Combat Lab provides its own expendable practice set.
+ await page.evaluate(async()=>{
+  const db=await new Promise<IDBDatabase>((resolve,reject)=>{
+   const r=indexedDB.open('four-keeps-local',1);r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);
+  });
+  const tx=db.transaction('campaigns','readwrite'),store=tx.objectStore('campaigns');
+  const list=await new Promise<any[]>(resolve=>{const r=store.getAll();r.onsuccess=()=>resolve(r.result);});
+  list[0].equipment={...(list[0].equipment??{arrows:20,caltrops:0,ballBearings:0}),daggers:0};store.put(list[0]);
+  await new Promise<void>((resolve,reject)=>{tx.oncomplete=()=>resolve();tx.onerror=()=>reject(tx.error);});
+  db.close();
+ });
+ await page.reload();
+ await page.getByRole('button',{name:'Campaigns',exact:true}).click();
+ await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await navigate(page,'Developer');
+ await page.getByRole('button',{name:'Generate Random Encounter'}).click();
+ await page.getByRole('button',{name:'Roll initiative (d20 + DEX)'}).click();
+ // Explicitly position the first target 30 feet from Nighthawk to reproduce
+ // the exact screen and avoid relying on randomly selected warehouse spawns.
+ await page.evaluate(async()=>{
+  const db=await new Promise<IDBDatabase>((resolve,reject)=>{
+   const r=indexedDB.open('four-keeps-local',1);r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);
+  });
+  const tx=db.transaction('campaigns','readwrite'),store=tx.objectStore('campaigns');
+  const all=await new Promise<any[]>(resolve=>{const r=store.getAll();r.onsuccess=()=>resolve(r.result);});
+  const session=all.find(c=>c.combatLab);
+  const p=session.combat.playerPosition;
+  session.combat.enemyPosition={x:p.x+6,y:p.y};
+  session.combat.selectedEnemy='first';
+  session.combat.order=['Nighthawk',session.combat.enemyName];
+  session.combat.turnIndex=0;
+  store.put(session);
+  await new Promise<void>((resolve,reject)=>{tx.oncomplete=()=>resolve();tx.onerror=()=>reject(tx.error);});
+  db.close();
+ });
+ await page.reload();
+ await page.getByRole('button',{name:'Campaigns',exact:true}).click();
+ await page.getByText('TEST SESSION').first().locator('..').getByRole('button',{name:'Continue Adventure'}).click();
+ await page.getByLabel('2024 D&D actions').getByRole('button',{name:'Attack',exact:true}).click();
+ const action=page.getByRole('region',{name:'Confirm combat action'});
+ await expect(action).toContainText('Target: 30 ft away');
+ await expect(action.getByRole('button',{name:/Dagger \(Throw\)/})).toBeEnabled();
+ await expect(action.getByRole('button',{name:/Dagger \(Throw\)/})).toContainText('20/60 ft');
+ await expect(action.getByRole('button',{name:/Dagger \(Throw\)/})).toContainText('Disadvantage');
+ await page.screenshot({path:'test-results/iphone-thrown-dagger-30ft.png'});
+ await action.getByRole('button',{name:/Dagger \(Throw\)/}).click();
+ await action.getByRole('button',{name:'Confirm'}).click();
+ await expect.poll(async()=> (await readAllCampaigns(page)).find(c=>c.combatLab)?.combat?.daggersAvailable).toBe(1);
+ expect((await readAllCampaigns(page)).find(c=>!c.combatLab)?.equipment?.daggers).toBe(0);
+ expect((await readAllCampaigns(page)).find(c=>c.combatLab)?.combat?.daggersThrown).toBe(1);
+ await expect(page.getByLabel('Combat Lab session')).toBeVisible();
+});
