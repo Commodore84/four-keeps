@@ -1793,187 +1793,107 @@ test('iPhone consumable use updates healing, resistance and individual wand copi
   expect(record.inventoryLedger.gear.filter((row:any)=>row.name===name).reduce((sum:number,row:any)=>sum+row.quantity,0)).toBe(0);
 });
 
-test('iPhone Stealth check resolution transitions directly into warehouse tactical combat',async({page})=>{
+test('iPhone Stealth check resolution opens original practice encounter instead of Phase 3 battlefield',async({page})=>{
  test.setTimeout(90000);
  await createAndImport(page,'rogue');
- await page.evaluate(()=>{
-  localStorage.setItem('four-keeps-access-code','browser-test-code');
-  localStorage.setItem('four-keeps-dm-mode','on');
- });
+ await page.evaluate(()=>{localStorage.setItem('four-keeps-access-code','browser-test-code');localStorage.setItem('four-keeps-dm-mode','on');});
  await page.route('**/api/dm',async route=>{
-  const request=route.request().postDataJSON();
-  const shared={worldUpdates:{},newFacts:[]};
+  const request=route.request().postDataJSON(),shared={worldUpdates:{},newFacts:[]};
   if(request.opening){await route.fulfill({json:{...shared,narration:'Dasahi warehouses are busy.'}});return;}
-  if(request.checkToken){
-   await route.fulfill({json:{...shared,narration:'Your careful approach succeeds, but two giant rats see the drawn bow and rush you. Roll initiative.',
-    checkResult:{skill:'Stealth',dice:request.dice,kept:request.dice[0],modifier:7,total:request.dice[0]+7,success:true},
-    combatStart:{enemyName:'Warehouse rats',templateId:'warehouse-vermin'}}});return;
-  }
-  await route.fulfill({json:{...shared,narration:'You slip between crates. Make a Stealth check to approach the rats.',
-    checkRequest:{skill:'Stealth',mode:'normal',reason:'Approach quietly',token:'signed-test-token'}}});
+  if(request.checkToken){await route.fulfill({json:{...shared,narration:'Two giant rats rush you. Roll initiative.',
+   checkResult:{skill:'Stealth',dice:request.dice,kept:request.dice[0],modifier:7,total:request.dice[0]+7,success:true},
+   combatStart:{enemyName:'Warehouse rats',templateId:'warehouse-vermin'}}});return;}
+  await route.fulfill({json:{...shared,narration:'Approach quietly. Make a Stealth check.',
+   checkRequest:{skill:'Stealth',mode:'normal',reason:'Approach quietly',token:'signed-test-token'}}});
  });
- await page.reload();
- await page.getByRole('button',{name:'Campaigns',exact:true}).click();
+ await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();
  await page.getByRole('button',{name:'Continue Adventure'}).click();
  await expect.poll(async()=> (await saved(page))?.journal?.some((entry:any)=>entry.id?.endsWith('-dm-opening'))).toBe(true);
- await page.getByLabel('Message the Dungeon Master').fill('I approach quietly and ready my bow if the rats attack.');
+ await page.getByLabel('Message the Dungeon Master').fill('I approach quietly and ready my bow.');
  await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
- await expect(page.getByRole('button',{name:'Roll Stealth'})).toBeVisible();
  await page.getByRole('button',{name:'Roll Stealth'}).click();
- await expect.poll(async()=> (await saved(page))?.adventureSession?.pendingEncounter?.scenario?.actors?.length).toBe(2);
+ await expect.poll(async()=> Boolean((await saved(page))?.combat?.classicAdventure)).toBe(true);
  const state=await saved(page);
  expect(state.pendingCheck).toBeUndefined();
- expect(state.adventureSession.pendingEncounter.scenario.actors.map((actor:any)=>actor.profile)).toEqual(['giant-rat','giant-rat']);
- await expect(page.getByRole('region',{name:'Tactical battlefield'})).toBeVisible();
- await page.reload();
- await page.getByRole('button',{name:'Campaigns',exact:true}).click();
+ expect(state.combat.classicAdventure.second).toBeDefined();
+ await expect(page.getByLabel('Combat movement grid')).toBeVisible();
+ await expect(page.getByRole('region',{name:'Tactical battlefield'})).toHaveCount(0);
+ await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();
  await page.getByRole('button',{name:'Continue Adventure'}).click();
- await expect(page.getByRole('region',{name:'Tactical battlefield'})).toBeVisible();
+ await expect(page.getByRole('button',{name:'Roll initiative (d20 + DEX)'})).toBeVisible();
 });
-test('iPhone DM template handoff opens verified solo battlefield without requiring a generated map',async({page})=>{
+test('iPhone DM warehouse template restores exact original practice combat controls',async({page})=>{
  test.setTimeout(90000);
  await createAndImport(page,'rogue');
- await page.evaluate(()=>{
-  localStorage.setItem('four-keeps-access-code','browser-test-code');
-  localStorage.setItem('four-keeps-dm-mode','on');
- });
+ await page.evaluate(()=>{localStorage.setItem('four-keeps-access-code','browser-test-code');localStorage.setItem('four-keeps-dm-mode','on');});
  await page.route('**/api/dm',async route=>{
-  const request=route.request().postDataJSON();
-  const shared={worldUpdates:{},newFacts:[]};
+  const request=route.request().postDataJSON(),shared={worldUpdates:{},newFacts:[]};
   if(request.opening){await route.fulfill({json:{...shared,narration:'The city of Dasahi wakes around you.'}});return;}
   await route.fulfill({json:{...shared,narration:'Two giant rats emerge from the warehouse crates.',
    combatStart:{enemyName:'Warehouse rats',templateId:'warehouse-vermin'}}});
  });
- await page.reload();
- await page.getByRole('button',{name:'Campaigns',exact:true}).click();
+ await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();
  await page.getByRole('button',{name:'Continue Adventure'}).click();
  await expect.poll(async()=> (await saved(page))?.journal?.some((entry:any)=>entry.id?.endsWith('-dm-opening'))).toBe(true);
- const composer=page.getByLabel('Message the Dungeon Master');
- await composer.fill('I step into the warehouse and the rats attack me.');
+ await page.getByLabel('Message the Dungeon Master').fill('I enter the warehouse and the rats attack.');
  await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
- const panel=page.getByRole('region',{name:'Tactical battlefield'});
- await expect(panel).toBeVisible();
- const scenario=await saved(page);
- expect(scenario?.adventureSession?.pendingEncounter?.scenario?.actors.map((actor:any)=>actor.profile)).toEqual(['giant-rat','giant-rat']);
- await expect(panel.getByRole('button',{name:'Roll initiative'})).toBeVisible();
- await navigate(page,'Journal');
- await page.getByRole('button',{name:'Bestiary'}).click();
+ await expect.poll(async()=> Boolean((await saved(page))?.combat?.classicAdventure)).toBe(true);
+ await expect(page.getByLabel('Combat movement grid')).toBeVisible();
+ await expect(page.getByRole('button',{name:'Roll initiative (d20 + DEX)'})).toBeVisible();
+ await expect(page.getByRole('region',{name:'Tactical battlefield'})).toHaveCount(0);
+ await navigate(page,'Journal');await page.getByRole('button',{name:'Bestiary'}).click();
  await expect(page.getByLabel('Bestiary')).toContainText('Creatures you encounter');
 });
-test('iPhone existing mapless warehouse rat combat opens the tactical board and persists after initiative',async({page})=>{
+test('iPhone existing mapless warehouse rat job reopens in original practice combat without reset',async({page})=>{
  test.setTimeout(90000);
  await createAndImport(page,'rogue');
- await page.evaluate(()=>{
-  localStorage.setItem('four-keeps-access-code','browser-test-code');
-  localStorage.setItem('four-keeps-dm-mode','on');
- });
+ await page.evaluate(()=>{localStorage.setItem('four-keeps-access-code','browser-test-code');localStorage.setItem('four-keeps-dm-mode','on');});
  await page.route('**/api/dm',async route=>{
-  const request=route.request().postDataJSON();
-  const shared={worldUpdates:{},newFacts:[]};
+  const request=route.request().postDataJSON(),shared={worldUpdates:{},newFacts:[]};
   if(request.opening){await route.fulfill({json:{...shared,narration:'Dasahi warehouses are ready for investigation.'}});return;}
   await route.fulfill({json:{...shared,narration:'Inside the warehouse behind a pallet stack, the enormous dockside rat sees your shortbow. Combat begins.',
    combatStart:{enemyName:'Giant rat'}}});
  });
- await page.reload();
- await page.getByRole('button',{name:'Campaigns',exact:true}).click();
+ await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();
  await page.getByRole('button',{name:'Continue Adventure'}).click();
  await expect.poll(async()=> (await saved(page))?.journal?.some((entry:any)=>entry.id?.endsWith('-dm-opening'))).toBe(true);
- await page.getByLabel('Message the Dungeon Master').fill('I move until I see the rat so I can attack it with my bow');
+ await page.getByLabel('Message the Dungeon Master').fill('I move until I see the rat so I can attack.');
  await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
- const battle=page.getByRole('region',{name:'Tactical battlefield'});
- await expect(battle).toBeVisible();
- expect((await saved(page)).adventureSession.pendingEncounter.scenario).toBeUndefined();
- await expect(battle.getByRole('button',{name:'Roll initiative'})).toBeVisible();
- await page.reload();
- await page.getByRole('button',{name:'Campaigns',exact:true}).click();
+ await expect.poll(async()=> Boolean((await saved(page))?.combat?.classicAdventure)).toBe(true);
+ await expect(page.getByLabel('Combat movement grid')).toBeVisible();
+ await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();
  await page.getByRole('button',{name:'Continue Adventure'}).click();
- await expect(page.getByRole('region',{name:'Tactical battlefield'})).toBeVisible();
+ await expect(page.getByRole('button',{name:'Roll initiative (d20 + DEX)'})).toBeVisible();
 });
-test('iPhone combat setup has visible start position, selectable alternatives and usable initiative',async({page})=>{
+test('iPhone practice combat uses original initiative tracker, action economy, and tactical map',async({page})=>{
  test.setTimeout(90000);
  await page.setViewportSize({width:390,height:844});
  await createAndImport(page,'rogue');
- await page.evaluate(()=>{
-  localStorage.setItem('four-keeps-access-code','browser-test-code');
-  localStorage.setItem('four-keeps-dm-mode','on');
- });
+ await page.evaluate(()=>{localStorage.setItem('four-keeps-access-code','browser-test-code');localStorage.setItem('four-keeps-dm-mode','on');});
  await page.route('**/api/dm',async route=>{
-  const request=route.request().postDataJSON();
-  const shared={worldUpdates:{},newFacts:[]};
+  const request=route.request().postDataJSON(),shared={worldUpdates:{},newFacts:[]};
   if(request.opening){await route.fulfill({json:{...shared,narration:'Dasahi welcomes you.'}});return;}
   await route.fulfill({json:{...shared,narration:'Two giant rats lunge from warehouse cargo.',
    combatStart:{enemyName:'Warehouse rats',templateId:'warehouse-vermin'}}});
  });
- await page.reload();
- await page.getByRole('button',{name:'Campaigns',exact:true}).click();
+ await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();
  await page.getByRole('button',{name:'Continue Adventure'}).click();
  await expect.poll(async()=> (await saved(page))?.journal?.some((entry:any)=>entry.id?.endsWith('-dm-opening'))).toBe(true);
  await page.getByLabel('Message the Dungeon Master').fill('I draw my bow as the rats charge.');
  await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
- const panel=page.getByRole('region',{name:'Tactical battlefield'});
- await expect(panel).toBeVisible();
- await expect(panel.getByText('Choose where to enter, then roll initiative.',{exact:false})).toBeVisible();
- await expect(panel.getByRole('button',{name:'Position 1 · Selected'})).toBeVisible();
- await expect(panel.getByRole('button',{name:'Roll initiative and begin combat'})).toBeEnabled();
- await expect(panel.getByText('You', {exact:true})).toBeVisible();
- await page.screenshot({path:'/tmp/fk-combat-setup-iphone.png',fullPage:true});
- await panel.getByRole('button',{name:'Position 2'}).click();
- await expect(panel.getByRole('button',{name:'Position 2 · Selected'})).toHaveAttribute('aria-pressed','true');
- await panel.getByRole('button',{name:'Roll initiative and begin combat'}).click();
- await expect.poll(async()=> (await saved(page))?.companionEncounter?.phaseThree?.scenario?.size).toBe(8);
- await expect(panel.getByText('Choose your starting square')).toHaveCount(0);
- await expect(panel.getByLabel('Combat resources')).toBeVisible();
- // Force only the test fixture's turn index so an initiative roll cannot make this UX regression flaky.
- await page.evaluate(async()=>{
-  const db=await new Promise<IDBDatabase>((resolve,reject)=>{const request=indexedDB.open('four-keeps-local',1);request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(request.error);});
-  const tx=db.transaction('campaigns','readwrite'),store=tx.objectStore('campaigns');
-  const current=await new Promise<any>(resolve=>{const request=store.getAll();request.onsuccess=()=>resolve(request.result[0]);});
-  const combat=current.companionEncounter;
-  combat.turnIndex=combat.order.indexOf('nighthawk');
-  combat.participants.nighthawk.actionUsed=false;
-  store.put(current);
-  await new Promise<void>((resolve,reject)=>{tx.oncomplete=()=>resolve();tx.onerror=()=>reject(tx.error);});
-  db.close();
- });
- await page.reload();
- await page.getByRole('button',{name:'Campaigns',exact:true}).click();
+ await expect.poll(async()=> Boolean((await saved(page))?.combat?.classicAdventure)).toBe(true);
+ await expect(page.getByLabel('Combat movement grid')).toBeVisible();
+ await expect(page.getByRole('button',{name:'Roll initiative (d20 + DEX)'})).toBeVisible();
+ await page.screenshot({path:'/tmp/fk-practice-restored-iphone.png',fullPage:true});
+ await page.getByRole('button',{name:'Roll initiative (d20 + DEX)'}).click();
+ await expect(page.getByLabel('Combat turn summary')).toBeVisible();
+ await expect(page.getByLabel('Combat resources')).toBeVisible();
+ await expect(page.getByLabel('Initiative order')).toContainText('Nighthawk');
+ await expect.poll(async()=> (await saved(page))?.combat?.order?.length).toBe(3);
+ await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();
  await page.getByRole('button',{name:'Continue Adventure'}).click();
- const activeBattle=page.getByRole('region',{name:'Tactical battlefield'});
- await expect(activeBattle.getByLabel('Quick combat controls')).toBeVisible();
- await expect(activeBattle.getByRole('button',{name:'Attack target'})).toBeVisible();
- if(await activeBattle.getByLabel('Choose weapon').count()){
-  const weaponSelect=activeBattle.getByLabel('Choose weapon');
-  expect(await weaponSelect.locator('option').count()).toBeGreaterThan(1);
-  await weaponSelect.selectOption((await weaponSelect.locator('option').filter({hasText:/shortbow/i}).count())?{label:'Shortbow'}:{index:1});
- }
- await expect(activeBattle.getByRole('button',{name:'Attack target'})).toBeEnabled();
- await activeBattle.getByRole('button',{name:'Combat actions +',exact:true}).click();
- const actions=activeBattle.getByLabel('Classic combat actions');
- await expect(actions.getByRole('button',{name:'Dodge',exact:true})).toBeEnabled();
- await expect(actions.getByRole('button',{name:'Dash',exact:true})).toBeVisible();
- await actions.getByRole('button',{name:'Dodge',exact:true}).click();
- await expect.poll(async()=>Boolean((await saved(page))?.companionEncounter?.participants?.nighthawk?.actionUsed)).toBe(true);
- await expect(actions.getByRole('button',{name:'Dodge',exact:true})).toBeDisabled();
- await page.screenshot({path:'/tmp/fk-unified-combat-iphone.png',fullPage:true});
- await page.reload();
- await page.getByRole('button',{name:'Campaigns',exact:true}).click();
- await page.getByRole('button',{name:'Continue Adventure'}).click();
- await expect(page.getByRole('region',{name:'Tactical battlefield'}).getByLabel('Combat resources')).toContainText('Spent');
- // A second simulated turn verifies that the restored attack button resolves real Phase 3 rules.
- await page.evaluate(async()=>{
-  const db=await new Promise<IDBDatabase>((resolve,reject)=>{const r=indexedDB.open('four-keeps-local',1);r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});
-  const tx=db.transaction('campaigns','readwrite'),store=tx.objectStore('campaigns');
-  const c=await new Promise<any>(resolve=>{const r=store.getAll();r.onsuccess=()=>resolve(r.result[0]);});
-  c.companionEncounter.turnIndex=c.companionEncounter.order.indexOf('nighthawk');
-  c.companionEncounter.participants.nighthawk.actionUsed=false;
-  store.put(c);
-  await new Promise<void>((resolve,reject)=>{tx.oncomplete=()=>resolve();tx.onerror=()=>reject(tx.error);});db.close();
- });
- await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();await page.getByRole('button',{name:'Continue Adventure'}).click();
- const attackButton=page.getByRole('region',{name:'Tactical battlefield'}).getByRole('button',{name:'Attack target'});
- await expect(attackButton).toBeEnabled();
- await attackButton.click();
- await expect.poll(async()=> (await saved(page))?.companionEncounter?.phaseThree?.lastRoll?.actor).toBe('nighthawk');
+ await expect(page.getByLabel('Combat turn summary')).toBeVisible();
+ await expect(page.getByLabel('Combat movement grid')).toBeVisible();
 });
 test('iPhone tactical combat opens from Adventure, previews movement, runs NPC turns and persists escape' ,async({page})=>{
  test.setTimeout(90000);
