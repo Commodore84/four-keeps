@@ -1148,6 +1148,11 @@ export function concludeDuel(campaign:Campaign):Campaign {
  const combat=campaign.combat;
  if(!combat||((combat.enemyHp!==0||!!combat.secondEnemy&&combat.secondEnemy.hp!==0)&&combat.outcome!=='player-defeated'))throw Error('The sparring match has not ended.');
  const now=new Date().toISOString();
+ if(combat.classicAdventure){
+  return {...campaign,combat:undefined,pendingAftermath:undefined,updatedAt:now,
+   journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',createdAt:now,
+    text:combat.outcome==='player-defeated'?'The encounter ended with Nighthawk unconscious.':'The enemies are defeated; the encounter is complete.'}]};
+ }
  if(combat.enemyName==='Training Dummy'){
   const character=campaign.character??prototypeNighthawk;
   const restoredHp=character.maxHitPoints??combat.trainingStartingHp??10;
