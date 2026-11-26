@@ -1936,7 +1936,13 @@ test('iPhone DM warehouse template restores exact original practice combat contr
  await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();
  await page.getByRole('button',{name:'Continue Adventure'}).click();
  await expect(board).toBeVisible();
- await expect.poll(async()=>camera.evaluate(el=>el.scrollLeft)).toBe(140);
+ // Reopening combat intentionally centers on the saved player, not the previous
+ // manually panned location. Zoom preference is retained.
+ await expect.poll(async()=>board.getByRole('gridcell',{name:/^Nighthawk/}).evaluate(el=>{
+   const marker=el.getBoundingClientRect(),frame=el.closest('[data-classic-combat-grid]')?.parentElement?.getBoundingClientRect();
+   return !!frame&&marker.left>=frame.left-1&&marker.right<=frame.right+1&&
+     marker.top>=frame.top-1&&marker.bottom<=frame.bottom+1;
+ })).toBe(true);
  expect((await saved(page)).combat.battlefield).toEqual(stateBefore.combat.battlefield);
  await focusCombatPlayer(page);
  const p=stateBefore.combat.playerPosition;
