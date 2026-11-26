@@ -501,6 +501,24 @@ export function trainingCoverBlocksSight(p:{x:number;y:number},e:{x:number;y:num
  for(let t=0;t<=1;t+=0.02)if(trainingPillars.some(pillar=>Math.abs(p.x+dx*t-pillar.x)<0.48&&Math.abs(p.y+dy*t-pillar.y)<0.48))return true;
  return false;
 }
+/** A hidden archer can briefly lean around adjacent cover without moving their
+ * token. The shot must have a genuine open line from an unblocked cardinal
+ * neighbor; this never shoots through a solid barrier. Attacking reveals them.
+ * Non-hidden combatants must move normally to establish a firing angle.
+ */
+export function combatRangedFiringPosition(c:NonNullable<Campaign['combat']>,target:{x:number;y:number}):{position:{x:number;y:number};peek:boolean}|undefined{
+ const p=c.playerPosition??{x:2,y:4},map=c.battlefield;
+ if(!map||battlefieldCover(map,p,target)!=='total')return {position:p,peek:false};
+ if(!c.playerHidden)return undefined;
+ for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]){
+  const candidate={x:p.x+dx,y:p.y+dy};
+  if(battlefieldBlocked(map,candidate)||candidate.x===target.x&&candidate.y===target.y)continue;
+  if(c.secondEnemy?.hp&&candidate.x===c.secondEnemy.position.x&&candidate.y===c.secondEnemy.position.y)continue;
+  if((c.enemyHp??12)>0&&c.enemyPosition&&candidate.x===c.enemyPosition.x&&candidate.y===c.enemyPosition.y)continue;
+  if(battlefieldCover(map,candidate,target)!=='total')return {position:candidate,peek:true};
+ }
+ return undefined;
+}
 function nextActiveTurn(c:NonNullable<Campaign['combat']>):{index:number;round:number} {
  const order=c.order??['Nighthawk',c.enemyName];
  let index=c.turnIndex??0,round=c.round;
@@ -752,13 +770,13 @@ function advanceTacticalMovement(campaign:Campaign,route:TacticalPoint[],startIn
  for(let i=startIndex+1;i<route.length;i++){
   const to=route[i],provoker=combat.disengaged?undefined:reactions.find(e=>e.available&&adjacent(position,e.pos)&&(!combat.battlefield||!trainingCoverBlocksSight(e.pos,position,combat.battlefield))&&!adjacent(to,e.pos));
   if(provoker){
-   const updated:NonNullable<Campaign['combat']>={...combat,playerPosition:position,movementUsed:(combat.movementUsed??0)+travelled,stats:{...(combat.stats??{damage:0,movement:0,attacks:0,hits:0,criticalHits:0,sneakDamage:0,finishingBlows:0}),movement:(combat.stats?.movement??0)+travelled},playerOpportunity:{enemyId:provoker.id,route,routeIndex:i-1,from:position,to:route[route.length-1],cost:trainingRouteCost(route.slice(i-1),combat.battlefield),phase:'roll-to-hit'}};
+   const updated:NonNullable<Campaign['combat']>={...combat,playerPosition:position,playerHidden:false,movementUsed:(combat.movementUsed??0)+travelled,stats:{...(combat.stats??{damage:0,movement:0,attacks:0,hits:0,criticalHits:0,sneakDamage:0,finishingBlows:0}),movement:(combat.stats?.movement??0)+travelled},playerOpportunity:{enemyId:provoker.id,route,routeIndex:i-1,from:position,to:route[route.length-1],cost:trainingRouteCost(route.slice(i-1),combat.battlefield),phase:'roll-to-hit'}};
    return {...campaign,combat:updated,updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:'Nighthawk moves '+travelled+' feet and stops at square ('+(position.x+1)+','+(position.y+1)+'). Enemy '+(provoker.id==='second'?'2':'1')+' makes an Opportunity Attack before Nighthawk leaves its reach.',createdAt:now}]};
   }
   position=to;travelled+=trainingStepCost(to.x,to.y,combat.battlefield);
  }
- const updated:NonNullable<Campaign['combat']>={...combat,playerPosition:position,playerHidden:combat.playerHidden&&trainingCoverBlocksSight(position,enemy,combat.battlefield)&&(!combat.secondEnemy||trainingCoverBlocksSight(position,combat.secondEnemy.position,combat.battlefield)),movementUsed:(combat.movementUsed??0)+travelled,stats:{...(combat.stats??{damage:0,movement:0,attacks:0,hits:0,criticalHits:0,sneakDamage:0,finishingBlows:0}),movement:(combat.stats?.movement??0)+travelled},playerOpportunity:undefined};
- return {...campaign,combat:updated,updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:'Nighthawk moves '+travelled+' feet to ('+(position.x+1)+','+(position.y+1)+'). '+updated.movementUsed+'/'+(combat.movementAllowance??35)+' feet used.',createdAt:now}]};
+ const updated:NonNullable<Campaign['combat']>={...combat,playerPosition:position,playerHidden:combat.playerHidden&&route.slice(startIndex+1).every(square=>((combat.enemyHp??12)<=0||trainingCoverBlocksSight(square,enemy,combat.battlefield))&&(!combat.secondEnemy||combat.secondEnemy.hp<=0||trainingCoverBlocksSight(square,combat.secondEnemy.position,combat.battlefield))),movementUsed:(combat.movementUsed??0)+travelled,stats:{...(combat.stats??{damage:0,movement:0,attacks:0,hits:0,criticalHits:0,sneakDamage:0,finishingBlows:0}),movement:(combat.stats?.movement??0)+travelled},playerOpportunity:undefined};
+ return {...campaign,combat:updated,updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:'Nighthawk moves '+travelled+' feet to ('+(position.x+1)+','+(position.y+1)+'). '+updated.movementUsed+'/'+(combat.movementAllowance??35)+' feet used.'+(combat.playerHidden&&!updated.playerHidden?' An enemy spots you during movement; Hidden ends.':''),createdAt:now}]};
 }
 export function resolveEnemyOpportunity(campaign:Campaign,kind:'hit'|'damage'|'finish'):Campaign {
   requireLegacyNighthawk(campaign);
@@ -966,7 +984,7 @@ export function takeDuelTurnAction(campaign:Campaign, action:'move'|'attack'|'th
     const p=next.playerPosition??{x:1,y:3},e=next.selectedEnemy==='second'&&next.secondEnemy?next.secondEnemy.position:next.enemyPosition??{x:5,y:3};
     const distance=5*Math.max(Math.abs(p.x-e.x),Math.abs(p.y-e.y));
     const thrown=action==='throw-dagger',bow=action==='shortbow';
-    if(next.battlefield&&battlefieldCover(next.battlefield,p,e)==='total')throw Error('Target has total cover.');
+    if(next.battlefield&&battlefieldCover(next.battlefield,p,e)==='total'&&(!bow&&!thrown||!combatRangedFiringPosition(next,e)))throw Error('Target has total cover. Move to an open firing angle or Hide and peek around nearby cover.');
     if(action==='attack'&&distance>5)throw Error('Dagger melee requires an adjacent enemy.');
     if(thrown&&distance>60)throw Error('Thrown dagger is out of range (60 ft maximum).');
     if((thrown||action==='attack')&&(next.daggersAvailable??2)<1)throw Error('No dagger available. Recover a thrown dagger after the encounter.');
@@ -1240,13 +1258,13 @@ export function rollDuelAttack(campaign:Campaign,kind:'hit'|'damage',applySneakA
   if(next.attack.phase!=='roll-to-hit')throw Error('Attack roll already made.');
   const character=campaign.character??prototypeNighthawk;
   const attackBonus=abilityModifier(next.attack.trueStrike?character.scores.int:character.scores.dex)+character.proficiencyBonus;
-  const player=combat.playerPosition??{x:2,y:4},enemy=combat.selectedEnemy==='second'&&combat.secondEnemy?combat.secondEnemy.position:combat.enemyPosition??{x:6,y:4},withinFive=Math.max(Math.abs(player.x-enemy.x),Math.abs(player.y-enemy.y))<=1;const cover=combat.battlefield?battlefieldCover(combat.battlefield,player,enemy):0;if(cover==='total')throw Error('Target has total cover.');const targetAC=(combat.selectedEnemy==='second'?combat.classicAdventure?.second?.ac:combat.classicAdventure?.first.ac)??12;const adjustedAC=targetAC+cover;const owlHelp=!!combat.owl&&combat.owl.helpTarget===(combat.selectedEnemy==='second'?'second':'first');const hasAdvantage=!!combat.playerHidden||!!combat.steadyAim||owlHelp||(!!combat.enemyProne&&combat.selectedEnemy!=='second'&&withinFive);const hasDisadvantage=!!next.attack.disadvantage||(!!combat.enemyProne&&combat.selectedEnemy!=='second'&&!withinFive);const advantage=hasAdvantage&&!hasDisadvantage;const disadvantage=hasDisadvantage&&!hasAdvantage;const firstD20=die(20),secondD20=(advantage||disadvantage)?die(20):undefined,d20=secondD20===undefined?firstD20:advantage?Math.max(firstD20,secondD20):Math.min(firstD20,secondD20),total=d20+attackBonus,critical=d20===20,hit=critical||(d20!==1&&total>=adjustedAC);
+  const player=combat.playerPosition??{x:2,y:4},enemy=combat.selectedEnemy==='second'&&combat.secondEnemy?combat.secondEnemy.position:combat.enemyPosition??{x:6,y:4};const shot=(next.attack.weapon==='shortbow'||next.attack.thrown)?combatRangedFiringPosition(combat,enemy):{position:player,peek:false};if(!shot)throw Error('Target has total cover.');const withinFive=Math.max(Math.abs(shot.position.x-enemy.x),Math.abs(shot.position.y-enemy.y))<=1;const cover=combat.battlefield?battlefieldCover(combat.battlefield,shot.position,enemy):0;if(cover==='total')throw Error('Target has total cover.');const targetAC=(combat.selectedEnemy==='second'?combat.classicAdventure?.second?.ac:combat.classicAdventure?.first.ac)??12;const adjustedAC=targetAC+cover;const owlHelp=!!combat.owl&&combat.owl.helpTarget===(combat.selectedEnemy==='second'?'second':'first');const hasAdvantage=!!combat.playerHidden||!!combat.steadyAim||owlHelp||(!!combat.enemyProne&&combat.selectedEnemy!=='second'&&withinFive);const hasDisadvantage=!!next.attack.disadvantage||(!!combat.enemyProne&&combat.selectedEnemy!=='second'&&!withinFive);const advantage=hasAdvantage&&!hasDisadvantage;const disadvantage=hasDisadvantage&&!hasAdvantage;const firstD20=die(20),secondD20=(advantage||disadvantage)?die(20):undefined,d20=secondD20===undefined?firstD20:advantage?Math.max(firstD20,secondD20):Math.min(firstD20,secondD20),total=d20+attackBonus,critical=d20===20,hit=critical||(d20!==1&&total>=adjustedAC);
   next.stats={...(next.stats??{damage:0,movement:0,attacks:0,hits:0,criticalHits:0,sneakDamage:0,finishingBlows:0}),attacks:(next.stats?.attacks??0)+1,hits:(next.stats?.hits??0)+(hit?1:0),criticalHits:(next.stats?.criticalHits??0)+(critical?1:0)};
   next.playerHidden=false;if(owlHelp&&next.owl)next.owl={...next.owl,helpTarget:undefined,helpRound:undefined};
   next.attack={phase:hit?'roll-damage':'resolved',d20,firstD20,total,critical,hit,advantage,disadvantage,weapon:next.attack.weapon,thrown:next.attack.thrown,trueStrike:next.attack.trueStrike,secondD20};next.sneakAttackEligible=hit&&!next.sneakAttackUsedThisTurn&&(advantage|| (!!next.trainingAllyAdjacent&&!disadvantage));
   if(next.attack.weapon==='shortbow')next.arrowsRemaining=(next.arrowsRemaining??20)-1;
   if(next.attack.thrown){next.daggersAvailable=(next.daggersAvailable??2)-1;next.daggersThrown=(next.daggersThrown??0)+1;}
-  description=(next.attack.weapon==='shortbow'?'Shortbow (ranged)':next.attack.thrown?'Thrown dagger (ranged)':'Dagger (melee)')+': '+(secondD20===undefined?'':(advantage?'advantage ':'disadvantage ')+firstD20+'/'+secondD20+' → ')+'d20 '+d20+' + '+attackBonus+' = '+total+' vs AC '+adjustedAC+': '+(hit?'HIT':'MISS')+'.'+(critical?' Critical hit.':'');
+  description=(shot.peek?'Peeks around cover. ':'')+(next.attack.weapon==='shortbow'?'Shortbow (ranged)':next.attack.thrown?'Thrown dagger (ranged)':'Dagger (melee)')+': '+(secondD20===undefined?'':(advantage?'advantage ':'disadvantage ')+firstD20+'/'+secondD20+' → ')+'d20 '+d20+' + '+attackBonus+' = '+total+' vs AC '+adjustedAC+': '+(hit?'HIT':'MISS')+'.'+(critical?' Critical hit.':'');
  }else{
   if(next.attack.phase!=='roll-damage')throw Error('Roll to hit first.');
   const modifier=abilityModifier((campaign.character??prototypeNighthawk).scores[next.attack.trueStrike?'int':'dex']);
