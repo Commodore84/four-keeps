@@ -428,6 +428,31 @@ export function beginDuel(campaign:Campaign, enemyName:string):Campaign {
   const now=new Date().toISOString();
   return {...campaign,...(clean==='Training Dummy'?{character:{...(campaign.character??prototypeNighthawk),currentHitPoints:(campaign.character??prototypeNighthawk).maxHitPoints??10}}:{}),combat:{journalStartIndex:campaign.journal.length+1,status:'awaiting-initiative',enemyName:clean,enemyInitiative:enemyRoll+1,round:1,...(clean==='Training Dummy'?{trainingStartingHp:(campaign.character??prototypeNighthawk).maxHitPoints??10}:{})},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:'Combat begins: Nighthawk vs '+clean+'. Enemy initiative rolled privately. Nighthawk must roll initiative.',createdAt:now}]};
 }
+/** A limited, map-visible deployment strip anchored to authored approach points.
+ * Enemies are not exposed by this authorization; their hidden positions
+ * are checked only by the rules engine. Older encounters without choices
+ * retain their fixed original entry.
+ */
+export function canDeployAt(combat:NonNullable<Campaign['combat']>,square:{x:number;y:number}):boolean{
+ const map=combat.battlefield,entries=combat.entryOptions;
+ if(!map||!entries?.length||!Number.isInteger(square.x)||!Number.isInteger(square.y))return false;
+ const xs=entries.map(entry=>entry.square.x),ys=entries.map(entry=>entry.square.y);
+ return square.x>=Math.max(1,Math.min(...xs)-2)&&square.x<=Math.min(map.width-2,Math.min(...xs)+1)&&
+   square.y>=Math.max(1,Math.min(...ys)-2)&&square.y<=Math.min(map.height-2,Math.max(...ys)+2)&&
+   !battlefieldBlocked(map,square);
+}
+/** Saves any legal pre-initiative square within the bounded deployment area. */
+export function chooseDuelDeployment(campaign:Campaign,square:{x:number;y:number}):Campaign{
+ requireLegacyNighthawk(campaign);
+ const combat=campaign.combat;
+ if(!combat||combat.status!=='awaiting-initiative'||!canDeployAt(combat,square))
+  throw Error('Select an open square inside your deployment area before initiative.');
+ const foes=[combat.enemyPosition,combat.secondStart,combat.secondEnemy?.position].filter(Boolean);
+ if(foes.some(p=>p?.x===square.x&&p?.y===square.y))throw Error('That square is not available.');
+ if(combat.playerPosition?.x===square.x&&combat.playerPosition?.y===square.y)return campaign;
+ return {...campaign,combat:{...combat,playerPosition:{x:square.x,y:square.y}},
+  updatedAt:new Date().toISOString()};
+}
 /** Choose an explicitly authorized approach before initiative only.
  * Uses saved scenario entry squares; cannot teleport or consume turn movement.
  */
@@ -437,14 +462,7 @@ export function chooseDuelEntry(campaign:Campaign,index:number):Campaign{
  if(!combat||combat.status!=='awaiting-initiative'||!combat.entryOptions||
     !Number.isInteger(index)||index<0||index>=combat.entryOptions.length)
   throw Error('Starting positions can only be chosen before initiative.');
- const choice=combat.entryOptions[index],square=choice.square;
- if(combat.battlefield&&battlefieldBlocked(combat.battlefield,square))
-  throw Error('The chosen starting position is blocked.');
- const foes=[combat.enemyPosition,combat.secondStart,combat.secondEnemy?.position].filter(Boolean);
- if(foes.some(p=>p?.x===square.x&&p?.y===square.y))throw Error('Starting position is occupied.');
- if(combat.playerPosition?.x===square.x&&combat.playerPosition?.y===square.y)return campaign;
- return {...campaign,combat:{...combat,playerPosition:{x:square.x,y:square.y}},
-  updatedAt:new Date().toISOString()};
+ return chooseDuelDeployment(campaign,combat.entryOptions[index].square);
 }
 export function rollDuelInitiative(campaign:Campaign):Campaign {
   requireLegacyNighthawk(campaign);
