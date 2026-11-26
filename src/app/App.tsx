@@ -1345,19 +1345,39 @@ export function App() {
   const cameraRestoring=useRef(false);
   const persistCamera=()=>{syncCombatView();const el=combatMapRef.current;if(cameraKey&&el&&!cameraRestoring.current)try{localStorage.setItem(cameraKey,JSON.stringify({zoom:combatZoom,left:el.scrollLeft,top:el.scrollTop}));}catch{/* storage unavailable */}};
   useEffect(()=>{
-    if(!cameraKey||activeView!=='adventure'||portalScreen!=='adventure'||!combatMapRef.current){if(!cameraKey&&cameraInitialized.current)setCombatZoom(1);cameraInitialized.current=undefined;return;}
+    if(!cameraKey||!combatMapRef.current){
+      if(!cameraKey&&cameraInitialized.current)setCombatZoom(1);
+      cameraInitialized.current=undefined;
+      return;
+    }
     if(cameraInitialized.current===cameraKey)return;
-    cameraRestoring.current=true;
     cameraInitialized.current=cameraKey;
-    const el=combatMapRef.current;let saved:{zoom:number;left:number;top:number}|undefined;
-    try{saved=JSON.parse(localStorage.getItem(cameraKey)??'null')??undefined;}catch{/* use default */}
+    previousPlayerSquare.current=undefined;
+    cameraRestoring.current=true;
+    // A saved pan may point at empty terrain or belong to a previous round.
+    // Restore zoom preference only: each opening starts centered on the player.
+    const el=combatMapRef.current;
+    let saved:{zoom:number}|undefined;
+    try{saved=JSON.parse(localStorage.getItem(cameraKey)??'null')??undefined;}catch{/* default zoom */}
     const zoom=saved&&Number.isFinite(saved.zoom)&&saved.zoom>=0.025&&saved.zoom<=5?saved.zoom:el.clientWidth/(21*10);
     setCombatZoom(zoom);
+    setCombatView(null);
     const p=campaign?.combat?.playerPosition??{x:0,y:0};
-    requestAnimationFrame(()=>{el.scrollTo(saved&&Number.isFinite(saved.left)&&saved.left>=0?saved.left:(p.x+.5)*21*zoom-el.clientWidth/2,saved&&Number.isFinite(saved.top)&&saved.top>=0?saved.top:(p.y+.5)*21*zoom-el.clientHeight/2);cameraRestoring.current=false;});
-  },[cameraKey,campaign?.combat?.status,activeView,portalScreen]);
-  useEffect(()=>{if(cameraKey&&cameraInitialized.current===cameraKey)persistCamera();},[combatZoom]);
-  useEffect(()=>{if(dynamicMap)requestAnimationFrame(syncCombatView);},[combatZoom,cameraKey,activeView,portalScreen]);
+    requestAnimationFrame(()=>requestAnimationFrame(()=>{
+      if(combatMapRef.current!==el)return;
+      const left=Math.max(0,(p.x+.5)*21*zoom-el.clientWidth/2);
+      const top=Math.max(0,(p.y+.5)*21*zoom-el.clientHeight/2);
+      el.scrollTo({left,top,behavior:'instant'});
+      // The virtualized cells must reflect the restored position immediately;
+      // otherwise the map can remain blank until the next manual scroll.
+      setCombatView({width:dynamicMap!.width,height:dynamicMap!.height,zoom,
+        left:Math.round(el.scrollLeft),top:Math.round(el.scrollTop),
+        viewWidth:el.clientWidth,viewHeight:el.clientHeight});
+      cameraRestoring.current=false;
+    }));
+  });
+  useEffect(()=>{if(cameraKey&&cameraInitialized.current===cameraKey&&!cameraRestoring.current)persistCamera();},[combatZoom]);
+  useEffect(()=>{if(dynamicMap&&!cameraRestoring.current)requestAnimationFrame(syncCombatView);},[combatZoom,cameraKey,activeView,portalScreen]);
   useEffect(()=>{
     const el=combatMapRef.current,p=campaign?.combat?.playerPosition;
     if(!cameraKey||!el||!p)return;
