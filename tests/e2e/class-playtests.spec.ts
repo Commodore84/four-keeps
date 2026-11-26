@@ -2125,7 +2125,13 @@ test('iPhone locked wooden door requires an Action to pick, then a free interact
  await provisionFixtureScenario(page,'lock');
  const board=page.getByRole('grid',{name:'Combat movement grid'});
  await board.scrollIntoViewIfNeeded();
- const target=board.getByRole('gridcell',{name:'Inspect locked door at 5, 18'});
+ // The locked loading door is now structurally anchored in the west wall;
+ // approach it before exercising lockpicking and free-open action economy.
+ await board.locator('[data-battlefield-x="1"][data-battlefield-y="16"]').click();
+ await expect(page.getByRole('button',{name:'Confirm Move',exact:true})).toBeVisible();
+ await page.getByRole('button',{name:'Confirm Move',exact:true}).click();
+ await expect.poll(async()=> (await saved(page)).combat.playerPosition).toEqual({x:1,y:16});
+ const target=board.getByRole('gridcell',{name:'Inspect locked door at 1, 16'});
  await expect(target).toBeEnabled();
  await target.click();
  const controls=page.getByRole('dialog',{name:'Selected battlefield object'});
