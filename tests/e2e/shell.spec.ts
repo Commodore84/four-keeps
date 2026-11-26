@@ -1672,6 +1672,31 @@ test('Generate Random Encounter uses the real combat engine, cycles environments
    await expect(selection).toHaveCount(0);
    const board=page.getByRole('grid',{name:'Combat movement grid'});
    await expect(board).toBeVisible();
+   // First render must contain the player without a manual pan to kick virtualization.
+   const player=board.getByRole('gridcell',{name:/^Nighthawk/});
+   await expect(player).toHaveCount(1);
+   await expect.poll(()=>player.evaluate(el=>{
+     const marker=el.getBoundingClientRect(),frame=el.closest('[data-classic-combat-grid]')?.parentElement?.getBoundingClientRect();
+     return !!frame&&marker.width>0&&marker.left>=frame.left-1&&marker.right<=frame.right+1&&
+       marker.top>=frame.top-1&&marker.bottom<=frame.bottom+1;
+   })).toBe(true);
+   if(n===0){
+     await page.screenshot({path:'test-results/combat-initial-player-centered-iphone.png'});
+     await page.evaluate(({campaignId,actionId})=>{
+       localStorage.setItem('four-keeps-camera:'+campaignId+':'+actionId,JSON.stringify({zoom:1.4,left:99999,top:99999}));
+     },{campaignId:actual.id,actionId:precombat.combat.classicAdventure?.actionId??'practice'});
+     // Reopening a saved encounter also centers on the player rather than stale pan coordinates.
+     await page.reload();
+     await page.getByRole('button',{name:'Campaigns',exact:true}).click();
+     await page.getByRole('button',{name:'Resume test encounter'}).click();
+     const resumed=page.getByRole('grid',{name:'Combat movement grid'});
+     await expect(resumed).toBeVisible();
+     await expect.poll(()=>resumed.getByRole('gridcell',{name:/^Nighthawk/}).evaluate(el=>{
+       const marker=el.getBoundingClientRect(),frame=el.closest('[data-classic-combat-grid]')?.parentElement?.getBoundingClientRect();
+       return !!frame&&marker.width>0&&marker.left>=frame.left-1&&marker.right<=frame.right+1&&
+         marker.top>=frame.top-1&&marker.bottom<=frame.bottom+1;
+     })).toBe(true);
+   }
    await expect(page.getByRole('region',{name:'Tactical battlefield'})).toHaveCount(0);
    await expect(page.getByLabel('Combat Lab session')).toContainText('lab-'+n.toString(16).padStart(8,'0'));
    await expect(page.getByLabel('Combat turn summary')).toBeVisible();
