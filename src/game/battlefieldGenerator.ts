@@ -60,8 +60,52 @@ export function battlefieldTacticalProfile(result:GeneratedBattlefield){
  const roughTiles=battlefield.objects.filter(o=>['chair','rubble','water','undergrowth'].includes(o.kind)).reduce((n,o)=>n+o.width*o.height,0);
  return {coverKinds:coverKinds.size,roughTiles,alternativeApproaches:Math.min(...starts.flatMap(start=>enemyStarts.map(enemy=>battlefieldAlternativeApproaches(battlefield,start,enemy))))};
 }
+/** A generated doorway or window must belong to a continuous architectural
+ * wall, never be a stand-alone obstruction in the middle of an open floor.
+ * This intentionally applies only to generated scenes, not custom DM maps
+ * or historical saved campaigns, which retain their original geometry. */
+export function validateGeneratedArchitecture(map:Battlefield):boolean {
+ const wallAt=(x:number,y:number)=>map.objects.some(o=>o.kind==='wall'&&x>=o.x&&x<o.x+o.width&&y>=o.y&&y<o.y+o.height);
+ for(const opening of map.objects.filter(o=>o.kind==='door'||o.kind==='window')){
+  // The opening occupies one cell. Larger authored openings require an
+  // explicitly designed multi-cell jamb validator rather than a loophole.
+  if(opening.width!==1||opening.height!==1)return false;
+  const {x,y}=opening;
+  const vertical=wallAt(x,y-1)&&wallAt(x,y+1);
+  const horizontal=wallAt(x-1,y)&&wallAt(x+1,y);
+  if(!vertical&&!horizontal)return false;
+  // A pair of tiny freestanding wall stubs with a door between them still
+  // isn't architecture. The connected supporting wall must reach the
+  // perimeter, or form a substantial enclosure/partition with two bends.
+  const key=(px:number,py:number)=>px+','+py;
+  const structural=(px:number,py:number)=>map.objects.some(o=>
+    (o.kind==='wall'||o===opening)&&px>=o.x&&px<o.x+o.width&&py>=o.y&&py<o.y+o.height);
+  const seen=new Set<string>([key(x,y)]),queue=[{x,y}];
+  for(let i=0;i<queue.length;i++)for(const [dx,dy] of [[0,1],[0,-1],[1,0],[-1,0]]){
+    const nx=queue[i].x+dx,ny=queue[i].y+dy,k=key(nx,ny);
+    if(nx<0||ny<0||nx>=map.width||ny>=map.height||seen.has(k)||!structural(nx,ny))continue;
+    seen.add(k);queue.push({x:nx,y:ny});
+  }
+  const reachesBoundary=queue.some(p=>p.x===0||p.y===0||p.x===map.width-1||p.y===map.height-1);
+  const bends=queue.filter(p=>
+    (structural(p.x-1,p.y)||structural(p.x+1,p.y))&&
+    (structural(p.x,p.y-1)||structural(p.x,p.y+1))).length;
+  if(!reachesBoundary&&(queue.length<8||bends<2))return false;
+  if(map.objects.some(other=>other!==opening&&
+    x>=other.x&&x<other.x+other.width&&y>=other.y&&y<other.y+other.height))return false;
+  // Interior openings must be approachable from both sides once opened.
+  // Perimeter loading doors can legitimately face outside the map.
+  if(x>0&&x<map.width-1&&y>0&&y<map.height-1){
+   const clear=(px:number,py:number)=>!battlefieldBlocked(map,{x:px,y:py});
+   if(!((vertical&&clear(x-1,y)&&clear(x+1,y))||
+         (horizontal&&clear(x,y-1)&&clear(x,y+1))))return false;
+  }
+ }
+ return true;
+}
 export function validateGeneratedBattlefield(result:GeneratedBattlefield):boolean{
  const {battlefield,starts,enemyStarts,exits}=result;
+ if(!validateGeneratedArchitecture(battlefield))return false;
  if(!validateBattlefieldAccess(battlefield,[...starts,...enemyStarts,...exits]))return false;
  if(new Set([...starts,...enemyStarts].map(p=>p.x+','+p.y)).size!==starts.length+enemyStarts.length)return false;
  if(![...starts,...enemyStarts].every(p=>battlefieldApproachCount(battlefield,p)>=2))return false;
@@ -82,7 +126,7 @@ export function generateBattlefield(environment:BattlefieldEnvironment,seed:stri
  // Temporary positions are used while seeded physical clutter is validated.
  // Final enemies are selected in separated tactical zones after scenery.
  const enemyStarts=[{x:9,y:mid-2},{x:11,y:mid+3}];
- const exits=[{x:0,y:mid},{x:width-1,y:mid}];
+ const exits=[{x:0,y:environment==='warehouse-vermin'?mid+1:mid},{x:width-1,y:mid}];
  if(environment==='warehouse-vermin'){
   // Perimeter and two entrances; repeated cargo bays separated by generous aisles.
   add('wall',0,0,width,1);add('wall',0,height-1,width,1);
@@ -91,9 +135,10 @@ export function generateBattlefield(environment:BattlefieldEnvironment,seed:stri
    add('cargo',x,pick(3,5),3,4);add('cargo',x,pick(mid+7,mid+9),3,4);
    add('crate',x+1,mid-6,2,2);
   }
-  // A closable storage partition near the entrance, including an exterior-view window.
-  add('door',4,mid+1);add('wall',4,mid+2);add('wall',4,mid+3);
-  add('window',22,mid-7,2,1);objects[objects.length-1].hp=4;
+  // The original freestanding door, two-wall stub, and freestanding window
+  // formed no room or corridor. Put the loading door in the actual outer wall.
+  // The adjacent open west loading lane (y=mid+1) remains a traversable exit.
+  add('door',0,mid-1);add('wall',0,mid);
   add('table',7,mid+1,2,1);add('chair',6,mid+2);add('pillar',18,mid-1);
  }else if(environment==='roadside-bandit'){
   // A broad open road with scattered terrain to either side, not a sealed corridor.
@@ -109,9 +154,15 @@ export function generateBattlefield(environment:BattlefieldEnvironment,seed:stri
    add('wall',x,5,1,pick(6,9));add('wall',x,mid+6,1,pick(5,9));
    add('rubble',x-2,mid-6,3,2);add('pillar',x+2,mid+1);
   }
-  add('wall',7,mid-6,4,1);add('wall',14,mid-2,1,3);
-  add('rubble',6,mid+1,2,2);add('rock',10,mid+5,2,1);add('door',14,mid+1);Object.assign(objects[objects.length-1],{locked:true,lockDC:15,forceDC:15,material:'wood',hp:18});
-  add('window',24,mid-1);Object.assign(objects[objects.length-1],{hp:4,material:'glass'});
+  add('wall',7,mid-6,4,1);
+  add('rubble',6,mid+1,2,2);add('rock',10,mid+5,2,1);
+  // A small ruined storeroom: connected perimeter walls, one real doorway
+  // and a window in the north wall. Both openings have structural jambs.
+  // Unlike the previous wall stub these fixtures enclose a meaningful space.
+  add('wall',7,3,2,1);add('window',9,3);Object.assign(objects[objects.length-1],{hp:4,material:'glass'});
+  add('wall',10,3,2,1);add('wall',7,4,1,3);
+  add('door',7,7);Object.assign(objects[objects.length-1],{locked:true,lockDC:15,forceDC:15,material:'wood',hp:18});
+  add('wall',7,8,1,3);add('wall',11,4,1,7);add('wall',8,10,3,1);
  }
  const battlefield:Battlefield={width,height,objects,theme:environment==='warehouse-vermin'?'warehouse':environment==='roadside-bandit'?'roadside':'ruins'};
  // Seeded clutter is authored through the same physical object schema as

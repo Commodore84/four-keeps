@@ -1,6 +1,6 @@
 import {describe,it,expect,vi,afterEach} from 'vitest';
 import {battlefieldBlocked,battlefieldContains,battlefieldCover,battlefieldDifficult,validateBattlefield,toggleBattlefieldDoor,toggleBattlefieldOpening,battlefieldDoorWithinReach,type Battlefield} from './battlefield';
-import {generateBattlefield,validateBattlefieldAccess,validateGeneratedBattlefield,battlefieldApproachCount,battlefieldTacticalProfile,battlefieldAlternativeApproaches} from './battlefieldGenerator';
+import {generateBattlefield,validateBattlefieldAccess,validateGeneratedBattlefield,validateGeneratedArchitecture,battlefieldApproachCount,battlefieldTacticalProfile,battlefieldAlternativeApproaches} from './battlefieldGenerator';
 import {buildSoloEncounter} from './encounterDirector';
 import {fitsBattlefield,validateCombatScenario} from './combatScenario';
 import {newCampaign,moveDuelToken,interactDuelBattlefieldDoor,interactDuelBattlefieldOpening,tacticalRoute,takeDuelTurnAction,rollDuelAttack,trainingRouteCost,combatRangedFiringPosition,type Campaign} from './campaign';
@@ -137,6 +137,44 @@ describe('spread encounter starts and optional player deployment',()=>{
   expect(()=>validateCombatScenario({...sample,entryOptions:[{label:'Duplicate',square:sample.starts[0]},{label:'Again',square:sample.starts[0]}]},'test')).toThrow('Entries must name unique');
  });
 });
+describe('generated physical architecture',()=>{
+ it('never puts a freestanding door or window in any of the three environments',()=>{
+  for(const env of ['warehouse-vermin','roadside-bandit','ruins-goblin-scouts'] as const)
+   for(let i=0;i<24;i++){
+    const g=generateBattlefield(env,'physical-architecture-'+i);
+    expect(validateGeneratedArchitecture(g.battlefield)).toBe(true);
+    expect(validateGeneratedBattlefield(g)).toBe(true);
+   }
+ });
+ it('keeps the warehouse floor unobstructed by the former arbitrary partition',()=>{
+  const g=generateBattlefield('warehouse-vermin','lab-b4baff2d');
+  expect(g.battlefield.objects.filter(o=>o.kind==='window')).toHaveLength(0);
+  const doors=g.battlefield.objects.filter(o=>o.kind==='door');
+  expect(doors).toHaveLength(1);
+  expect(doors[0]).toMatchObject({x:0,y:15});
+  expect(battlefieldCover(g.battlefield,{x:3,y:17},g.enemyStarts[0])).not.toBe('total');
+  expect(battlefieldBlocked(g.battlefield,{x:4,y:17})).toBe(false);
+ });
+ it('places the ruins openings in a reachable architectural enclosure',()=>{
+  const g=generateBattlefield('ruins-goblin-scouts','ruined-storeroom');
+  const door=g.battlefield.objects.find(o=>o.kind==='door')!;
+  const window=g.battlefield.objects.find(o=>o.kind==='window')!;
+  expect(door).toMatchObject({x:7,y:7});
+  expect(window).toMatchObject({x:9,y:3});
+  expect(battlefieldBlocked(g.battlefield,{x:8,y:7})).toBe(false);
+  expect(battlefieldBlocked(g.battlefield,{x:6,y:7})).toBe(false);
+  expect(validateGeneratedArchitecture(g.battlefield)).toBe(true);
+ });
+ it('rejects an isolated doorway even if flanked by two wall squares',()=>{
+  const freestanding:Battlefield={width:12,height:12,objects:[
+   {id:'upper',kind:'wall',x:5,y:4,width:1,height:1},
+   {id:'door',kind:'door',x:5,y:5,width:1,height:1},
+   {id:'lower',kind:'wall',x:5,y:6,width:1,height:1}
+  ]};
+  expect(validateGeneratedArchitecture(freestanding)).toBe(false);
+  expect(validateGeneratedArchitecture({...freestanding,objects:freestanding.objects.map(o=>o.kind==='door'?{...o,kind:'window'}:o)})).toBe(false);
+ });
+});
 describe('three permanent encounter generators',()=>{
  const environments=[['warehouse-vermin',40,32,50],['roadside-bandit',32,60,75],['ruins-goblin-scouts',48,40,100]] as const;
  for(const [id,width,height,xp] of environments){
@@ -159,9 +197,9 @@ describe('three permanent encounter generators',()=>{
  it('opens and closes doors with persistent physical effects and occupied-door protection',()=>{
   const g=generateBattlefield('warehouse-vermin','door-test');
   const door=g.battlefield.objects.find(o=>o.kind==='door')!;
-  const c=arena({x:3,y:16},{x:9,y:14});
+  const c=arena({x:1,y:16},{x:9,y:14});
   const campaign={...c,combat:{...c.combat!,battlefield:g.battlefield}};
-  expect(battlefieldDoorWithinReach(door,{x:3,y:16})).toBe(true);
+  expect(battlefieldDoorWithinReach(door,{x:1,y:16})).toBe(true);
   expect(battlefieldBlocked(g.battlefield,{x:door.x,y:door.y})).toBe(true);
   const opened=interactDuelBattlefieldDoor(campaign,door.id);
   expect(opened.combat!.objectInteractionUsed).toBe(true);

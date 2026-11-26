@@ -1706,6 +1706,8 @@ test('Generate Random Encounter uses the real combat engine, cycles environments
    await expect(page.getByRole('region',{name:'Tactical battlefield'})).toHaveCount(0);
    await expect(page.getByLabel('Combat Lab session')).toContainText('lab-'+n.toString(16).padStart(8,'0'));
    await expect(page.getByLabel('Compact initiative order')).toBeVisible();
+   await expect(page.getByLabel('Battlefield scene').getByRole('button',{name:'Return to adventure'})).toHaveCount(0);
+   await expect(page.getByRole('button',{name:'Return to adventure'})).toHaveCount(0);
    await expect(page.getByLabel('Combat movement grid')).toHaveAttribute('data-battlefield-theme',['warehouse','roadside','ruins'][n]);
    await expect(page.getByRole('button',{name:'Fit entire map'})).toHaveCount(0);
    await expect(page.getByRole('button',{name:'Center on character'})).toHaveCount(0);
@@ -1731,7 +1733,9 @@ test('Generate Random Encounter uses the real combat engine, cycles environments
      await expect(page.getByRole('button',{name:'Continue Adventure'})).toHaveCount(1);
      await page.getByRole('button',{name:'Resume test encounter'}).click();
      await expect(page.getByLabel('Combat Lab session')).toContainText('lab-00000002');
-     await page.getByRole('button',{name:'Return to adventure'}).click();
+     await expect(page.getByLabel('Battlefield scene').getByRole('button',{name:'Return to adventure'})).toHaveCount(0);
+     await page.getByRole('button',{name:'Open navigation menu'}).click();
+     await page.getByRole('navigation',{name:'Primary navigation'}).getByRole('button',{name:'Return to adventure'}).click();
      await expect(page.getByLabel('Combat Lab session')).toHaveCount(0);
      await expect(page.getByRole('button',{name:'Refresh Four Keeps'})).toHaveCount(0);
      const composer=page.getByLabel('Message the Dungeon Master');

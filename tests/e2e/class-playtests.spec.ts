@@ -1987,8 +1987,14 @@ test('iPhone illustrated warehouse door opens, persists, and ignores corrupted c
  const imageUrl=await door.evaluate(el=>getComputedStyle(el).backgroundImage.slice(5,-2));
  expect(imageUrl).toMatch(/^data:image\/svg\+xml/);
  await expect(board.locator('[data-terrain-art="floor-warehouse"]').first()).toBeVisible();
- await expect(board.getByRole('gridcell',{name:'Open door at 5, 18'})).toBeEnabled();
- await board.getByRole('gridcell',{name:'Open door at 5, 18'}).click();
+ // The loading door is part of the actual west perimeter, not a stray
+ // obstruction on the floor. Walk into reach before opening it.
+ await board.locator('[data-battlefield-x="1"][data-battlefield-y="16"]').click();
+ await expect(page.getByRole('button',{name:'Confirm Move',exact:true})).toBeVisible();
+ await page.getByRole('button',{name:'Confirm Move',exact:true}).click();
+ await expect.poll(async()=> (await saved(page)).combat.playerPosition).toEqual({x:1,y:16});
+ await expect(board.getByRole('gridcell',{name:'Open door at 1, 16'})).toBeEnabled();
+ await board.getByRole('gridcell',{name:'Open door at 1, 16'}).click();
  await expect(board.locator('[data-terrain-art="door-open"]')).toHaveCount(1);
  await expect.poll(async()=> (await saved(page)).combat.battlefield.objects.some((o:any)=>o.kind==='door'&&o.open)).toBe(true);
  expect((await saved(page)).combat.objectInteractionUsed).toBe(true);
