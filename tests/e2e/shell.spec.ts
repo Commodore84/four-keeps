@@ -1641,25 +1641,31 @@ test('Generate Random Encounter uses the real combat engine, cycles environments
    expect(secondSpawn).toBeDefined();
    expect(firstSpawn).not.toEqual(secondSpawn);
    expect(precombat.combat.battlefield.objects.length).toBeGreaterThan(4);
-   const selection=page.getByRole('group',{name:'Choose starting position'});
+   const selection=page.getByRole('region',{name:'Choose starting position'});
    if(n===1){
      await expect(selection).toHaveCount(0);
    }else{
-     const option=n===0?'North loading aisle':'South rubble approach';
      await expect(selection).toBeVisible();
-     await expect(selection.getByRole('button')).toHaveCount(3);
-     await selection.getByRole('button',{name:new RegExp(option)}).click();
-     const beforeInitiative=await readScopedLab(page,actual.id);
-     const selected=beforeInitiative.combat.entryOptions.find((entry:any)=>entry.label===option);
-     expect(beforeInitiative.combat.playerPosition).toEqual(selected.square);
-     expect(beforeInitiative.combat.status).toBe('awaiting-initiative');
+     const board=selection.getByRole('grid',{name:'Starting position battlefield map'});
+     await expect(board).toBeVisible();
+     await expect(board.getByRole('gridcell',{name:/Enemy|Giant Rat|Goblin|Bandit/i})).toHaveCount(0);
+     const chosen=board.getByRole('gridcell',{name:'Choose starting square 5, 17'});
      if(n===0){
+       await chosen.click();
+       const beforeInitiative=await readScopedLab(page,actual.id);
+       expect(beforeInitiative.combat.playerPosition).toEqual({x:4,y:16});
+       expect(beforeInitiative.combat.status).toBe('awaiting-initiative');
        await page.screenshot({path:'test-results/dynamic-entry-choice-iphone.png'});
        await page.reload();
        await page.getByRole('button',{name:'Campaigns',exact:true}).click();
        await expect(page.getByRole('button',{name:'Resume test encounter'})).toBeVisible();
        await page.getByRole('button',{name:'Resume test encounter'}).click();
-       await expect(selection.getByRole('button',{name:new RegExp(option)})).toHaveAttribute('aria-pressed','true');
+       await expect(selection.getByRole('gridcell',{name:'Your selected starting square'})).toHaveAttribute('aria-pressed','true');
+     }else{
+       const option=board.getByRole('gridcell',{name:'Choose starting square 5, 21'});
+       await option.click();
+       const beforeInitiative=await readScopedLab(page,actual.id);
+       expect(beforeInitiative.combat.playerPosition).toEqual({x:4,y:20});
      }
    }
    await page.getByRole('button',{name:'Roll initiative (d20 + DEX)'}).click();
