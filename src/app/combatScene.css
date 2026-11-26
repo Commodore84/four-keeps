@@ -1,0 +1,29 @@
+/* Mobile scene framing: underlying classic rules and map remain authoritative. */
+.scene-battlefield-frame {
+  height: 100% !important;
+  max-height: none !important;
+  width: 100%;
+  border-radius: 0;
+}
+.scene-floating-panel {
+  position: absolute;
+  bottom: calc(100% + 2px);
+  left: 0;
+  right: 0;
+  z-index: 35;
+  max-height: min(57dvh, 500px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 10px;
+  border: 1px solid rgb(214 179 108 / .6);
+  border-radius: 12px 12px 0 0;
+  background: #252632;
+  box-shadow: 0 -9px 35px rgb(0 0 0 / .35);
+  -webkit-overflow-scrolling: touch;
+}
+.scene-floating-panel:empty { display: none; }
+.scene-choices-only > .contents > button { display: none; }
+.scene-floating-panel button { min-height: 40px; }
+@media (max-height: 600px) {
+ .scene-floating-panel { max-height: 48dvh; }
+}

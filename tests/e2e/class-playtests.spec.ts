@@ -1822,7 +1822,7 @@ test('iPhone Stealth check resolution opens original practice encounter instead 
  await expect(page.getByRole('region',{name:'Tactical battlefield'})).toHaveCount(0);
  await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();
  await page.getByRole('button',{name:'Continue Adventure'}).click();
- await expect(page.getByLabel('Combat turn summary')).toBeVisible();
+ await expect(page.getByLabel('Compact initiative order')).toBeVisible();
 });
 /** Pinch through actual touch events: the player UI has no camera toolbar. */
 async function pinchCombatMap(page:Page,mode:'in'|'out'){
@@ -1871,7 +1871,7 @@ test('iPhone DM warehouse template restores exact original practice combat contr
  await page.evaluate(()=>{const original=crypto.getRandomValues.bind(crypto);let count=0;crypto.getRandomValues=((a:ArrayBufferView|null)=>{if(a instanceof Uint32Array&&a.length===1&&count<2){a[0]=count++===0?19:0;return a;}return original(a);}) as typeof crypto.getRandomValues;});
  await page.getByRole('button',{name:'Roll initiative (d20 + DEX)'}).click();
  await expect(page.getByLabel('Combat movement grid')).toBeVisible();
- await expect(page.getByLabel('Combat turn summary')).toBeVisible();
+ await expect(page.getByLabel('Compact initiative order')).toBeVisible();
  await expect(page.getByRole('region',{name:'Tactical battlefield'})).toHaveCount(0);
  const board=page.getByRole('grid',{name:'Combat movement grid'});
  await expect.poll(async()=>board.getByRole('gridcell').count()).toBeLessThan(700);
@@ -2001,7 +2001,7 @@ test('iPhone illustrated warehouse door opens, persists, and ignores corrupted c
  await expect(board.locator('[data-terrain-art="door-open"]')).toHaveCount(1);
  expect((await saved(page)).combat.battlefield).toEqual(savedCampaign.combat.battlefield);
  await expect.poll(async()=>board.getByRole('gridcell').first().evaluate(el=>el.getBoundingClientRect().width)).toBeGreaterThan(22);
- await expect(page.getByLabel('Combat turn summary')).toBeVisible();
+ await expect(page.getByLabel('Compact initiative order')).toBeVisible();
 });
 test('iPhone opens a window and virtualizes a 256×256 illustrated battlefield at Fit',async({page})=>{
  test.setTimeout(90000);
@@ -2068,7 +2068,7 @@ test('iPhone opens a window and virtualizes a 256×256 illustrated battlefield a
  await expect(board.locator('[data-battlefield-marker="player"]')).toHaveCount(1);
  await expect.poll(async()=>board.locator('[data-battlefield-marker="enemy"]').count()).toBeGreaterThanOrEqual(1);
  await expect(board.getByRole('gridcell',{name:'Nighthawk',exact:true})).toBeVisible();
- await expect(page.getByLabel('Combat turn summary')).toBeVisible();
+ await expect(page.getByLabel('Compact initiative order')).toBeVisible();
  await board.scrollIntoViewIfNeeded();
  await page.screenshot({path:'test-results/dynamic-virtualized-256-iphone.png'});
  await board.screenshot({path:'test-results/dynamic-virtualized-256-board.png'});
@@ -2138,7 +2138,7 @@ test('iPhone locked wooden door requires an Action to pick, then a free interact
  await board.screenshot({path:'test-results/fixture-locked-open-iphone.png'});
  await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();await page.getByRole('button',{name:'Continue Adventure'}).click();
  await expect(board.locator('[data-terrain-art="door-open"]')).toHaveCount(1);
- await expect(page.getByLabel('Combat turn summary')).toBeVisible();
+ await expect(page.getByLabel('Compact initiative order')).toBeVisible();
 });
 test('iPhone dagger attack shatters a glass window and removes physical cover',async({page})=>{
  test.setTimeout(90000);
@@ -2160,7 +2160,7 @@ test('iPhone dagger attack shatters a glass window and removes physical cover',a
  await board.screenshot({path:'test-results/fixture-glass-shattered-iphone.png'});
  await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();await page.getByRole('button',{name:'Continue Adventure'}).click();
  await expect(board.locator('[data-terrain-art="window-shattered"]')).toHaveCount(1);
- await expect(page.getByLabel('Combat resources')).toBeVisible();
+ await expect(page.getByLabel('Scene combat resources')).toBeVisible();
 });
 for(const scenario of [
  {id:'roadside-bandit',width:32,height:60,label:'roadside'},
@@ -2189,7 +2189,7 @@ for(const scenario of [
   const board=page.getByRole('grid',{name:'Combat movement grid'});
   await expect.poll(async()=>board.getByRole('gridcell').count()).toBeLessThan(1100);
   await expect(board.locator('[data-terrain-art="floor-'+scenario.label+'"]').first()).toBeVisible();
-  await expect(page.getByLabel('Combat turn summary')).toBeVisible();
+  await expect(page.getByLabel('Compact initiative order')).toBeVisible();
   await expect(page.getByRole('region',{name:'Tactical battlefield'})).toHaveCount(0);
   const frame=board.locator('..');
   await board.scrollIntoViewIfNeeded();
@@ -2228,7 +2228,7 @@ test('iPhone existing mapless warehouse rat job reopens in original practice com
  await expect(page.getByLabel('Combat movement grid')).toBeVisible();
  await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();
  await page.getByRole('button',{name:'Continue Adventure'}).click();
- await expect(page.getByLabel('Combat turn summary')).toBeVisible();
+ await expect(page.getByLabel('Compact initiative order')).toBeVisible();
 });
 test('iPhone practice combat uses original initiative tracker, action economy, and tactical map',async({page})=>{
  test.setTimeout(90000);
@@ -2251,13 +2251,13 @@ test('iPhone practice combat uses original initiative tracker, action economy, a
  await page.getByRole('button',{name:'Roll initiative (d20 + DEX)'}).click();
  await expect(page.getByLabel('Combat movement grid')).toBeVisible();
  await page.screenshot({path:'/tmp/fk-practice-restored-iphone.png',fullPage:true});
- await expect(page.getByLabel('Combat turn summary')).toBeVisible();
- await expect(page.getByLabel('Combat resources')).toBeVisible();
+ await expect(page.getByLabel('Compact initiative order')).toBeVisible();
+ await expect(page.getByLabel('Scene combat resources')).toBeVisible();
  await expect(page.getByLabel('Initiative order')).toContainText('Nighthawk');
  await expect.poll(async()=> (await saved(page))?.combat?.order?.length).toBe(3);
  await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();
  await page.getByRole('button',{name:'Continue Adventure'}).click();
- await expect(page.getByLabel('Combat turn summary')).toBeVisible();
+ await expect(page.getByLabel('Compact initiative order')).toBeVisible();
  await expect(page.getByLabel('Combat movement grid')).toBeVisible();
 });
 test('iPhone tactical combat opens from Adventure, previews movement, runs NPC turns and persists escape' ,async({page})=>{

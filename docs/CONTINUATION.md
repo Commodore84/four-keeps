@@ -8,6 +8,8 @@ Read this document **before starting any continuation task**. Also read [RELEASE
 
 > Continue Four Keeps in `Commodore84/four-keeps`. FIRST use the GitHub connection to read `docs/CONTINUATION.md` and `docs/RELEASE_CHECKS.md` from the current working branch. Recover the existing Vercel sandbox `four-keeps-m1-b2` using `get_named_sandbox(resume:true)`; verify its `/vercel/four-keeps` checkout, GitHub connectivity, and available test runner. A local container error such as `Could not resolve host: github.com` is NOT a reason to stop or demand another chat. Preserve dirty work; create an isolated worktree from the verified candidate SHA. If the sandbox is unavailable, investigate alternate Vercel sessions and GitHub-connected execution before reporting a specific blocker. Verify current foundation/candidate SHAs rather than assuming old ones. Run the full required release checks and only publish after exact-SHA CI and Vercel READY. Do not ask me to start another chat because one execution environment failed.
 
+**Chat capacity warning in every Four Keeps handoff:** Approximately every five user requests (not tool calls), offer an approximate estimate of remaining user requests in the current chat. Distinguish short conversational requests from development-heavy ones, and warn before major development if a fresh chat is safer. Never claim to know exact remaining tokens or a hard request limit. Preserve this instruction in each continuation prompt. This is a conversation-management estimate, not an executable repository check.
+
 **Handoff generator rule:** Never produce a Four Keeps Proceed button or new-chat continuation prompt that omits the preamble above. Keep the exact feature requirements after it. This file is a repository convention; it cannot automatically inject text into ChatGPT messages, so the continuation author must include it explicitly.
 
 ## Recover the actual state
@@ -65,3 +67,11 @@ The next Dynamic Battlefields batch scopes disposable random encounters under th
 
 ### Wide battlefields and optional entry selection (2026-11-25)
 The shared generator now spreads enemies across physically valid tactical regions, rather than clustering near the entry. Some authored encounters (warehouse/ruins) allow one of three saved pre-initiative player start squares, while roadside retains a fixed entry. All moves after initiative continue through the original engine's 2024 movement rules. See DYNAMIC_BATTLEFIELDS.md. Confirm exact candidate SHA and release checks before publication.
+
+
+### Phase 3 mobile scene interface (2026-11-26)
+- The existing combat interface was approved for a targeted map-first layout evolution. Preserve the ORIGINAL classic combat engine, all physical 2024 rules and gestures, encounter saves and illustrated terrain.
+- Foundation at session start: `17dfcf24092971e24ac94d8ee1628bf23dd2c0cc` (verify current HEAD again on continuation). Original dirty sandbox checkout on an unrelated merchant branch remains untouched. Isolated review/development worktree: `/vercel/four-keeps-mobile-scene`, branch `feat/mobile-scene-interface-review`.
+- Layout adds a compact initiative row, a battle-map scene host, contextual target distance/cover, a one-line resource row, settings-persisted per-character action favorites, a fixed More / End Turn bar, action choices expanding above it, and collapsed DM narration / Speak. Narrative history excludes system combat-roll entries; initiative detail shows the separate system log.
+- Existing map, movement, attack, fixture and action implementations are relocated using `ScenePortal` rather than recreated. The portal must rebind when a scene host is replaced during reload; the map ref must signal camera initialization after mounting or the iPhone viewport/scale will be wrong. Enemy turns retain the map while their existing reaction controls remain available.
+- Refer to `docs/MOBILE_SCENE_INTERFACE.md` for design acceptance and validation. Final exact-SHA CI + iPhone artifacts + Vercel READY + protected foundation fast-forward remain mandatory; do not claim publication from a local test.

@@ -61,12 +61,12 @@ test('training encounter starts, rolls initiative, and survives reload', async (
   await page.getByRole('button',{name:'Campaigns',exact:true}).click();await page.getByRole('button', { name: 'Continue Adventure' }).click();
   await expect(page.getByRole('button', { name: 'Roll initiative (d20 + DEX)' })).toBeVisible();
   await page.getByRole('button', { name: 'Roll initiative (d20 + DEX)' }).click();
-  await expect(page.locator('[aria-label="Combat turn summary"]')).toBeVisible();
-  await expect(page.locator('[data-classic-initiative="true"]')).toHaveCount(1);
-  await expect(page.locator('[data-classic-combat-grid="true"]')).toHaveCount(1);
+  await expect(page.getByLabel('Compact initiative order')).toBeVisible();
+  await expect(page.getByRole('button',{name:'Expand initiative and combat history'})).toBeVisible();
+  await expect(page.locator('[data-classic-combat-grid="true"]')).toBeVisible();
   await page.reload();
   await page.getByRole('button',{name:'Campaigns',exact:true}).click();await page.getByRole('button', { name: 'Continue Adventure' }).click();
-  await expect(page.locator('[aria-label="Combat turn summary"]')).toBeVisible();
+  await expect(page.getByLabel('Compact initiative order')).toBeVisible();
 });
 
 test('navigation preserves unsent draft and a saved campaign after reload', async ({ page }) => {
@@ -110,7 +110,7 @@ test('campaign deletion requires confirmation and preserves other campaigns', as
   await expect(page.getByRole('button', { name: 'Continue Adventure' })).toHaveCount(0);
 });
 
-test('combat replaces persistent DM composer with optional Ask DM and header resources', async ({ page }) => {
+test('combat uses the compact scene composer and action resources', async ({ page }) => {
   await page.goto('/four-keeps/');
   await navigate(page,'Settings');
   await createLegacyCampaign(page,'Combat UI regression');
@@ -119,13 +119,12 @@ test('combat replaces persistent DM composer with optional Ask DM and header res
   await page.getByRole('button', { name: 'Start encounter training' }).click();
   await expect(page.getByLabel('Message the Dungeon Master')).toHaveCount(0);
   await page.getByRole('button', { name: 'Roll initiative (d20 + DEX)' }).click();
-  await expect(page.getByLabel('Combat resources')).toBeVisible();
-  await expect(page.getByText('Last action:', { exact: false })).toHaveCount(0);
+  await expect(page.getByLabel('Scene combat resources')).toBeVisible();
   await expect(page.getByLabel('Message the Dungeon Master')).toHaveCount(0);
-  await page.getByRole('button', { name: 'Ask DM +' }).click();
-  await expect(page.locator('#combat-dm-question')).toBeVisible();
-  await page.getByRole('button', { name: 'Ask DM −' }).click();
-  await expect(page.locator('#combat-dm-question')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Speak' }).click();
+  await expect(page.locator('#scene-speak-input')).toBeVisible();
+  await page.getByRole('button', { name: 'Speak' }).click();
+  await expect(page.locator('#scene-speak-input')).toHaveCount(0);
 });
 
 test('illustrated forest map displays terrain-aligned grid without a legend', async ({ page, request }) => {
@@ -1706,7 +1705,7 @@ test('Generate Random Encounter uses the real combat engine, cycles environments
    }
    await expect(page.getByRole('region',{name:'Tactical battlefield'})).toHaveCount(0);
    await expect(page.getByLabel('Combat Lab session')).toContainText('lab-'+n.toString(16).padStart(8,'0'));
-   await expect(page.getByLabel('Combat turn summary')).toBeVisible();
+   await expect(page.getByLabel('Compact initiative order')).toBeVisible();
    await expect(page.getByLabel('Combat movement grid')).toHaveAttribute('data-battlefield-theme',['warehouse','roadside','ruins'][n]);
    await expect(page.getByRole('button',{name:'Fit entire map'})).toHaveCount(0);
    await expect(page.getByRole('button',{name:'Center on character'})).toHaveCount(0);
@@ -1787,7 +1786,7 @@ test('Combat Lab shows and resolves a thrown dagger at 30 feet without touching 
  await page.reload();
  await page.getByRole('button',{name:'Campaigns',exact:true}).click();
  await page.getByRole('button',{name:'Resume test encounter'}).click();
- await page.getByLabel('2024 D&D actions').getByRole('button',{name:'Attack',exact:true}).click();
+ await page.getByRole('button',{name:'Scene action: Attack'}).click();
  const action=page.getByRole('region',{name:'Confirm combat action'});
  await expect(action).toContainText('Target: 30 ft away');
  await expect(action.getByRole('button',{name:/Dagger \(Throw\)/})).toBeEnabled();
