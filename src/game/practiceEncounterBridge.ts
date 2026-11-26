@@ -41,8 +41,11 @@ export function restorePracticeEncounter(campaign:Campaign):Campaign {
  const stats=(actor:ScenarioActor)=>{
   const profile=TACTICAL_PROFILES[actor.profile];
   const weapon=profile.weapons[0];
+  const ranged=profile.weapons.find(w=>w.normal!==undefined&&w.reach>5);
   return {name:displayNames[foes.indexOf(actor)],id:actor.id,
-   hp:profile.hp,maxHp:profile.hp,speed:profile.speed,
+   ...(ranged?{rangedWeapon:{name:ranged.name,bonus:ranged.bonus,damageDice:ranged.dice,
+    damageModifier:ranged.modifier,normalFeet:ranged.normal??80,longFeet:ranged.reach}}:{}),
+   hp:profile.hp,maxHp:profile.hp,speed:profile.speed,perceptionBonus:profile.perception-10,
    attackBonus:weapon?.bonus??0,damageDice:weapon?.dice??'1d4',
    damageModifier:weapon?.modifier??0,ac:profile.ac};
  };

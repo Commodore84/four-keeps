@@ -1,3 +1,4 @@
+import {enemyRole,selectEnemyTactic,isConcealedFrom,type EnemyTacticalPlan} from './tacticalEnemyAI';
 import {battlefieldBlocked,battlefieldDifficult,battlefieldCover,battlefieldOpeningWithinReach,toggleBattlefieldOpening,type Battlefield} from './battlefield';
 import {attemptFixtureCheck,strikeBattlefieldFixture,type FixtureResolution} from './battlefieldFixtures';
 import {playerToolTraining} from './playerSheetSummary';
@@ -13,7 +14,9 @@ import type {AdventureSession} from './adventureSession';
 import {finishSubclassRest,resolveSubclassDamage,canApplyCondition,selectFiendResistance,spendDarkOnesOwnLuck,type SubclassCombatState,type DamageType,type Terrain} from './subclassCombatRules';
 import { prototypeNighthawk, abilityModifier, type CharacterStats, type Skill, skillAbility } from './checks';
 import { emptyWorld, mergeWorld, normalizeWorld, type WorldState } from './world';
-export type ClassicAdventureOpponent={id:string;name:string;hp:number;maxHp:number;speed:number;attackBonus:number;damageDice:string;damageModifier:number;ac:number};
+export type ClassicAdventureOpponent={id:string;name:string;hp:number;maxHp:number;speed:number;attackBonus:number;damageDice:string;damageModifier:number;ac:number;perceptionBonus?:number;
+ /** The printed ranged action, if any. Older saved encounters remain valid. */
+ rangedWeapon?:{name:string;bonus:number;damageDice:string;damageModifier:number;normalFeet:number;longFeet:number}};
 export interface JournalEntry { id: string; text: string; createdAt: string; kind: 'note' | 'system' | 'player' | 'dm' }
 export interface Campaign {
   /** Disposable seed-tagged encounter generated through the normal DM combat bridge. */
@@ -101,7 +104,7 @@ export interface Campaign {
   xpAwards?: { id: string; amount: number; reason: string }[];
   levelOneSnapshot?: { character: CharacterStats; xp: number; xpAwards: { id: string; amount: number; reason: string }[] };
   encounterRecaps?: {id:string;date:string;outcome:string;rounds:number;damage:number;movement:number;attacks:number;hits:number;criticalHits:number;sneakDamage:number;finishingBlows:number}[];
-  combat?: { battlefield?:Battlefield; /** Optional pre-initiative entry choices, never free in-combat movement. */ entryOptions?:{label:string;square:{x:number;y:number}}[]; secondStart?:{x:number;y:number}; owl?:{position:{x:number;y:number};hp:number;movementUsed:number;actionUsed:boolean;helpTarget?:'first'|'second';helpRound?:number}; stats?:{damage:number;movement:number;attacks:number;hits:number;criticalHits:number;sneakDamage:number;finishingBlows:number}; journalStartIndex?:number; status:'awaiting-initiative'|'initiative-set'|'completed'; enemyName:string; enemyInitiative:number; selectedEnemy?:'first'|'second'; secondEnemy?:{name:string;initiative:number;position:{x:number;y:number};hp:number;maxHp:number;detected:boolean;prone?:boolean;grappled?:boolean}; playerInitiative?:number; round:number; order?:string[]; turnIndex?:number; movementUsed?:number; actionUsed?:boolean; objectInteractionUsed?:boolean; bonusActionUsed?:boolean; spellSlotExpendedThisTurn?:boolean; pendingSpellSave?:{spell:'Mind Sliver'|'Tasha’s Hideous Laughter';target:'first'|'second'}; mindSliverPenalty?:{target:'first'|'second';expiresRound:number}; laughterTarget?:'first'|'second'; lastSpellSave?:{spell:string;target:string;roll:number;total:number;dc:number;success:boolean;damage?:number}; lastAction?:string; arrowsRemaining?:number; daggersAvailable?:number; daggersThrown?:number; reactionUsed?:boolean; enemyReactionUsed?:boolean; secondEnemyReactionUsed?:boolean; playerOpportunity?:{route?:{x:number;y:number}[];routeIndex?:number;remainingEnemyIds?:('first'|'second')[];enemyId?:'first'|'second';from:{x:number;y:number};to:{x:number;y:number};cost:number;phase:'roll-to-hit'|'roll-damage'|'resolved';d20?:number;total?:number;hit?:boolean;damage?:number;critical?:boolean}; reactionAttack?:{phase:'roll-to-hit'|'roll-damage'|'resolved';d20?:number;total?:number;hit?:boolean;critical?:boolean;damage?:number}; opportunity?:{from:{x:number;y:number};to:{x:number;y:number}}; attack?:{target?:'first'|'second';trueStrike?:boolean;weapon?:'dagger'|'shortbow'; thrown?:boolean; disadvantage?:boolean; phase:'roll-to-hit'|'roll-damage'|'resolved'; d20?:number; firstD20?:number; total?:number; hit?:boolean; critical?:boolean; damage?:number; weaponDamageRolls?:number[]; sneakAttackRolls?:number[]; sneakAttackDamage?:number; advantage?:boolean; secondD20?:number}; steadyAim?:boolean; movementAllowance?:number; disengaged?:boolean; enemyHp?:number; enemyMaxHp?:number; outcome?:'nonlethal-victory'|'player-defeated'; enemyLastTurn?:string; trainingStartingHp?:number; playerPosition?:{x:number;y:number}; enemyPosition?:{x:number;y:number}; trainingAllyAdjacent?:boolean; enemyProne?:boolean; enemyGrappled?:boolean; lastGrappleResult?:string; playerProne?:boolean; playerGrappled?:boolean; playerHidden?:boolean; hideRoll?:number; hideTotal?:number; hideResult?:string; enemySearchResult?:string; lastSkillAction?:{action:'Search'|'Study'|'Influence';skill:string;roll:number;total:number;description:string}; readiedAction?:{trigger:string;response:string;declaredRound:number;weapon?:'dagger'|'throw-dagger'|'shortbow';spell?:'Mind Sliver'}; pendingEnemyGrapple?:boolean; pendingPlayerEscape?:boolean; lastPlayerGrappleResult?:string; pendingEnemyShove?:boolean; lastPlayerShoveSave?:string; lastShoveSave?:{passed:boolean;dc:number;outcome:'prone'|'push';effectApplied:boolean}; sneakAttackUsedThisTurn?:boolean; sneakAttackEligible?:boolean; classicAdventure?:{origin:'dm';actionId?:string;scenarioLocation:string;first:ClassicAdventureOpponent;second?:ClassicAdventureOpponent} };
+  combat?: { battlefield?:Battlefield; /** Optional pre-initiative entry choices, never free in-combat movement. */ entryOptions?:{label:string;square:{x:number;y:number}}[]; secondStart?:{x:number;y:number}; owl?:{position:{x:number;y:number};hp:number;movementUsed:number;actionUsed:boolean;helpTarget?:'first'|'second';helpRound?:number}; stats?:{damage:number;movement:number;attacks:number;hits:number;criticalHits:number;sneakDamage:number;finishingBlows:number}; journalStartIndex?:number; status:'awaiting-initiative'|'initiative-set'|'completed'; enemyName:string; enemyInitiative:number; selectedEnemy?:'first'|'second'; secondEnemy?:{name:string;initiative:number;position:{x:number;y:number};hp:number;maxHp:number;detected:boolean;prone?:boolean;grappled?:boolean}; playerInitiative?:number; round:number; order?:string[]; turnIndex?:number; movementUsed?:number; actionUsed?:boolean; objectInteractionUsed?:boolean; bonusActionUsed?:boolean; spellSlotExpendedThisTurn?:boolean; pendingSpellSave?:{spell:'Mind Sliver'|'Tasha’s Hideous Laughter';target:'first'|'second'}; mindSliverPenalty?:{target:'first'|'second';expiresRound:number}; laughterTarget?:'first'|'second'; lastSpellSave?:{spell:string;target:string;roll:number;total:number;dc:number;success:boolean;damage?:number}; lastAction?:string; arrowsRemaining?:number; daggersAvailable?:number; daggersThrown?:number; reactionUsed?:boolean; enemyReactionUsed?:boolean; secondEnemyReactionUsed?:boolean; playerOpportunity?:{route?:{x:number;y:number}[];routeIndex?:number;remainingEnemyIds?:('first'|'second')[];enemyId?:'first'|'second';from:{x:number;y:number};to:{x:number;y:number};cost:number;phase:'roll-to-hit'|'roll-damage'|'resolved';d20?:number;total?:number;hit?:boolean;damage?:number;critical?:boolean}; reactionAttack?:{phase:'roll-to-hit'|'roll-damage'|'resolved';d20?:number;total?:number;hit?:boolean;critical?:boolean;damage?:number}; opportunity?:{from:{x:number;y:number};to:{x:number;y:number}}; attack?:{target?:'first'|'second';trueStrike?:boolean;weapon?:'dagger'|'shortbow'; thrown?:boolean; disadvantage?:boolean; phase:'roll-to-hit'|'roll-damage'|'resolved'; d20?:number; firstD20?:number; total?:number; hit?:boolean; critical?:boolean; damage?:number; weaponDamageRolls?:number[]; sneakAttackRolls?:number[]; sneakAttackDamage?:number; advantage?:boolean; secondD20?:number}; steadyAim?:boolean; movementAllowance?:number; disengaged?:boolean; enemyHp?:number; enemyMaxHp?:number; outcome?:'nonlethal-victory'|'player-defeated'; enemyLastTurn?:string; trainingStartingHp?:number; playerPosition?:{x:number;y:number}; enemyPosition?:{x:number;y:number}; trainingAllyAdjacent?:boolean; enemyProne?:boolean; enemyGrappled?:boolean; lastGrappleResult?:string; playerProne?:boolean; playerGrappled?:boolean; playerHidden?:boolean; lastKnownPlayerPosition?:{x:number;y:number}; hideRoll?:number; hideTotal?:number; hideResult?:string; enemySearchResult?:string; lastSkillAction?:{action:'Search'|'Study'|'Influence';skill:string;roll:number;total:number;description:string}; readiedAction?:{trigger:string;response:string;declaredRound:number;weapon?:'dagger'|'throw-dagger'|'shortbow';spell?:'Mind Sliver'}; pendingEnemyGrapple?:boolean; pendingPlayerEscape?:boolean; lastPlayerGrappleResult?:string; pendingEnemyShove?:boolean; lastPlayerShoveSave?:string; lastShoveSave?:{passed:boolean;dc:number;outcome:'prone'|'push';effectApplied:boolean}; sneakAttackUsedThisTurn?:boolean; sneakAttackEligible?:boolean; classicAdventure?:{origin:'dm';actionId?:string;scenarioLocation:string;first:ClassicAdventureOpponent;second?:ClassicAdventureOpponent} };
   pendingAftermath?: { opponent: string; playerDefeated: boolean };
   postCombatFollowUp?: import('./postCombatFollowUp').PostCombatFollowUp;
   questPayouts?: import('./encounterRewardResolution').QuestPayout[];
@@ -594,7 +597,7 @@ export function addSecondTrainingEnemy(campaign:Campaign):Campaign {
 }
 export function canNighthawkHide(c:NonNullable<Campaign['combat']>):boolean {
  const p=c.playerPosition??{x:2,y:4};
- const concealed=(enemy:{x:number;y:number})=>trainingCoverBlocksSight(p,enemy,c.battlefield)||(trainingTerrain(p.x,p.y,c.battlefield)==='brush'&&Math.max(Math.abs(p.x-enemy.x),Math.abs(p.y-enemy.y))>1);
+ const concealed=(enemy:{x:number;y:number})=>c.battlefield?isConcealedFrom(c.battlefield,p,enemy):trainingCoverBlocksSight(p,enemy)||(trainingTerrain(p.x,p.y)==='brush'&&Math.max(Math.abs(p.x-enemy.x),Math.abs(p.y-enemy.y))>1);
  return ((c.enemyHp??12)<=0||concealed(c.enemyPosition??{x:6,y:4}))&&(!c.secondEnemy||c.secondEnemy.hp<=0||concealed(c.secondEnemy.position));
 }
 export function hideNighthawk(campaign:Campaign,actionType:'action'|'bonus'='bonus'):Campaign {
@@ -611,7 +614,7 @@ export function hideNighthawk(campaign:Campaign,actionType:'action'|'bonus'='bon
  const roll=crypto.getRandomValues(new Uint32Array(1))[0]%20+1,total=roll+mod,success=total>=15;
  const detail=(useBonus?'Cunning Action: Hide (bonus action).':'Hide (action).')+' Stealth d20 '+roll+' + '+mod+' = '+total+' vs DC 15. '+(success?'Success: Hidden behind cover.':'Failure: enemy knows your position.');
  const now=new Date().toISOString();
- return {...campaign,combat:{...c,bonusActionUsed:c.bonusActionUsed||useBonus,actionUsed:c.actionUsed||!useBonus,lastAction:'Hide',playerHidden:success,hideRoll:roll,hideTotal:total,hideResult:detail},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:detail,createdAt:now}]};
+ return {...campaign,combat:{...c,bonusActionUsed:c.bonusActionUsed||useBonus,actionUsed:c.actionUsed||!useBonus,lastAction:'Hide',playerHidden:success,lastKnownPlayerPosition:c.playerPosition??{x:2,y:4},hideRoll:roll,hideTotal:total,hideResult:detail},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:detail,createdAt:now}]};
 }
 export function searchForNighthawk(campaign:Campaign):Campaign {
   requireLegacyNighthawk(campaign);
@@ -775,7 +778,7 @@ function advanceTacticalMovement(campaign:Campaign,route:TacticalPoint[],startIn
   }
   position=to;travelled+=trainingStepCost(to.x,to.y,combat.battlefield);
  }
- const updated:NonNullable<Campaign['combat']>={...combat,playerPosition:position,playerHidden:combat.playerHidden&&route.slice(startIndex+1).every(square=>((combat.enemyHp??12)<=0||trainingCoverBlocksSight(square,enemy,combat.battlefield))&&(!combat.secondEnemy||combat.secondEnemy.hp<=0||trainingCoverBlocksSight(square,combat.secondEnemy.position,combat.battlefield))),movementUsed:(combat.movementUsed??0)+travelled,stats:{...(combat.stats??{damage:0,movement:0,attacks:0,hits:0,criticalHits:0,sneakDamage:0,finishingBlows:0}),movement:(combat.stats?.movement??0)+travelled},playerOpportunity:undefined};
+ const updated:NonNullable<Campaign['combat']>={...combat,playerPosition:position,playerHidden:combat.playerHidden&&route.slice(startIndex+1).every(square=>((combat.enemyHp??12)<=0||(combat.battlefield?isConcealedFrom(combat.battlefield,square,enemy):trainingCoverBlocksSight(square,enemy)))&&(!combat.secondEnemy||combat.secondEnemy.hp<=0||(combat.battlefield?isConcealedFrom(combat.battlefield,square,combat.secondEnemy.position):trainingCoverBlocksSight(square,combat.secondEnemy.position)))),movementUsed:(combat.movementUsed??0)+travelled,stats:{...(combat.stats??{damage:0,movement:0,attacks:0,hits:0,criticalHits:0,sneakDamage:0,finishingBlows:0}),movement:(combat.stats?.movement??0)+travelled},playerOpportunity:undefined};
  return {...campaign,combat:updated,updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:'Nighthawk moves '+travelled+' feet to ('+(position.x+1)+','+(position.y+1)+'). '+updated.movementUsed+'/'+(combat.movementAllowance??35)+' feet used.'+(combat.playerHidden&&!updated.playerHidden?' An enemy spots you during movement; Hidden ends.':''),createdAt:now}]};
 }
 export function resolveEnemyOpportunity(campaign:Campaign,kind:'hit'|'damage'|'finish'):Campaign {
@@ -1102,7 +1105,14 @@ export function resolveDuelEnemyTurn(campaign:Campaign):Campaign {
  const opponent=secondEnemyTurn?combat.classicAdventure?.second:combat.classicAdventure?.first;
  const speed=grappled?0:standing?Math.max(0,Math.ceil((opponent?.speed??10)/5)-3):Math.max(1,Math.ceil((opponent?.speed??10)/5));
  let position={...startingPosition};
- // Move at most Speed/5 squares along a shortest walkable route.
+ const tacticalPlan:EnemyTacticalPlan|undefined=combat.battlefield&&combat.classicAdventure?
+  selectEnemyTactic({map:combat.battlefield,start:startingPosition,target:playerPosition,
+   ally:otherPosition,speedFeet:speed*5,role:enemyRole(currentName),hidden:!!combat.playerHidden,
+   lastKnown:combat.lastKnownPlayerPosition}):undefined;
+ let movedFeet=0;
+ if(tacticalPlan){position=tacticalPlan.position;movedFeet=tacticalPlan.movementFeet;}
+ else {
+ // Legacy training duels keep their original pursuit routine.
  const queue=[{pos:startingPosition,steps:0}],seen=new Set([startingPosition.x+','+startingPosition.y]);
  let best={pos:startingPosition,steps:0};
  for(let head=0;head<queue.length;head++){
@@ -1119,29 +1129,53 @@ export function resolveDuelEnemyTurn(campaign:Campaign):Campaign {
   }
  }
  position=best.pos;
- const inReach=distance(position,playerPosition)<=1;
- // Target selection must use the final position: a dummy cannot strike an owl it moved away from.
- const owlInReach=!!combat.owl&&combat.owl.hp>0&&distance(position,combat.owl.position)<=1;
- const targetOwl=owlInReach;
- const standDescription=(standing?'Enemy stands from Prone, spending 15 feet of movement. ':'')+(best.steps?'Moves '+best.steps*5+' feet to ('+(position.x+1)+', '+(position.y+1)+'). ':'')+(!inReach&&!owlInReach?'Cannot reach Nighthawk'+(combat.owl&&combat.owl.hp>0?' or Owl':'')+'; no melee attack. ':'');
+ movedFeet=best.steps*5;
 
+
+ }
+ const inReach=distance(position,playerPosition)<=1;
+ const owlInReach=!!combat.owl&&combat.owl.hp>0&&distance(position,combat.owl.position)<=1;
+ const targetOwl=owlInReach&&(!tacticalPlan||tacticalPlan.mode==='melee');
+ const currentSight=combat.battlefield&&combat.playerHidden?isConcealedFrom(combat.battlefield,playerPosition,position):false;
+ // On a generated battlefield a plainly exposed hidden creature is found;
+ // otherwise searching consumes the enemy's action and uses its Perception roll.
+ const spotted=!!tacticalPlan&&!!combat.playerHidden&&!currentSight;
+ const searching=!!tacticalPlan&&tacticalPlan.mode==='search'&&!spotted;
+ const canSearchNearby=searching&&distance(position,combat.lastKnownPlayerPosition??startingPosition)<=6;
+ const searchRoll=canSearchNearby?crypto.getRandomValues(new Uint32Array(1))[0]%20+1:undefined;
+ const perceptionBonus=opponent?.perceptionBonus??(enemyRole(currentName)==='rat'?2:0);
+ const foundBySearch=searchRoll!==undefined&&searchRoll+perceptionBonus>=(combat.hideTotal??15);
+ const stillHidden=!!combat.playerHidden&&!spotted&&!foundBySearch;
+ const searchMessage=searching?(searchRoll!==undefined?
+   ' Search (Wisdom Perception): '+searchRoll+' + '+perceptionBonus+' vs Stealth DC '+(combat.hideTotal??15)+
+   (foundBySearch?'. Nighthawk discovered.':'. No trace of Nighthawk found.'):
+   ' Searches the last known location without finding Nighthawk.'):'';
+ const roleNote=tacticalPlan?(tacticalPlan.reason+'. '):'';
+ const standDescription=(standing?'Enemy stands from Prone, spending 15 feet of movement. ':'')+
+  (movedFeet?'Moves '+movedFeet+' feet to ('+(position.x+1)+', '+(position.y+1)+'). ':'')+
+  roleNote+(spotted?' Nighthawk is spotted in the open.':'')+searchMessage+
+  ((!tacticalPlan||tacticalPlan.mode==='wait')&&!inReach&&!owlInReach?
+   ' Cannot reach Nighthawk'+(combat.owl&&combat.owl.hp>0?' or Owl':'')+'; no melee attack. ':'');
  const character=campaign.character??prototypeNighthawk;
  const die=(sides:number)=>crypto.getRandomValues(new Uint32Array(1))[0]%sides+1;
  const cover=combat.battlefield?battlefieldCover(combat.battlefield,position,targetOwl?combat.owl!.position:playerPosition):0;
- const canAttack=(targetOwl||inReach)&&cover!=='total';
+ const canAttack=(tacticalPlan?(tacticalPlan.mode==='ranged'||tacticalPlan.mode==='melee'&&inReach||targetOwl)&&!searching&&!stillHidden:targetOwl||inReach)&&cover!=='total';
+ const rangedWeapon=tacticalPlan?.mode==='ranged'?opponent?.rangedWeapon:undefined;
  const first=canAttack?die(20):0;
- const dodging=targetOwl?false:combat.lastAction==='Dodge'||!!combat.playerHidden;
- const second=dodging?die(20):undefined;
- const attackRoll=second===undefined?first:Math.min(first,second);
- const attackBonus=opponent?.attackBonus??4;
+ const dodging=targetOwl?false:combat.lastAction==='Dodge'||!!stillHidden||tacticalPlan?.mode==='ranged'&&distance(position,playerPosition)<=1||tacticalPlan?.mode==='ranged'&&tacticalPlan.distanceFeet>(rangedWeapon?.normalFeet??80);
+ const packTactics=!!tacticalPlan&&enemyRole(currentName)==='rat'&&!!otherPosition&&distance(otherPosition,playerPosition)<=1;
+ const advantage=packTactics&&!dodging;
+ const second=dodging||advantage?die(20):undefined;
+ const attackRoll=second===undefined?first:advantage?Math.max(first,second):Math.min(first,second);
+ const attackBonus=rangedWeapon?.bonus??opponent?.attackBonus??4;
  const total=attackRoll+attackBonus;
  const ac=(targetOwl?11:character.armorClass??14)+(typeof cover==='number'?cover:0);
  const hit=canAttack&&(attackRoll===20||(attackRoll!==1&&total>=ac));
  const critical=attackRoll===20;
- const dice=opponent?.damageDice.match(/^(\d+)d(\d+)$/i);
+ const dice=(rangedWeapon?.damageDice??opponent?.damageDice)?.match(/^(\d+)d(\d+)$/i);
  const diceCount=dice?Math.min(8,Number(dice[1])):1,dieFaces=dice?Number(dice[2]):2;
  const rollDamage=()=>Array.from({length:diceCount},()=>die(dieFaces)).reduce((a,b)=>a+b,0);
- const damage=hit?Math.max(0,rollDamage()+(critical?rollDamage():0)+(opponent?.damageModifier??(targetOwl?2:0))):0;
+ const damage=hit?Math.max(0,rollDamage()+(critical?rollDamage():0)+(rangedWeapon?.damageModifier??opponent?.damageModifier??(targetOwl?2:0))):0;
  const before=character.currentHitPoints??character.maxHitPoints??10;
  const owlAfter=targetOwl?Math.max(0,(combat.owl?.hp??1)-damage):undefined;
  const owlDestroyed=targetOwl&&hit&&owlAfter===0;
@@ -1152,15 +1186,15 @@ export function resolveDuelEnemyTurn(campaign:Campaign):Campaign {
   :(combat.classicAdventure?' Damage: ':' Nonlethal damage: ')+damage+'. Nighthawk HP: '+before+' → '+after+'/'+(character.maxHitPoints??10)+'.';
  const detail=(targetOwl?'Owl is within melee reach. ':standDescription)
   +(combat.order[combat.turnIndex??0]??combat.enemyName)
-  +(canAttack?(targetOwl?' attacks Owl: ':combat.classicAdventure?' attacks: ':' training attack: '):' waits out of range. ')
-  +(canAttack?(dodging?'disadvantage ('+first+', '+second+') → ':'d20 ')+attackRoll+' + '+attackBonus+' = '+total+' vs AC '+ac+': '+(hit?'HIT':'MISS')+'.'
+  +(canAttack?(targetOwl?' attacks Owl: ':tacticalPlan?.mode==='ranged'?' fires '+(rangedWeapon?.name??(enemyRole(currentName)==='goblin'?'Shortbow':'Light Crossbow'))+': ':combat.classicAdventure?' attacks: ':' training attack: '):searching?' finishes searching. ':' waits out of range. ')
+  +(canAttack?(dodging?'disadvantage ('+first+', '+second+') → ':advantage?'advantage (Pack Tactics '+first+', '+second+') → ':'d20 ')+attackRoll+' + '+attackBonus+' = '+total+' vs AC '+ac+': '+(hit?'HIT':'MISS')+'.'
     +(hit?damageDescription:'')
     +(defeated?(combat.classicAdventure?' Nighthawk falls unconscious.':' Nighthawk is knocked unconscious; sparring ends.'):''):'');
  const turn=nextActiveTurn(combat);
  const followingIndex=turn.index;
  const nextRound=turn.round;
  const nextOwl=owlDestroyed?undefined:targetOwl&&combat.owl?{...combat.owl,hp:owlAfter??combat.owl.hp}:combat.owl;
- const nextCombat={...combat,readiedAction:combat.order[followingIndex]==='Nighthawk'?undefined:combat.readiedAction,owl:followingIndex!==undefined&&combat.order[followingIndex]==='Nighthawk'?refreshOwlForNighthawkTurn({...combat,owl:nextOwl,round:nextRound}):nextOwl,enemyPosition:secondEnemyTurn?combat.enemyPosition:position,secondEnemy:secondEnemyTurn&&combat.secondEnemy?{...combat.secondEnemy,position,prone:false}:combat.secondEnemy,enemyProne:secondEnemyTurn?combat.enemyProne:false,turnIndex:followingIndex,round:nextRound,reactionUsed:false,enemyReactionUsed:secondEnemyTurn?combat.enemyReactionUsed:false,secondEnemyReactionUsed:secondEnemyTurn?false:combat.secondEnemyReactionUsed,movementUsed:0,movementAllowance:35,actionUsed:false,objectInteractionUsed:false,bonusActionUsed:false,steadyAim:false,disengaged:false,sneakAttackUsedThisTurn:false,sneakAttackEligible:false,spellSlotExpendedThisTurn:false,lastAction:undefined,attack:undefined,enemyLastTurn:detail,status:defeated?'completed' as const:combat.status,outcome:defeated?'player-defeated' as const:combat.outcome};
+ const nextCombat={...combat,readiedAction:combat.order[followingIndex]==='Nighthawk'?undefined:combat.readiedAction,owl:followingIndex!==undefined&&combat.order[followingIndex]==='Nighthawk'?refreshOwlForNighthawkTurn({...combat,owl:nextOwl,round:nextRound}):nextOwl,enemyPosition:secondEnemyTurn?combat.enemyPosition:position,playerHidden:stillHidden,enemySearchResult:searchMessage||undefined,lastKnownPlayerPosition:stillHidden?combat.lastKnownPlayerPosition:playerPosition,secondEnemy:secondEnemyTurn&&combat.secondEnemy?{...combat.secondEnemy,position,prone:false}:combat.secondEnemy,enemyProne:secondEnemyTurn?combat.enemyProne:false,turnIndex:followingIndex,round:nextRound,reactionUsed:false,enemyReactionUsed:secondEnemyTurn?combat.enemyReactionUsed:false,secondEnemyReactionUsed:secondEnemyTurn?false:combat.secondEnemyReactionUsed,movementUsed:0,movementAllowance:35,actionUsed:false,objectInteractionUsed:false,bonusActionUsed:false,steadyAim:false,disengaged:false,sneakAttackUsedThisTurn:false,sneakAttackEligible:false,spellSlotExpendedThisTurn:false,lastAction:undefined,attack:undefined,enemyLastTurn:detail,status:defeated?'completed' as const:combat.status,outcome:defeated?'player-defeated' as const:combat.outcome};
  const concentrationCheck=!targetOwl&&damage>0&&!!campaign.concentration;
  const concentrationRoll=concentrationCheck?die(20):undefined;
  const concentrationBonus=abilityModifier(character.scores.con);
