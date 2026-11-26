@@ -1964,6 +1964,52 @@ test('iPhone DM warehouse template restores exact original practice combat contr
  await navigate(page,'Journal');await page.getByRole('button',{name:'Bestiary'}).click();
  await expect(page.getByLabel('Bestiary')).toContainText('Creatures you encounter');
 });
+test('Combat Lab replenishes depleted HP, arrows, daggers, consumables and hit dice on every new encounter',async({page})=>{
+ test.setTimeout(110000);
+ await createAndImport(page,'rogue');
+ const original=await saved(page);
+ await page.evaluate(async()=>{
+  const db=await new Promise<IDBDatabase>((resolve,reject)=>{const r=indexedDB.open('four-keeps-local',1);r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});
+  const tx=db.transaction('campaigns','readwrite'),store=tx.objectStore('campaigns');
+  const all=await new Promise<any[]>(resolve=>{const r=store.getAll();r.onsuccess=()=>resolve(r.result);});
+  const c=all[0];
+  c.character.currentHitPoints=1;c.hitDiceRemaining=0;c.equipment.arrows=0;c.equipment.daggers=0;
+  for(const row of c.inventoryLedger.gear)if(row.name==='Arrows'||row.name==='Dagger')row.quantity=0;
+  c.inventoryLedger.gear.push({name:'Potion of Healing',quantity:0});
+  store.put(c);await new Promise<void>((resolve,reject)=>{tx.oncomplete=()=>resolve();tx.onerror=()=>reject(tx.error);});db.close();
+ });
+ await page.reload();
+ await page.getByRole('button',{name:'Campaigns',exact:true}).click();
+ await page.getByRole('button',{name:'Continue Adventure'}).click();
+ const depleted=await saved(page);
+ expect(depleted.id).toBe(original.id);
+ expect(depleted.character.currentHitPoints).toBe(1);
+ await navigate(page,'Developer');
+ const button=page.getByLabel('Combat Lab').getByRole('button',{name:'Generate Random Encounter'});
+ for(let cycle=0;cycle<2;cycle++){
+  await button.click();
+  await expect(page.getByRole('button',{name:'Roll initiative (d20 + DEX)'})).toBeVisible();
+  const lab=await page.evaluate(id=>JSON.parse(localStorage.getItem('four-keeps-combat-lab-session:'+id)??'null'),original.id);
+  expect(lab).toBeTruthy();
+  expect(lab.character.currentHitPoints).toBe(lab.character.maxHitPoints);
+  expect(lab.equipment.arrows).toBeGreaterThanOrEqual(20);
+  expect(lab.equipment.daggers).toBeGreaterThanOrEqual(2);
+  expect(lab.combat.arrowsRemaining).toBeGreaterThanOrEqual(20);
+  expect(lab.combat.daggersAvailable).toBeGreaterThanOrEqual(2);
+  expect(lab.hitDiceRemaining).toBe(lab.character.level);
+  const gear=Object.fromEntries(lab.inventoryLedger.gear.map((r:{name:string;quantity:number})=>[r.name,r.quantity]));
+  expect(gear.Arrows).toBeGreaterThanOrEqual(20);
+  expect(gear.Dagger).toBeGreaterThanOrEqual(2);
+  expect(gear['Potion of Healing']).toBeGreaterThanOrEqual(1);
+  await page.getByRole('button',{name:'Roll initiative (d20 + DEX)'}).click();
+  await expect(page.getByLabel('Scene combat resources')).toContainText('HP '+lab.character.maxHitPoints+'/'+lab.character.maxHitPoints);
+  if(cycle===0){
+   await page.getByRole('button',{name:'Open navigation menu'}).click();
+   await page.getByRole('navigation',{name:'Primary navigation'}).getByRole('button',{name:'Developer',exact:true}).click();
+  }
+  expect(await saved(page)).toEqual(depleted);
+ }
+});
 test('iPhone illustrated warehouse door opens, persists, and ignores corrupted camera storage',async({page})=>{
  test.setTimeout(90000);
  await createAndImport(page,'rogue');

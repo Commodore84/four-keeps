@@ -44,7 +44,7 @@ describe('shared Combat Lab test entry point',()=>{
   const lab=makeCombatLabEncounter('ruins-goblin-scouts','lab-ff00ff11',rogue);
   expect(lab.combatLab?.originCampaignId).toBe('live-rogue');
   expect(lab.characterIdentity).toEqual(rogue.characterIdentity);
-  expect(lab.equipment).toEqual(rogue.equipment);
+  expect(lab.equipment).toEqual({...rogue.equipment,arrows:20});
   expect(lab.inventoryLedger).toEqual(rogue.inventoryLedger);
   lab.inventoryLedger!.currency.GP=0;
   lab.character!.scores.dex=8;
@@ -61,6 +61,85 @@ describe('shared Combat Lab test entry point',()=>{
   expect(lab.combat?.daggersAvailable).toBe(2);
   expect(lab.combatLab?.originCampaignId).toBe(depleted.id);
   expect(depleted).toEqual(before);
+ });
+ it('starts every disposable encounter fully healed, fully stocked, and with all class resources ready',()=>{
+  const base=newCampaign('Depleted real adventure','real-depleted');
+  const source={
+   ...base,
+   characterIdentity:{name:'Riven',classId:'rogue',draftId:'riven-draft'} as NonNullable<typeof base.characterIdentity>,
+   character:{...base.character!,classId:'rogue',level:5,maxHitPoints:38,currentHitPoints:2,
+    temporaryHitPoints:6,conditions:['Poisoned','Exhaustion'],exhaustionLevel:3,
+    deathSaves:{successes:1,failures:2,stable:false,dead:false},
+    resources:{'Second Wind':{maximum:2,used:2,recovery:'short' as const}},
+    spellSlots:{level1:3,usedLevel1:3,level2:2,usedLevel2:2}},
+   hitDiceRemaining:0,
+   equipment:{daggers:0,arrows:0,caltrops:0,ballBearings:0},
+   healerKitUsesRemaining:1,waterskinPints:1,
+   inventoryLedger:{currency:{CP:0,SP:0,EP:0,GP:22,PP:0},gear:[
+    {name:'Dagger',quantity:0},{name:'Arrows',quantity:0},
+    {name:'Crossbow Bolts',quantity:2},{name:'Potion of Healing',quantity:0},
+    {name:'Oil',quantity:0},{name:'Torch',quantity:0},
+    {name:'Caltrops',quantity:0},{name:'Ball Bearings',quantity:0},
+    {name:"Healer's Kit",quantity:0},{name:'Waterskin',quantity:1},
+    {name:'Shortbow',quantity:1},{name:'Thieves’ Tools',quantity:1}
+   ]}
+  };
+  const snapshot=structuredClone(source);
+  for(const environment of COMBAT_LAB_SCENARIOS){
+   const lab=makeCombatLabEncounter(environment,'lab-feedf00d',source);
+   expect(lab.character?.currentHitPoints).toBe(38);
+   expect(lab.character?.temporaryHitPoints).toBe(0);
+   expect(lab.character?.conditions).toEqual([]);
+   expect(lab.character?.exhaustionLevel).toBe(0);
+   expect(lab.character?.deathSaves).toMatchObject({successes:0,failures:0,dead:false});
+   expect(lab.character?.resources?.['Second Wind']?.used).toBe(0);
+   expect(lab.character?.spellSlots).toMatchObject({usedLevel1:0,usedLevel2:0});
+   expect(lab.hitDiceRemaining).toBe(5);
+   expect(lab.equipment).toEqual({daggers:2,arrows:20,caltrops:1,ballBearings:1});
+   const gear=Object.fromEntries(lab.inventoryLedger?.gear.map(row=>[row.name,row.quantity])??[]);
+   expect(gear).toMatchObject({'Arrows':20,'Crossbow Bolts':20,'Dagger':2,
+    'Potion of Healing':1,'Oil':1,'Torch':1,'Caltrops':1,'Ball Bearings':1,"Healer's Kit":1});
+   expect(gear['Shortbow']).toBe(1);
+   expect(lab.healerKitUsesRemaining).toBe(10);
+   expect(lab.waterskinPints).toBe(4);
+   expect(lab.inventoryLedger?.currency.GP).toBe(22);
+   const rolled=rollDuelInitiative(lab);
+   expect(rolled.combat?.arrowsRemaining).toBe(20);
+   expect(rolled.combat?.daggersAvailable).toBe(2);
+   // Spending resources in one lab may not taint the next lab or story.
+   lab.inventoryLedger!.gear.find(row=>row.name==='Potion of Healing')!.quantity=0;
+   lab.character!.currentHitPoints=1;
+   expect(makeCombatLabEncounter(environment,'lab-feedf00e',source).character?.currentHitPoints).toBe(38);
+   expect(source).toEqual(snapshot);
+  }
+ });
+ it('keeps ordinary permanent possessions and gold unchanged in the practice copy',()=>{
+  const source=newCampaign('Original adventure','ledger-test');
+  source.inventoryLedger={currency:{CP:3,SP:2,EP:0,GP:19,PP:0},
+   gear:[{name:'Potion of Healing',quantity:5},{name:'Torch',quantity:0},
+    {name:'Shortbow',quantity:0},{name:'Rope',quantity:1},{name:'Arrows',quantity:42}]};
+  const before=structuredClone(source);
+  const lab=makeCombatLabEncounter('roadside-bandit','lab-6789abcd',source);
+  expect(lab.inventoryLedger?.gear).toEqual([
+   {name:'Potion of Healing',quantity:5},{name:'Torch',quantity:1},
+   {name:'Shortbow',quantity:0},{name:'Rope',quantity:1},{name:'Arrows',quantity:42}
+  ]);
+  expect(lab.equipment?.arrows).toBe(42);
+  expect(source).toEqual(before);
+ });
+ it('refreshes a throwing dagger from character-creation gear even if its last ledger row is gone',()=>{
+  // Imported builds may retain an original dagger while the live campaign
+  // no longer has a ledger row after throwing or losing it.
+  // The training counters still guarantee two daggers for the classic engine.
+  const c=newCampaign('Practice fallback','practitioner');
+  const lab=makeCombatLabEncounter('warehouse-vermin','lab-2222bbaa',{
+   ...c,characterIdentity:{name:'Rogue',classId:'rogue'} as NonNullable<typeof c.characterIdentity>,
+   equipment:{daggers:0,arrows:0,caltrops:0,ballBearings:0},
+   inventoryLedger:{currency:{CP:0,SP:0,EP:0,GP:0,PP:0},gear:[]}
+  });
+  expect(lab.equipment?.daggers).toBe(2);
+  expect(lab.equipment?.arrows).toBe(20);
+  expect(lab.combat?.arrowsRemaining).toBe(20);
  });
  it('retains generated positions and objects after initiative and moving a character',()=>{
   const lab=makeCombatLabEncounter('roadside-bandit','lab-11112222');
