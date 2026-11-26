@@ -1,3 +1,4 @@
+import {CombatDeploymentMap} from './CombatDeploymentMap';
 import {objectAt,battlefieldOpeningWithinReach,battlefieldBlocked} from '../game/battlefield';
 import {battlefieldTileName,battlefieldTileVariant} from './battlefieldIllustrations';
 import {battlefieldVisibleIndices,type BattlefieldViewport} from './battlefieldViewport';
@@ -52,7 +53,7 @@ import {campaignFromCharacterDraft,characterDraftImportOptions} from '../game/ch
 import { cloneElement, useEffect, useRef, useState } from 'react';
 import { createBackup, parseBackup } from '../game/backup';
 import { BookOpen, Bird, Blocks, Compass, Droplet, Map, RefreshCw, Send, Settings, Shield, Swords, UserRound, Users, Search, ChevronDown, MessageCircle, MapPin, GitBranch, Sparkles } from 'lucide-react';
-import { addExchange, addNote, addRoll, beginDuel, adjustEquipment, rollDuelInitiative, chooseDuelEntry, takeDuelTurnAction, utilizeCombatItem, takeCombatSkillAction, readyCombatAction, readyCombatMindSliver, resolveReadiedSpellReaction, resolveReadiedCombatReaction, resolveReadiedWeaponAttack, moveDuelToken, interactDuelBattlefieldOpening, useDuelFixtureAction, type DuelFixtureAction, moveOwl, owlHelp, owlTurnAction, tacticalRoute, tacticalOpportunityEnemies, publicCombatText, resolveEnemyOpportunity, moveTrainingDummy, resolveTrainingReaction, rollTrainingReaction, advanceDuelTestEnemyTurn, resolveDuelEnemyTurn, beginEnemyShove, beginEnemyGrapple, rollPlayerGrappleSave, beginPlayerGrappleEscape, rollPlayerGrappleEscape, rollPlayerShoveSave, standNighthawk, rollDuelAttack, shoveTrainingEnemy, hideNighthawk, searchForNighthawk, trainingMapSize, isTrainingPillar, trainingTerrain, trainingRouteCost, trainingCoverBlocksSight, canNighthawkHide, addSecondTrainingEnemy, selectTrainingTarget, grappleTrainingEnemy, escapeTrainingGrapple, concludeDuel, quitTrainingEncounter, newCampaign, awardExperience, levelUpRogue, levelUpArcaneTrickster, tricksterCantrips, tricksterSpells, isRitualSpell, castNighthawkSpell, castCombatMagicAction, resolveCombatSpellSave, resolveLaughterRepeatSave, availableCombatSpells, takeNighthawkRest, applyNighthawkDamage, minutesUntilLongRestEligible, advanceToLongRestEligibility, endNighthawkConcentration, spellRequiresConcentration, reconcileNighthawkScores, undoNighthawkScoreReconciliation, xpThresholds, type Campaign } from '../game/campaign';
+import { addExchange, addNote, addRoll, beginDuel, adjustEquipment, rollDuelInitiative, chooseDuelEntry,chooseDuelDeployment, takeDuelTurnAction, utilizeCombatItem, takeCombatSkillAction, readyCombatAction, readyCombatMindSliver, resolveReadiedSpellReaction, resolveReadiedCombatReaction, resolveReadiedWeaponAttack, moveDuelToken, interactDuelBattlefieldOpening, useDuelFixtureAction, type DuelFixtureAction, moveOwl, owlHelp, owlTurnAction, tacticalRoute, tacticalOpportunityEnemies, publicCombatText, resolveEnemyOpportunity, moveTrainingDummy, resolveTrainingReaction, rollTrainingReaction, advanceDuelTestEnemyTurn, resolveDuelEnemyTurn, beginEnemyShove, beginEnemyGrapple, rollPlayerGrappleSave, beginPlayerGrappleEscape, rollPlayerGrappleEscape, rollPlayerShoveSave, standNighthawk, rollDuelAttack, shoveTrainingEnemy, hideNighthawk, searchForNighthawk, trainingMapSize, isTrainingPillar, trainingTerrain, trainingRouteCost, trainingCoverBlocksSight, canNighthawkHide, addSecondTrainingEnemy, selectTrainingTarget, grappleTrainingEnemy, escapeTrainingGrapple, concludeDuel, quitTrainingEncounter, newCampaign, awardExperience, levelUpRogue, levelUpArcaneTrickster, tricksterCantrips, tricksterSpells, isRitualSpell, castNighthawkSpell, castCombatMagicAction, resolveCombatSpellSave, resolveLaughterRepeatSave, availableCombatSpells, takeNighthawkRest, applyNighthawkDamage, minutesUntilLongRestEligible, advanceToLongRestEligibility, endNighthawkConcentration, spellRequiresConcentration, reconcileNighthawkScores, undoNighthawkScoreReconciliation, xpThresholds, type Campaign } from '../game/campaign';
 import { localCampaignStorage as baseCampaignStorage,subscribeCampaignSaveStatus,type CampaignSaveStatus } from '../game/storage';
 import {createCombatLabSessionStorage} from '../game/combatLabStorage';
 import { availableCombatMovement, combatHideStatus, combatWeaponChoices } from '../game/combat-ui';
@@ -1305,6 +1306,17 @@ export function App() {
     }catch(error){setNotice('Starting position: '+String(error));}
     finally{setSaving(false);}
   }
+  async function selectDeploymentSquare(square:{x:number;y:number}){
+    if(!campaign||saving)return;
+    setSaving(true);
+    try{
+      const next=chooseDuelDeployment(campaign,square);
+      await localCampaignStorage.save(next);
+      setCampaign(next);setCampaigns(items=>items.map(item=>item.id===next.id?next:item));
+      setNotice('');
+    }catch(error){setNotice('Starting position: '+String(error));}
+    finally{setSaving(false);}
+  }
   async function rollInitiative() {
     if(!campaign||saving)return;
     setSaving(true);
@@ -2099,20 +2111,8 @@ export function App() {
           {(()=>{const latestDamage=campaign.journal.slice(campaign.combat!.journalStartIndex??0).filter(entry=>entry.kind==='system'&&(/Nighthawk HP: \d+ → \d+\//.test(entry.text)||/Nighthawk takes \d+ damage/.test(entry.text))).at(-1);return <div className="space-y-2">{latestDamage&&campaign.journal.at(-1)?.id===latestDamage.id&&<p role="status" aria-live="polite" className="rounded-lg border border-red-400/70 bg-red-950/30 p-3 text-sm font-semibold">{latestDamage.text}</p>}</div>;})()}
           {campaign.combat.status==='completed'&&(()=>{const s=campaign.combat!.stats??{damage:0,movement:0,attacks:0,hits:0,criticalHits:0,sneakDamage:0,finishingBlows:0};return <section className="rounded-xl border border-gold/60 bg-gold/10 p-4 space-y-3" aria-label="Encounter recap"><p className="eyebrow">Encounter Complete</p><h3 className="font-serif text-xl text-gold">{campaign.combat!.outcome==='player-defeated'?'Defeat':'Victory'} · Combat Recap</h3><div className="grid grid-cols-3 gap-2 text-center">{[['Rounds',campaign.combat!.round],['Damage',s.damage],['Movement',s.movement+' ft']].map(([label,value])=><div key={label} className="rounded-lg border border-white/20 p-2"><strong className="block text-lg">{value}</strong><span className="text-xs">{label}</span></div>)}</div><p className="font-semibold">Nighthawk · Scorecard</p><p className="text-sm">Attacks: {s.attacks} · Hits: {s.hits} · Accuracy: {s.attacks?Math.round(100*s.hits/s.attacks):0}%</p><p className="text-sm">Critical hits: {s.criticalHits} · Sneak Attack damage: {s.sneakDamage} · Finishing blows: {s.finishingBlows}</p><p className="text-xs text-parchment/70">Training encounter statistics. Continue to save the recap in your campaign history.</p></section>;})()}
           {(campaign.combat.status==='completed'||(campaign.combat.enemyHp===0&&(!campaign.combat.secondEnemy||campaign.combat.secondEnemy.hp===0))) ? <div className="space-y-3 rounded-lg border border-gold/60 bg-gold/10 p-3"><p className="font-semibold text-gold">{campaign.combat.outcome==='player-defeated'?'Nighthawk is unconscious — sparring ends':'Victory — nonlethal sparring match'}</p><p className="text-sm">{campaign.combat.outcome==='player-defeated'?'Nighthawk was reduced to 0 HP by a nonlethal training strike. Combat has ended.':campaign.combat.enemyName+' is at 0 HP and unconscious, not dead. Combat is over; no further turns are needed.'}</p><button type="button" disabled={saving} className="w-full rounded-lg bg-gold p-3 font-semibold text-ink disabled:opacity-40" onClick={()=>void finishDefeatedDuel()}>Continue to aftermath</button></div> : campaign.combat.status==='awaiting-initiative' ? <>
-           {!!campaign.combat.entryOptions?.length&&<section role="group" aria-label="Choose starting position" className="space-y-2 rounded-lg border border-gold/40 bg-ink/50 p-3">
-             <p className="font-semibold text-gold">Choose your starting position</p>
-             <p className="text-xs text-parchment/75">Optional: select an approach before initiative. It does not spend combat movement. The selected square is saved.</p>
-             <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-              {campaign.combat.entryOptions.map((entry,index)=>{
-               const selected=campaign.combat!.playerPosition?.x===entry.square.x&&campaign.combat!.playerPosition?.y===entry.square.y;
-               return <button type="button" key={index} disabled={saving}
-                 aria-pressed={selected} onClick={()=>void selectEntry(index)}
-                 className={`min-h-11 rounded-lg border px-3 py-2 text-left text-sm ${selected?'border-gold bg-gold/20 font-semibold text-gold':'border-white/30 text-parchment'} disabled:opacity-40`}>
-                  {entry.label}<span className="block text-xs opacity-75">Square {entry.square.x+1}, {entry.square.y+1}{selected?' · Selected':''}</span>
-                 </button>;
-              })}
-             </div>
-           </section>}
+           {!!campaign.combat.battlefield&&!!campaign.combat.entryOptions?.length&&
+             <CombatDeploymentMap combat={campaign.combat} disabled={saving} onSelect={square=>void selectDeploymentSquare(square)}/>}
            <p className="text-sm">The enemy's initiative has been rolled. Roll Nighthawk's d20 to establish turn order.</p><button type="button" disabled={saving} className="w-full rounded-lg bg-gold p-3 font-semibold text-ink disabled:opacity-40" onClick={()=>void rollInitiative()}>Roll initiative (d20 + DEX)</button></> : <><p className="font-semibold text-gold">{campaign.combat.order?.[campaign.combat.turnIndex??0]==='Nighthawk'?'Your turn — Nighthawk':'Enemy turn — '+campaign.combat.order?.[campaign.combat.turnIndex??0]}</p>{!campaign.combat.secondEnemy&&<button type="button" disabled={saving} className="hidden" onClick={()=>void addSecondDummy()}>Add Second Training Dummy · Test Multiple Enemies</button>}
           
           <div className="rounded-xl border border-gold/40 bg-gold/5 p-3 space-y-3" aria-label="Combat turn summary">
