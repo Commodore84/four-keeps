@@ -1,6 +1,6 @@
 /* Decorative tiles are non-interactive. The grid and button labels remain authoritative. */
 [data-terrain-art]{background-size:cover;background-position:center;background-repeat:no-repeat;}
-[data-terrain-art]:not([aria-selected="true"]){border-color:rgba(232,223,189,.19);}
+[data-terrain-art^="floor-"]:not([aria-selected="true"]){border-color:rgba(232,223,189,.15);}
 [data-terrain-art="cargo"]{background-image:url("../assets/battlefield/cargo.svg");}
 [data-terrain-art="chair"]{background-image:url("../assets/battlefield/chair.svg");}
 [data-terrain-art="crate"]{background-image:url("../assets/battlefield/crate.svg");}
@@ -24,10 +24,34 @@
 [data-terrain-variant="1"]{background-position:12% 80%;background-size:108% 108%;}
 [data-terrain-variant="2"]{background-position:88% 15%;background-size:112% 112%;}
 [data-terrain-variant="3"]{background-position:66% 91%;background-size:105% 105%;}
-[data-battlefield-theme="warehouse"]{background-image:url("../assets/battlefield/floor-warehouse.svg");}
-[data-battlefield-theme="roadside"]{background-image:url("../assets/battlefield/floor-roadside.svg");}
-[data-battlefield-theme="ruins"]{background-image:url("../assets/battlefield/floor-ruins.svg");}
-[data-battlefield-theme]{background-repeat:repeat;background-size:max(8px,var(--battlefield-cell-size,21px)) max(8px,var(--battlefield-cell-size,21px));}
+/* Continuous scenery under the interactive 5-foot grid.
+ * The three large texture patches span eight squares, instead of repeating a
+ * miniature floor illustration in every button. The road is visual only.
+ * Neither styling nor decorative details can modify cover/pathing/visibility.
+ */
+[data-battlefield-theme]{background-color:#555c51;background-repeat:repeat;
+  background-size:calc(var(--battlefield-cell-size,21px) * 8) calc(var(--battlefield-cell-size,21px) * 8);
+}
+[data-battlefield-theme="warehouse"]{
+  background-color:#665746;
+  background-image:url("../assets/battlefield/scene-warehouse.svg");
+}
+[data-battlefield-theme="roadside"]{
+  background-color:#51664c;
+  background-image:
+    linear-gradient(180deg,transparent 0%,transparent 40%,rgba(60,48,35,.56) 43%,rgba(152,123,77,.86) 46%,rgba(154,128,87,.91) 50%,rgba(131,105,72,.86) 54%,rgba(63,52,40,.48) 57%,transparent 60%,transparent 100%),
+    url("../assets/battlefield/scene-roadside.svg");
+  background-size:100% 100%,calc(var(--battlefield-cell-size,21px) * 8) calc(var(--battlefield-cell-size,21px) * 8);
+  background-repeat:no-repeat,repeat;
+}
+[data-battlefield-theme="ruins"]{
+  background-color:#606a60;
+  background-image:url("../assets/battlefield/scene-ruins.svg");
+}
+/* Floor cells are clear windows onto the continuous illustrated ground.
+ * Sparse mud and fractures can still overlay it; actor and path highlights win.
+ */
+[data-battlefield-theme] [data-terrain-art^="floor-"]{background-image:none;}
 [data-battlefield-object]{background-size:100% 100%;background-repeat:no-repeat;pointer-events:none;}
 [data-terrain-art="window-open"]{background-image:url("../assets/battlefield/window-open.svg");}
 [data-terrain-art="tree-deep"]{background-image:url("../assets/battlefield/tree-deep.svg");}
@@ -39,3 +63,6 @@
 [data-terrain-art="door-locked"]{background-image:url("../assets/battlefield/door-locked.svg");}
 [data-terrain-art="door-broken"]{background-image:url("../assets/battlefield/door-broken.svg");}
 [data-terrain-art="window-shattered"]{background-image:url("../assets/battlefield/window-shattered.svg");}
+
+/* Tokens and selection states remain readable above the artwork. */
+[data-battlefield-theme] [aria-pressed="true"]{outline-offset:-1px;}

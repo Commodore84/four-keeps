@@ -33,7 +33,7 @@ describe('viewport-efficient classic battlefield',()=>{
  });
 });
 
-import {battlefieldTileVariant,battlefieldTileName} from './battlefieldIllustrations';
+import {battlefieldTileVariant,battlefieldTileName,battlefieldObjectArtworkStyle} from './battlefieldIllustrations';
 describe('stable decorative terrain variation',()=>{
  it('uses coordinates and the kind without mutating rules or campaign state',()=>{
   const m={width:12,height:15,objects:[],theme:'ruins' as const};
@@ -43,5 +43,14 @@ describe('stable decorative terrain variation',()=>{
   expect(battlefieldTileName(m)).toBe('floor-ruins');
   expect(battlefieldTileName(m,{id:'win',kind:'window',x:4,y:8,width:1,height:1,open:true})).toBe('window-open');
   expect(battlefieldTileName(m,{id:'win',kind:'window',x:4,y:8,width:1,height:1})).toBe('window');
+  const prop={id:'stack',kind:'cargo' as const,x:5,y:7,width:3,height:2};
+  expect(battlefieldTileName(m,prop,5,7)).toBe(battlefieldTileName(m,prop,7,8));
+  expect(battlefieldObjectArtworkStyle(prop,5,7,2)).toMatchObject({
+   backgroundSize:'126px 84px',backgroundPosition:'0px 0px'});
+  expect(battlefieldObjectArtworkStyle(prop,7,8,2)).toMatchObject({
+   backgroundSize:'126px 84px',backgroundPosition:'-84px -42px'});
+  expect(battlefieldObjectArtworkStyle({...prop,kind:'wall'},7,8,2)).toBeUndefined();
+  expect(battlefieldObjectArtworkStyle(undefined,5,7,2)).toBeUndefined();
+
  });
 });

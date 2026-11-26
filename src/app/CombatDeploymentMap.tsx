@@ -1,7 +1,7 @@
 import {useEffect,useRef,useState} from 'react';
 import {UserRound} from 'lucide-react';
 import {battlefieldBlocked,objectAt,type Battlefield,type BattlefieldPoint} from '../game/battlefield';
-import {battlefieldTileName} from './battlefieldIllustrations';
+import {battlefieldTileName,battlefieldObjectArtworkStyle} from './battlefieldIllustrations';
 import {ClassicCombatGrid} from './ClassicCombatPresentation';
 import {ClassicCombatMapFrame} from './ClassicCombatMapFrame';
 import {canDeployAt,type Campaign} from '../game/campaign';
@@ -45,7 +45,7 @@ export function CombatDeploymentMap({combat,onSelect,disabled=false}:{
       aria-pressed={legal?own:undefined} disabled={disabled||!legal}
       onClick={()=>onSelect(point)}
       className={'relative min-w-0 border aspect-square flex items-center justify-center '+(own?'border-amber-200 bg-amber-300/60 ring-2 ring-inset ring-amber-200 text-amber-100 z-10':legal?'border-sky-300/90 bg-sky-400/20 cursor-pointer':'border-white/10 opacity-75')}
-      style={{gridColumnStart:x+1,gridRowStart:y+1,minHeight:0,borderRadius:0}}>
+      style={{gridColumnStart:x+1,gridRowStart:y+1,minHeight:0,borderRadius:0,...battlefieldObjectArtworkStyle(obj,x,y,zoom)}}>
       {own?<UserRound size={18} aria-label="Player" className="drop-shadow-[0_1px_2px_#000]"/>:legal&&!blocked?<span aria-hidden="true" className="h-1 w-1 rounded-full bg-sky-200/90"/>:null}
      </button>;
     })}

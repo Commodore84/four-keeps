@@ -1672,6 +1672,13 @@ test('Generate Random Encounter uses the real combat engine, cycles environments
    await expect(selection).toHaveCount(0);
    const board=page.getByRole('grid',{name:'Combat movement grid'});
    await expect(board).toBeVisible();
+   // Illustrated surface is separate from the gameplay grid and tracks the
+   // environment without changing any of the saved tactical objects.
+   const theme=['warehouse','roadside','ruins'][n];
+   await expect(board).toHaveAttribute('data-battlefield-theme',theme);
+   await expect.poll(()=>board.evaluate(node=>getComputedStyle(node).backgroundImage)).toContain('svg');
+   await expect(board.locator('[data-terrain-art]')).not.toHaveCount(0);
+   await board.locator('xpath=..').screenshot({path:'test-results/phase3-illustrated-'+theme+'-iphone.png'});
    // First render must contain the player without a manual pan to kick virtualization.
    const player=board.getByRole('gridcell',{name:/^Nighthawk/});
    await expect(player).toHaveCount(1);
