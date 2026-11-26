@@ -1,5 +1,5 @@
 import {enemyRole,selectEnemyTactic,isConcealedFrom,type EnemyTacticalPlan} from './tacticalEnemyAI';
-import {battlefieldBlocked,battlefieldDifficult,battlefieldCover,battlefieldOpeningWithinReach,toggleBattlefieldOpening,type Battlefield} from './battlefield';
+import {battlefieldBlocked,battlefieldDifficult,battlefieldCover,battlefieldOpaqueSightBlocked,battlefieldOpeningWithinReach,toggleBattlefieldOpening,type Battlefield} from './battlefield';
 import {attemptFixtureCheck,strikeBattlefieldFixture,type FixtureResolution} from './battlefieldFixtures';
 import {playerToolTraining} from './playerSheetSummary';
 import type {TemporaryEffect} from './temporaryEffects';
@@ -499,7 +499,7 @@ export const trainingStepCost=(x:number,y:number,map?:Battlefield)=>trainingTerr
 export const trainingRouteCost=(route:{x:number;y:number}[],map?:Battlefield)=>route.slice(1).reduce((sum,p)=>sum+trainingStepCost(p.x,p.y,map),0);
 export const isTrainingPillar=(x:number,y:number,map?:Battlefield)=>map?battlefieldBlocked(map,{x,y}):trainingPillars.some(p=>p.x===x&&p.y===y);
 export function trainingCoverBlocksSight(p:{x:number;y:number},e:{x:number;y:number},map?:Battlefield):boolean {
- if(map)return battlefieldCover(map,p,e)==='total';
+ if(map)return battlefieldCover(map,p,e)==='total'||battlefieldOpaqueSightBlocked(map,p,e);
  const dx=e.x-p.x,dy=e.y-p.y;
  for(let t=0;t<=1;t+=0.02)if(trainingPillars.some(pillar=>Math.abs(p.x+dx*t-pillar.x)<0.48&&Math.abs(p.y+dy*t-pillar.y)<0.48))return true;
  return false;

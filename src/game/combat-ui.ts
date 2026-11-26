@@ -1,4 +1,5 @@
-import { canNighthawkHide, combatRangedFiringPosition, trainingCoverBlocksSight, type Campaign } from './campaign';
+import { canNighthawkHide, combatRangedFiringPosition, trainingCoverBlocksSight, trainingTerrain, type Campaign } from './campaign';
+import {isConcealedFrom} from './tacticalEnemyAI';
 
 type Combat = NonNullable<Campaign['combat']>;
 export type CombatRollLabel = 'Normal roll'|'Advantage'|'Disadvantage';
@@ -9,16 +10,23 @@ export function availableCombatMovement(c: Combat): number {
 }
 export function combatHideStatus(c: Combat): { available:boolean; reason:string; visibleTo:string[] } {
   const p=c.playerPosition??{x:2,y:4};
+  // The same directional spectator check used by the rule engine determines
+  // what the player sees here; undergrowth conceals the player, not the foe.
+  const concealed=(enemy:{x:number;y:number})=>c.battlefield?
+    isConcealedFrom(c.battlefield,p,enemy):
+    trainingCoverBlocksSight(p,enemy)||(trainingTerrain(p.x,p.y)==='brush'&&
+      Math.max(Math.abs(p.x-enemy.x),Math.abs(p.y-enemy.y))>1);
   const visibleTo=[
-    ...((c.enemyHp??12)>0&&!trainingCoverBlocksSight(p,c.enemyPosition??{x:6,y:4},c.battlefield)?['Dummy 1']:[]),
-    ...(c.secondEnemy&&c.secondEnemy.hp>0&&!trainingCoverBlocksSight(p,c.secondEnemy.position,c.battlefield)?['Dummy 2']:[]),
+    ...((c.enemyHp??12)>0&&!concealed(c.enemyPosition??{x:6,y:4})?[c.enemyName]:[]),
+    ...(c.secondEnemy&&c.secondEnemy.hp>0&&!concealed(c.secondEnemy.position)?[c.secondEnemy.name]:[]),
   ];
   const resourcesSpent=!!c.bonusActionUsed&&(!!c.actionUsed||!!c.attack);
-  const available=canNighthawkHide(c)&&!resourcesSpent&&!c.playerHidden;
+  const coverEligible=canNighthawkHide(c);
+  const available=coverEligible&&!resourcesSpent&&!c.playerHidden;
   const reason=c.playerHidden?'Already Hidden — no new check needed':
-    visibleTo.length?'Hide unavailable: visible to '+visibleTo.join(' and '):
     resourcesSpent?'Hide unavailable: Action and Bonus Action spent':
-    'Out of sight of all enemies — Hide available';
+    !coverEligible?'Hide requires heavy obscurity or solid cover out of every living enemy’s sight'+(visibleTo.length?' (seen by '+visibleTo.join(' and ')+')':'')+'.':
+    'Out of sight of all enemies — Hide available (DC 15 Dexterity (Stealth))';
   return {available,reason,visibleTo};
 }
 export function combatAttackRollPreview(c:Combat,weapon:'dagger'|'throw-dagger'|'shortbow'):CombatRollLabel {

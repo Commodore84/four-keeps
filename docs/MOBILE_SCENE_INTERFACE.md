@@ -27,3 +27,6 @@ Release only after one complete exact-candidate-SHA GitHub Actions verify run (f
 
 ## Placement map legibility and overview (2026-11-26)
 Pre-initiative placement can now zoom below 100% (to 25%) and Fit the whole map on iPhone. Zoom stays centered on the area being examined; Fit centers the overview. The placement-only floor artwork uses reduced-detail, theme-matched colors so walls, doors, props, blue start squares and the gold character marker remain immediately readable. The combat map's original illustrative surface, controls, geometry, target concealment and campaign rules remain unchanged.
+
+## Object checks and concealment feedback (2026-11-26)
+The existing selected-object overlay remains, with explicit Locked/Unlocked status. A locked door offers Roll Thieves’ Tools (Action) at its saved lock DC; without the tools it cannot be picked, and a free opening is unavailable. The completed Dexterity (Sleight of Hand) roll and DC appear in the same object panel. Hiding uses an opaque, symmetric wall sight test distinct from attack cover; a spent Action does not prevent a Rogue from using an unused Cunning Action bonus Hide when concealed. Hide favorites may be tapped for a concise eligibility explanation even if the actual action is unavailable. The existing confirm step and authoritative rule checks are preserved.

@@ -78,6 +78,28 @@ export function validateBattlefield(value:unknown):Battlefield{
 }
 /** Ray/rectangle intersection (open interior, so a grazing corner is clear).
  * Partial cover is evaluated from the attack origin, not the target square. */
+/** Direction-independent opaque line of sight between token centers.
+ * Directional attack-cover silhouettes aren't a reliable visibility test:
+ * they can report Total Cover from A to B but only 3/4 from B to A.
+ * A physically solid wall, pillar, closed door, or tree blocks both ways.
+ * Lower partial-cover props (chairs, crates, cargo, windows) are not treated
+ * as opaque unless a DM later assigns them explicit obscuration. */
+export function battlefieldOpaqueSightBlocked(map:Battlefield,from:BattlefieldPoint,to:BattlefieldPoint):boolean{
+ if(from.x===to.x&&from.y===to.y)return false;
+ const dx=to.x-from.x,dy=to.y-from.y;
+ for(const o of map.objects){
+  if(!battlefieldObjectBlocks(o)||!['wall','pillar','door','tree'].includes(o.kind))continue;
+  let lo=0,hi=1;
+  for(const [start,delta,min,max] of [[from.x,dx,o.x-.5,o.x+o.width-.5],
+    [from.y,dy,o.y-.5,o.y+o.height-.5]]){
+   if(delta===0){if(start<=min||start>=max){hi=-1;break;}continue;}
+   const a=(min-start)/delta,b=(max-start)/delta;
+   lo=Math.max(lo,Math.min(a,b));hi=Math.min(hi,Math.max(a,b));
+  }
+  if(hi-lo>1e-8&&hi>0&&lo<1)return true;
+ }
+ return false;
+}
 export function battlefieldCover(map:Battlefield,from:BattlefieldPoint,to:BattlefieldPoint):0|2|5|'total'{
  if(from.x===to.x&&from.y===to.y)return 0;
  const dx=to.x-from.x,dy=to.y-from.y,length=Math.hypot(dx,dy);

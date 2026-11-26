@@ -2165,6 +2165,71 @@ async function provisionFixtureScenario(page:Page,kind:'lock'|'window'){
  await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();
  await page.getByRole('button',{name:'Continue Adventure'}).click();
 }
+test('iPhone Rogue can Hide with bonus action after spending Action behind a solid wall',async({page})=>{
+ test.setTimeout(100000);
+ await fixtureWarehouse(page);
+ // Give the imported Rogue the screenshot's remaining resource state:
+ // Action already spent, Bonus Action ready, both opponents beyond opaque wall.
+ await page.evaluate(async()=>{
+  const db=await new Promise<IDBDatabase>((resolve,reject)=>{const r=indexedDB.open('four-keeps-local',1);r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});
+  const tx=db.transaction('campaigns','readwrite'),store=tx.objectStore('campaigns');
+  const all=await new Promise<any[]>(resolve=>{const r=store.getAll();r.onsuccess=()=>resolve(r.result);});
+  const c=all[0];
+  c.character.level=3;
+  c.combat.playerPosition={x:3,y:16};
+  c.combat.enemyPosition={x:17,y:16};
+  c.combat.secondEnemy={name:'Goblin Warrior 2',position:{x:19,y:19},initiative:8,hp:12,maxHp:12,detected:true};
+  c.combat.battlefield.objects.push({id:'visibility-wall-regression',kind:'wall',x:10,y:8,width:1,height:19});
+  c.combat.actionUsed=true;c.combat.bonusActionUsed=false;c.combat.playerHidden=false;
+  c.combat.order=['Nighthawk',c.combat.enemyName,'Goblin Warrior 2'];c.combat.turnIndex=0;
+  store.put(c);
+  await new Promise<void>((resolve,reject)=>{tx.oncomplete=()=>resolve();tx.onerror=()=>reject(tx.error);});db.close();
+ });
+ await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();
+ await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await expect(page.getByLabel('Scene combat resources')).toContainText('B');
+ const hide=page.getByRole('button',{name:'Scene action: Hide'});
+ await expect(hide).toBeEnabled();
+ await hide.click();
+ await expect(page.getByText(/Hide available \(DC 15 Dexterity/)).toBeVisible();
+ await page.evaluate(()=>{const original=crypto.getRandomValues.bind(crypto);crypto.getRandomValues=((a:ArrayBufferView|null)=>{
+  if(a instanceof Uint32Array&&a.length===1){a[0]=19;return a;}return original(a);
+ }) as typeof crypto.getRandomValues;});
+ await page.getByRole('button',{name:'Confirm',exact:true}).click();
+ await expect.poll(async()=> (await saved(page)).combat.playerHidden).toBe(true);
+ const result=(await saved(page)).combat;
+ expect(result.actionUsed).toBe(true);
+ expect(result.bonusActionUsed).toBe(true);
+ await expect(page.getByLabel('Scene combat resources')).toContainText('B');
+ // The button remains discoverable and explains why another Hide is needless.
+ await hide.click();
+ await expect(page.getByText('Already Hidden — no new check needed')).toBeVisible();
+ await expect(page.getByRole('button',{name:'Confirm',exact:true})).toBeDisabled();
+ await page.screenshot({path:'test-results/rogue-cunning-hide-behind-wall-iphone.png'});
+});
+test('iPhone locked door cannot be opened or picked without owned Thieves’ Tools',async({page})=>{
+ test.setTimeout(90000);
+ await fixtureWarehouse(page);
+ await provisionFixtureScenario(page,'lock');
+ await page.evaluate(async()=>{
+  const db=await new Promise<IDBDatabase>((resolve,reject)=>{const r=indexedDB.open('four-keeps-local',1);r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});
+  const tx=db.transaction('campaigns','readwrite'),store=tx.objectStore('campaigns');
+  const all=await new Promise<any[]>(resolve=>{const r=store.getAll();r.onsuccess=()=>resolve(r.result);});
+  const c=all[0];c.inventoryLedger.gear=c.inventoryLedger.gear.filter((r:{name:string})=>!r.name.toLowerCase().includes('thieves'));
+  store.put(c);await new Promise<void>((resolve,reject)=>{tx.oncomplete=()=>resolve();tx.onerror=()=>reject(tx.error);});db.close();
+ });
+ await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();await page.getByRole('button',{name:'Continue Adventure'}).click();
+ const board=page.getByRole('grid',{name:'Combat movement grid'});
+ await board.locator('[data-battlefield-x="1"][data-battlefield-y="16"]').click();
+ await page.getByRole('button',{name:'Confirm Move',exact:true}).click();
+ await expect.poll(async()=> (await saved(page)).combat.playerPosition).toEqual({x:1,y:16});
+ await board.getByRole('gridcell',{name:'Inspect locked door at 1, 16'}).click();
+ const controls=page.getByRole('dialog',{name:'Selected battlefield object'});
+ await expect(controls).toContainText('You need Thieves’ Tools');
+ await expect(controls.getByRole('button',{name:'Roll Thieves’ Tools (Action)'})).toBeDisabled();
+ await expect(controls.getByRole('button',{name:'Open (Free)'})).toHaveCount(0);
+ expect((await saved(page)).combat.battlefield.objects.find((o:any)=>o.kind==='door').locked).toBe(true);
+});
 test('iPhone locked wooden door requires an Action to pick, then a free interaction to open',async({page})=>{
  test.setTimeout(90000);
  await fixtureWarehouse(page);
@@ -2185,8 +2250,13 @@ test('iPhone locked wooden door requires an Action to pick, then a free interact
  await page.evaluate(()=>{const original=crypto.getRandomValues.bind(crypto);crypto.getRandomValues=((a:ArrayBufferView|null)=>{
   if(a instanceof Uint32Array&&a.length===1){a[0]=19;return a;}return original(a);
  }) as typeof crypto.getRandomValues;});
- await controls.getByRole('button',{name:'Pick lock (Action)'}).click();
+ await expect(controls).toContainText('Dexterity (Sleight of Hand)');
+ await expect(controls).toContainText('DC 15');
+ await expect(controls.getByRole('button',{name:'Open (Free)'})).toHaveCount(0);
+ await controls.getByRole('button',{name:'Roll Thieves’ Tools (Action)'}).click();
+ await expect(controls.getByRole('status',{name:'Fixture roll result'})).toContainText('vs DC 15');
  await expect.poll(async()=> (await saved(page)).combat.battlefield.objects.find((o:any)=>o.kind==='door')?.locked).toBe(false);
+ await expect(controls).toContainText('Unlocked door');
  expect((await saved(page)).combat.actionUsed).toBe(true);
  expect((await saved(page)).combat.objectInteractionUsed).toBeFalsy();
  await expect(controls.getByRole('button',{name:'Strike object (Action)'})).toBeDisabled();

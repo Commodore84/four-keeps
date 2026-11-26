@@ -1,9 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   newCampaign, takeDuelTurnAction, rollDuelAttack, resolveDuelEnemyTurn,
-  owlHelp, moveOwl, moveDuelToken, canNighthawkHide, standNighthawk, beginEnemyShove, rollPlayerShoveSave, beginEnemyGrapple, rollPlayerGrappleSave, beginPlayerGrappleEscape, rollPlayerGrappleEscape, resolveEnemyOpportunity, type Campaign,
+  owlHelp, moveOwl, moveDuelToken, canNighthawkHide, hideNighthawk, standNighthawk, beginEnemyShove, rollPlayerShoveSave, beginEnemyGrapple, rollPlayerGrappleSave, beginPlayerGrappleEscape, rollPlayerGrappleEscape, resolveEnemyOpportunity, type Campaign,
 } from './campaign';
 import { availableCombatMovement, combatHideStatus, combatAttackRollPreview, combatWeaponChoices } from './combat-ui';
+import {generateBattlefield} from './battlefieldGenerator';
+import {battlefieldCover,battlefieldOpaqueSightBlocked} from './battlefield';
 
 type Combat = NonNullable<Campaign['combat']>;
 const combat=(c:Campaign)=>c.combat!;
@@ -230,11 +232,39 @@ describe('UI selectors agree with the combat rules',()=>{
   it('Hide is unavailable when a living dummy can see Nighthawk',()=>{
     const c=combat(arena({playerPosition:{x:2,y:10},enemyPosition:{x:3,y:10}}));
     expect(canNighthawkHide(c)).toBe(false);
-    expect(combatHideStatus(c)).toMatchObject({available:false,visibleTo:['Dummy 1']});
+    expect(combatHideStatus(c)).toMatchObject({available:false,visibleTo:['Training Dummy']});
   });
   it('Hide ignores defeated dummies and reports available resources',()=>{
     const c=combat(arena({enemyHp:0}));
     expect(combatHideStatus(c)).toMatchObject({available:true,visibleTo:[]});
+  });
+  it('permits Cunning Action Hide behind opaque ruins walls even with a spent Action',()=>{
+    // This exact seeded layout has a real directional-cover mismatch:
+    // from the player to the goblin is Total Cover, reverse is only 3/4.
+    const g=generateBattlefield('ruins-goblin-scouts','lab-00000002');
+    const player={x:10,y:2},first=g.enemyStarts[0],second=g.enemyStarts[1];
+    expect(battlefieldCover(g.battlefield,player,first)).toBe('total');
+    expect(battlefieldCover(g.battlefield,first,player)).toBe(5);
+    expect(battlefieldOpaqueSightBlocked(g.battlefield,player,first)).toBe(true);
+    expect(battlefieldOpaqueSightBlocked(g.battlefield,first,player)).toBe(true);
+    const c=arena({battlefield:g.battlefield,playerPosition:player,
+      enemyName:'Goblin Warrior',enemyPosition:first,secondEnemy:{
+        name:'Goblin Warrior 2',position:second,initiative:5,hp:12,maxHp:12,detected:true
+      },actionUsed:true,bonusActionUsed:false,playerHidden:false});
+    expect(combatHideStatus(combat(c))).toMatchObject({available:true,visibleTo:[]});
+    dice(20);
+    const hidden=hideNighthawk(c,'bonus');
+    expect(hidden.combat).toMatchObject({playerHidden:true,actionUsed:true,bonusActionUsed:true,hideRoll:20});
+    expect(hidden.journal.at(-1)?.text).toContain('DC 15');
+  });
+  it('still rejects hiding when the wall is absent or a living enemy can see you',()=>{
+    const g=generateBattlefield('ruins-goblin-scouts','lab-00000002');
+    const player={x:10,y:2},e=g.enemyStarts[0];
+    const c=arena({battlefield:{...g.battlefield,objects:[]},
+      playerPosition:player,enemyPosition:e,actionUsed:true,bonusActionUsed:false});
+    expect(combatHideStatus(combat(c)).available).toBe(false);
+    expect(()=>hideNighthawk(c,'bonus')).toThrow(/cover/);
+    expect(combatHideStatus(combat(c)).reason).toMatch(/visible|seen/);
   });
   it('Hide correctly reports spent Action and Bonus Action',()=>{
     const c=combat(arena({enemyHp:0,actionUsed:true,bonusActionUsed:true}));

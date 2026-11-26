@@ -1642,9 +1642,12 @@ export function App() {
     }catch(error){setNotice('Movement: '+String(error));}finally{setSaving(false);}
   }
   const [selectedFixtureId,setSelectedFixtureId]=useState<string|null>(null);
+  const [fixtureRollFeedback,setFixtureRollFeedback]=useState<{id:string;text:string}|null>(null);
   const nearbyFixtures=dynamicMap?.objects.filter(o=>!o.destroyed&&
     ['door','window','crate','cargo','table'].includes(o.kind)&&
     battlefieldOpeningWithinReach(o,campaign?.combat?.playerPosition??{x:2,y:4}))??[];
+  const hasThievesTools=(campaign?.inventoryLedger?.gear??[]).some(item=>
+    item.quantity>0&&item.name.toLowerCase().replace(/[’']/g,'').replace(/[^a-z]/g,'')==='thievestools');
   const canUseFixtureAction=!!campaign?.combat&&campaign.combat.order?.[campaign.combat.turnIndex??0]==='Nighthawk'&&
     !campaign.combat.actionUsed&&!campaign.combat.attack&&!campaign.combat.playerOpportunity&&!saving;
   async function performFixtureAction(id:string,action:DuelFixtureAction){
@@ -1654,7 +1657,9 @@ export function App() {
       const next=useDuelFixtureAction(campaign,id,action);
       await localCampaignStorage.save(next);
       setCampaign(next);setCampaigns(items=>items.map(item=>item.id===next.id?next:item));
-      setNotice(publicCombatText(next.journal[next.journal.length-1].text));
+      const resolution=publicCombatText(next.journal[next.journal.length-1].text);
+      setNotice(resolution);
+      setFixtureRollFeedback({id,text:resolution});
       setGridDestination(null);
     }catch(error){setNotice('Fixture: '+String(error));}finally{setSaving(false);}
   }
@@ -1997,7 +2002,7 @@ export function App() {
     return false;
   };
   const selectSceneAction=(id:SceneActionId)=>{
-    if(!sceneActionAvailable(id))return;
+    if(!sceneActionAvailable(id)&&!(id==='hide'&&sceneTurnName==='Nighthawk'&&activeCombatToken==='nighthawk'))return;
     setSceneMoreOpen(false);setSceneDetailsOpen(false);setSceneNarrationOpen(false);
     if(activeCombatToken==='owl'){
       if(id==='dash'||id==='disengage'||id==='dodge'||id==='help')void owlAction(id);
@@ -2316,14 +2321,17 @@ export function App() {
             {selectedFixtureId&&nearbyFixtures.some(object=>object.id===selectedFixtureId)&&(()=>{
               const fixture=nearbyFixtures.find(object=>object.id===selectedFixtureId)!;
               return <div role="dialog" aria-label="Selected battlefield object" className="rounded-lg border border-gold/50 p-2 space-y-2 text-sm">
-                <div className="flex items-center justify-between gap-2"><span>{fixture.locked?'Locked ':''}{fixture.kind} at {fixture.x+1}, {fixture.y+1}</span>
+                <div className="flex items-center justify-between gap-2"><span>{fixture.kind==='door'?(fixture.locked?'Locked ':fixture.open?'Open ':'Unlocked '):fixture.locked?'Locked ':''}{fixture.kind} at {fixture.x+1}, {fixture.y+1}</span>
                   <button type="button" aria-label="Dismiss object actions" onClick={()=>setSelectedFixtureId(null)} className="px-2 py-1">×</button></div>
+                {fixture.locked&&<p className="text-xs text-parchment/80">Locked — requires a Dexterity (Sleight of Hand) roll with Thieves’ Tools, DC {fixture.lockDC??15}. Uses your Action. {hasThievesTools?'':'You need Thieves’ Tools in your inventory. '}Forcing or breaking it are alternatives.</p>}
+                {!fixture.locked&&!fixture.open&&(fixture.kind==='door'||fixture.kind==='window')&&<p className="text-xs text-emerald-200">Unlocked — you may open it with your free object interaction.</p>}
                 <div className="flex flex-wrap gap-2">
-                  {fixture.locked&&<button type="button" disabled={!canUseFixtureAction} onClick={()=>void performFixtureAction(fixture.id,'pick')} className="rounded border border-white/30 p-2 disabled:opacity-40">Pick lock (Action)</button>}
+                  {fixture.locked&&<button type="button" disabled={!canUseFixtureAction||!hasThievesTools} onClick={()=>void performFixtureAction(fixture.id,'pick')} className="rounded border border-white/30 p-2 disabled:opacity-40">Roll Thieves’ Tools (Action)</button>}
                   {(fixture.kind==='door'||fixture.kind==='window')&&!fixture.open&&<button type="button" disabled={!canUseFixtureAction} onClick={()=>void performFixtureAction(fixture.id,'force')} className="rounded border border-white/30 p-2 disabled:opacity-40">Force open (Action)</button>}
                   <button type="button" disabled={!canUseFixtureAction} onClick={()=>void performFixtureAction(fixture.id,'strike')} className="rounded border border-white/30 p-2 disabled:opacity-40">Strike object (Action)</button>
                   {(fixture.kind==='door'||fixture.kind==='window')&&!fixture.locked&&<button type="button" disabled={saving||!!campaign.combat.objectInteractionUsed} onClick={()=>void toggleCombatOpening(fixture.id)} className="rounded border border-white/30 p-2 disabled:opacity-40">{fixture.open?'Close':'Open'} (Free)</button>}
                 </div>
+                {fixtureRollFeedback?.id===fixture.id&&<p role="status" aria-label="Fixture roll result" className="rounded border border-gold/30 bg-black/20 p-2 text-xs text-gold">{fixtureRollFeedback.text}</p>}
               </div>;
             })()}
   <ScenePortal active={sceneMode} targetId="scene-map-host"><ClassicCombatMapFrame className={sceneMode?'scene-battlefield-frame':''} ref={attachCombatMap} style={sceneMode?{touchAction:'none',overflow:'auto',height:'100%',maxHeight:'none',width:'100%'}:dynamicMap?{touchAction:'none',overflow:'auto'}:undefined} onScroll={persistCamera} onTouchStart={startCombatTouch} onTouchMove={moveCombatTouch} onTouchEnd={endCombatTouch} onTouchCancel={endCombatTouch} onClickCapture={e=>{if(suppressCombatTap.current){e.stopPropagation();e.preventDefault();suppressCombatTap.current=false;}}}><ClassicCombatGrid size={campaign.combat.battlefield?.width??trainingMapSize}
@@ -2436,7 +2444,7 @@ export function App() {
  <div className="grid grid-cols-1 gap-2">{availableCombatSpells(campaign).map(spell=>{const cantrip=campaign.character?.cantrips?.includes(spell)??false;const noSlots=!cantrip&&(campaign.character?.spellSlots?.usedLevel1??0)>=(campaign.character?.spellSlots?.level1??0);return <button type="button" key={spell} disabled={saving||noSlots} className="rounded-lg border border-white/30 p-2.5 text-left disabled:opacity-35" onClick={()=>void castEncounterSpell(spell)}><span className="font-semibold">{spell}</span><span className="block text-xs text-parchment/65">{cantrip?'Cantrip · no slot':'Level 1 · spends one slot'} · {spellSummaries[spell]??'Effect awaits DM adjudication'}</span></button>;})}</div>
  <button type="button" className="text-xs underline" onClick={()=>setPendingCombatAction(null)}>Cancel</button>
  </div>}
- {activeCombatToken==='nighthawk'&&action==='hide'&&pendingCombatAction==='hide'&&<div className="col-span-2 rounded-lg border border-white/20 px-3 py-2 text-xs space-y-1"><p className="font-semibold">Pillar cover / enemy sight</p>{sightEnemies.map(e=><p key={e.name} className={e.blocked?'text-emerald-300':'text-amber-300'}>{e.name}: {e.blocked?'Sight blocked by pillar':'Can see Nighthawk'}</p>)}<p className={visibleEnemies.length?'text-amber-300':'text-emerald-300'}>{hideStatus?.reason}</p></div>}{activeCombatToken==='nighthawk'&&pendingCombatAction===action&&<div className="col-span-2">          {(['search','study','influence'] as const).includes(pendingCombatAction as 'search'|'study'|'influence')&&<div className="rounded-lg border border-gold bg-gold/10 p-3 space-y-2" role="region" aria-label="Choose skill action">
+ {activeCombatToken==='nighthawk'&&action==='hide'&&pendingCombatAction==='hide'&&<div className="col-span-2 rounded-lg border border-white/20 px-3 py-2 text-xs space-y-1"><p className="font-semibold">Cover and enemy sight</p>{sightEnemies.map(e=><p key={e.name} className={e.blocked?'text-emerald-300':'text-amber-300'}>{e.name}: {e.blocked?'Line of sight blocked':'Can see Nighthawk'}</p>)}<p className={visibleEnemies.length?'text-amber-300':'text-emerald-300'}>{hideStatus?.reason}</p></div>}{activeCombatToken==='nighthawk'&&pendingCombatAction===action&&<div className="col-span-2">          {(['search','study','influence'] as const).includes(pendingCombatAction as 'search'|'study'|'influence')&&<div className="rounded-lg border border-gold bg-gold/10 p-3 space-y-2" role="region" aria-label="Choose skill action">
             <p className="font-semibold">{pendingCombatAction==='search'?'Search':pendingCombatAction==='study'?'Study':'Influence'} · Choose skill</p>
             <p className="text-xs text-parchment/70">Uses your Action. Roll is recorded; DM adjudicates information or NPC response.</p>
             <div className="grid grid-cols-2 gap-2">{(pendingCombatAction==='search'?['Perception','Investigation','Survival']:pendingCombatAction==='study'?['Arcana','History','Investigation','Nature','Religion']:['Deception','Intimidation','Performance','Persuasion']).map(skill=><button key={skill} type="button" disabled={saving} className="rounded border border-gold p-2" onClick={()=>void skillCombatAction(pendingCombatAction==='search'?'Search':pendingCombatAction==='study'?'Study':'Influence',skill as Parameters<typeof takeCombatSkillAction>[2])}>{skill}</button>)}</div>
@@ -2546,7 +2554,7 @@ export function App() {
         </div>
         <div id="scene-action-dock" className="flex gap-1" aria-label="Favorite scene actions">
           {sceneFavorites.map(id=>{const definition=sceneActionDefinitions.find(item=>item.id===id)!;const Icon=id==='attack'?Swords:id==='hide'?EyeOff:id==='dash'||id==='disengage'?Footprints:id==='magic'?Sparkles:id==='dodge'?Shield:id==='help'?Users:id==='steady-aim'?Swords:id==='ready'?Shield:id==='search'?Search:id==='study'?BookOpen:id==='influence'?MessageCircle:Blocks;
-            return <button key={id} type="button" disabled={!sceneActionAvailable(id)} aria-label={'Scene action: '+definition.label} aria-pressed={pendingCombatAction===id} onClick={()=>selectSceneAction(id)} className={'flex min-h-12 min-w-0 flex-1 flex-col items-center justify-center rounded-lg border px-0.5 text-[10px] disabled:opacity-40 '+(pendingCombatAction===id?'border-gold bg-gold/20 text-gold':'border-white/25 bg-panel')}><Icon size={18}/><span className="max-w-full truncate">{definition.label}</span></button>;
+            return <button key={id} type="button" disabled={!sceneActionAvailable(id)&&!(id==='hide'&&sceneTurnName==='Nighthawk'&&activeCombatToken==='nighthawk')} aria-label={'Scene action: '+definition.label} aria-pressed={pendingCombatAction===id} onClick={()=>selectSceneAction(id)} className={'flex min-h-12 min-w-0 flex-1 flex-col items-center justify-center rounded-lg border px-0.5 text-[10px] disabled:opacity-40 '+(pendingCombatAction===id?'border-gold bg-gold/20 text-gold':'border-white/25 bg-panel')}><Icon size={18}/><span className="max-w-full truncate">{definition.label}</span></button>;
           })}
           <button type="button" aria-label="More scene actions" aria-expanded={sceneMoreOpen} onClick={()=>{setSceneMoreOpen(v=>!v);setPendingCombatAction(null);setGridDestination(null);setSceneDetailsOpen(false);}} className={'flex min-h-12 w-[62px] shrink-0 flex-col items-center justify-center rounded-lg border text-[10px] '+(sceneMoreOpen?'border-gold bg-gold/20':'border-white/25 bg-panel')}><MoreHorizontal size={19}/>More</button>
           <button type="button" disabled={saving||sceneTurnName!=='Nighthawk'} aria-label={pendingCombatAction==='end'?'Confirm End Turn':'End Turn'} onClick={()=>{if(pendingCombatAction==='end')void combatAction('end');else {setPendingCombatAction('end');setSceneMoreOpen(false);setSelectedWeapon(null);}}} className={'flex min-h-12 w-[77px] shrink-0 flex-col items-center justify-center rounded-lg border text-[10px] font-semibold disabled:opacity-40 '+(pendingCombatAction==='end'?'border-amber-300 bg-amber-400/20 text-amber-100':'border-gold/60 bg-panel text-gold')}><SkipForward size={18}/>{pendingCombatAction==='end'?'Confirm End':'End Turn'}</button>

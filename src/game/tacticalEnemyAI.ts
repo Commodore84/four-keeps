@@ -1,4 +1,4 @@
-import {battlefieldBlocked,battlefieldCover,battlefieldDifficult,objectAt,type Battlefield,type BattlefieldPoint} from './battlefield';
+import {battlefieldBlocked,battlefieldCover,battlefieldDifficult,battlefieldOpaqueSightBlocked,objectAt,type Battlefield,type BattlefieldPoint} from './battlefield';
 
 /** Pure, deterministic enemy decisions on the authoritative saved battlefield.
  * 2024 physical cover is directional: the target's AC bonus is calculated from
@@ -23,7 +23,7 @@ export function obscuredAt(map:Battlefield,point:BattlefieldPoint):boolean{
 }
 export function tacticalSight(map:Battlefield,viewer:BattlefieldPoint,target:BattlefieldPoint){
  const cover=battlefieldCover(map,viewer,target);
- return {cover,visible:cover!=='total',heavyObscurement:obscuredAt(map,target)};
+ return {cover,visible:cover!=='total'&&!battlefieldOpaqueSightBlocked(map,viewer,target),heavyObscurement:obscuredAt(map,target)};
 }
 /** Out of line of sight, or heavily obscured, is required for concealed movement.
  * Partial cover alone never makes a creature invisible to observers.
