@@ -5,7 +5,7 @@ import {buildSoloEncounter} from './encounterDirector';
 import {fitsBattlefield,validateCombatScenario} from './combatScenario';
 import {newCampaign,moveDuelToken,interactDuelBattlefieldDoor,interactDuelBattlefieldOpening,tacticalRoute,takeDuelTurnAction,rollDuelAttack,trainingRouteCost,type Campaign} from './campaign';
 import {restorePracticeEncounter} from './practiceEncounterBridge';
-import {chooseDuelEntry,rollDuelInitiative} from './campaign';
+import {chooseDuelEntry,chooseDuelDeployment,canDeployAt,rollDuelInitiative} from './campaign';
 
 const map:Battlefield={width:60,height:80,objects:[
  {id:'wall',kind:'wall',x:30,y:45,width:1,height:4},
@@ -85,6 +85,17 @@ describe('spread encounter starts and optional player deployment',()=>{
   const combat=restorePracticeEncounter(pending);
   expect(combat.combat?.status).toBe('awaiting-initiative');
   expect(combat.combat?.entryOptions).toEqual(scenario.entryOptions);
+  const arbitrary={x:4,y:16};
+  expect(canDeployAt(combat.combat!,arbitrary)).toBe(true);
+  expect(canDeployAt(combat.combat!,{x:9,y:16})).toBe(false);
+  const selected=chooseDuelDeployment(combat,arbitrary);
+  expect(selected.combat?.playerPosition).toEqual(arbitrary);
+  expect(selected.combat?.movementUsed??0).toBe(0);
+  expect(()=>chooseDuelDeployment(combat,{x:9,y:16})).toThrow('deployment area');
+  expect(()=>chooseDuelDeployment(combat,{x:-1,y:16})).toThrow('deployment area');
+  const rolledArbitrary=rollDuelInitiative(selected);
+  expect(rolledArbitrary.combat?.playerPosition).toEqual(arbitrary);
+  expect(()=>chooseDuelDeployment(rolledArbitrary,arbitrary)).toThrow('deployment area');
   const moved=chooseDuelEntry(combat,2);
   expect(moved.combat?.playerPosition).toEqual(scenario.starts[2]);
   expect(moved.combat?.movementUsed??0).toBe(0);
