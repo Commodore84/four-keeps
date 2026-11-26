@@ -3,7 +3,7 @@ import {battlefieldBlocked,battlefieldContains,battlefieldCover,battlefieldDiffi
 import {generateBattlefield,validateBattlefieldAccess,validateGeneratedBattlefield,battlefieldApproachCount,battlefieldTacticalProfile,battlefieldAlternativeApproaches} from './battlefieldGenerator';
 import {buildSoloEncounter} from './encounterDirector';
 import {fitsBattlefield,validateCombatScenario} from './combatScenario';
-import {newCampaign,moveDuelToken,interactDuelBattlefieldDoor,interactDuelBattlefieldOpening,tacticalRoute,takeDuelTurnAction,rollDuelAttack,trainingRouteCost,type Campaign} from './campaign';
+import {newCampaign,moveDuelToken,interactDuelBattlefieldDoor,interactDuelBattlefieldOpening,tacticalRoute,takeDuelTurnAction,rollDuelAttack,trainingRouteCost,combatRangedFiringPosition,type Campaign} from './campaign';
 import {restorePracticeEncounter} from './practiceEncounterBridge';
 import {chooseDuelEntry,chooseDuelDeployment,canDeployAt,rollDuelInitiative} from './campaign';
 
@@ -54,6 +54,28 @@ describe('authoritative rectangular battlefield',()=>{
   const bonus=5;
   vi.spyOn(crypto,'getRandomValues').mockImplementation(((a:Uint32Array)=>{a[0]=16-bonus-1;return a;}) as typeof crypto.getRandomValues);
   expect(rollDuelAttack(prepared,'hit').combat?.attack?.hit).toBe(false);
+ });
+ it('allows a hidden ranged peek around a pillar, uses Advantage, then reveals the shooter',()=>{
+  const coverMap:Battlefield={width:12,height:10,theme:'warehouse',objects:[{id:'pillar',kind:'pillar',x:4,y:4,width:1,height:1}]};
+  const start={...arena({x:3,y:4},{x:7,y:4}),combat:{...arena({x:3,y:4},{x:7,y:4}).combat!,battlefield:coverMap,playerHidden:true,selectedEnemy:'first' as const}};
+  expect(battlefieldCover(coverMap,start.combat!.playerPosition!,start.combat!.enemyPosition!)).toBe('total');
+  expect(combatRangedFiringPosition(start.combat!,start.combat!.enemyPosition!)?.peek).toBe(true);
+  const prepared=takeDuelTurnAction(start,'shortbow');
+  const fired=rollDuelAttack(prepared,'hit');
+  expect(fired.combat!.attack?.advantage).toBe(true);
+  expect(fired.combat!.playerHidden).toBe(false);
+  expect(fired.combat!.playerPosition).toEqual({x:3,y:4});
+  expect(fired.journal.at(-1)?.text).toContain('Peeks around cover');
+  const coveredMove=moveDuelToken(start,2,4);
+  expect(coveredMove.combat?.playerHidden).toBe(true);
+  const exposedMove=moveDuelToken(start,3,3);
+  expect(exposedMove.combat?.playerHidden).toBe(false);
+  expect(exposedMove.journal.at(-1)?.text).toContain('Hidden ends');
+  const exposed={...start,combat:{...start.combat!,playerHidden:false}};
+  expect(()=>takeDuelTurnAction(exposed,'shortbow')).toThrow(/total cover/);
+  const sealed:Battlefield={...coverMap,objects:[{id:'wall',kind:'wall',x:4,y:1,width:2,height:8}]};
+  expect(combatRangedFiringPosition({...start.combat!,battlefield:sealed},start.combat!.enemyPosition!)).toBeUndefined();
+  expect(()=>takeDuelTurnAction({...start,combat:{...start.combat!,battlefield:sealed}},'shortbow')).toThrow(/total cover/);
  });
  it('preserves the legacy training map when no battlefield is stored',()=>{
   const c=arena();delete c.combat!.battlefield;
