@@ -98,3 +98,46 @@
   flex:none;
   margin:auto;
 }
+
+/* Option B: only the ACTIVE scene's open floor is visually quiet.
+ * The illustration keys for walls, doors, cover and props remain unchanged;
+ * deployment art, rule geometry, selection and movement are unaffected. */
+.scene-battlefield-frame [data-battlefield-theme="warehouse"] {
+  background-color: #6c665b;
+  background-image: linear-gradient(150deg,#726c60,#625d53);
+  background-size: 100% 100%;
+  background-repeat: no-repeat;
+}
+.scene-battlefield-frame [data-battlefield-theme="ruins"] {
+  background-color: #647469;
+  background-image: linear-gradient(145deg,#69786d,#5c6d63);
+  background-size: 100% 100%;
+  background-repeat: no-repeat;
+}
+.scene-battlefield-frame [data-battlefield-theme="roadside"] {
+  background-color: #60735c;
+  background-image: linear-gradient(180deg,transparent 38%,rgba(123,104,74,.35) 43%,rgba(136,115,83,.48) 56%,transparent 61%),linear-gradient(155deg,#62765e,#546b54);
+  background-size: 100% 100%;
+  background-repeat: no-repeat;
+}
+.scene-battlefield-frame [role="gridcell"][data-terrain-art^="floor-"] {
+  background-image: none;
+  /* Preserve colored route, movement and targeting outlines from the cell. */
+}
+.scene-battlefield-frame [role="gridcell"][data-terrain-art^="floor-"].bg-transparent {
+  border-color: rgba(233,234,217,.16);
+}
+.scene-battlefield-frame [data-battlefield-marker] {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-family: ui-sans-serif,system-ui,sans-serif;
+  font-size: 10px;
+  line-height: 1;
+  color: #111a19;
+  text-shadow: 0 1px 0 rgba(255,255,255,.3);
+  border: 2px solid #fff4d8 !important;
+  box-shadow: 0 0 0 1px #101819, 0 1px 7px rgba(0,0,0,.8) !important;
+}
+.scene-battlefield-frame [data-battlefield-marker="enemy"] { color: #fff6ef; }

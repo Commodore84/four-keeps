@@ -101,3 +101,11 @@ The shared generator now spreads enemies across physically valid tactical region
 - `battlefieldOpaqueSightBlocked` uses symmetric center-ray collision with solid walls, pillars, closed doors and trees. Directional offensive cover remains unchanged, but enemy line of sight and Hide checks no longer contradict each other when the other direction measures only partial cover. Undergrowth and resource checks still apply. `combatHideStatus` now uses the same enemy-visibility predicate as `canNighthawkHide`, names actual enemies, and explains Hide eligibility. A dimmed Hide favorite can be tapped on the player's turn for an explanation without spending an action; Confirm remains disabled unless legal.
 - Regression: seeded ruins `lab-00000002` with player (10,2), first Goblin Warrior (19,7), second (38,33), Action spent and Bonus Action ready. Unit and iPhone tests cover Hide, lock pick with/without tools, persisted fixture state and action usage.
 - Maintain the approximate chat-capacity warning every five user requests in all future Four Keeps continuations.
+
+
+### Option B combat readability and contextual controls (2026-11-26)
+- Approved design: keep the original Phase 3 combat engine, iPhone gesture handling, 2024 mechanics, action/bonus resources, character preferences, saved map geometry and campaign persistence unchanged. The combat map receives quiet theme-matched low-detail backgrounds, while walls/doors/props and selection/pathing art remain distinct. No second combat engine.
+- Low-zoom/overview actor pins are fixed-size, colored 16px passive indicators; player/enemy/owl visibility and target selection remain governed by existing rules. Normal-zoom tokens remain.
+- Persistent favorite action dock stays as before. Expanded contextual panel caps at 30dvh / 250px; More displays 4 columns of touch-friendly choices; long catalogs scroll within capped panel as needed. Detailed Controls is available with a close button and max 36dvh rather than 72%, preserving forced reaction controls.
+- Tests: `tests/e2e/scene-interface.spec.ts` Option B layout, `tests/e2e/shell.spec.ts` theme assertions and existing full iPhone suite. Verify exact-SHA full CI + Vercel READY before a protected non-forced foundation fast-forward.
+- Continue to estimate chat capacity approximately every five user requests in future Four Keeps continuation prompts.

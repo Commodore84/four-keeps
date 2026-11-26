@@ -1727,7 +1727,10 @@ test('Generate Random Encounter uses the real combat engine, cycles environments
    // environment without changing any of the saved tactical objects.
    const theme=['warehouse','roadside','ruins'][n];
    await expect(board).toHaveAttribute('data-battlefield-theme',theme);
-   await expect.poll(()=>board.evaluate(node=>getComputedStyle(node).backgroundImage)).toContain('svg');
+   // The active combat floor has a quiet theme gradient; object sprites
+   // (doors, walls, cover) remain illustrated on their individual cells.
+   await expect.poll(()=>board.evaluate(node=>getComputedStyle(node).backgroundImage)).toContain('gradient');
+   await expect.poll(()=>board.evaluate(node=>getComputedStyle(node).backgroundImage)).not.toContain('svg');
    await expect(board.locator('[data-terrain-art]')).not.toHaveCount(0);
    await board.locator('xpath=..').screenshot({path:'test-results/phase3-illustrated-'+theme+'-iphone.png'});
    // First render must contain the player without a manual pan to kick virtualization.

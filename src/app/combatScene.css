@@ -11,19 +11,28 @@
   left: 0;
   right: 0;
   z-index: 35;
-  max-height: min(57dvh, 500px);
+  /* Routine actions occupy only a small portion of the battlefield.
+     Long spell/weapon catalogs remain scrollable without growing over the map. */
+  max-height: min(30dvh, 250px);
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding: 10px;
+  padding: 8px;
   border: 1px solid rgb(214 179 108 / .6);
   border-radius: 12px 12px 0 0;
-  background: #252632;
+  background: rgb(29 34 39 / .97);
   box-shadow: 0 -9px 35px rgb(0 0 0 / .35);
   -webkit-overflow-scrolling: touch;
 }
 .scene-floating-panel:empty { display: none; }
 .scene-choices-only > .contents > button { display: none; }
-.scene-floating-panel button { min-height: 40px; }
+.scene-floating-panel button { min-height: 44px; }
+.scene-context-actions { align-content: start; gap: 6px; }
+.scene-context-actions > .contents > button { padding: 7px 4px; font-size: 12px; }
+.scene-context-actions [role="region"] { padding: 8px; }
+.scene-context-actions [aria-label="Confirm combat action"] { padding: 8px; }
+.scene-context-actions [aria-label="Confirm combat action"] > p { margin-bottom: 3px; }
+.scene-detailed-controls { overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
 @media (max-height: 600px) {
- .scene-floating-panel { max-height: 48dvh; }
+ .scene-floating-panel { max-height: min(35dvh, 210px); }
+ .scene-detailed-controls { max-height: 40dvh; }
 }

@@ -30,3 +30,11 @@ Pre-initiative placement can now zoom below 100% (to 25%) and Fit the whole map 
 
 ## Object checks and concealment feedback (2026-11-26)
 The existing selected-object overlay remains, with explicit Locked/Unlocked status. A locked door offers Roll Thieves’ Tools (Action) at its saved lock DC; without the tools it cannot be picked, and a free opening is unavailable. The completed Dexterity (Sleight of Hand) roll and DC appear in the same object panel. Hiding uses an opaque, symmetric wall sight test distinct from attack cover; a spent Action does not prevent a Rogue from using an unused Cunning Action bonus Hide when concealed. Hide favorites may be tapped for a concise eligibility explanation even if the actual action is unavailable. The existing confirm step and authoritative rule checks are preserved.
+
+
+## Option B map-first clarity batch (2026-11-26)
+- Approved direction: contextual, map-first combat. The **active scene only** uses quiet warehouse/ruins gradients and a broad, muted roadside path instead of repeating stone-tile illustrations. Grid geometry, object sprites, cover, doors, token positions, route and selected-square highlights stay authoritative; placement view and noncombat scenery are unchanged.
+- At overview/low zoom, player, owl and enemy positions gain clear, noninteractive 16px pins with distinct labels/color; map cells remain the real click/target surfaces and pin labels never disclose DM-hidden HP.
+- The existing contextual choices panel stays attached immediately above the persistent favorites bar. Cap its height at about 30dvh / 250px; simple actions take only short rows. More uses four compact columns, scrolling only for long lists or spell/weapon choices. Preserve the existing confirm/cancel behavior and touch-friendly minimum 44px controls.
+- The legacy Detailed Controls view is still available for rare states, capped to 36dvh with its own Close control; reactions and mandatory interruptions still appear even if it was otherwise collapsed. Do not remove existing mechanics, change action economy, or create a second battlefield implementation.
+- Focused iPhone screenshots and deterministic tests cover scene layout bounds, More action grid, the details close control and the three scene background themes; preserve safe-area, voice/composer, initiative, persistent favorites and camera gestures.

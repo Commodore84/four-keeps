@@ -54,6 +54,35 @@ test('iPhone scene keeps battlefield visible with initiative, resources, favorit
  await expect(page.locator('#scene-speak-input')).toHaveCSS('font-size','16px');
  await page.getByRole('button',{name:'Speak'}).click();
 });
+test('iPhone Option B keeps action choices compact and detailed controls from eclipsing the map',async({page})=>{
+ await createScene(page);
+ const viewport=page.viewportSize();
+ expect(viewport).toBeTruthy();
+ const map=page.getByLabel('Battlefield scene');
+ await expect(map).toBeVisible();
+ await page.getByRole('button',{name:'More scene actions'}).click();
+ const panel=page.locator('#scene-action-panel');
+ await expect(panel).toBeVisible();
+ const menu=await panel.evaluate(el=>({height:el.getBoundingClientRect().height,
+   columns:getComputedStyle(el.querySelector('[aria-label="2024 D&D actions"]')!).gridTemplateColumns.split(' ').length,
+   maxHeight:getComputedStyle(el).maxHeight}));
+ expect(menu.columns).toBe(4);
+ expect(menu.height).toBeLessThanOrEqual(viewport!.height*.31+2);
+ await expect(map).toBeVisible();
+ await page.screenshot({path:'test-results/mobile-scene-option-b-more-iphone.png',fullPage:false});
+ await page.getByRole('button',{name:'More scene actions'}).click();
+ await page.getByRole('button',{name:'Detailed controls',exact:true}).click();
+ const details=page.getByLabel('Combat initiative tracker');
+ await expect(details).toBeVisible();
+ expect((await details.boundingBox())!.height).toBeLessThanOrEqual(viewport!.height*.37);
+ await expect(page.getByRole('button',{name:'Close detailed controls panel'})).toBeVisible();
+ await expect(map).toBeVisible();
+ await page.screenshot({path:'test-results/mobile-scene-option-b-details-iphone.png',fullPage:false});
+ await page.getByRole('button',{name:'Close detailed controls panel'}).click();
+ await expect(details).toBeHidden();
+ // All controls stay connected to the original battlefield, not an overlay map.
+ await expect(page.getByRole('grid',{name:'Combat movement grid'})).toBeVisible();
+});
 test('scene favorites and order persist for the selected character',async({page})=>{
  await createScene(page);
  await navigate(page,'Settings');
