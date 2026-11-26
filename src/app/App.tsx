@@ -2102,6 +2102,10 @@ export function App() {
         </div>}
 
         {sceneMode&&<div id="scene-map-host" className="absolute inset-0 z-0" aria-label="Battlefield scene"/>}
+        {sceneMode&&campaign?.combatLab&&<div aria-label="Combat Lab session" className="absolute left-2 top-2 z-20 flex max-w-[52%] flex-col gap-1 rounded-lg border border-gold/40 bg-panel/95 p-1.5 text-[10px] shadow-md">
+          <span className="truncate text-gold" title={'Test encounter · Seed: '+campaign.combatLab.seed}>TEST · Seed: {campaign.combatLab.seed}</span>
+          <button type="button" className="min-h-9 rounded border border-white/30 px-2 text-xs font-medium" onClick={returnFromCombatLab}>Return to adventure</button>
+        </div>}
         {sceneMode&&sceneTargetName&&<div className="pointer-events-none absolute right-2 top-2 z-10 rounded-lg border border-white/30 bg-panel/85 px-2 py-1 text-[11px]" aria-label="Selected battlefield target">
           <span className="font-semibold">{sceneTargetName}</span><span className="ml-2 tabular-nums text-parchment/80">{sceneTargetDistance} ft</span>
           {sceneTargetCover!==undefined&&sceneTargetCover!==0&&<span className="ml-2 text-amber-200">{sceneTargetCover==='total'?'Total cover':sceneTargetCover===5?'¾ cover':'½ cover'}</span>}

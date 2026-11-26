@@ -25,6 +25,7 @@ test('iPhone scene keeps battlefield visible with initiative, resources, favorit
  await createScene(page);
  await expect(page.getByLabel('Compact initiative order')).toBeVisible();
  await expect(page.getByLabel('Battlefield scene')).toBeVisible();
+ await expect(page.getByLabel('Combat Lab session')).toHaveCount(0);
  await expect(page.getByLabel('Scene combat resources')).toContainText('HP');
  await expect(page.getByRole('button',{name:'More scene actions'})).toBeVisible();
  await expect(page.getByRole('button',{name:'End Turn'})).toBeVisible();

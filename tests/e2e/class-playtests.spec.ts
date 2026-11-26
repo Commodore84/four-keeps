@@ -2253,7 +2253,9 @@ test('iPhone practice combat uses original initiative tracker, action economy, a
  await page.screenshot({path:'/tmp/fk-practice-restored-iphone.png',fullPage:true});
  await expect(page.getByLabel('Compact initiative order')).toBeVisible();
  await expect(page.getByLabel('Scene combat resources')).toBeVisible();
- await expect(page.getByLabel('Initiative order')).toContainText('Nighthawk');
+ await page.getByRole('button',{name:'Expand initiative and combat history'}).click();
+ await expect(page.getByLabel('Expanded initiative and combat roll history').getByLabel('Initiative order',{exact:true})).toContainText('Nighthawk');
+ await page.getByRole('button',{name:'Expand initiative and combat history'}).click();
  await expect.poll(async()=> (await saved(page))?.combat?.order?.length).toBe(3);
  await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();
  await page.getByRole('button',{name:'Continue Adventure'}).click();

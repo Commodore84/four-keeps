@@ -14,6 +14,7 @@ Reorganize existing classic combat presentation around its authoritative battlef
 ## Implementation invariants
 - Keep classic map's camera gestures and deterministic movement/attack/event engine.
 - Keep the actual saved campaign and disposable Combat Lab encounter isolated.
+- Keep a compact seed and Return to adventure control accessible in the map for Combat Lab sessions, including after initiative begins; do not hide the only exit inside a collapsed details panel.
 - Do not reveal secret enemy stats or DM adjudication information.
 - During an enemy turn, keep the map mounted but disallow player movement; preserve existing enemy/reaction logic.
 - When a scene portal changes host, the original camera must initialize against the mounted viewport. Never leave children in a detached portal DOM node.
