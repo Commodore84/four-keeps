@@ -24,3 +24,6 @@ Reorganize existing classic combat presentation around its authoritative battlef
 ## Verification
 Focused validation: TypeScript; scene preference unit tests; iPhone Playwright for scene, favorites persistence, initiative, Speak, original warehouse handoff, classic camera and path/attack affordances.
 Release only after one complete exact-candidate-SHA GitHub Actions verify run (full Vitest + complete iPhone Chromium suite + artifacts) and matching Vercel READY, then a protected nonforced fast-forward. Failed/older verification does not count.
+
+## Placement map legibility and overview (2026-11-26)
+Pre-initiative placement can now zoom below 100% (to 25%) and Fit the whole map on iPhone. Zoom stays centered on the area being examined; Fit centers the overview. The placement-only floor artwork uses reduced-detail, theme-matched colors so walls, doors, props, blue start squares and the gold character marker remain immediately readable. The combat map's original illustrative surface, controls, geometry, target concealment and campaign rules remain unchanged.

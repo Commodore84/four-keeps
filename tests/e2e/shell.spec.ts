@@ -1612,6 +1612,58 @@ async function readAllCampaigns(page:Page){
 async function readScopedLab(page:Page,originId:string){
  return page.evaluate(id=>JSON.parse(localStorage.getItem('four-keeps-combat-lab-session:'+id)??'null'),originId);
 }
+test('iPhone ruins placement can zoom below 100 percent, fit all terrain, and retain readable start squares',async({page})=>{
+ test.setTimeout(85000);
+ await page.setViewportSize({width:390,height:844});
+ await page.goto('/four-keeps/');
+ await createLegacyCampaign(page,'Deployment overview regression');
+ const [original]=await readAllCampaigns(page);
+ await navigate(page,'Developer');
+ await page.evaluate(()=>{
+  const sample=crypto.getRandomValues.bind(crypto);let used=false;
+  crypto.getRandomValues=((a:ArrayBufferView|null)=>{
+   if(!used&&a instanceof Uint32Array&&a.length===1){used=true;a[0]=2;return a;}
+   return sample(a);
+  }) as typeof crypto.getRandomValues;
+ });
+ await page.getByLabel('Combat Lab').getByRole('button',{name:'Generate Random Encounter'}).click();
+ const placement=page.getByRole('region',{name:'Choose starting position'});
+ await expect(placement).toBeVisible();
+ const grid=placement.getByRole('grid',{name:'Starting position battlefield map'});
+ await expect(grid).toHaveAttribute('data-battlefield-theme','ruins');
+ const frame=grid.locator('xpath=..');
+ const dims=()=>grid.evaluate(el=>({
+  zoom:parseFloat(el.style.getPropertyValue('--battlefield-cell-size'))/21,
+  width:el.getBoundingClientRect().width,height:el.getBoundingClientRect().height,
+  frameWidth:el.parentElement!.clientWidth,frameHeight:el.parentElement!.clientHeight,
+  background:getComputedStyle(el).backgroundImage,
+  tiles:el.querySelectorAll('[data-terrain-art^="floor-"]').length,
+ }));
+ const before=await dims();
+ expect(before.zoom).toBeCloseTo(1.8);
+ expect(before.background).toContain('linear-gradient');
+ expect(before.background).not.toContain('svg');
+ expect(before.tiles).toBeGreaterThan(500);
+ await frame.screenshot({path:'test-results/ruins-deployment-clean-floor-iphone.png'});
+ for(let i=0;i<4;i++)await placement.getByRole('button',{name:'Zoom deployment map out'}).click();
+ expect((await dims()).zoom).toBeLessThan(1);
+ await placement.getByRole('button',{name:'Fit deployment map'}).click();
+ const fitted=await dims();
+ expect(fitted.zoom).toBeLessThan(.5);
+ expect(fitted.width).toBeLessThanOrEqual(fitted.frameWidth);
+ expect(fitted.height).toBeLessThanOrEqual(fitted.frameHeight);
+ await frame.screenshot({path:'test-results/ruins-deployment-fit-overview-iphone.png'});
+ // Zooming back in preserves legal deployment and does not reveal hidden foes.
+ await placement.getByRole('button',{name:'Zoom deployment map in'}).click();
+ expect((await dims()).zoom).toBeGreaterThan(fitted.zoom);
+ await expect(grid.getByRole('gridcell',{name:/Enemy|Goblin/})).toHaveCount(0);
+ await grid.getByRole('gridcell',{name:'Choose starting square 5, 21'}).click();
+ await expect(grid.getByRole('gridcell',{name:'Your selected starting square'})).toHaveAttribute('aria-pressed','true');
+ const state=await readScopedLab(page,original.id);
+ expect(state.combat.playerPosition).toEqual({x:4,y:20});
+ expect(state.combat.status).toBe('awaiting-initiative');
+ expect((await readAllCampaigns(page))[0]).toEqual(original);
+});
 test('Generate Random Encounter uses the real combat engine, cycles environments, and protects a real campaign',async({page})=>{
  test.setTimeout(110000);
  await page.setViewportSize({width:390,height:844});

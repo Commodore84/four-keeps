@@ -66,3 +66,35 @@
 
 /* Tokens and selection states remain readable above the artwork. */
 [data-battlefield-theme] [aria-pressed="true"]{outline-offset:-1px;}
+
+/* Placement is an orientation/selection view, not a detailed terrain inspection.
+ * Keep architecture and tokens vivid; remove repeating floor-flagstones,
+ * cracks and high-frequency noise from beneath the available start squares.
+ * Combat's illustrated ground, fixtures and persisted geometry are unchanged. */
+.deployment-map-frame [data-battlefield-theme="warehouse"]{
+  background-color:#675e52;
+  background-image:linear-gradient(145deg,#655b4d,#574e42);
+  background-size:100% 100%;
+}
+.deployment-map-frame [data-battlefield-theme="roadside"]{
+  background-color:#566b53;
+  background-image:linear-gradient(145deg,#5d7457,#4d614c);
+  background-size:100% 100%;
+}
+.deployment-map-frame [data-battlefield-theme="ruins"]{
+  background-color:#56665f;
+  background-image:linear-gradient(145deg,#586a61,#4d6059);
+  background-size:100% 100%;
+}
+.deployment-map-frame [data-terrain-art^="floor-"]{
+  background-image:none;
+  border-color:rgba(232,223,189,.14);
+}
+.deployment-map-frame{
+  display:flex;
+  flex-direction:column;
+}
+.deployment-map-frame [aria-label="Starting position battlefield map"]{
+  flex:none;
+  margin:auto;
+}
