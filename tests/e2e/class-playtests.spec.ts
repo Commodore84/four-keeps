@@ -2791,7 +2791,7 @@ test('iPhone mapped travel stops at an armed trap, saves damage and resumes afte
   const sceneAction=message.includes('enter the passage')?
    {type:'show',id:sceneId,title:'Old Passage',battlefield:{width:7,height:1,objects:[]},
     features:[{id:'floor-spikes',kind:'trap',label:'Spiked floor plate',position:{x:3,y:0},
-     dc:15,skill:'Perception',trapEffect:{saveAbility:'dex',saveDC:15,damageDice:'2d6',damageType:'piercing',onSave:'half'}}]}:
+     dc:15,skill:'Perception',trapEffect:{saveAbility:'dex',saveDC:15,damageDice:'2d4',damageType:'piercing',onSave:'half'}}]}:
    /(?:walk|continue) to the exit/.test(message)?{type:'move',id:sceneId,x:6,y:0}:null;
   await route.fulfill({json:{...shared,sceneAction,narration:'You proceed cautiously through the old passage.'}});
  });
@@ -2805,6 +2805,8 @@ test('iPhone mapped travel stops at an armed trap, saves damage and resumes afte
  await say('I enter the passage carefully.');
  await expect(page.getByLabel('DM scene map')).toBeVisible();
  const initial=await saved(page),originalHp=initial.character.currentHitPoints;
+ // Max 2d4 = 8 damage: this journey tests resuming movement while alive, not the separate 0-HP rules.
+ expect(originalHp).toBeGreaterThan(8);
  expect(initial.explorationScene.features[0].discovered).toBe(false);
  await say('I walk to the exit.');
  await expect.poll(async()=> (await saved(page))?.pendingTrapSave?.stage).toBe('hazard');
