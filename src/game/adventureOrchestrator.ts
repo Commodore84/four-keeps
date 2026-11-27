@@ -41,6 +41,15 @@ export function adventureMemory(campaign:Campaign) {
     clues:(world?.clues??[]).slice(-30),
     quests:(world?.quests??[]).slice(-15),
     establishedFacts:(campaign.worldFacts??[]).slice(-40),
+    scene:campaign.explorationScene?{
+      id:campaign.explorationScene.id,title:campaign.explorationScene.title,
+      location:campaign.explorationScene.location,visible:campaign.explorationScene.visible,
+      templateId:campaign.explorationScene.templateId,
+      playerPosition:campaign.explorationScene.playerPosition,
+      objects:campaign.explorationScene.battlefield.objects.map(o=>({
+        id:o.id,kind:o.kind,open:o.open,locked:o.locked,destroyed:o.destroyed
+      })).slice(0,80)
+    }:null,
     recentConversation:campaign.journal.filter(e=>e.kind==='player'||e.kind==='dm').slice(-12).map(e=>({role:e.kind==='player'?'user':'assistant',content:e.text}))
   };
 }

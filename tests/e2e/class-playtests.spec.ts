@@ -2633,3 +2633,56 @@ test('iPhone completed warehouse contract awards 50 XP once and allows a clear 5
  expect(again.questPayouts.filter((p:any)=>p.status==='collected')).toHaveLength(1);
  expect(again.xpAwards.filter((award:any)=>award.id==='classic-encounter-warehouse-victory')).toHaveLength(1);
 });
+
+
+test('iPhone DM presents a persistent exploration map inside conversation and keeps it for matching combat',async({page})=>{
+ test.setTimeout(100000);
+ await createAndImport(page,'rogue');
+ await page.evaluate(()=>{localStorage.setItem('four-keeps-access-code','browser-test-code');localStorage.setItem('four-keeps-dm-mode','on');});
+ let messages:string[]=[];
+ await page.route('**/api/dm',async route=>{
+  const request=route.request().postDataJSON(),message=String(request.message??'');
+  const shared={worldUpdates:{},newFacts:[]};
+  if(request.opening){await route.fulfill({json:{...shared,narration:'The waterfront of Dasahi comes alive around you.'}});return;}
+  messages.push(message);
+  const sceneAction=message.includes('enter the warehouse')?{type:'show',id:'test-warehouse',title:'Dockside Warehouse',templateId:'warehouse-vermin'}:null;
+  const combatStart=message.includes('I attack the rat')?{enemyName:'Giant Rat',templateId:'warehouse-vermin'}:null;
+  await route.fulfill({json:{...shared,narration:combatStart?'The rat lunges. Roll initiative.':'The warehouse is quiet except for dripping water.',
+   sceneAction,combatStart}});
+ });
+ await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();
+ await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await expect.poll(async()=> (await saved(page))?.journal?.some((entry:any)=>entry.id?.endsWith('-dm-opening'))).toBe(true);
+ await page.getByLabel('Message the Dungeon Master').fill('I enter the warehouse and look around.');
+ await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
+ const scene=page.getByLabel('DM scene map');
+ await expect(scene).toBeVisible();
+ await expect(scene.getByRole('grid',{name:'DM-presented exploration map'})).toBeVisible();
+ await expect(scene).toContainText('Dockside Warehouse');
+ await scene.scrollIntoViewIfNeeded();
+ await page.screenshot({path:'test-results/conversational-exploration-scene.png'});
+ const first=await saved(page);
+ expect(first.explorationScene.visible).toBe(true);
+ expect(first.combat).toBeUndefined();
+ expect(first.explorationScene.battlefield.objects.length).toBeGreaterThan(0);
+ await scene.getByRole('button',{name:'Fit scene map'}).click();
+ const target=scene.getByRole('gridcell',{name:/Inspect .* at \d+, \d+/}).first();
+ await target.click();
+ await expect(scene.getByLabel('Selected exploration object')).toBeVisible();
+ await scene.getByRole('button',{name:'Ask DM'}).click();
+ await expect(page.getByLabel('Message the Dungeon Master')).toHaveValue(/I want to inspect/);
+ await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
+ await expect(scene).toBeVisible();
+ await expect.poll(()=>messages.some(message=>message.startsWith('I want to inspect'))).toBe(true);
+ await expect.poll(async()=>{const c=await saved(page);return !c?.pendingAdventureAction&&c?.journal?.filter((e:any)=>e.kind==='dm').length>=3;}).toBe(true);
+ await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();
+ await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await expect(scene).toBeVisible();
+ expect((await saved(page)).explorationScene.battlefield).toEqual(first.explorationScene.battlefield);
+ await page.getByLabel('Message the Dungeon Master').fill('I attack the rat!');
+ await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
+ await expect.poll(async()=>{const c=await saved(page);return Boolean(c?.combat?.battlefield??c?.adventureSession?.pendingEncounter?.scenario?.battlefield);}).toBe(true);
+ await expect(page.getByRole('button',{name:'Roll initiative (d20 + DEX)'})).toBeVisible({timeout:15000});
+ const fighting=await saved(page);
+ expect(fighting.combat?.battlefield??fighting.adventureSession?.pendingEncounter?.scenario?.battlefield).toEqual(first.explorationScene.battlefield);
+});

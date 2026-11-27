@@ -1,5 +1,6 @@
 import type {CombatScenario} from './combatScenario';
 import {resolveDmBattlefield} from './encounterDirector';
+import {scenarioFromExplorationScene} from './explorationScene';
 import type {Campaign} from './campaign';
 import {startUnifiedEncounter,addCompanionEnemy} from './companionEncounter';
 import {resupplyTravelingMerchant} from './merchantSupply';
@@ -55,7 +56,8 @@ export function travelAdventure(campaign:Campaign,destination:AdventureSite,now=
  if(!ADVENTURE_SITES[session.site].neighbors.includes(destination))throw Error('Destination is not adjacent');
  const route=campaign.merchantTraderRoute;
  if(route&&route.nextStopIndex<route.stops.length&&(settlementTier(campaign)!=='traveling'||route.stops[route.nextStopIndex]!==destination||route.stops[route.nextStopIndex-1]!==session.site))throw Error('Travel must follow the verified merchant route.');
- const traveled={...campaign,adventureSession:{...session,site:destination,visited:session.visited.includes(destination)?session.visited:[...session.visited,destination]},location:adventureSiteForCampaign(campaign,destination).name,updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system' as const,text:'Travelled to '+adventureSiteForCampaign(campaign,destination).name+'. '+adventureSiteForCampaign(campaign,destination).description,createdAt:now}]};
+ const scene=campaign.explorationScene;
+ const traveled={...campaign,...(scene?{explorationScene:{...scene,visible:false}}:{}),adventureSession:{...session,site:destination,visited:session.visited.includes(destination)?session.visited:[...session.visited,destination]},location:adventureSiteForCampaign(campaign,destination).name,updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system' as const,text:'Travelled to '+adventureSiteForCampaign(campaign,destination).name+'. '+adventureSiteForCampaign(campaign,destination).description,createdAt:now}]};
  if(!route||route.nextStopIndex>=route.stops.length)return traveled;
  const arrivalId='leg-'+route.nextStopIndex+'-'+destination;
  if(route.completedArrivalIds.includes(arrivalId))throw Error('Merchant route arrival already processed.');
@@ -93,7 +95,8 @@ export function proposeAdventureEncounter(campaign:Campaign,enemyName:unknown,ac
  if(session.pendingEncounter)return campaign;
  if(typeof enemyName!=='string'||!enemyName.trim()||enemyName.trim().length>80||!actionId.trim())return campaign;
  const locationKey=(campaign.location??session.site).trim().toLowerCase();
- const scenario=templateId!==undefined||battlefield!==undefined?resolveDmBattlefield(templateId!==undefined?{templateId}: {battlefield},locationKey,campaign.id+":"+actionId):undefined;
+ const matchingScene=battlefield===undefined&&templateId!==undefined?scenarioFromExplorationScene(campaign,templateId):undefined;
+ const scenario=matchingScene??(templateId!==undefined||battlefield!==undefined?resolveDmBattlefield(templateId!==undefined?{templateId}: {battlefield},locationKey,campaign.id+":"+actionId):undefined);
  if(scenario&&!scenario.artwork&&campaign.tacticalArtwork?.[locationKey])scenario.artwork=campaign.tacticalArtwork[locationKey];
  return {...campaign,updatedAt:now,adventureSession:{...session,pendingEncounter:{enemyName:enemyName.trim(),actionId,...(scenario?{scenario}:{})}}};
 }
