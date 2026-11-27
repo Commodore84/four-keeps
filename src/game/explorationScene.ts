@@ -10,13 +10,19 @@ export interface ExplorationScene {
  features?:ExplorationFeature[];
 }
 export type ExplorationFeature={
- id:string;kind:'clue'|'trap'|'mechanism';label:string;position:BattlefieldPoint;
+ id:string;kind:'clue'|'trap'|'mechanism'|'key';label:string;position:BattlefieldPoint;
  dc:10|15|20;skill:'Investigation'|'Perception';discovered:boolean;disarmed?:boolean;
  triggered?:boolean;trapEffect?:TrapEffect;
  /** Traps mounted on a specific door/window trigger from object interaction, not walking. */
  targetObjectId?:string;
  /** A persistent physical lever/plate/button. Requires discovery of an established clue. */
  linkedObjectId?:string;requiresFeatureId?:string;activated?:boolean;
+ /** Finite, saved puzzle dependencies: only earlier activated mechanisms and scene-local keys qualify. */
+ requiresMechanismIds?:string[];requiresKeyId?:string;
+ /** A turn always changes one notch; reaching target activates the mechanism permanently. */
+ rotation?:{positions:2|3|4;current:number;target:number};
+ /** A scene-local key is acquired once by an explicit player action, never minted into shop gear. */
+ collected?:boolean;
 };
 /** Trap profiles are part of the saved DM scene; no effect may be invented
  * when a roll resolves. Older saved traps without a profile remain harmless. */
@@ -56,12 +62,14 @@ type SceneMove={type:'move';id:string;x:number;y:number};
 type SceneHide={type:'hide'};
 type SceneOpening={type:'open'|'close';id:string;objectId:string};
 type SceneActivation={type:'activate';id:string;featureId:string};
+type SceneTake={type:'take';id:string;featureId:string};
 type SceneShift={type:'shift';id:string;objectId:string;x:number;y:number};
-export type DmSceneAction=SceneShow|SceneHide|SceneOpening|SceneMove|SceneActivation|SceneShift;
+export type DmSceneAction=SceneShow|SceneHide|SceneOpening|SceneMove|SceneActivation|SceneShift|SceneTake;
 const slug=/^[a-z0-9][a-z0-9-]{2,63}$/;
 const compact=(value:unknown)=>typeof value==='string'?value.trim():'';
 const isTemplate=(id:string):id is SoloEncounterId=>Object.hasOwn(SOLO_ROGUE_ENCOUNTERS,id);
 const shiftIntent=/\b(?:push|pull|move|drag|slide|shove|shift|reposition)\b/i;
+const takingIntent=/\b(?:take|pick up|collect|retrieve|grab|pocket|carry)\b/i;
 const activationIntent=/\b(?:pull|push|press|turn|flip|activate|operate|use|slide|rotate|twist|lift|move|throw|trigger)\b/i;
 const openingIntent=/\b(?:open|close|shut|push|pull|turn|lift|slide|unlock)\b/i;
 const toolOwned=(campaign:Campaign)=>(campaign.inventoryLedger?.gear??[]).some(item=>
@@ -111,7 +119,7 @@ function normalizeFeatures(value:unknown,map:Battlefield):ExplorationFeature[]{
   if(!raw||typeof raw!=='object'||Array.isArray(raw))throw Error('Invalid scene feature.');
   const f=raw as Record<string,unknown>,id=compact(f.id),label=compact(f.label);
   const position=f.position as BattlefieldPoint;
-  if(!slug.test(id)||ids.has(id)||!['clue','trap','mechanism'].includes(String(f.kind))||
+  if(!slug.test(id)||ids.has(id)||!['clue','trap','mechanism','key'].includes(String(f.kind))||
     label.length<2||label.length>90||!position||!battlefieldContains(map,position)||
     ![10,15,20].includes(Number(f.dc))||!['Investigation','Perception'].includes(String(f.skill))||
     (f.discovered!==undefined&&typeof f.discovered!=='boolean')||
@@ -125,7 +133,21 @@ function normalizeFeatures(value:unknown,map:Battlefield):ExplorationFeature[]{
     (f.linkedObjectId!==undefined&&(f.kind!=='mechanism'||!slug.test(compact(f.linkedObjectId))||
       !validDoor(map,String(f.linkedObjectId))))||
     (f.requiresFeatureId!==undefined&&(f.kind!=='mechanism'||!slug.test(compact(f.requiresFeatureId))))||
-    (f.activated!==undefined&&(f.kind!=='mechanism'||typeof f.activated!=='boolean'||f.activated&&!f.discovered)))
+    (f.requiresKeyId!==undefined&&(f.kind!=='mechanism'||!slug.test(compact(f.requiresKeyId))))||
+    (f.requiresMechanismIds!==undefined&&(f.kind!=='mechanism'||!Array.isArray(f.requiresMechanismIds)||
+      f.requiresMechanismIds.length>4||new Set(f.requiresMechanismIds).size!==f.requiresMechanismIds.length||
+      !f.requiresMechanismIds.every((ref:unknown)=>typeof ref==='string'&&slug.test(ref))))||
+    (f.rotation!==undefined&&(f.kind!=='mechanism'||!f.rotation||typeof f.rotation!=='object'||Array.isArray(f.rotation)||
+      Object.keys(f.rotation).some(key=>!['positions','current','target'].includes(key))||
+      ![2,3,4].includes((f.rotation as Record<string,unknown>).positions as number)||
+      !Number.isInteger((f.rotation as Record<string,unknown>).current)||
+      !Number.isInteger((f.rotation as Record<string,unknown>).target)||
+      Number((f.rotation as Record<string,unknown>).target)<1||
+      Number((f.rotation as Record<string,unknown>).target)>=Number((f.rotation as Record<string,unknown>).positions)||
+      Number((f.rotation as Record<string,unknown>).current)<0||
+      Number((f.rotation as Record<string,unknown>).current)>=Number((f.rotation as Record<string,unknown>).positions)))||
+    (f.collected!==undefined&&(f.kind!=='key'||typeof f.collected!=='boolean'||f.collected&&!f.discovered))||
+    (f.activated!==undefined&&(f.kind!=='mechanism'||typeof f.activated!=='boolean'||f.activated&&!f.discovered||f.activated&&f.rotation&&Number((f.rotation as Record<string,unknown>).current)!==Number((f.rotation as Record<string,unknown>).target))))
     throw Error('Invalid scene feature.');
   ids.add(id);
   return {id,kind:f.kind as ExplorationFeature['kind'],label,position:{x:position.x,y:position.y},
@@ -136,18 +158,34 @@ function normalizeFeatures(value:unknown,map:Battlefield):ExplorationFeature[]{
     ...(f.kind==='trap'&&f.targetObjectId!==undefined?{targetObjectId:String(f.targetObjectId)}:{}),
     ...(f.kind==='mechanism'&&f.linkedObjectId!==undefined?{linkedObjectId:String(f.linkedObjectId)}:{}),
     ...(f.kind==='mechanism'&&f.requiresFeatureId!==undefined?{requiresFeatureId:String(f.requiresFeatureId)}:{}),
-    ...(f.kind==='mechanism'&&f.activated===true?{activated:true}:{})};
+    ...(f.kind==='mechanism'&&f.activated===true?{activated:true}:{}),
+    ...(f.kind==='mechanism'&&Array.isArray(f.requiresMechanismIds)?{requiresMechanismIds:[...f.requiresMechanismIds] as string[]}:{}),
+    ...(f.kind==='mechanism'&&f.requiresKeyId!==undefined?{requiresKeyId:String(f.requiresKeyId)}:{}),
+    ...(f.kind==='mechanism'&&f.rotation!==undefined?{rotation:{...(f.rotation as ExplorationFeature['rotation'])!}}:{}),
+    ...(f.kind==='key'&&f.collected===true?{collected:true}:{})};
  });
  for(const f of normalized){
   if(f.kind==='mechanism'){
-   if(!f.linkedObjectId||f.requiresFeatureId===f.id||
-      f.requiresFeatureId&&!normalized.some(x=>x.id===f.requiresFeatureId&&x.kind==='clue'))
+   if((!f.linkedObjectId&&!f.rotation)||f.requiresFeatureId===f.id||
+      f.requiresFeatureId&&!normalized.some(x=>x.id===f.requiresFeatureId&&x.kind==='clue')||
+      f.requiresKeyId&&!normalized.some(x=>x.id===f.requiresKeyId&&x.kind==='key')||
+      f.requiresMechanismIds?.some(ref=>ref===f.id||!normalized.some(x=>x.id===ref&&x.kind==='mechanism')))
     throw Error('Invalid scene mechanism prerequisites.');
   }
   if(f.kind==='trap'&&f.targetObjectId&&
     normalized.filter(x=>x.kind==='trap'&&x.targetObjectId===f.targetObjectId).length>1)
     throw Error('A door may have only one saved trap.');
  }
+ // Detect cycles before any state is saved: no mechanism can depend on itself indirectly.
+ const visiting=new Set<string>(),done=new Set<string>();
+ const visit=(id:string):void=>{
+  if(visiting.has(id))throw Error('Cyclic scene mechanism prerequisites.');
+  if(done.has(id))return;
+  visiting.add(id);
+  for(const ref of normalized.find(f=>f.id===id)?.requiresMechanismIds??[])visit(ref);
+  visiting.delete(id);done.add(id);
+ };
+ for(const f of normalized.filter(f=>f.kind==='mechanism'))visit(f.id);
  return normalized;
 }
 export function sceneCheckRequest(campaign:Campaign,request:unknown,check:{skill:string;tool?:string;token:string}):PendingSceneCheck|undefined{
@@ -302,6 +340,22 @@ export function applyDmSceneAction(campaign:Campaign,action:unknown,now=new Date
     journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',
       text:'Moved '+obj.kind+' '+obj.id+' to square '+(destination.x+1)+','+(destination.y+1)+'.',createdAt:now}]};
  }
+ if(a.type==='take'){
+  if(campaign.pendingTrapSave)throw Error('Resolve the triggered trap before taking a key.');
+  if((campaign.character?.currentHitPoints??1)<=0)throw Error('An unconscious character cannot take an object.');
+  if(!before||!before.visible||before.location!==campaign.location||a.id!==before.id||
+    typeof a.featureId!=='string'||Object.keys(a).some(k=>!['type','id','featureId'].includes(k))||
+    !takingIntent.test(playerMessage))throw Error('Taking an object requires explicit player intent.');
+  const key=before.features?.find(f=>f.kind==='key'&&f.id===a.featureId);
+  if(!key||!key.discovered||key.collected||distance(before.playerPosition,key.position)>1||
+     battlefieldOpaqueSightBlocked(before.battlefield,before.playerPosition,key.position)||
+     !playerMessage.toLowerCase().includes(key.label.toLowerCase()))
+   throw Error('The key is unknown, out of reach, already collected, or not the requested object.');
+  const features=before.features!.map(f=>f.id===key.id?{...f,collected:true}:f);
+  return {...campaign,explorationScene:{...before,features,updatedAt:now},
+   journal:[...campaign.journal,{id:'key-'+before.id+'-'+key.id,kind:'system',
+    text:'You collected '+key.label+'. It remains available in this scene.',createdAt:now}]};
+ }
  if(a.type==='activate'){
   if(campaign.pendingTrapSave)throw Error('Resolve the triggered trap before using a mechanism.');
   if((campaign.character?.currentHitPoints??1)<=0)throw Error('An unconscious character cannot use a mechanism.');
@@ -309,21 +363,35 @@ export function applyDmSceneAction(campaign:Campaign,action:unknown,now=new Date
    typeof a.featureId!=='string'||Object.keys(a).some(k=>!['type','id','featureId'].includes(k))||
    !activationIntent.test(playerMessage))throw Error('Activation requires an explicit player interaction.');
   const mechanism=before.features?.find(f=>f.kind==='mechanism'&&f.id===a.featureId);
-  if(!mechanism||!mechanism.discovered||mechanism.activated||!mechanism.linkedObjectId||
+  if(!mechanism||!mechanism.discovered||mechanism.activated||
     distance(before.playerPosition,mechanism.position)>1||
     battlefieldOpaqueSightBlocked(before.battlefield,before.playerPosition,mechanism.position))
     throw Error('The mechanism is not accessible.');
   if(mechanism.requiresFeatureId&&!before.features?.some(f=>f.id===mechanism.requiresFeatureId&&f.kind==='clue'&&f.discovered))
     throw Error('The mechanism prerequisite has not been discovered.');
-  const target=validDoor(before.battlefield,mechanism.linkedObjectId);
-  if(!target)throw Error('The linked opening is no longer present.');
-  // The lever releases its lock; the player must still explicitly open it.
-  const battlefield={...before.battlefield,objects:before.battlefield.objects.map(o=>
-    o.id===target.id?{...o,locked:false}:o)};
-  const features=before.features!.map(f=>f.id===mechanism.id?{...f,activated:true}:f);
+  if(mechanism.requiresKeyId&&!before.features?.some(f=>f.id===mechanism.requiresKeyId&&f.kind==='key'&&f.collected))
+    throw Error('The required key has not been collected.');
+  if(mechanism.requiresMechanismIds?.some(ref=>!before.features?.some(f=>f.id===ref&&f.kind==='mechanism'&&f.activated)))
+    throw Error('Other mechanisms must be aligned first.');
+  if(!playerMessage.toLowerCase().includes(mechanism.label.toLowerCase()))
+    throw Error('The requested mechanism does not match the player action.');
+  if(mechanism.rotation&&!/\b(?:rotate|turn|twist)\b/i.test(playerMessage))
+    throw Error('Rotating a mechanism requires an explicit turn.');
+  const rotation=mechanism.rotation?{...mechanism.rotation,
+    current:(mechanism.rotation.current+(/\b(?:counterclockwise|anti-clockwise|anticlockwise)\b/i.test(playerMessage)?-1:1)+mechanism.rotation.positions)%mechanism.rotation.positions}:undefined;
+  const aligned=!rotation||rotation.current===rotation.target;
+  const target=mechanism.linkedObjectId?validDoor(before.battlefield,mechanism.linkedObjectId):undefined;
+  if(mechanism.linkedObjectId&&!target)throw Error('The linked opening is no longer present.');
+  // A rotated intermediary only aligns when the correct notch is reached. The
+  // final linked latch releases the lock, but opening remains a separate action.
+  const battlefield=target&&aligned?{...before.battlefield,objects:before.battlefield.objects.map(o=>
+    o.id===target.id?{...o,locked:false}:o)}:before.battlefield;
+  const features=before.features!.map(f=>{if(f.id!==mechanism.id)return f;
+   const {activated:_previous,...rest}=f;return {...rest,...(rotation?{rotation}:{}),...(aligned?{activated:true}:{})};});
   return {...campaign,explorationScene:{...before,battlefield,features,updatedAt:now},
-   journal:[...campaign.journal,{id:'mechanism-'+before.id+'-'+mechanism.id,kind:'system',
-    text:'You activate '+mechanism.label+'. The mechanism releases '+target.id+'.',createdAt:now}]};
+   journal:[...campaign.journal,{id:aligned?'mechanism-'+before.id+'-'+mechanism.id:crypto.randomUUID(),kind:'system',
+    text:aligned?'You align '+mechanism.label+(target?'. The mechanism releases '+target.id+'.':'.'):
+      'You rotate '+mechanism.label+' to notch '+(rotation!.current+1)+' of '+rotation!.positions+'.',createdAt:now}]};
  }
  if(a.type==='open'||a.type==='close'){
   if(campaign.pendingTrapSave)throw Error('Resolve the triggered trap before manipulating an opening.');
@@ -379,7 +447,7 @@ export function applyDmSceneAction(campaign:Campaign,action:unknown,now=new Date
   if(!square)throw Error('Scene contains no accessible position.');
   playerPosition=square;
  }
- const features=a.features===undefined?undefined:normalizeFeatures(a.features,battlefield).map(f=>({...f,discovered:f.kind==='mechanism',disarmed:undefined,triggered:undefined,activated:undefined}));
+ const features=a.features===undefined?undefined:normalizeFeatures(a.features,battlefield).map(f=>({...f,discovered:f.kind==='mechanism',disarmed:undefined,triggered:undefined,activated:undefined,collected:undefined}));
  return {...campaign,explorationScene:{id:a.id,title:a.title.trim(),location:campaign.location,
   visible:true,battlefield,playerPosition,updatedAt:now,
   ...(features?{features}:{}),...(typeof a.templateId==='string'?{templateId:a.templateId as SoloEncounterId,seed}:{})}};

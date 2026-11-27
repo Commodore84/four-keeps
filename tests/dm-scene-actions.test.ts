@@ -96,3 +96,33 @@ it('requires a player request before returning a one-cell object shift',async()=
  const passive=response();await handler(req('I inspect the crate.'),passive);
  expect(passive.body.sceneAction).toBeNull();
 });
+
+it('passes scene-local key and rotating mechanism state to the DM without allowing free pickup',async()=>{
+ const state={...gameState,scene:{...scene,features:[
+  {id:'sun-key',kind:'key',label:'Copper Sun Key',position:{x:2,y:1},dc:10,skill:'Investigation',discovered:true,collected:false},
+  {id:'north-statue',kind:'mechanism',label:'North statue',position:{x:1,y:1},dc:10,skill:'Investigation',
+   discovered:true,activated:false,rotation:{positions:4,current:1,target:2},requiresKeyId:'sun-key'}
+ ]}};
+ setup({narration:'You take the copper key.',sceneAction:{type:'take',id:'hidden-cellar',featureId:'sun-key'}});
+ const r=response();
+ await handler(req('I pick up the Copper Sun Key.',state),r);
+ expect(r.code).toBe(200);
+ expect(r.body.sceneAction).toEqual({type:'take',id:'hidden-cellar',featureId:'sun-key'});
+ const passive=response();
+ await handler(req('I look around the chamber.',state),passive);
+ expect(passive.body.sceneAction).toBeNull();
+});
+
+it('binds discovering a scene-local key to the same sealed check pipeline',async()=>{
+ const state={...gameState,scene:{...scene,features:[
+  {id:'sun-key',kind:'key',label:'Copper Sun Key',position:{x:2,y:1},dc:10,skill:'Investigation',discovered:false}
+ ]}};
+ setup({narration:'You find a copper key beneath the statue.',checkRequest:{
+  skill:'Investigation',difficulty:'easy',reason:'Search the statue',sceneCheck:{sceneId:'hidden-cellar',featureId:'sun-key',goal:'discover'}
+ }});
+ const r=response();
+ await handler(req('I investigate the base of the statue.',state),r);
+ expect(r.code).toBe(200);
+ expect(r.body.checkRequest?.sceneCheck).toEqual({sceneId:'hidden-cellar',featureId:'sun-key',goal:'discover'});
+ expect(typeof r.body.checkRequest?.token).toBe('string');
+});

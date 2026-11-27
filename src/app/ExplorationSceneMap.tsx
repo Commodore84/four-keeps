@@ -14,7 +14,7 @@ export function ExplorationSceneMap({scene,onInspect}:{scene:ExplorationScene;on
  const frame=useRef<HTMLDivElement>(null);
  const map=scene.battlefield;
  const selected=map.objects.find(obj=>obj.id===selectedId&&!obj.destroyed);
- const selectedFeature=selectedSquare?scene.features?.find(f=>f.discovered&&f.position.x===selectedSquare.x&&f.position.y===selectedSquare.y):undefined;
+ const selectedFeature=selectedSquare?scene.features?.find(f=>f.discovered&&!(f.kind==='key'&&f.collected)&&f.position.x===selectedSquare.x&&f.position.y===selectedSquare.y):undefined;
  const selectedDoorTrap=selected?scene.features?.find(f=>f.kind==='trap'&&f.targetObjectId===selected.id&&f.discovered):undefined;
  const focus=(next:number)=>{
   const el=frame.current;
@@ -66,13 +66,13 @@ export function ExplorationSceneMap({scene,onInspect}:{scene:ExplorationScene;on
      const obj=objectAt(map,{x,y}).find(o=>!o.destroyed);
      const blocked=battlefieldBlocked(map,{x,y});
      const interact=!!obj&&['door','window','table','crate','cargo','chair','pillar','rock','tree'].includes(obj.kind);
-     const feature=scene.features?.find(f=>f.discovered&&f.position.x===x&&f.position.y===y);
+     const feature=scene.features?.find(f=>f.discovered&&!(f.kind==='key'&&f.collected)&&f.position.x===x&&f.position.y===y);
      const content=own?<span aria-label="Character location" className="relative z-10 flex h-4 w-4 items-center justify-center rounded-full border border-white bg-amber-300 text-[10px] font-bold text-black">P</span>:null;
      const styles={gridColumnStart:x+1,gridRowStart:y+1,minHeight:0,borderRadius:0,...battlefieldObjectArtworkStyle(obj,x,y,zoom)};
      if(!interact && feature)return <button key={i} type="button" role="gridcell" aria-label={'Examine '+feature.kind+' '+feature.label}
       onClick={()=>{setSelectedId(null);setSelectedSquare({x,y});}}
       data-terrain-art={battlefieldTileName(map,obj,x,y)} style={styles}
-      className="relative aspect-square min-w-0 border border-amber-400/50 text-[10px] text-gold">{content??(feature.kind==='mechanism'?(feature.activated?'✓':'◉'):feature.kind==='trap'?(feature.disarmed?'✓':feature.triggered?'!':'?'):'?')}</button>;
+      className="relative aspect-square min-w-0 border border-amber-400/50 text-[10px] text-gold">{content??(feature.kind==='mechanism'?(feature.activated?'✓':'◉'):feature.kind==='key'?'⚿':feature.kind==='trap'?(feature.disarmed?'✓':feature.triggered?'!':'?'):'?')}</button>;
      return interact?<button type="button" key={i} role="gridcell" data-terrain-art={battlefieldTileName(map,obj,x,y)}
       aria-label={'Inspect '+label(obj!)+' at '+(x+1)+', '+(y+1)} aria-pressed={selectedId===obj!.id}
       onClick={()=>{setSelectedId(obj!.id);setSelectedSquare(null);}} style={styles}
@@ -108,13 +108,18 @@ export function ExplorationSceneMap({scene,onInspect}:{scene:ExplorationScene;on
   </div>}
   {selectedSquare&&<div aria-label="Selected exploration square" className="flex items-center justify-between gap-2 rounded-lg border border-gold/30 p-2 text-sm">
    <span>{selectedFeature?
-      ((selectedFeature.kind==='mechanism'?(selectedFeature.activated?'Activated mechanism':'Mechanism'):selectedFeature.kind==='trap'?(selectedFeature.disarmed?'Disarmed trap':selectedFeature.triggered?'Triggered trap':'Trap'):'Clue')+': '+selectedFeature.label):
+      ((selectedFeature.kind==='mechanism'?(selectedFeature.activated?'Aligned mechanism':'Mechanism'):selectedFeature.kind==='key'?'Key':selectedFeature.kind==='trap'?(selectedFeature.disarmed?'Disarmed trap':selectedFeature.triggered?'Triggered trap':'Trap'):'Clue')+': '+selectedFeature.label+
+      (selectedFeature.rotation?' · notch '+(selectedFeature.rotation.current+1)+' / '+selectedFeature.rotation.positions:'')):
       'Square '+(selectedSquare.x+1)+', '+(selectedSquare.y+1)}</span>
-   <button type="button" onClick={()=>onInspect(selectedFeature?
-     selectedFeature.kind==='mechanism'?'I pull the '+selectedFeature.label+' and observe its effect.':
+   <button type="button" disabled={selectedFeature?.kind==='mechanism'&&!!selectedFeature.activated} onClick={()=>onInspect(selectedFeature?
+     selectedFeature.kind==='mechanism'?(selectedFeature.rotation?'I rotate the '+selectedFeature.label+' one step clockwise.':'I pull the '+selectedFeature.label+' and observe its effect.'):
+     selectedFeature.kind==='key'?'I pick up the '+selectedFeature.label+'.':
      'I inspect the '+selectedFeature.label+' more closely.':
-     'I move to square '+(selectedSquare.x+1)+', '+(selectedSquare.y+1)+' and look around carefully.')} className="min-h-11 rounded border border-gold/50 px-3 text-gold">{selectedFeature?.kind==='mechanism'?'Use mechanism':selectedFeature?'Ask DM about feature':'Ask DM to move'}</button>
+     'I move to square '+(selectedSquare.x+1)+', '+(selectedSquare.y+1)+' and look around carefully.')} className="min-h-11 rounded border border-gold/50 px-3 text-gold">{selectedFeature?.kind==='mechanism'?(selectedFeature.activated?'Aligned':selectedFeature.rotation?'Rotate':'Use mechanism'):selectedFeature?.kind==='key'?'Take key':selectedFeature?'Ask DM about feature':'Ask DM to move'}</button>
   </div>}
+  {selectedFeature?.kind==='mechanism'&&selectedFeature.rotation&&!selectedFeature.activated&&
+   <button type="button" onClick={()=>onInspect('I rotate the '+selectedFeature.label+' one step counterclockwise.')}
+    className="min-h-11 rounded border border-gold/50 px-2 text-xs text-gold">Rotate counterclockwise</button>}
   <p className="text-xs text-parchment/65">Explore through conversation. Tap an object to ask the DM about it. The map does not move your character or spend actions until the DM resolves your request.</p>
  </section>;
 }

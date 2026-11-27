@@ -3082,3 +3082,94 @@ test('iPhone sealed lockpicking check unlocks a door and persists it without byp
  await page.getByRole('button',{name:'Continue Adventure'}).click();
  expect((await saved(page)).explorationScene.battlefield.objects[0]).toMatchObject({locked:false,open:true});
 });
+
+test('iPhone multi-stage sun temple puzzle persists discovered key, statue rotations and unlocked door',async({page})=>{
+ test.setTimeout(160000);
+ await createAndImport(page,'rogue');
+ await page.evaluate(()=>{localStorage.setItem('four-keeps-access-code','browser-test-code');localStorage.setItem('four-keeps-dm-mode','on');});
+ const temple='sun-temple-steps';
+ await page.route('**/api/dm',async route=>{
+  const body=route.request().postDataJSON(),message=String(body.message??'');
+  const shared={newFacts:[],worldUpdates:{}};
+  if(body.opening){await route.fulfill({json:{...shared,narration:'A sun temple stands in the distance.'}});return;}
+  if(body.checkToken){const dice=body.dice;
+   await route.fulfill({json:{...shared,narration:'Your investigation reveals what was concealed.',
+    checkResult:{skill:'Investigation',dice,kept:dice[0],modifier:20,total:dice[0]+20,success:true}}});return;}
+  const movement=message.match(/I walk to square (\d+), (\d+)/);
+  const sceneAction=message==='I enter the sun temple.'?
+   {type:'show',id:temple,title:'Sun Temple',battlefield:{width:7,height:4,
+     objects:[{id:'sun-door',kind:'door',x:5,y:1,width:1,height:1,locked:true,lockDC:20}]},
+    features:[
+     {id:'star-inscription',kind:'clue',label:'Star inscription',position:{x:1,y:1},dc:10,skill:'Investigation'},
+     {id:'copper-key',kind:'key',label:'Copper Sun Key',position:{x:1,y:0},dc:10,skill:'Investigation'},
+     {id:'north-statue',kind:'mechanism',label:'North statue',position:{x:2,y:1},dc:10,skill:'Investigation',
+      requiresFeatureId:'star-inscription',rotation:{positions:4,current:0,target:2}},
+     {id:'south-statue',kind:'mechanism',label:'South statue',position:{x:3,y:1},dc:10,skill:'Investigation',
+      requiresFeatureId:'star-inscription',rotation:{positions:4,current:0,target:3}},
+     {id:'sun-latch',kind:'mechanism',label:'Sun latch',position:{x:4,y:1},dc:10,skill:'Investigation',
+      linkedObjectId:'sun-door',requiresMechanismIds:['north-statue','south-statue'],requiresKeyId:'copper-key'}
+    ]}:
+   movement?{type:'move',id:temple,x:Number(movement[1])-1,y:Number(movement[2])-1}:
+   message.startsWith('I pick up the Copper Sun Key')?{type:'take',id:temple,featureId:'copper-key'}:
+   message.includes('rotate the North statue')?{type:'activate',id:temple,featureId:'north-statue'}:
+   message.includes('rotate the South statue')?{type:'activate',id:temple,featureId:'south-statue'}:
+   message.includes('pull the Sun latch')?{type:'activate',id:temple,featureId:'sun-latch'}:
+   message.includes('open the door sun-door')?{type:'open',id:temple,objectId:'sun-door'}:null;
+  const checkId=message.startsWith('I investigate the inscription')?'star-inscription':
+   message.startsWith('I investigate beneath the statue')?'copper-key':null;
+  const checkRequest=checkId?{skill:'Investigation',mode:'normal',reason:'Discover '+checkId,
+   token:'temple-'+checkId,sceneCheck:{sceneId:temple,featureId:checkId,goal:'discover'}}:null;
+  await route.fulfill({json:{...shared,narration:'The sun temple responds to your attempt.',sceneAction,checkRequest}});
+ });
+ await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();
+ await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await expect.poll(async()=>(await saved(page))?.journal?.some((e:any)=>e.id?.endsWith('-dm-opening'))).toBe(true);
+ async function say(message:string){
+  await page.getByLabel('Message the Dungeon Master').fill(message);
+  await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
+ }
+ const get=(id:string)=>saved(page).then(c=>c?.explorationScene?.features?.find((f:any)=>f.id===id));
+ await say('I enter the sun temple.');
+ const map=page.getByLabel('DM scene map');await expect(map).toBeVisible();
+ await expect(map.getByRole('gridcell',{name:'Examine mechanism North statue'})).toBeVisible();
+ await say('I walk to square 2, 2');
+ await expect.poll(async()=>(await saved(page))?.explorationScene?.playerPosition).toEqual({x:1,y:1});
+ await say('I investigate the inscription.');
+ await page.getByRole('button',{name:'Roll Investigation'}).click();
+ await expect.poll(async()=> (await get('star-inscription'))?.discovered).toBe(true);
+ await say('I investigate beneath the statue.');
+ await page.getByRole('button',{name:'Roll Investigation'}).click();
+ await expect.poll(async()=> (await get('copper-key'))?.discovered).toBe(true);
+ await map.getByRole('gridcell',{name:'Examine key Copper Sun Key'}).click();
+ await map.getByRole('button',{name:'Take key'}).click();
+ await expect(page.getByLabel('Message the Dungeon Master')).toHaveValue(/I pick up the Copper Sun Key/);
+ await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
+ await expect.poll(async()=> (await get('copper-key'))?.collected).toBe(true);
+ await say('I walk to square 3, 2');
+ await expect.poll(async()=>(await saved(page))?.explorationScene?.playerPosition).toEqual({x:2,y:1});
+ await map.getByRole('gridcell',{name:'Examine mechanism North statue'}).click();
+ await map.getByRole('button',{name:'Rotate',exact:true}).click();
+ await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
+ await expect.poll(async()=> (await get('north-statue'))?.rotation?.current).toBe(1);
+ await say('I rotate the North statue one step clockwise.');
+ await expect.poll(async()=> (await get('north-statue'))?.activated).toBe(true);
+ await expect(map.getByRole('button',{name:'Aligned'})).toBeDisabled();
+ await say('I rotate the South statue one step counterclockwise.');
+ await expect.poll(async()=> (await get('south-statue'))?.activated).toBe(true);
+ await say('I walk to square 4, 2');
+ await expect.poll(async()=>(await saved(page))?.explorationScene?.playerPosition).toEqual({x:3,y:1});
+ await say('I pull the Sun latch.');
+ await expect.poll(async()=> (await get('sun-latch'))?.activated).toBe(true);
+ expect((await saved(page)).explorationScene.battlefield.objects[0].locked).toBe(false);
+ await say('I walk to square 5, 2');
+ await expect.poll(async()=>(await saved(page))?.explorationScene?.playerPosition).toEqual({x:4,y:1});
+ await say('I open the door sun-door.');
+ await expect.poll(async()=>(await saved(page))?.explorationScene?.battlefield?.objects?.[0]?.open).toBe(true);
+ await page.screenshot({path:'test-results/sun-temple-multistage-iphone.png'});
+ await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();
+ await page.getByRole('button',{name:'Continue Adventure'}).click();
+ const persisted=await saved(page);
+ expect(persisted.explorationScene.features.find((f:any)=>f.id==='copper-key').collected).toBe(true);
+ expect(persisted.explorationScene.features.find((f:any)=>f.id==='north-statue').rotation.current).toBe(2);
+ expect(persisted.explorationScene.battlefield.objects[0]).toMatchObject({open:true,locked:false});
+});

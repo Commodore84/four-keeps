@@ -48,7 +48,7 @@ export function adventureMemory(campaign:Campaign) {
       playerPosition:campaign.explorationScene.playerPosition,
       features:(campaign.explorationScene.features??[]).map(f=>({
         id:f.id,kind:f.kind,label:f.label,position:f.position,dc:f.dc,
-        skill:f.skill,discovered:f.discovered,disarmed:f.disarmed,triggered:f.triggered,trapEffect:f.trapEffect,targetObjectId:f.targetObjectId,linkedObjectId:f.linkedObjectId,requiresFeatureId:f.requiresFeatureId,activated:f.activated
+        skill:f.skill,discovered:f.discovered,disarmed:f.disarmed,triggered:f.triggered,trapEffect:f.trapEffect,targetObjectId:f.targetObjectId,linkedObjectId:f.linkedObjectId,requiresFeatureId:f.requiresFeatureId,activated:f.activated,requiresMechanismIds:f.requiresMechanismIds,requiresKeyId:f.requiresKeyId,rotation:f.rotation,collected:f.collected
       })).slice(0,12),
       objects:campaign.explorationScene.battlefield.objects.map(o=>({
         id:o.id,kind:o.kind,open:o.open,locked:o.locked,lockDC:o.lockDC,destroyed:o.destroyed

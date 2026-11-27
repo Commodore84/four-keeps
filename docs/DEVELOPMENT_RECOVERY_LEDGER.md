@@ -26,3 +26,8 @@ This document distinguishes **present functionality**, **unpublished candidates*
 - If a player-visible regression is found in merchant/cart/capacity or combat UI, isolate it with a test against the **current foundation**, then selectively port the required fix; historical patch mismatch alone is not evidence of a missing feature.
 - Defer enemy AI refinements at the player's request, fog of war, procedural scene artwork, mapped NPC movement, NPC trap triggering, complex multi-stage puzzles, broad trap conditions, and complete resistance/vulnerability handling. These are not claimed implemented.
 - Do not remove stale branches/worktrees or restore deprecated controls without an explicit cleanup decision. Keep `CONTINUATION.md` and `RELEASE_CHECKS.md` authoritative, with approximate capacity warnings every five user requests.
+
+## v29 environmental encounter follow-up (2026-11-27)
+- The v28 recovered candidate was fully verified and foundation-fast-forwarded at `de69848f6275b1b97265e8b7fa244c8bd3c927e1` (GitHub Actions run `46041912657`; 1,112 Vitest and 179 iPhone Playwright tests passed; matching Vercel foundation deployment READY).
+- v29 adds reusable saved scene-local keys, bounded notch rotations, acyclic multi-mechanism prerequisites and a final latch unlocking a separate physical door action. Completion is driven by authoritative checks/actions, not narration. The tested Sun Temple scene and iPhone regression are in the new release candidate.
+- Larger-item Strength/Athletics, transportable cross-scene quest items, mapped NPC movement and generated room artwork remain explicitly deferred; do not recover historical worktrees indiscriminately.
