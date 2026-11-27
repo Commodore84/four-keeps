@@ -3243,3 +3243,75 @@ test('iPhone Athletics moves a heavy statue and raises a gate through sealed che
  expect(persisted.explorationScene.battlefield.objects[1]).toMatchObject({open:true,locked:false});
  expect(persisted.explorationScene.features.find((f:any)=>f.id==='gate-effort').completed).toBe(true);
 });
+
+test('iPhone multi-square heavy dais with named helper and prebuilt winch persists both results',async({page})=>{
+ test.setTimeout(160000);
+ await createAndImport(page,'rogue');
+ await page.evaluate(()=>{localStorage.setItem('four-keeps-access-code','browser-test-code');localStorage.setItem('four-keeps-dm-mode','on');});
+ const sceneId='dais-and-winch';
+ await page.route('**/api/dm',async route=>{
+  const body=route.request().postDataJSON(),message=String(body.message??'');
+  const shared={newFacts:[],worldUpdates:{}};
+  if(body.opening){await route.fulfill({json:{...shared,narration:'A sealed gatehouse awaits.'}});return;}
+  if(body.checkToken){const dice=body.dice;await route.fulfill({json:{...shared,narration:'You exert yourself successfully.',
+   checkResult:{skill:'Athletics',dice,kept:dice[0],modifier:20,total:dice[0]+20,success:true}}});return;}
+  const sceneAction=message==='I enter the old quarry.'?
+   {type:'show',id:sceneId,title:'Old Quarry',battlefield:{width:10,height:5,objects:[
+     {id:'quarry-dais',kind:'cargo',x:2,y:1,width:2,height:2},
+     {id:'counterweight-gate',kind:'door',x:8,y:2,width:1,height:1,locked:true,forceDC:15}
+    ]},features:[
+     {id:'quarry-dais-effort',kind:'obstacle',label:'Stone Dais',position:{x:2,y:1},dc:15,
+      skill:'Athletics',targetObjectId:'quarry-dais',obstacleMode:'shift',weightLb:400,
+      helper:{label:'Mara Vell',strength:10,position:{x:1,y:2}}},
+     {id:'counterweight-effort',kind:'obstacle',label:'Quarry Gate',position:{x:8,y:2},dc:15,
+      skill:'Athletics',targetObjectId:'counterweight-gate',obstacleMode:'lift',weightLb:400,
+      rig:{label:'Counterweight Winch',multiplier:2}}
+    ]}:
+   message.startsWith('I walk to square 2, 2')?{type:'move',id:sceneId,x:1,y:1}:
+   message.startsWith('I walk to square 8, 3')?{type:'move',id:sceneId,x:7,y:2}:null;
+  const checkRequest=message.startsWith('I push the Stone Dais one square east')?
+   {skill:'Athletics',mode:'advantage',reason:'Cooperative effort',token:'help-dais-token',
+    sceneCheck:{sceneId,featureId:'quarry-dais-effort',goal:'heavy-shift',x:3,y:1,method:'helper'}}:
+   message.startsWith('I heave and lift the Quarry Gate')?
+   {skill:'Athletics',mode:'normal',reason:'Use the winch',token:'rig-gate-token',
+    sceneCheck:{sceneId,featureId:'counterweight-effort',goal:'heavy-lift',method:'rig'}}:null;
+  await route.fulfill({json:{...shared,narration:'The quarry machinery groans.',sceneAction,checkRequest}});
+ });
+ await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();
+ await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await expect.poll(async()=>(await saved(page))?.journal?.some((e:any)=>e.id?.endsWith('-dm-opening'))).toBe(true);
+ async function say(message:string){await page.getByLabel('Message the Dungeon Master').fill(message);
+  await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();}
+ await say('I enter the old quarry.');
+ const map=page.getByLabel('DM scene map');await expect(map).toBeVisible();
+ await say('I walk to square 2, 2');
+ await expect.poll(async()=>(await saved(page))?.explorationScene?.playerPosition).toEqual({x:1,y:1});
+ await map.getByRole('gridcell',{name:'Inspect cargo at 3, 2'}).click();
+ await expect(page.getByRole('group',{name:'Heavy interaction approach'})).toBeVisible();
+ await page.getByRole('button',{name:'Help: Mara Vell'}).click();
+ await page.getByRole('button',{name:'Push heavy Stone Dais east'}).click();
+ await expect(page.getByLabel('Message the Dungeon Master')).toHaveValue(/with help from Mara Vell/);
+ await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
+ await expect(page.getByRole('button',{name:'Roll Athletics'})).toBeVisible();
+ expect((await saved(page)).explorationScene.battlefield.objects[0]).toMatchObject({x:2,y:1,width:2,height:2});
+ await page.getByRole('button',{name:'Roll Athletics'}).click();
+ await expect.poll(async()=> (await saved(page))?.explorationScene?.battlefield?.objects?.[0]?.x).toBe(3);
+ await say('I walk to square 8, 3');
+ await expect.poll(async()=>(await saved(page))?.explorationScene?.playerPosition).toEqual({x:7,y:2});
+ await map.getByRole('gridcell',{name:'Inspect Locked door at 9, 3'}).click();
+ await page.getByRole('button',{name:'Counterweight Winch'}).click();
+ await page.getByRole('button',{name:'Lift gate'}).click();
+ await expect(page.getByLabel('Message the Dungeon Master')).toHaveValue(/using the Counterweight Winch/);
+ await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
+ await expect(page.getByRole('button',{name:'Roll Athletics'})).toBeVisible();
+ await page.getByRole('button',{name:'Roll Athletics'}).click();
+ await expect.poll(async()=> (await saved(page))?.explorationScene?.battlefield?.objects?.[1]?.open).toBe(true);
+ await expect(page.getByRole('group',{name:'Heavy interaction approach'})).toHaveCount(0);
+ await page.screenshot({path:'test-results/extended-heavy-quarry-iphone.png'});
+ await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();
+ await page.getByRole('button',{name:'Continue Adventure'}).click();
+ const persisted=await saved(page);
+ expect(persisted.explorationScene.battlefield.objects[0]).toMatchObject({x:3,y:1,width:2,height:2});
+ expect(persisted.explorationScene.battlefield.objects[1]).toMatchObject({open:true,locked:false});
+ expect(persisted.explorationScene.features.find((f:any)=>f.id==='counterweight-effort').completed).toBe(true);
+});

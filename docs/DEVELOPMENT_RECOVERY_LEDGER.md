@@ -35,3 +35,7 @@ This document distinguishes **present functionality**, **unpublished candidates*
 ## v30 heavy environment interactions (2026-11-27)
 - On a new isolated branch atop verified v29 foundation `dfc90a449fbf2520b81bc9a9a89e783b4eef6347`, added persistent `statue` geometry and scene-authored Strength/Athletics checks for moving 1x1 heavy objects and lifting locked gates. Sealed result tokens bind a specific object, optional one-cell target, and canonical skill DC. Failed checks and unreachable/blocked/over-capacity actions leave the scene unchanged. Trapped gates use saved trap saves without bypass.
 - Regression source: `explorationHeavyObjects.test.ts`, API scene check tests, iPhone Heavy Gate Hall test. Feature worktree and all historical dirty work remain preserved. Publication is forbidden without full exact-SHA CI and READY.
+
+## v29 continuation — expanded heavy scene affordances (2026-11-27)
+- Extends published heavy-check foundation `7fc3a1403f705ce6a31b651c1510b217107486d8` with rectangular prop collision-safe movement and initial-scene-authored named rig/helper or owned crowbar leverage, all bound to sealed Athletics checks. Existing Strength/carrying rules are reused for Goliath and temporary Strength, and exact helper/rig identity is required in player text; no hidden NPC spawning or free bonuses.
+- Maintain the isolated worktree and historical dirty work. New `explorationExtendedHeavy.test.ts`, DM API tests and iPhone Old Quarry evidence must pass exact-SHA full release checks before foundation publication.

@@ -7,7 +7,8 @@ import {ClassicCombatMapFrame} from './ClassicCombatMapFrame';
 
 /** A noncombat view of the exact saved combat geometry. The conversation is
  * authoritative for exploration intentions; this view spends no actions or movement. */
-export function ExplorationSceneMap({scene,onInspect}:{scene:ExplorationScene;onInspect:(text:string)=>void}){
+export function ExplorationSceneMap({scene,onInspect,canUseCrowbar=false}:{scene:ExplorationScene;onInspect:(text:string)=>void;canUseCrowbar?:boolean}){
+ const [heavyMethod,setHeavyMethod]=useState<'solo'|'crowbar'|'rig'|'helper'>('solo');
  const [zoom,setZoom]=useState(1);
  const [selectedId,setSelectedId]=useState<string|null>(null);
  const [selectedSquare,setSelectedSquare]=useState<{x:number;y:number}|null>(null);
@@ -17,6 +18,18 @@ export function ExplorationSceneMap({scene,onInspect}:{scene:ExplorationScene;on
  const selectedFeature=selectedSquare?scene.features?.find(f=>f.discovered&&!(f.kind==='key'&&f.collected)&&f.position.x===selectedSquare.x&&f.position.y===selectedSquare.y):undefined;
  const selectedDoorTrap=selected?scene.features?.find(f=>f.kind==='trap'&&f.targetObjectId===selected.id&&f.discovered):undefined;
  const selectedObstacle=selected?scene.features?.find(f=>f.kind==='obstacle'&&f.targetObjectId===selected.id&&f.discovered):undefined;
+ const availableMethod=heavyMethod==='crowbar'&&selectedObstacle?.leveragePoint&&canUseCrowbar?'crowbar':
+   heavyMethod==='rig'&&selectedObstacle?.rig?'rig':
+   heavyMethod==='helper'&&selectedObstacle?.helper?'helper':'solo';
+ const methodWords=availableMethod==='crowbar'?' using my crowbar':
+   availableMethod==='rig'?' using the '+selectedObstacle!.rig!.label:
+   availableMethod==='helper'?' with help from '+selectedObstacle!.helper!.label:'';
+ const methodOptions=selectedObstacle?[
+  {value:'solo' as const,label:'Solo'},
+  ...(selectedObstacle.leveragePoint&&canUseCrowbar?[{value:'crowbar' as const,label:'Crowbar'}]:[]),
+  ...(selectedObstacle.rig?[{value:'rig' as const,label:selectedObstacle.rig.label}]:[]),
+  ...(selectedObstacle.helper?[{value:'helper' as const,label:'Help: '+selectedObstacle.helper.label}]:[])
+ ]:[];
  const focus=(next:number)=>{
   const el=frame.current;
   const z=Math.max(.25,Math.min(2.5,Math.round(next*100)/100));
@@ -95,15 +108,23 @@ export function ExplorationSceneMap({scene,onInspect}:{scene:ExplorationScene;on
   {selectedObstacle&&<div role="group" aria-label="Heavy obstacle" className="flex items-center justify-between gap-2 text-xs text-gold">
    <span>{selectedObstacle.label} · Athletics DC {selectedObstacle.dc} · {selectedObstacle.weightLb} lb{selectedObstacle.completed?' · Raised':''}</span>
    {selectedObstacle.obstacleMode==='lift'&&!selectedObstacle.completed&&selected?.locked&&
-     <button type="button" onClick={()=>onInspect('I heave and lift the '+selectedObstacle.label+' using Strength and Athletics.')}
+     <button type="button" onClick={()=>onInspect('I heave and lift the '+selectedObstacle.label+' using Strength and Athletics'+methodWords+'.')}
       className="min-h-11 rounded border border-gold/50 px-2">Lift gate</button>}
   </div>}
+  {selectedObstacle&&!selectedObstacle.completed&&methodOptions.length>1&&<div role="group" aria-label="Heavy interaction approach"
+   className="flex flex-wrap items-center gap-1 text-xs">
+    {methodOptions.map(option=><button key={option.value} type="button"
+      aria-pressed={availableMethod===option.value} onClick={()=>setHeavyMethod(option.value)}
+      className={'min-h-11 rounded border px-2 '+(availableMethod===option.value?'border-gold text-gold':'border-white/20 text-parchment/70')}>
+      {option.label}
+     </button>)}
+   </div>}
   {selectedObstacle?.obstacleMode==='shift'&&selected&&
    <div aria-label="Push heavy object" className="flex items-center justify-between gap-2 text-xs">
     <span>Push {selectedObstacle.label}</span>
     <div className="flex gap-1">
      {(['north','east','south','west'] as const).map(dir=><button key={dir} type="button"
-       onClick={()=>onInspect('I push the '+selectedObstacle.label+' one square '+dir+' using Athletics.')}
+       onClick={()=>onInspect('I push the '+selectedObstacle.label+' one square '+dir+' using Athletics'+methodWords+'.')}
        className="min-h-11 min-w-11 rounded border border-gold/50 px-2 text-gold"
        aria-label={'Push heavy '+selectedObstacle.label+' '+dir}>
        {{north:'N',east:'E',south:'S',west:'W'}[dir]}

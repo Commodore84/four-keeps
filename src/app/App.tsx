@@ -220,7 +220,8 @@ function Adventure({ campaign, fullHistory, onToggleHistory, onAdventureChange, 
       <p className="eyebrow">{entry.kind === 'player' ? (campaign?.characterIdentity?.name??'Nighthawk') : 'Dungeon Master'}</p>
       {entry.kind==='dm'?<DMNarration key={entry.id} id={entry.id} text={entry.text} speed={narrationSpeed} animate={!seen.includes(entry.id)} onComplete={()=>markSeen(entry.id)}/>:<p className="mt-2 whitespace-pre-wrap leading-7 text-parchment/90">{entry.text}</p>}
     </article>)}
-    {campaign?.explorationScene?.visible && campaign.explorationScene.location===campaign.location && !campaign.combat && !campaign.adventureSession?.pendingEncounter && <ExplorationSceneMap scene={campaign.explorationScene} onInspect={onInspectScene}/>}
+    {campaign?.explorationScene?.visible && campaign.explorationScene.location===campaign.location && !campaign.combat && !campaign.adventureSession?.pendingEncounter && <ExplorationSceneMap scene={campaign.explorationScene} onInspect={onInspectScene}
+       canUseCrowbar={(campaign.inventoryLedger?.gear??[]).some(item=>item.quantity>0&&item.name.toLowerCase()==='crowbar')}/>}
     {campaign?.pendingClarification?.answer && <p role="status" className="text-xs text-gold">Your reply is saved. <button type="button" disabled={saving} className="underline" onClick={()=>void onRetryAction()}>Retry DM response</button></p>}
     {campaign?.pendingMerchantPurchase && <section aria-label="Pending merchant order" className="rounded-xl border border-gold/40 bg-panel p-4 space-y-3">
       <h3 className="font-semibold">Pending merchant order</h3>

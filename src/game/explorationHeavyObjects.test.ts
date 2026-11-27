@@ -95,7 +95,7 @@ describe('v30 sealed Strength/Athletics environmental interactions',()=>{
   const invalid=(feature:unknown,object=room.battlefield.objects[0])=>
     ()=>applyDmSceneAction(make(),{...room,battlefield:{...room.battlefield,objects:[object]},features:[feature]},now);
   expect(invalid({...room.features[0],targetObjectId:'missing'})).toThrow('feature');
-  expect(invalid({...room.features[0],weightLb:901})).toThrow('feature');
+  expect(invalid({...room.features[0],weightLb:6001})).toThrow('feature');
   expect(invalid({...room.features[0],skill:'Investigation'})).toThrow('feature');
   expect(invalid({...room.features[0],obstacleMode:'lift'})).toThrow('feature');
   const near=approach(visible(),1,1);

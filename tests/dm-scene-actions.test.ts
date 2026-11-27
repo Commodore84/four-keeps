@@ -161,3 +161,37 @@ it('binds a visible heavy gate lift to Athletics and the authored force DC',asyn
  expect(r.code).toBe(200);
  expect(r.body.checkRequest?.sceneCheck).toEqual({sceneId:'hidden-cellar',featureId:'gate-effort',goal:'heavy-lift'});
 });
+
+it('binds authored rig and helper methods to sealed Strength (Athletics) checks',async()=>{
+ const feature={id:'shift-dais',kind:'obstacle',label:'Stone Dais',position:{x:2,y:1},dc:15,
+  skill:'Athletics',targetObjectId:'dais',obstacleMode:'shift',weightLb:400,discovered:true,
+  leveragePoint:true,rig:{label:'Counterweight Winch',multiplier:2},
+  helper:{label:'Mara Vell',strength:10,position:{x:1,y:2}}};
+ const state={...gameState,scene:{...scene,features:[feature],
+  objects:[{id:'dais',kind:'cargo',x:2,y:1,width:2,height:2}],
+  playerPosition:{x:1,y:1}}};
+ const base={skill:'Athletics',difficulty:'moderate',reason:'Move the dais'};
+ const intent=(method:'rig'|'helper'|'crowbar')=>({sceneId:'hidden-cellar',featureId:'shift-dais',
+  goal:'heavy-shift',x:3,y:1,method});
+ setup({narration:'You brace for the effort.',checkRequest:{...base,sceneCheck:intent('rig')}});
+ const rig=response();await handler(req('I push the Stone Dais one square east using the Counterweight Winch.',state),rig);
+ expect(rig.code).toBe(200);
+ expect(rig.body.checkRequest?.sceneCheck).toEqual(intent('rig'));
+ const noRigName=response();await handler(req('I push the Stone Dais east.',state),noRigName);
+ expect(noRigName.body.checkRequest?.sceneCheck).toBeUndefined();
+ setup({narration:'Mara helps with the stone.',checkRequest:{...base,sceneCheck:intent('helper')}});
+ const helper=response();await handler(req('I push the Stone Dais one square east with help from Mara Vell.',state),helper);
+ expect(helper.body.checkRequest?.sceneCheck).toEqual(intent('helper'));
+ expect(helper.body.checkRequest?.mode).toBe('advantage');
+ const noHelper=response();await handler(req('I push the Stone Dais one square east with help from Mara Vell.',
+  {...state,scene:{...state.scene,features:[{...feature,helper:null}]} }),noHelper);
+ expect(noHelper.body.checkRequest?.sceneCheck).toBeUndefined();
+ setup({narration:'You pry with a bar.',checkRequest:{...base,sceneCheck:intent('crowbar')}});
+ const goliathState={...state,characterIdentity:{name:'Scout',classId:'rogue',speciesId:'goliath'},
+  equipment:{...gameState.equipment,owned:[{name:'Crowbar',quantity:1}]}};
+ const crowbar=response();await handler(req('I push the Stone Dais east using my crowbar.',goliathState),crowbar);
+ expect(crowbar.body.checkRequest?.sceneCheck).toEqual(intent('crowbar'));
+ expect(crowbar.body.checkRequest?.mode).toBe('advantage');
+ const withoutCrowbar=response();await handler(req('I push the Stone Dais east using my crowbar.',state),withoutCrowbar);
+ expect(withoutCrowbar.body.checkRequest?.sceneCheck).toBeUndefined();
+});

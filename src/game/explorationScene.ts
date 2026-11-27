@@ -1,4 +1,5 @@
 import type {Campaign} from './campaign';
+import {carryingCapacity} from './carryingCapacity';
 import {battlefieldBlocked,battlefieldContains,battlefieldOpeningWithinReach,battlefieldDifficult,battlefieldOpaqueSightBlocked,toggleBattlefieldOpening,validateBattlefield,type Battlefield,type BattlefieldPoint} from './battlefield';
 import {buildSoloEncounter,SOLO_ROGUE_ENCOUNTERS,type SoloEncounterId} from './encounterDirector';
 
@@ -25,6 +26,10 @@ export type ExplorationFeature={
  collected?:boolean;
  /** Heavy scene interaction is an authored physical check, not arbitrary narrated displacement. */
  obstacleMode?:'shift'|'lift';weightLb?:number;completed?:boolean;
+ /** Scene-authored affordances, never created during a pending check. */
+ leveragePoint?:boolean;
+ rig?:{label:string;multiplier:2};
+ helper?:{label:string;strength:number;position:BattlefieldPoint};
 };
 /** Trap profiles are part of the saved DM scene; no effect may be invented
  * when a roll resolves. Older saved traps without a profile remain harmless. */
@@ -57,7 +62,7 @@ const trapEffectValid=(value:unknown):value is TrapEffect=>{
   ['piercing','poison','fire','bludgeoning'].includes(String(e.damageType))&&
   ['half','none'].includes(String(e.onSave));
 };
-export type SceneCheckIntent={sceneId:string;featureId:string;goal:'discover'|'disarm'|'unlock'|'heavy-shift'|'heavy-lift';x?:number;y?:number};
+export type SceneCheckIntent={sceneId:string;featureId:string;goal:'discover'|'disarm'|'unlock'|'heavy-shift'|'heavy-lift';x?:number;y?:number;method?:'crowbar'|'rig'|'helper'};
 export type PendingSceneCheck=SceneCheckIntent&{token:string};
 type SceneShow={type:'show';id:string;title:string;templateId?:SoloEncounterId;battlefield?:unknown;features?:unknown[]};
 type SceneMove={type:'move';id:string;x:number;y:number};
@@ -135,12 +140,30 @@ function normalizeFeatures(value:unknown,map:Battlefield):ExplorationFeature[]{
       (f.kind==='trap'?!validDoor(map,String(f.targetObjectId)):!map.objects.some(o=>o.id===f.targetObjectId))||
       !objectAtPosition(map,String(f.targetObjectId),position)))||
     (f.obstacleMode!==undefined&&(f.kind!=='obstacle'||!['shift','lift'].includes(String(f.obstacleMode))))||
-    (f.weightLb!==undefined&&(f.kind!=='obstacle'||!Number.isSafeInteger(f.weightLb)||Number(f.weightLb)<1||Number(f.weightLb)>900))||
+    (f.weightLb!==undefined&&(f.kind!=='obstacle'||!Number.isSafeInteger(f.weightLb)||Number(f.weightLb)<1||Number(f.weightLb)>6000))||
+    (f.leveragePoint!==undefined&&(f.kind!=='obstacle'||typeof f.leveragePoint!=='boolean'))||
+    (f.rig!==undefined&&(f.kind!=='obstacle'||!f.rig||typeof f.rig!=='object'||Array.isArray(f.rig)||
+      Object.keys(f.rig).some(key=>!['label','multiplier'].includes(key))||
+      typeof (f.rig as Record<string,unknown>).label!=='string'||
+      String((f.rig as Record<string,unknown>).label).length>60||
+      String((f.rig as Record<string,unknown>).label).trim().length<2||
+      (f.rig as Record<string,unknown>).multiplier!==2))||
+    (f.helper!==undefined&&(f.kind!=='obstacle'||!f.helper||typeof f.helper!=='object'||Array.isArray(f.helper)||
+      Object.keys(f.helper).some(key=>!['label','strength','position'].includes(key))||
+      typeof (f.helper as Record<string,unknown>).label!=='string'||
+      String((f.helper as Record<string,unknown>).label).trim().length<2||
+      String((f.helper as Record<string,unknown>).label).length>60||
+      !Number.isInteger((f.helper as Record<string,unknown>).strength)||
+      Number((f.helper as Record<string,unknown>).strength)<1||
+      Number((f.helper as Record<string,unknown>).strength)>30||
+      !(f.helper as Record<string,unknown>).position||
+      !battlefieldContains(map,(f.helper as Record<string,unknown>).position as BattlefieldPoint)||
+      battlefieldBlocked(map,(f.helper as Record<string,unknown>).position as BattlefieldPoint)))||
     (f.completed!==undefined&&(f.kind!=='obstacle'||typeof f.completed!=='boolean'||f.completed&&(!f.discovered||f.obstacleMode!=='lift')))||
     (f.kind==='obstacle'&&(!f.targetObjectId||!f.obstacleMode||!f.weightLb||
       !map.objects.some(o=>o.id===f.targetObjectId&&!o.destroyed&&
         (f.obstacleMode==='lift'?['door','window'].includes(o.kind):
-        ['statue','cargo','rock','table'].includes(o.kind)&&o.width===1&&o.height===1)&&
+        ['statue','cargo','rock','table'].includes(o.kind)&&o.width<=3&&o.height<=3)&&
         (f.obstacleMode!=='lift'||o.forceDC===undefined||o.forceDC===f.dc))))||
     (f.linkedObjectId!==undefined&&(f.kind!=='mechanism'||!slug.test(compact(f.linkedObjectId))||
       !validDoor(map,String(f.linkedObjectId))))||
@@ -176,6 +199,11 @@ function normalizeFeatures(value:unknown,map:Battlefield):ExplorationFeature[]{
     ...(f.kind==='mechanism'&&f.rotation!==undefined?{rotation:{...(f.rotation as ExplorationFeature['rotation'])!}}:{}),
     ...(f.kind==='key'&&f.collected===true?{collected:true}:{}),
     ...(f.kind==='obstacle'?{obstacleMode:f.obstacleMode as 'shift'|'lift',weightLb:Number(f.weightLb)}:{}),
+    ...(f.kind==='obstacle'&&f.leveragePoint===true?{leveragePoint:true}:{}),
+    ...(f.kind==='obstacle'&&f.rig?{rig:{label:String((f.rig as {label:string}).label),multiplier:2 as const}}:{}),
+    ...(f.kind==='obstacle'&&f.helper?{helper:{label:String((f.helper as {label:string}).label),
+      strength:Number((f.helper as {strength:number}).strength),
+      position:{...(f.helper as {position:BattlefieldPoint}).position}}}:{}),
     ...(f.kind==='obstacle'&&f.completed===true?{completed:true}:{})};
  });
  for(const f of normalized){
@@ -208,27 +236,44 @@ function normalizeFeatures(value:unknown,map:Battlefield):ExplorationFeature[]{
  * Heavy shifts move one five-foot cell and cannot overlay other saved features. */
 function validHeavyShift(scene:ExplorationScene,feature:ExplorationFeature,x:number,y:number):boolean{
  const o=scene.battlefield.objects.find(obj=>obj.id===feature.targetObjectId);
- if(!o||o.destroyed||o.width!==1||o.height!==1||
+ if(!o||o.destroyed||o.width>3||o.height>3||
     !Number.isInteger(x)||!Number.isInteger(y)||Math.abs(o.x-x)+Math.abs(o.y-y)!==1||
-    distance(scene.playerPosition,{x:o.x,y:o.y})>1)return false;
- const rest={...scene.battlefield,objects:scene.battlefield.objects.filter(obj=>obj.id!==o.id)};
- const target={x,y};
- return battlefieldContains(rest,target)&&!battlefieldBlocked(rest,target)&&
-   !(x===scene.playerPosition.x&&y===scene.playerPosition.y)&&
-   !scene.features?.some(f=>f.id!==feature.id&&f.position.x===x&&f.position.y===y) &&
-   !rest.objects.some(obj=>x>=obj.x&&x<obj.x+obj.width&&y>=obj.y&&y<obj.y+obj.height);
+    !battlefieldOpeningWithinReach(o,scene.playerPosition))return false;
+ const rest=scene.battlefield.objects.filter(obj=>obj.id!==o.id);
+ // Every destination footprint cell must be clear, not just its north-west corner.
+ for(let dx=0;dx<o.width;dx++)for(let dy=0;dy<o.height;dy++){
+  const cell={x:x+dx,y:y+dy};
+  if(!battlefieldContains(scene.battlefield,cell)||
+     cell.x===scene.playerPosition.x&&cell.y===scene.playerPosition.y||
+     feature.helper?.position.x===cell.x&&feature.helper?.position.y===cell.y||
+     rest.some(obj=>cell.x>=obj.x&&cell.x<obj.x+obj.width&&cell.y>=obj.y&&cell.y<obj.y+obj.height)||
+     scene.features?.some(f=>f.id!==feature.id&&f.position.x===cell.x&&f.position.y===cell.y))
+    return false;
+ }
+ // Never detach authored fixtures from another embedded feature.
+ return !scene.features?.some(f=>f.id!==feature.id&&f.position.x>=o.x&&f.position.x<o.x+o.width&&
+   f.position.y>=o.y&&f.position.y<o.y+o.height);
 }
 const heavyDirection=(from:BattlefieldPoint,to:BattlefieldPoint):'north'|'south'|'east'|'west'|undefined=>
  to.x===from.x&&to.y===from.y-1?'north':to.x===from.x&&to.y===from.y+1?'south':
  to.y===from.y&&to.x===from.x+1?'east':to.y===from.y&&to.x===from.x-1?'west':undefined;
+function ownsCrowbar(campaign:Campaign):boolean{
+ return (campaign.inventoryLedger?.gear??[]).some(item=>item.quantity>0&&item.name.toLowerCase()==='crowbar');
+}
 function heavyEligible(campaign:Campaign,scene:ExplorationScene,feature:ExplorationFeature,
- goal:'heavy-shift'|'heavy-lift',target?:BattlefieldPoint):boolean{
+ goal:'heavy-shift'|'heavy-lift',target?:BattlefieldPoint,method?:SceneCheckIntent['method']):boolean{
  if(feature.kind!=='obstacle'||!feature.discovered||feature.completed||
     feature.obstacleMode!==(goal==='heavy-shift'?'shift':'lift')||!campaign.character||
-    (campaign.character.currentHitPoints??1)<=0||campaign.pendingTrapSave||
-    (feature.weightLb??Infinity)>campaign.character.scores.str*30)return false;
+    (campaign.character.currentHitPoints??1)<=0||campaign.pendingTrapSave)return false;
  const o=scene.battlefield.objects.find(obj=>obj.id===feature.targetObjectId);
  if(!o||o.destroyed||!battlefieldOpeningWithinReach(o,scene.playerPosition))return false;
+ if(method==='crowbar'&&(!feature.leveragePoint||!ownsCrowbar(campaign)))return false;
+ if(method==='rig'&&!feature.rig)return false;
+ if(method==='helper'&&(!feature.helper||
+   !battlefieldOpeningWithinReach(o,feature.helper.position)))return false;
+ const base=(carryingCapacity(campaign)??0)*2;
+ const max=(method==='rig'?base*2:base)+(method==='helper'?(feature.helper?.strength??0)*30:0);
+ if((feature.weightLb??Infinity)>max)return false;
  if(goal==='heavy-lift')return ['door','window'].includes(o.kind)&&!!o.locked&&target===undefined;
  return !!target&&validHeavyShift(scene,feature,target.x,target.y);
 }
@@ -240,8 +285,13 @@ export function sceneCheckRequest(campaign:Campaign,request:unknown,check:{skill
  if(intent.goal==='heavy-shift'||intent.goal==='heavy-lift'){
   const feature=scene.features?.find(f=>f.id===intent.featureId&&f.kind==='obstacle');
   const target=intent.goal==='heavy-shift'?{x:intent.x as number,y:intent.y as number}:undefined;
+  const method=intent.method===undefined?undefined:intent.method as SceneCheckIntent['method'];
+  if(method!==undefined&&!['crowbar','rig','helper'].includes(method))return undefined;
   if(!feature||check.skill!=='Athletics'||check.tool||
-    !heavyEligible(campaign,scene,feature,intent.goal,target)||
+    !heavyEligible(campaign,scene,feature,intent.goal,target,method)||
+    (method==='crowbar'&&!/\bcrowbar\b/i.test(playerMessage))||
+    (method==='rig'&&!playerMessage.toLowerCase().includes(feature.rig?.label.toLowerCase()??'__missing_rig__'))||
+    (method==='helper'&&!playerMessage.toLowerCase().includes(feature.helper?.label.toLowerCase()??'__missing_helper__'))||
     !playerMessage.toLowerCase().includes(feature.label.toLowerCase())||!heavyIntent.test(playerMessage)||
     (intent.goal==='heavy-lift'&&(intent.x!==undefined||intent.y!==undefined))||
     (target&&(!shiftIntent.test(playerMessage)||
@@ -249,7 +299,7 @@ export function sceneCheckRequest(campaign:Campaign,request:unknown,check:{skill
        scene.battlefield.objects.find(o=>o.id===feature.targetObjectId)!,target)??'__missing_direction__'))))
    return undefined;
   return {sceneId:scene.id,featureId:feature.id,goal:intent.goal,token:check.token,
-    ...(target?{x:target.x,y:target.y}:{})};
+    ...(target?{x:target.x,y:target.y}:{}),...(method?{method}:{})};
  }
  if(intent.x!==undefined||intent.y!==undefined)return undefined;
  if(intent.goal==='unlock'){
@@ -297,12 +347,13 @@ export function resolveSceneCheck(campaign:Campaign,token:string,success:boolean
  if(pending.goal==='heavy-shift'||pending.goal==='heavy-lift'){
   const f=scene.features?.find(feature=>feature.id===pending.featureId&&feature.kind==='obstacle');
   const target=pending.goal==='heavy-shift'?{x:pending.x!,y:pending.y!}:undefined;
-  if(!f||!heavyEligible(campaign,scene,f,pending.goal,target))return rest;
+  if(!f||!heavyEligible(campaign,scene,f,pending.goal,target,pending.method))return rest;
   const o=scene.battlefield.objects.find(obj=>obj.id===f.targetObjectId)!;
   if(pending.goal==='heavy-shift'){
    const battlefield={...scene.battlefield,objects:scene.battlefield.objects.map(obj=>
      obj.id===o.id?{...obj,x:target!.x,y:target!.y}:obj)};
-   const features=scene.features!.map(feature=>feature.id===f.id?{...feature,position:{x:target!.x,y:target!.y}}:feature);
+   const features=scene.features!.map(feature=>feature.id===f.id?{...feature,
+     position:{x:feature.position.x+target!.x-o.x,y:feature.position.y+target!.y-o.y}}:feature);
    return {...rest,explorationScene:{...scene,battlefield,features,updatedAt:campaign.updatedAt},
      journal:[...campaign.journal,{id:'heavy-shift-'+crypto.randomUUID(),kind:'system',
        text:'Athletics success: moved '+f.label+' one square; position saved.',createdAt:campaign.updatedAt}]};
