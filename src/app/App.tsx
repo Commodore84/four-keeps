@@ -836,10 +836,15 @@ export function App() {
         .map(entry => ({ role: entry.kind === 'player' ? 'user' : 'assistant', content: entry.text }));
       const response = await fetch('/api/dm', { method:'POST', headers:{ 'Content-Type':'application/json','x-four-keeps-access':accessCode },
         body:JSON.stringify({ checkToken:pending.token, dice, character:locked.character ?? prototypeNighthawk, gameState:{ questPayouts:locked.questPayouts??[],magicWishlist:magicWishlistNames(locked.id),scene:adventureMemory(locked).scene,...campaignPlayerContext(locked), familiar:locked.familiar ?? null, elapsedMinutes:locked.elapsedMinutes ?? 0, concentration:locked.concentration??null, spellEffects:(locked.spellEffects??[]).slice(-12), recentEvents:locked.journal.filter(e=>e.kind==='system').slice(-8).map(e=>e.text) }, history, worldFacts:locked.worldFacts ?? [], world:locked.world ?? emptyWorld() }) });
-      const result: { narration?:string; newFacts?:string[]; worldUpdates?:unknown; combatStart?:{enemyName:string;templateId?:string;battlefield?:unknown}|null;checkResult?:{skill:string;tool?:string;dice:number[];kept:number;modifier:number;total:number;success:boolean}; error?:string; sceneAction?:unknown } = await response.json();
+      const result: { narration?:string; newFacts?:string[]; worldUpdates?:unknown; combatStart?:{enemyName:string;templateId?:string;battlefield?:unknown}|null;checkResult?:{skill:string;tool?:string;npcId?:string;dice:number[];kept:number;modifier:number;total:number;success:boolean}; error?:string; sceneAction?:unknown } = await response.json();
       if (!response.ok || !result.narration || !result.checkResult) throw new Error(result.error || 'Check resolution failed');
       const r = result.checkResult;
-      const rollText = (locked.characterIdentity?.name??'Nighthawk')+' · '+r.skill+(r.tool?' with '+r.tool:'')+': '+(r.dice.length === 1 ? String(r.dice[0]) : r.dice.join(' / ')+' ('+pending.mode+': '+r.kept+')')+' '+(r.modifier >= 0 ? '+' : '−')+Math.abs(r.modifier)+' = '+r.total+'.';
+      if((locked.pendingSceneCheck?.npcId??null)!==(r.npcId??null))
+        throw new Error('The check result was issued for a different character.');
+      const actor=locked.pendingSceneCheck?.npcId
+        ? locked.world?.npcs.find(n=>n.id===locked.pendingSceneCheck?.npcId)?.name??'NPC'
+        : locked.characterIdentity?.name??'Nighthawk';
+      const rollText = actor+' · '+r.skill+(r.tool?' with '+r.tool:'')+': '+(r.dice.length === 1 ? String(r.dice[0]) : r.dice.join(' / ')+' ('+pending.mode+': '+r.kept+')')+' '+(r.modifier >= 0 ? '+' : '−')+Math.abs(r.modifier)+' = '+r.total+'.';
       const narrated = addExchange(locked, rollText, result.narration, new Date().toISOString(), result.newFacts ?? [], result.worldUpdates);
       const resolvedScene=resolveSceneCheck(narrated,pending.token,r.success);
       const verified=locked.pendingMerchantNegotiation?.checkToken===pending.token
@@ -2320,7 +2325,9 @@ export function App() {
           <p className="eyebrow">Dungeon Master requests a check</p>
           <p className="font-serif text-xl">{campaign.pendingCheck.skill}{campaign.pendingCheck.tool?' · '+campaign.pendingCheck.tool:''} · {campaign.pendingCheck.mode}</p>
           <p className="text-sm text-parchment/70">{campaign.pendingCheck.reason}</p>
-          <button type="button" disabled={saving || !dmMode} onClick={() => void resolvePendingCheck()} className="w-full rounded-lg bg-gold px-4 py-3 font-semibold text-ink disabled:opacity-40">{campaign.pendingCheck.dice ? (saving ? 'DM is resolving…' : 'Retry DM response') : 'Roll '+campaign.pendingCheck.skill}</button>
+          <button type="button" disabled={saving || !dmMode} onClick={() => void resolvePendingCheck()} className="w-full rounded-lg bg-gold px-4 py-3 font-semibold text-ink disabled:opacity-40">{campaign.pendingCheck.dice ? (saving ? 'DM is resolving…' : 'Retry DM response') : 'Roll '+(campaign.pendingSceneCheck?.npcId?
+             (campaign.world?.npcs.find(n=>n.id===campaign.pendingSceneCheck?.npcId)?.name??'NPC')+' · ':
+             '')+campaign.pendingCheck.skill}</button>
            {campaign.pendingCheck.dice && (() => { const dice = campaign.pendingCheck.dice; const used = dice.length === 1 ? dice[0] : campaign.pendingCheck.mode === 'advantage' ? Math.max(...dice) : Math.min(...dice); const modifier = skillModifier(campaign.character ?? prototypeNighthawk, campaign.pendingCheck.skill as Parameters<typeof skillModifier>[1]); return <div role="status" aria-live="polite" className="rounded-lg border border-gold/30 bg-ink/60 p-3"><p className="text-xs uppercase tracking-widest text-gold">Nighthawk · {campaign.pendingCheck.skill} check</p><p className="mt-2 text-xl font-semibold">{dice.length === 1 ? String(dice[0]) : dice.join(' / ')+' ('+campaign.pendingCheck.mode+': '+used+')'} <span className="text-parchment/70">{modifier >= 0 ? '+' : '−'}{Math.abs(modifier)} =</span> {used + modifier}</p><p className="mt-1 text-xs text-parchment/65">{saving ? 'Waiting for the Dungeon Master. Your roll is saved.' : 'Roll saved. Retry the DM response without rerolling.'}</p></div>; })()}
           <p className="text-xs text-parchment/60">The target number is hidden. Your roll is saved before adjudication.</p>
         </div>}

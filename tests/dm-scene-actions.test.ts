@@ -231,3 +231,48 @@ it('binds dynamic heavy assistance to the same mapped NPC and world name',async(
   {...state,scene:{...state.scene,npcs:[]}}),absent);
  expect(absent.body.checkRequest?.sceneCheck).toBeUndefined();
 });
+
+it('issues an independent sealed NPC Investigation check with the persistent world modifier, never the player modifier',async()=>{
+ const skillWorld={npcs:[{id:'mara-vell',name:'Mara Vell',role:'Guide',location:'Dasahi',
+  relationship:'Cooperative',notes:[],skillBonuses:{Investigation:6,Perception:3}}]};
+ const state={...gameState,scene:{...scene,playerPosition:{x:0,y:0},
+  npcs:[{npcId:'mara-vell',position:{x:2,y:2},strength:12}],
+  features:[{id:'hidden-ledger',kind:'clue',label:'Hidden Ledger',position:{x:3,y:2},
+   dc:15,skill:'Investigation',discovered:false}]}};
+ const make=(message:string,override=state)=>({...req(message,override),body:{...req(message,override).body,world:skillWorld}});
+ setup({narration:'Mara agrees to examine the shelves.',checkRequest:{skill:'Investigation',
+  difficulty:'moderate',reason:'Mara searches the quarry',sceneCheck:{
+   sceneId:'hidden-cellar',featureId:'hidden-ledger',goal:'discover',npcId:'mara-vell'}}});
+ const initial=response();
+ await handler(make('I ask Mara Vell to investigate this area for clues.'),initial);
+ expect(initial.code).toBe(200);
+ expect(initial.body.checkRequest.sceneCheck).toMatchObject({npcId:'mara-vell',goal:'discover',featureId:'hidden-ledger'});
+ expect(initial.body.checkRequest.mode).toBe('normal');
+ const token=initial.body.checkRequest.token;
+ setup({narration:'Mara studies the evidence.',newFacts:[],worldUpdates:{}});
+ const passed=response();await handler({...make(''),body:{...make('').body,checkToken:token,dice:[12]}},passed);
+ expect(passed.code).toBe(200);
+ expect(passed.body.checkResult).toMatchObject({
+  skill:'Investigation',npcId:'mara-vell',kept:12,modifier:6,total:18,success:true});
+ const failed=response();await handler({...make(''),body:{...make('').body,checkToken:token,dice:[4]}},failed);
+ expect(failed.body.checkResult).toMatchObject({npcId:'mara-vell',modifier:6,total:10,success:false});
+ const wrongText=response();await handler(make('I investigate the area alone.'),wrongText);
+ expect(wrongText.body.checkRequest).toBeNull();
+ const noAbility=response();await handler(make('I ask Mara Vell to investigate the area.',
+  {...state,scene:{...state.scene,npcs:[]}}),noAbility);
+ expect(noAbility.body.checkRequest).toBeNull();
+});
+
+it('will not issue discovery checks by assigning late NPC bonuses or an unlisted skill',async()=>{
+ const state={...gameState,scene:{...scene,npcs:[{npcId:'mara-vell',position:{x:2,y:2},strength:12}],
+  features:[{id:'hidden-ledger',kind:'clue',label:'Hidden Ledger',position:{x:3,y:2},
+   dc:15,skill:'Investigation',discovered:false}]}};
+ setup({narration:'Mara watches but has no established search skill.',checkRequest:{skill:'Investigation',
+  difficulty:'moderate',reason:'Check for hidden things',sceneCheck:{sceneId:'hidden-cellar',featureId:'hidden-ledger',goal:'discover',npcId:'mara-vell'}},
+  worldUpdates:{npcs:[{name:'Mara Vell',skillBonuses:{Investigation:12}}]}});
+ const request={...req('I ask Mara Vell to investigate the area.',state),body:{
+  ...req('I ask Mara Vell to investigate the area.',state).body,
+  world:{npcs:[{id:'mara-vell',name:'Mara Vell',role:'Guide',notes:[]}]} }};
+ const noSkills=response();await handler(request,noSkills);
+ expect(noSkills.body.checkRequest).toBeNull();
+});

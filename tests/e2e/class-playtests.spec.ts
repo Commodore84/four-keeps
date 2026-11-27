@@ -3399,3 +3399,69 @@ test('iPhone persistent NPC can speak, rotate a mechanism, follow and help move 
  expect(persisted.explorationScene.npcs[0].following).toBe(true);
  expect(persisted.world.npcs.find((n:any)=>n.id==='mara-vell').relationship).toBe('Trusting and helpful');
 });
+
+test('iPhone NPC independently rolls sealed Investigation, discovers clue and persists without borrowing player modifier',async({page})=>{
+ test.setTimeout(170000);
+ await createAndImport(page,'rogue');
+ await page.evaluate(()=>{localStorage.setItem('four-keeps-access-code','browser-test-code');localStorage.setItem('four-keeps-dm-mode','on');});
+ const sceneId='quarry-archives';
+ await page.route('**/api/dm',async route=>{
+  const body=route.request().postDataJSON(),message=String(body.message??'');
+  const shared={newFacts:[],worldUpdates:{}};
+  if(body.opening){await route.fulfill({json:{...shared,narration:'A sealed archive lies beyond the quarry.'}});return;}
+  if(body.checkToken){
+   const dice=body.dice;
+   await route.fulfill({json:{...shared,narration:'Mara spots a concealed ledger under the shelves.',
+    checkResult:{skill:'Investigation',npcId:'mara-vell',mode:'normal',
+     dice,kept:dice[0],modifier:5,total:dice[0]+5,success:true}}});
+   return;
+  }
+  if(message==='I enter the quarry archives with Mara Vell.'){
+   await route.fulfill({json:{...shared,narration:'Mara Vell joins you inside the quiet archive.',
+    worldUpdates:{npcs:[{name:'Mara Vell',role:'Guide',location:'Dasahi',
+     relationship:'Cautious but prepared to investigate',
+     skillBonuses:{Investigation:5,Perception:3},notes:['Willing to examine old archives']}]},
+    sceneAction:{type:'show',id:sceneId,title:'Quarry Archives',battlefield:{
+      width:8,height:5,objects:[]},
+     npcs:[{npcId:'mara-vell',position:{x:2,y:1},strength:12}],
+     features:[{id:'hidden-ledger',kind:'clue',label:'Hidden Ledger',
+       position:{x:3,y:2},dc:15,skill:'Investigation'}]}}});return;
+  }
+  if(message==='I ask Mara Vell to investigate this area for clues and hazards.'){
+   await route.fulfill({json:{...shared,narration:'Mara agrees to search for hidden evidence.',
+    checkRequest:{skill:'Investigation',mode:'normal',reason:'Mara searches the archives',
+     token:'sealed-mara-investigation',
+     sceneCheck:{sceneId,featureId:'hidden-ledger',goal:'discover',npcId:'mara-vell'}}}});return;
+  }
+  await route.fulfill({json:{...shared,narration:'Mara considers your request and declines to investigate further.',sceneAction:null}});
+ });
+ await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();
+ await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await expect.poll(async()=>(await saved(page))?.journal?.some((e:any)=>e.id?.endsWith('-dm-opening'))).toBe(true);
+ async function say(message:string){await page.getByLabel('Message the Dungeon Master').fill(message);
+  await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();}
+ await say('I enter the quarry archives with Mara Vell.');
+ const map=page.getByLabel('DM scene map');await expect(map).toBeVisible();
+ expect((await saved(page)).world.npcs.find((n:any)=>n.id==='mara-vell').skillBonuses).toEqual({
+  Investigation:5,Perception:3});
+ expect((await saved(page)).explorationScene.features[0].discovered).toBe(false);
+ await map.getByRole('gridcell',{name:'Talk to Mara Vell at 3, 2'}).click();
+ await page.getByRole('button',{name:'Ask to search'}).click();
+ await expect(page.getByLabel('Message the Dungeon Master')).toHaveValue(/ask Mara Vell to investigate/);
+ await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
+ await expect(page.getByRole('button',{name:'Roll Mara Vell · Investigation'})).toBeVisible();
+ expect((await saved(page)).explorationScene.features[0].discovered).toBe(false);
+ await page.getByRole('button',{name:'Roll Mara Vell · Investigation'}).click();
+ await expect.poll(async()=>(await saved(page))?.explorationScene?.features?.[0]?.discovered).toBe(true);
+ const result=await saved(page);
+ expect(result.journal.some((entry:any)=>entry.text.includes('Mara Vell · Investigation')&&entry.text.includes('+5'))).toBe(true);
+ await page.screenshot({path:'test-results/npc-independent-investigation-iphone.png'});
+ await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();
+ await page.getByRole('button',{name:'Continue Adventure'}).click();
+ const restored=await saved(page);
+ expect(restored.explorationScene.features[0].discovered).toBe(true);
+ expect(restored.world.npcs.find((n:any)=>n.id==='mara-vell').skillBonuses).toEqual({
+  Investigation:5,Perception:3});
+ await say('I ask Mara Vell to investigate this area again.');
+ expect((await saved(page)).pendingSceneCheck).toBeUndefined();
+});

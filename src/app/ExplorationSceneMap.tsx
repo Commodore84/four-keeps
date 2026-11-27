@@ -118,6 +118,8 @@ export function ExplorationSceneMap({scene,onInspect,canUseCrowbar=false,npcReco
   {selectedNpc&&<div role="group" aria-label="Selected scene NPC"
    className="flex flex-wrap items-center gap-2 rounded-lg border border-sky-500/30 p-2 text-xs">
    <span className="font-semibold text-sky-100">{selectedNpcName}{selectedNpc.following?' · Following':''}</span>
+   <button type="button" onClick={()=>onInspect('I ask '+selectedNpcName+' to investigate this area for clues and hazards.')}
+    className="min-h-11 rounded border border-white/20 px-2">Ask to search</button>
    <button type="button" onClick={()=>onInspect('I speak with '+selectedNpcName+' about what we have found.')}
     className="min-h-11 rounded border border-white/20 px-2">Speak</button>
    <button type="button" onClick={()=>onInspect('I ask '+selectedNpcName+(selectedNpc.following?' to wait here.':' to follow me.'))}

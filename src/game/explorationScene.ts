@@ -69,7 +69,7 @@ const trapEffectValid=(value:unknown):value is TrapEffect=>{
   ['piercing','poison','fire','bludgeoning'].includes(String(e.damageType))&&
   ['half','none'].includes(String(e.onSave));
 };
-export type SceneCheckIntent={sceneId:string;featureId:string;goal:'discover'|'disarm'|'unlock'|'heavy-shift'|'heavy-lift';x?:number;y?:number;method?:'crowbar'|'rig'|'helper'};
+export type SceneCheckIntent={sceneId:string;featureId:string;goal:'discover'|'disarm'|'unlock'|'heavy-shift'|'heavy-lift';x?:number;y?:number;method?:'crowbar'|'rig'|'helper';npcId?:string};
 export type PendingSceneCheck=SceneCheckIntent&{token:string};
 type SceneShow={type:'show';id:string;title:string;templateId?:SoloEncounterId;battlefield?:unknown;features?:unknown[];npcs?:unknown[]};
 type SceneMove={type:'move';id:string;x:number;y:number};
@@ -349,11 +349,36 @@ function heavyEligible(campaign:Campaign,scene:ExplorationScene,feature:Explorat
  if(goal==='heavy-lift')return ['door','window'].includes(o.kind)&&!!o.locked&&target===undefined;
  return !!target&&validHeavyShift(scene,feature,target.x,target.y);
 }
+function npcDiscoveryEligible(campaign:Campaign,scene:ExplorationScene,npcId:string,feature:ExplorationFeature,skill:string):boolean{
+ const npc=scene.npcs?.find(n=>n.npcId===npcId);
+ const record=campaign.world?.npcs.find(n=>n.id===npcId);
+ if(!npc||!record||!['Investigation','Perception'].includes(skill)||
+    !Number.isInteger(record.skillBonuses?.[skill as 'Investigation'|'Perception'])||
+    record.skillBonuses?.[skill as 'Investigation'|'Perception']===undefined||
+    feature.skill!==skill||feature.discovered||campaign.pendingTrapSave)return false;
+ const mounted=feature.kind==='trap'&&feature.targetObjectId?
+    validDoor(scene.battlefield,feature.targetObjectId):undefined;
+ return mounted?battlefieldOpeningWithinReach(mounted,npc.position):
+  distance(npc.position,feature.position)<=6&&
+  !battlefieldOpaqueSightBlocked(scene.battlefield,npc.position,feature.position);
+}
 export function sceneCheckRequest(campaign:Campaign,request:unknown,check:{skill:string;tool?:string;token:string},playerMessage=''):PendingSceneCheck|undefined{
  const scene=campaign.explorationScene;
  if(!request||typeof request!=='object'||!scene||!scene.visible||scene.location!==campaign.location)return undefined;
  const intent=request as Record<string,unknown>;
  if(intent.sceneId!==scene.id||typeof intent.featureId!=='string'||!['discover','disarm','unlock','heavy-shift','heavy-lift'].includes(String(intent.goal)))return undefined;
+ if(intent.npcId!==undefined){
+  if(typeof intent.npcId!=='string'||!slug.test(intent.npcId)||intent.goal!=='discover'||
+    intent.x!==undefined||intent.y!==undefined||intent.method!==undefined||check.tool||
+    !/\b(?:ask|tell|request|invite|instruct|persuade|convince)\b/i.test(playerMessage)||
+    !/\b(?:search|investigate|examine|inspect|look|study|check)\b/i.test(playerMessage))
+   return undefined;
+  const record=campaign.world?.npcs.find(n=>n.id===intent.npcId);
+  const feature=scene.features?.find(f=>f.id===intent.featureId);
+  if(!record||!feature||!playerMessage.toLowerCase().includes(record.name.toLowerCase())||
+    !npcDiscoveryEligible(campaign,scene,intent.npcId,feature,check.skill))return undefined;
+  return {sceneId:scene.id,featureId:feature.id,goal:'discover',npcId:intent.npcId,token:check.token};
+ }
  if(intent.goal==='heavy-shift'||intent.goal==='heavy-lift'){
   const feature=scene.features?.find(f=>f.id===intent.featureId&&f.kind==='obstacle');
   const target=intent.goal==='heavy-shift'?{x:intent.x as number,y:intent.y as number}:undefined;
@@ -415,6 +440,15 @@ export function resolveSceneCheck(campaign:Campaign,token:string,success:boolean
    pendingTrapSave:{sceneId:scene.id,featureId:feature.id,stage:'hazard'},
    journal:[...campaign.journal,{id:'trap-disarm-'+scene.id+'-'+feature.id,kind:'system',
     text:'Disarming '+feature.label+' failed. The trap springs; resolve the saved '+feature.trapEffect.saveAbility.toUpperCase()+' saving throw.',createdAt:campaign.updatedAt}]};
+ }
+ if(pending.npcId){
+  const feature=scene.features?.find(f=>f.id===pending.featureId);
+  const skill=feature?.skill;
+  if(!feature||!skill||!npcDiscoveryEligible(campaign,scene,pending.npcId,feature,skill))return rest;
+  const features=scene.features!.map(f=>f.id===feature.id?{...f,discovered:true}:f);
+  return {...rest,explorationScene:{...scene,features,updatedAt:campaign.updatedAt},
+   journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',
+    text:(campaign.world?.npcs.find(n=>n.id===pending.npcId)?.name??'NPC')+' discovers '+feature.label+' after a verified skill check.',createdAt:campaign.updatedAt}]};
  }
  if(pending.goal==='heavy-shift'||pending.goal==='heavy-lift'){
   const f=scene.features?.find(feature=>feature.id===pending.featureId&&feature.kind==='obstacle');

@@ -19,3 +19,17 @@ describe('structured world memory', () => {
     expect(state.npcs).toHaveLength(0);
   });
 });
+describe('persistent NPC independent skill bonuses',()=>{
+ it('bounds discovery modifiers, keeps the first established values and preserves older NPC saves',()=>{
+  let world=mergeWorld(emptyWorld(),{npcs:[{name:'Mara Vell',role:'Guide',location:'Quarry',
+   skillBonuses:{Perception:3,Investigation:5,Athletics:100}}]});
+  expect(world.npcs[0].skillBonuses).toEqual({Perception:3,Investigation:5});
+  expect(normalizeWorld(JSON.parse(JSON.stringify(world)))).toEqual(world);
+  world=mergeWorld(world,{npcs:[{name:'Mara Vell',relationship:'Friendly',
+   skillBonuses:{Perception:12,Investigation:12}}]});
+  expect(world.npcs[0].relationship).toBe('Friendly');
+  expect(world.npcs[0].skillBonuses).toEqual({Perception:3,Investigation:5});
+  expect(normalizeWorld({npcs:[{name:'Old Scout',role:'Guide'}]}).npcs[0].skillBonuses).toBeUndefined();
+  expect(normalizeWorld({npcs:[{name:'Untrained',skillBonuses:{Perception:30,Investigation:-8}}]}).npcs[0].skillBonuses).toBeUndefined();
+ });
+});

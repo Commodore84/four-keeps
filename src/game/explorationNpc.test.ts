@@ -121,3 +121,45 @@ describe('v29 persistent NPC scene actors and agency',()=>{
   expect(invalid({npcs:[{npcId:'orin-thale',position:{x:6,y:4},strength:10}]})).toThrow('mapped NPC');
  });
 });
+
+describe('independently verified NPC discovery',()=>{
+ const scene={type:'show',id:'quarry-search',title:'Quarry Search',
+  battlefield:{width:15,height:5,objects:[]},
+  npcs:[{npcId:'mara-vell',position:{x:2,y:2},strength:12}],
+  features:[{id:'hidden-ledger',kind:'clue',label:'Hidden Ledger',position:{x:4,y:2},dc:15,skill:'Investigation'}]};
+ const capable=()=>{
+  const c=first();return {...c,world:mergeWorld(c.world,
+   {npcs:[{name:'Mara Vell',skillBonuses:{Investigation:4,Perception:2}}]})};
+ };
+ const issue=(c:Campaign,msg='I ask Mara Vell to investigate this area for clues.')=>
+  sceneCheckRequest(c,{sceneId:'quarry-search',featureId:'hidden-ledger',goal:'discover',npcId:'mara-vell'},
+   {skill:'Investigation',token:'sealed-npc-roll'},msg);
+ it('uses a world NPC skill and saved position, not the player position or player skill',()=>{
+  let c=applyDmSceneAction(capable(),scene,now);
+  expect(isCampaign(c)).toBe(true);
+  const pending=issue(c);
+  expect(pending).toMatchObject({npcId:'mara-vell',goal:'discover',featureId:'hidden-ledger'});
+  expect(issue(c,'I investigate the area alone.')).toBeUndefined();
+  expect(sceneCheckRequest(c,{sceneId:'quarry-search',featureId:'hidden-ledger',goal:'discover',npcId:'mara-vell'},
+   {skill:'Perception',token:'tamper'},'I ask Mara Vell to search.')).toBeUndefined();
+  const failed=resolveSceneCheck({...c,pendingSceneCheck:pending!},'sealed-npc-roll',false);
+  expect(failed.explorationScene!.features!.find(f=>f.id==='hidden-ledger')!.discovered).toBe(false);
+  c=resolveSceneCheck({...c,pendingSceneCheck:pending!},'sealed-npc-roll',true);
+  expect(c.explorationScene!.features!.find(f=>f.id==='hidden-ledger')!.discovered).toBe(true);
+  expect(c.journal.at(-1)?.text).toContain('Mara Vell discovers Hidden Ledger');
+  expect(isCampaign(c)).toBe(true);
+ });
+ it('rejects absent modifiers, relocated NPCs, new obstructions and repeated discovery',()=>{
+  const original=applyDmSceneAction(first(),scene,now);
+  expect(issue(original)).toBeUndefined();
+  const c=applyDmSceneAction(capable(),scene,now);
+  const pending=issue(c)!;
+  const updated={...c,explorationScene:{...c.explorationScene!,
+   npcs:c.explorationScene!.npcs!.map(n=>({...n,position:{x:14,y:4}}))}};
+  expect(issue(updated)).toBeUndefined();
+  const resolved=resolveSceneCheck({...updated,pendingSceneCheck:pending},pending.token,true);
+  expect(resolved.explorationScene!.features![0].discovered).toBe(false);
+  const completed=resolveSceneCheck({...c,pendingSceneCheck:pending},pending.token,true);
+  expect(issue(completed)).toBeUndefined();
+ });
+});
