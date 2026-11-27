@@ -1722,7 +1722,9 @@ test('Generate Random Encounter uses the real combat engine, cycles environments
    await page.getByRole('button',{name:'Roll initiative (d20 + DEX)'}).click();
    await expect(selection).toHaveCount(0);
    const board=page.getByRole('grid',{name:'Combat movement grid'});
-   await expect(board).toBeVisible();
+   // Initiative clears deployment before the original map portal finishes
+   // mounting. Wait for the committed combat viewport, not the intermediate shell.
+   await expect(board).toBeVisible({timeout:15000});
    // Illustrated surface is separate from the gameplay grid and tracks the
    // environment without changing any of the saved tactical objects.
    const theme=['warehouse','roadside','ruins'][n];

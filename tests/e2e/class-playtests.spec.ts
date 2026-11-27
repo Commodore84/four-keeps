@@ -2686,3 +2686,94 @@ test('iPhone DM presents a persistent exploration map inside conversation and ke
  const fighting=await saved(page);
  expect(fighting.combat?.battlefield??fighting.adventureSession?.pendingEncounter?.scenario?.battlefield).toEqual(first.explorationScene.battlefield);
 });
+
+
+test('iPhone conversation moves on verified geometry and discovers and disarms scene features through DM checks',async({page})=>{
+ test.setTimeout(130000);
+ await createAndImport(page,'rogue');
+ // An explicitly owned tool is required by both DM check request and client binding.
+ await page.evaluate(async()=>{
+  const db=await new Promise<IDBDatabase>((resolve,reject)=>{const r=indexedDB.open('four-keeps-local',1);r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});
+  const tx=db.transaction('campaigns','readwrite'),store=tx.objectStore('campaigns');
+  const list=await new Promise<any[]>(resolve=>{const r=store.getAll();r.onsuccess=()=>resolve(r.result);});
+  const c=list[0],ledger=c.inventoryLedger??{currency:{CP:0,SP:0,EP:0,GP:0,PP:0},gear:[]};
+  if(!ledger.gear.some((g:any)=>g.name==='Thieves’ Tools'&&g.quantity>0))ledger.gear.push({name:'Thieves’ Tools',quantity:1});
+  c.inventoryLedger=ledger;store.put(c);
+  await new Promise<void>((resolve,reject)=>{tx.oncomplete=()=>resolve();tx.onerror=()=>reject(tx.error);});db.close();
+ });
+ await page.evaluate(()=>{localStorage.setItem('four-keeps-access-code','browser-test-code');localStorage.setItem('four-keeps-dm-mode','on');});
+ const requests:string[]=[];
+ await page.route('**/api/dm',async route=>{
+  const body=route.request().postDataJSON(),message=String(body.message??'');
+  const shared={newFacts:[],worldUpdates:{}};
+  if(body.opening){await route.fulfill({json:{...shared,narration:'The docks of Dasahi are busy.'}});return;}
+  if(body.checkToken){
+   const dice=body.dice;
+   await route.fulfill({json:{...shared,narration:'The check is resolved. You make careful progress.',
+    checkResult:{skill:body.checkToken==='clue-token'?'Investigation':body.checkToken==='trap-token'?'Perception':'Sleight of Hand',
+    tool:body.checkToken==='disarm-token'?'Thieves’ Tools':undefined,dice,kept:dice[0],modifier:20,total:dice[0]+20,success:true}}});
+   return;
+  }
+  requests.push(message);
+  const sceneId='mapped-cellar';
+  const action=message.startsWith('I enter the cellar')?{type:'show',id:sceneId,title:'The Locked Cellar',
+   battlefield:{width:8,height:6,objects:[{id:'supply-crate',kind:'crate',x:5,y:3,width:1,height:1}]},
+   features:[{id:'ledger',kind:'clue',label:'Hidden ledger',position:{x:2,y:1},dc:15,skill:'Investigation'},
+     {id:'tripwire',kind:'trap',label:'Fine tripwire',position:{x:2,y:0},dc:15,skill:'Perception'}]}:
+    message.startsWith('I move to square')?{type:'move',id:sceneId,x:1,y:0}:
+    message.startsWith('I leave the cellar')?{type:'hide'}:null;
+  const checkRequest=message.startsWith('I search the desk')?
+     {skill:'Investigation',mode:'normal',reason:'Search the desk',token:'clue-token',sceneCheck:{sceneId,featureId:'ledger',goal:'discover'}}:
+    message.startsWith('I check the floor')?
+     {skill:'Perception',mode:'normal',reason:'Look for hazards',token:'trap-token',sceneCheck:{sceneId,featureId:'tripwire',goal:'discover'}}:
+    message.startsWith('I disarm')?
+     {skill:'Sleight of Hand',tool:'Thieves’ Tools',mode:'normal',reason:'Disarm trap',token:'disarm-token',
+      sceneCheck:{sceneId,featureId:'tripwire',goal:'disarm'}}:null;
+  await route.fulfill({json:{...shared,narration:'The Dungeon Master describes what you can perceive.',sceneAction:action,checkRequest}});
+ });
+ await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();
+ await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await expect.poll(async()=> (await saved(page))?.journal?.some((j:any)=>j.id?.endsWith('-dm-opening'))).toBe(true);
+ async function say(message:string){
+  const input=page.getByLabel('Message the Dungeon Master');
+  await input.fill(message);await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
+ }
+ await say('I enter the cellar cautiously.');
+ const scene=page.getByLabel('DM scene map');
+ await expect(scene).toBeVisible();
+ const c0=await saved(page);
+ expect(c0.explorationScene.features.every((f:any)=>f.discovered===false)).toBe(true);
+ expect(await scene.getByRole('gridcell',{name:/Examine (clue|trap)/}).count()).toBe(0);
+ await scene.getByRole('gridcell',{name:'Explore square 2, 1'}).click();
+ await scene.getByRole('button',{name:'Ask DM to move'}).click();
+ await expect(page.getByLabel('Message the Dungeon Master')).toHaveValue(/I move to square 2, 1/);
+ await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
+ await expect.poll(async()=> (await saved(page))?.explorationScene?.playerPosition).toEqual({x:1,y:0});
+ await say('I search the desk for hidden writing.');
+ await expect(page.getByRole('button',{name:'Roll Investigation'})).toBeVisible();
+ expect((await saved(page)).explorationScene.features[0].discovered).toBe(false);
+ await page.getByRole('button',{name:'Roll Investigation'}).click();
+ await expect.poll(async()=> (await saved(page))?.explorationScene?.features?.[0]?.discovered).toBe(true);
+ await expect(scene.getByRole('gridcell',{name:'Examine clue Hidden ledger'})).toBeVisible();
+ await say('I check the floor for a trap.');
+ await expect(page.getByRole('button',{name:'Roll Perception'})).toBeVisible();
+ await page.getByRole('button',{name:'Roll Perception'}).click();
+ await expect.poll(async()=> (await saved(page))?.explorationScene?.features?.[1]?.discovered).toBe(true);
+ expect((await saved(page)).explorationScene.features[1].disarmed).toBeUndefined();
+ await say('I disarm the fine tripwire using my Thieves’ Tools.');
+ await expect(page.getByRole('button',{name:'Roll Sleight of Hand'})).toBeVisible();
+ await page.getByRole('button',{name:'Roll Sleight of Hand'}).click();
+ await expect.poll(async()=> (await saved(page))?.explorationScene?.features?.[1]?.disarmed).toBe(true);
+ await scene.getByRole('gridcell',{name:'Examine trap Fine tripwire'}).click();
+ await expect(scene.getByLabel('Selected exploration square')).toContainText('Disarmed trap');
+ await expect(scene.getByRole('button',{name:'Ask DM about feature'})).toBeVisible();
+ await scene.scrollIntoViewIfNeeded();
+ await page.screenshot({path:'test-results/conversational-scene-checks.png'});
+ await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();
+ await page.getByRole('button',{name:'Continue Adventure'}).click();
+ const persisted=await saved(page);
+ expect(persisted.explorationScene.playerPosition).toEqual({x:1,y:0});
+ expect(persisted.explorationScene.features.map((f:any)=>f.discovered)).toEqual([true,true]);
+ expect(persisted.explorationScene.features[1].disarmed).toBe(true);
+ expect(requests.some(m=>m.includes('search the desk'))).toBe(true);
+});

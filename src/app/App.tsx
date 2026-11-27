@@ -1,6 +1,6 @@
 import {CombatDeploymentMap} from './CombatDeploymentMap';
 import {ExplorationSceneMap} from './ExplorationSceneMap';
-import {applyDmSceneAction,syncSceneWithCombat} from '../game/explorationScene';
+import {applyDmSceneAction,sceneCheckRequest,resolveSceneCheck,syncSceneWithCombat} from '../game/explorationScene';
 import {objectAt,battlefieldOpeningWithinReach,battlefieldBlocked,battlefieldCover} from '../game/battlefield';
 import {battlefieldTileName,battlefieldTileVariant,battlefieldObjectArtworkStyle} from './battlefieldIllustrations';
 import {battlefieldVisibleIndices,type BattlefieldViewport} from './battlefieldViewport';
@@ -803,14 +803,15 @@ export function App() {
       const history = locked.journal.filter(entry => entry.kind === 'player' || entry.kind === 'dm').slice(-12)
         .map(entry => ({ role: entry.kind === 'player' ? 'user' : 'assistant', content: entry.text }));
       const response = await fetch('/api/dm', { method:'POST', headers:{ 'Content-Type':'application/json','x-four-keeps-access':accessCode },
-        body:JSON.stringify({ checkToken:pending.token, dice, character:locked.character ?? prototypeNighthawk, gameState:{ questPayouts:locked.questPayouts??[],magicWishlist:magicWishlistNames(locked.id), ...campaignPlayerContext(locked), familiar:locked.familiar ?? null, elapsedMinutes:locked.elapsedMinutes ?? 0, concentration:locked.concentration??null, spellEffects:(locked.spellEffects??[]).slice(-12), recentEvents:locked.journal.filter(e=>e.kind==='system').slice(-8).map(e=>e.text) }, history, worldFacts:locked.worldFacts ?? [], world:locked.world ?? emptyWorld() }) });
-      const result: { narration?:string; newFacts?:string[]; worldUpdates?:unknown; combatStart?:{enemyName:string;templateId?:string;battlefield?:unknown}|null;checkResult?:{skill:string;tool?:string;dice:number[];kept:number;modifier:number;total:number;success:boolean}; error?:string } = await response.json();
+        body:JSON.stringify({ checkToken:pending.token, dice, character:locked.character ?? prototypeNighthawk, gameState:{ questPayouts:locked.questPayouts??[],magicWishlist:magicWishlistNames(locked.id),scene:adventureMemory(locked).scene,...campaignPlayerContext(locked), familiar:locked.familiar ?? null, elapsedMinutes:locked.elapsedMinutes ?? 0, concentration:locked.concentration??null, spellEffects:(locked.spellEffects??[]).slice(-12), recentEvents:locked.journal.filter(e=>e.kind==='system').slice(-8).map(e=>e.text) }, history, worldFacts:locked.worldFacts ?? [], world:locked.world ?? emptyWorld() }) });
+      const result: { narration?:string; newFacts?:string[]; worldUpdates?:unknown; combatStart?:{enemyName:string;templateId?:string;battlefield?:unknown}|null;checkResult?:{skill:string;tool?:string;dice:number[];kept:number;modifier:number;total:number;success:boolean}; error?:string; sceneAction?:unknown } = await response.json();
       if (!response.ok || !result.narration || !result.checkResult) throw new Error(result.error || 'Check resolution failed');
       const r = result.checkResult;
-      const rollText = 'Nighthawk · '+r.skill+(r.tool?' with '+r.tool:'')+': '+(r.dice.length === 1 ? String(r.dice[0]) : r.dice.join(' / ')+' ('+pending.mode+': '+r.kept+')')+' '+(r.modifier >= 0 ? '+' : '−')+Math.abs(r.modifier)+' = '+r.total+'.';
+      const rollText = (locked.characterIdentity?.name??'Nighthawk')+' · '+r.skill+(r.tool?' with '+r.tool:'')+': '+(r.dice.length === 1 ? String(r.dice[0]) : r.dice.join(' / ')+' ('+pending.mode+': '+r.kept+')')+' '+(r.modifier >= 0 ? '+' : '−')+Math.abs(r.modifier)+' = '+r.total+'.';
       const narrated = addExchange(locked, rollText, result.narration, new Date().toISOString(), result.newFacts ?? [], result.worldUpdates);
+      const resolvedScene=resolveSceneCheck(narrated,pending.token,r.success);
       const verified=locked.pendingMerchantNegotiation?.checkToken===pending.token
-        ? resolveMerchantNegotiation(narrated,pending.token,r.success,r.total) : narrated;
+        ? resolveMerchantNegotiation(resolvedScene,pending.token,r.success,r.total) : resolvedScene;
       const validCombat=!!result.combatStart&&!!locked.characterIdentity&&locked.adventureSession?.status==='exploring';
       const next=validCombat?proposeAdventureEncounter(verified,result.combatStart!.enemyName,
         'check-'+pending.token,undefined,result.combatStart!.battlefield,result.combatStart!.templateId):verified;
@@ -1211,7 +1212,7 @@ export function App() {
       const history=memory.recentConversation;
       const response = await fetch('/api/dm', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-four-keeps-access': accessCode },
         body: JSON.stringify({ message:aiSession?prepared.pendingAdventureAction!.message:message, clarification:prepared.pendingClarification??null, actionId, character:statsWithTemporaryEffects(current) ?? prototypeNighthawk, gameState:{ questPayouts:current.questPayouts??[],magicWishlist:magicWishlistNames(current.id),magicSaleInventory:(current.inventoryLedger?.gear??[]).filter(item=>item.quantity>0).slice(0,40).map(item=>({name:item.name,quantity:item.quantity})), ...campaignPlayerContext(current), adventureSession:current.adventureSession??null, scene:memory.scene, merchant:frontierMerchantContext(current), characterIdentity:current.characterIdentity??null, location:current.location, combat:current.combat??null, familiar:current.familiar ?? null, elapsedMinutes:current.elapsedMinutes ?? 0, concentration:current.concentration??null, spellEffects:(current.spellEffects??[]).slice(-12), recentEvents:current.journal.filter(e=>e.kind==='system').slice(-8).map(e=>e.text) }, history, worldFacts: memory.establishedFacts, world: current.world ?? emptyWorld(), anchamida:current.characterBuild?{predefined:anchamidaLocations.map(s=>({id:s.id,name:s.name,x:s.x,y:s.y,notes:s.notes})),discovered:current.mapDiscovered??[],dynamic:current.mapDynamicSites??[]}:null, adventureMemory:memory }) });
-      const result: { narration?: string; newFacts?: string[]; worldUpdates?: unknown; checkRequest?: { skill:string; tool?:string; mode:'normal'|'advantage'|'disadvantage'; reason:string; token:string } | null; combatStart?:{enemyName:string;battlefield?:unknown;templateId?:string}|null; magicSaleOffer?:{buyer:string;questId:string;itemName:string;quantity:number;proceedsCp:number}|null; merchantDiscount?:{itemId:string;percent:number}|null; clarificationRequest?:{question:string}|null; travelDestination?:string|null; mapActions?:unknown; sceneAction?:unknown; error?: string } = await response.json();
+      const result: { narration?: string; newFacts?: string[]; worldUpdates?: unknown; checkRequest?: { skill:string; tool?:string; mode:'normal'|'advantage'|'disadvantage'; reason:string; token:string;sceneCheck?:unknown } | null; combatStart?:{enemyName:string;battlefield?:unknown;templateId?:string}|null; magicSaleOffer?:{buyer:string;questId:string;itemName:string;quantity:number;proceedsCp:number}|null; merchantDiscount?:{itemId:string;percent:number}|null; clarificationRequest?:{question:string}|null; travelDestination?:string|null; mapActions?:unknown; sceneAction?:unknown; error?: string } = await response.json();
       if (!response.ok || !result.narration) throw new Error(result.error || 'DM request failed');
       // Do not trust the network boundary to enforce mutually exclusive gameplay transitions.
       // A rejected response leaves the persisted pending action available for an exact-ID retry.
@@ -1242,6 +1243,9 @@ export function App() {
           {templateId:result.combatStart.templateId,...(result.combatStart.battlefield!==undefined?{battlefield:result.combatStart.battlefield}:{})}:
           {battlefield:result.combatStart.battlefield},key);
       }
+      const sceneCheck=result.checkRequest?.sceneCheck?
+        sceneCheckRequest(prepared,result.checkRequest.sceneCheck,result.checkRequest):undefined;
+      if(result.checkRequest?.sceneCheck&&!sceneCheck)throw Error('Scene investigation is out of reach or does not match the saved feature.');
       const narrated = aiSession
         ? {...commitAdventureAction(prepared,actionId!,result.narration,new Date().toISOString(),result.newFacts??[],result.worldUpdates),pendingClarification:undefined,pendingCheck:result.checkRequest??undefined}
         : addExchange(current, message, result.narration, new Date().toISOString(), result.newFacts ?? [], result.worldUpdates, result.checkRequest ?? undefined);
@@ -1259,7 +1263,8 @@ export function App() {
         try {mapped=applyAnchamidaActions(next,result.mapActions);}
         catch(error) {console.warn('Rejected invalid DM map action batch',error);}
       }
-      mapped=applyDmSceneAction(mapped,result.sceneAction);
+      mapped=applyDmSceneAction(mapped,result.sceneAction,new Date().toISOString(),prepared.pendingAdventureAction?.message??message);
+      if(sceneCheck)mapped={...mapped,pendingSceneCheck:sceneCheck};
       mapped=trackMerchantConversation(mapped,message,result.narration);
       if(aiSession&&result.magicSaleOffer&&!result.clarificationRequest&&!result.checkRequest&&!result.combatStart&&!result.travelDestination) {
         try {
