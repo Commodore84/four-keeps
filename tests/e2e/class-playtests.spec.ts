@@ -3173,3 +3173,73 @@ test('iPhone multi-stage sun temple puzzle persists discovered key, statue rotat
  expect(persisted.explorationScene.features.find((f:any)=>f.id==='north-statue').rotation.current).toBe(2);
  expect(persisted.explorationScene.battlefield.objects[0]).toMatchObject({open:true,locked:false});
 });
+
+test('iPhone Athletics moves a heavy statue and raises a gate through sealed checks with saved scene geometry',async({page})=>{
+ test.setTimeout(160000);
+ await createAndImport(page,'rogue');
+ await page.evaluate(()=>{localStorage.setItem('four-keeps-access-code','browser-test-code');localStorage.setItem('four-keeps-dm-mode','on');});
+ const sceneId='heavy-gate-hall';
+ await page.route('**/api/dm',async route=>{
+  const body=route.request().postDataJSON(),message=String(body.message??'');
+  const shared={newFacts:[],worldUpdates:{}};
+  if(body.opening){await route.fulfill({json:{...shared,narration:'A forgotten gatehouse lies ahead.'}});return;}
+  if(body.checkToken){const dice=body.dice;await route.fulfill({json:{...shared,narration:'Your Athletics check succeeds.',
+    checkResult:{skill:'Athletics',dice,kept:dice[0],modifier:20,total:dice[0]+20,success:true}}});return;}
+  const sceneAction=message==='I enter the heavy gate hall.'?
+   {type:'show',id:sceneId,title:'Heavy Gate Hall',battlefield:{width:8,height:4,
+    objects:[
+     {id:'stone-statue',kind:'statue',x:2,y:1,width:1,height:1,material:'stone'},
+     {id:'iron-gate',kind:'door',x:5,y:1,width:1,height:1,locked:true,forceDC:15,lockDC:15,material:'iron'}
+    ]},features:[
+     {id:'statue-effort',kind:'obstacle',label:'Stone Sentinel',position:{x:2,y:1},dc:15,
+      skill:'Athletics',targetObjectId:'stone-statue',obstacleMode:'shift',weightLb:210},
+     {id:'gate-effort',kind:'obstacle',label:'Iron Portcullis',position:{x:5,y:1},dc:15,
+      skill:'Athletics',targetObjectId:'iron-gate',obstacleMode:'lift',weightLb:200}
+    ]}:
+   message.startsWith('I walk to square 2, 2')?{type:'move',id:sceneId,x:1,y:1}:
+   message.startsWith('I walk to square 5, 2')?{type:'move',id:sceneId,x:4,y:1}:null;
+  const checkRequest=message.startsWith('I push the Stone Sentinel one square east')?
+   {skill:'Athletics',mode:'normal',reason:'Push Stone Sentinel',token:'heavy-shift-token',
+    sceneCheck:{sceneId,featureId:'statue-effort',goal:'heavy-shift',x:3,y:1}}:
+   message.startsWith('I heave and lift the Iron Portcullis')?
+   {skill:'Athletics',mode:'normal',reason:'Lift Iron Portcullis',token:'heavy-lift-token',
+    sceneCheck:{sceneId,featureId:'gate-effort',goal:'heavy-lift'}}:null;
+  await route.fulfill({json:{...shared,narration:'You assess the massive stone and iron obstacles.',sceneAction,checkRequest}});
+ });
+ await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();
+ await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await expect.poll(async()=>(await saved(page))?.journal?.some((e:any)=>e.id?.endsWith('-dm-opening'))).toBe(true);
+ async function say(message:string){await page.getByLabel('Message the Dungeon Master').fill(message);
+  await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();}
+ await say('I enter the heavy gate hall.');
+ const map=page.getByLabel('DM scene map');await expect(map).toBeVisible();
+ await expect(map.getByRole('gridcell',{name:'Inspect statue at 3, 2'})).toBeVisible();
+ await say('I walk to square 2, 2');
+ await expect.poll(async()=>(await saved(page))?.explorationScene?.playerPosition).toEqual({x:1,y:1});
+ await map.getByRole('gridcell',{name:'Inspect statue at 3, 2'}).click();
+ await expect(page.getByRole('group',{name:'Heavy obstacle'})).toContainText('Stone Sentinel');
+ await page.getByRole('button',{name:'Push heavy Stone Sentinel east'}).click();
+ await expect(page.getByLabel('Message the Dungeon Master')).toHaveValue(/push the Stone Sentinel one square east/);
+ await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
+ await expect(page.getByRole('button',{name:'Roll Athletics'})).toBeVisible();
+ expect((await saved(page)).explorationScene.battlefield.objects[0]).toMatchObject({x:2,y:1});
+ await page.getByRole('button',{name:'Roll Athletics'}).click();
+ await expect.poll(async()=> (await saved(page))?.explorationScene?.battlefield?.objects?.[0]?.x).toBe(3);
+ await say('I walk to square 5, 2');
+ await expect.poll(async()=>(await saved(page))?.explorationScene?.playerPosition).toEqual({x:4,y:1});
+ await map.getByRole('gridcell',{name:'Inspect Locked door at 6, 2'}).click();
+ await page.getByRole('button',{name:'Lift gate'}).click();
+ await expect(page.getByLabel('Message the Dungeon Master')).toHaveValue(/lift the Iron Portcullis/);
+ await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
+ await expect(page.getByRole('button',{name:'Roll Athletics'})).toBeVisible();
+ expect((await saved(page)).explorationScene.battlefield.objects[1].locked).toBe(true);
+ await page.getByRole('button',{name:'Roll Athletics'}).click();
+ await expect.poll(async()=> (await saved(page))?.explorationScene?.battlefield?.objects?.[1]?.open).toBe(true);
+ await page.screenshot({path:'test-results/heavy-statue-gate-iphone.png'});
+ await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();
+ await page.getByRole('button',{name:'Continue Adventure'}).click();
+ const persisted=await saved(page);
+ expect(persisted.explorationScene.battlefield.objects[0]).toMatchObject({x:3,y:1,kind:'statue'});
+ expect(persisted.explorationScene.battlefield.objects[1]).toMatchObject({open:true,locked:false});
+ expect(persisted.explorationScene.features.find((f:any)=>f.id==='gate-effort').completed).toBe(true);
+});

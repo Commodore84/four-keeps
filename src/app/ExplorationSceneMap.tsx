@@ -16,6 +16,7 @@ export function ExplorationSceneMap({scene,onInspect}:{scene:ExplorationScene;on
  const selected=map.objects.find(obj=>obj.id===selectedId&&!obj.destroyed);
  const selectedFeature=selectedSquare?scene.features?.find(f=>f.discovered&&!(f.kind==='key'&&f.collected)&&f.position.x===selectedSquare.x&&f.position.y===selectedSquare.y):undefined;
  const selectedDoorTrap=selected?scene.features?.find(f=>f.kind==='trap'&&f.targetObjectId===selected.id&&f.discovered):undefined;
+ const selectedObstacle=selected?scene.features?.find(f=>f.kind==='obstacle'&&f.targetObjectId===selected.id&&f.discovered):undefined;
  const focus=(next:number)=>{
   const el=frame.current;
   const z=Math.max(.25,Math.min(2.5,Math.round(next*100)/100));
@@ -65,7 +66,7 @@ export function ExplorationSceneMap({scene,onInspect}:{scene:ExplorationScene;on
      const x=i%map.width,y=Math.floor(i/map.width),own=x===scene.playerPosition.x&&y===scene.playerPosition.y;
      const obj=objectAt(map,{x,y}).find(o=>!o.destroyed);
      const blocked=battlefieldBlocked(map,{x,y});
-     const interact=!!obj&&['door','window','table','crate','cargo','chair','pillar','rock','tree'].includes(obj.kind);
+     const interact=!!obj&&['door','window','table','crate','cargo','chair','pillar','rock','statue','tree'].includes(obj.kind);
      const feature=scene.features?.find(f=>f.discovered&&!(f.kind==='key'&&f.collected)&&f.position.x===x&&f.position.y===y);
      const content=own?<span aria-label="Character location" className="relative z-10 flex h-4 w-4 items-center justify-center rounded-full border border-white bg-amber-300 text-[10px] font-bold text-black">P</span>:null;
      const styles={gridColumnStart:x+1,gridRowStart:y+1,minHeight:0,borderRadius:0,...battlefieldObjectArtworkStyle(obj,x,y,zoom)};
@@ -91,7 +92,25 @@ export function ExplorationSceneMap({scene,onInspect}:{scene:ExplorationScene;on
      className="min-h-11 rounded border border-gold/50 px-2 text-gold">{selected.locked?'Pick lock':selected.open?'Close':'Open'}</button>}
    </div>
   </div>}
-  {selected&&['crate','chair'].includes(selected.kind)&&selected.width===1&&selected.height===1&&
+  {selectedObstacle&&<div role="group" aria-label="Heavy obstacle" className="flex items-center justify-between gap-2 text-xs text-gold">
+   <span>{selectedObstacle.label} · Athletics DC {selectedObstacle.dc} · {selectedObstacle.weightLb} lb{selectedObstacle.completed?' · Raised':''}</span>
+   {selectedObstacle.obstacleMode==='lift'&&!selectedObstacle.completed&&selected?.locked&&
+     <button type="button" onClick={()=>onInspect('I heave and lift the '+selectedObstacle.label+' using Strength and Athletics.')}
+      className="min-h-11 rounded border border-gold/50 px-2">Lift gate</button>}
+  </div>}
+  {selectedObstacle?.obstacleMode==='shift'&&selected&&
+   <div aria-label="Push heavy object" className="flex items-center justify-between gap-2 text-xs">
+    <span>Push {selectedObstacle.label}</span>
+    <div className="flex gap-1">
+     {(['north','east','south','west'] as const).map(dir=><button key={dir} type="button"
+       onClick={()=>onInspect('I push the '+selectedObstacle.label+' one square '+dir+' using Athletics.')}
+       className="min-h-11 min-w-11 rounded border border-gold/50 px-2 text-gold"
+       aria-label={'Push heavy '+selectedObstacle.label+' '+dir}>
+       {{north:'N',east:'E',south:'S',west:'W'}[dir]}
+     </button>)}
+    </div>
+   </div>}
+  {selected&&!selectedObstacle&&['crate','chair'].includes(selected.kind)&&selected.width===1&&selected.height===1&&
    <div aria-label="Move selected object" className="flex items-center justify-between gap-2 text-xs">
     <span className="text-parchment/65">Move {selected.kind}</span>
     <div className="flex gap-1">

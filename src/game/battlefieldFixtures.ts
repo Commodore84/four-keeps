@@ -5,7 +5,7 @@ import {battlefieldObjectCover,type Battlefield,type BattlefieldObject,type Batt
 export const fixtureMaterials={
  glass:{ac:13},wood:{ac:15},stone:{ac:17},iron:{ac:19}
 } as const;
-export const fixtureDefaultMaterial=(kind:BattlefieldObjectKind)=>kind==='window'?'glass':kind==='wall'||kind==='pillar'||kind==='rock'?'stone':kind==='cargo'?'iron':'wood';
+export const fixtureDefaultMaterial=(kind:BattlefieldObjectKind)=>kind==='window'?'glass':kind==='wall'||kind==='pillar'||kind==='rock'||kind==='statue'?'stone':kind==='cargo'?'iron':'wood';
 export function fixtureStats(object:BattlefieldObject){
  const material=object.material??fixtureDefaultMaterial(object.kind);
  const ac=fixtureMaterials[material].ac;

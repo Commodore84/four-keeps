@@ -1,7 +1,7 @@
 /** Shared, serializable physical geometry. Coordinates are five-foot cells.
  * The renderer consumes this same data; images never determine rules. */
 export type BattlefieldPoint={x:number;y:number};
-export type BattlefieldObjectKind='wall'|'pillar'|'table'|'chair'|'crate'|'cargo'|'rock'|'tree'|'door'|'window'|'rubble'|'water'|'undergrowth';
+export type BattlefieldObjectKind='wall'|'pillar'|'table'|'chair'|'crate'|'cargo'|'rock'|'statue'|'tree'|'door'|'window'|'rubble'|'water'|'undergrowth';
 export type BattlefieldObject={id:string;kind:BattlefieldObjectKind;x:number;y:number;width:number;height:number;asset?:string;open?:boolean;
  /** Optional 2024 DMG fixture stats. Undefined preserves historical saves and ordinary objects. */
  locked?:boolean;lockDC?:10|15|20;lockComplexity?:'simple'|'complex';lockProgress?:number;
@@ -11,7 +11,7 @@ const properties:Record<BattlefieldObjectKind,{blocked:boolean;difficult:boolean
  wall:{blocked:true,difficult:false,cover:'total'},pillar:{blocked:true,difficult:false,cover:'total'},
  table:{blocked:true,difficult:false,cover:2},chair:{blocked:false,difficult:true,cover:2},
  crate:{blocked:true,difficult:false,cover:2},cargo:{blocked:true,difficult:false,cover:5},
- rock:{blocked:true,difficult:false,cover:5},tree:{blocked:true,difficult:false,cover:'total'},
+ rock:{blocked:true,difficult:false,cover:5},statue:{blocked:true,difficult:false,cover:5},tree:{blocked:true,difficult:false,cover:'total'},
  door:{blocked:true,difficult:false,cover:'total'},window:{blocked:true,difficult:false,cover:5},
  rubble:{blocked:false,difficult:true,cover:0},water:{blocked:false,difficult:true,cover:0},
  undergrowth:{blocked:false,difficult:true,cover:0}

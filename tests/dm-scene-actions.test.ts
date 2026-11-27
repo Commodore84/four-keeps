@@ -126,3 +126,38 @@ it('binds discovering a scene-local key to the same sealed check pipeline',async
  expect(r.body.checkRequest?.sceneCheck).toEqual({sceneId:'hidden-cellar',featureId:'sun-key',goal:'discover'});
  expect(typeof r.body.checkRequest?.token).toBe('string');
 });
+
+it('seals a player-directed Athletics shift with a bounded destination, not a free DM map mutation',async()=>{
+ const heavyScene={...scene,playerPosition:{x:1,y:1},
+  features:[{id:'stone-effort',kind:'obstacle',label:'Stone Sentinel',position:{x:2,y:1},dc:15,
+   skill:'Athletics',targetObjectId:'statue-one',obstacleMode:'shift',weightLb:210,discovered:true}],
+  objects:[{id:'statue-one',kind:'statue',x:2,y:1,width:1,height:1}]};
+ const payload={narration:'You brace your shoulder and push.',checkRequest:{
+   skill:'Athletics',difficulty:'moderate',reason:'Shift the sentinel',
+   sceneCheck:{sceneId:'hidden-cellar',featureId:'stone-effort',goal:'heavy-shift',x:3,y:1}
+ }};
+ setup(payload);
+ const r=response();await handler(req('I push the Stone Sentinel one square east.',{...gameState,scene:heavyScene}),r);
+ expect(r.code).toBe(200);
+ expect(r.body.checkRequest?.sceneCheck).toEqual(payload.checkRequest.sceneCheck);
+ expect(r.body.sceneAction).toBeNull();
+ const wrong=response();await handler(req('I push the Stone Sentinel west.',{...gameState,scene:heavyScene}),wrong);
+ expect(wrong.body.checkRequest?.sceneCheck).toBeUndefined();
+ const tooHeavy=response();await handler(req('I push the Stone Sentinel one square east.',{
+  ...gameState,scene:{...heavyScene,features:[{...heavyScene.features[0],weightLb:400}]} }),tooHeavy);
+ expect(tooHeavy.body.checkRequest?.sceneCheck).toBeUndefined();
+});
+
+it('binds a visible heavy gate lift to Athletics and the authored force DC',async()=>{
+ const gateScene={...scene,playerPosition:{x:1,y:1},
+  features:[{id:'gate-effort',kind:'obstacle',label:'Iron Portcullis',position:{x:2,y:1},
+   dc:20,skill:'Athletics',targetObjectId:'gate-one',obstacleMode:'lift',weightLb:210,discovered:true}],
+  objects:[{id:'gate-one',kind:'door',x:2,y:1,width:1,height:1,locked:true,forceDC:20}]};
+ setup({narration:'The gate strains against the frame.',checkRequest:{
+  skill:'Athletics',difficulty:'hard',reason:'Lift the gate',sceneCheck:{
+   sceneId:'hidden-cellar',featureId:'gate-effort',goal:'heavy-lift'}
+ }});
+ const r=response();await handler(req('I heave and lift the Iron Portcullis.',{...gameState,scene:gateScene}),r);
+ expect(r.code).toBe(200);
+ expect(r.body.checkRequest?.sceneCheck).toEqual({sceneId:'hidden-cellar',featureId:'gate-effort',goal:'heavy-lift'});
+});

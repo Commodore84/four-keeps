@@ -10,7 +10,7 @@ export interface ExplorationScene {
  features?:ExplorationFeature[];
 }
 export type ExplorationFeature={
- id:string;kind:'clue'|'trap'|'mechanism'|'key';label:string;position:BattlefieldPoint;
+ id:string;kind:'clue'|'trap'|'mechanism'|'key'|'obstacle';label:string;position:BattlefieldPoint;
  dc:10|15|20;skill:'Investigation'|'Perception';discovered:boolean;disarmed?:boolean;
  triggered?:boolean;trapEffect?:TrapEffect;
  /** Traps mounted on a specific door/window trigger from object interaction, not walking. */
@@ -23,6 +23,8 @@ export type ExplorationFeature={
  rotation?:{positions:2|3|4;current:number;target:number};
  /** A scene-local key is acquired once by an explicit player action, never minted into shop gear. */
  collected?:boolean;
+ /** Heavy scene interaction is an authored physical check, not arbitrary narrated displacement. */
+ obstacleMode?:'shift'|'lift';weightLb?:number;completed?:boolean;
 };
 /** Trap profiles are part of the saved DM scene; no effect may be invented
  * when a roll resolves. Older saved traps without a profile remain harmless. */
@@ -55,7 +57,7 @@ const trapEffectValid=(value:unknown):value is TrapEffect=>{
   ['piercing','poison','fire','bludgeoning'].includes(String(e.damageType))&&
   ['half','none'].includes(String(e.onSave));
 };
-export type SceneCheckIntent={sceneId:string;featureId:string;goal:'discover'|'disarm'|'unlock'};
+export type SceneCheckIntent={sceneId:string;featureId:string;goal:'discover'|'disarm'|'unlock'|'heavy-shift'|'heavy-lift';x?:number;y?:number};
 export type PendingSceneCheck=SceneCheckIntent&{token:string};
 type SceneShow={type:'show';id:string;title:string;templateId?:SoloEncounterId;battlefield?:unknown;features?:unknown[]};
 type SceneMove={type:'move';id:string;x:number;y:number};
@@ -68,6 +70,7 @@ export type DmSceneAction=SceneShow|SceneHide|SceneOpening|SceneMove|SceneActiva
 const slug=/^[a-z0-9][a-z0-9-]{2,63}$/;
 const compact=(value:unknown)=>typeof value==='string'?value.trim():'';
 const isTemplate=(id:string):id is SoloEncounterId=>Object.hasOwn(SOLO_ROGUE_ENCOUNTERS,id);
+const heavyIntent=/\b(?:push|pull|drag|shift|move|shove|heave|lift|raise|force|haul)\b/i;
 const shiftIntent=/\b(?:push|pull|move|drag|slide|shove|shift|reposition)\b/i;
 const takingIntent=/\b(?:take|pick up|collect|retrieve|grab|pocket|carry)\b/i;
 const activationIntent=/\b(?:pull|push|press|turn|flip|activate|operate|use|slide|rotate|twist|lift|move|throw|trigger)\b/i;
@@ -119,17 +122,26 @@ function normalizeFeatures(value:unknown,map:Battlefield):ExplorationFeature[]{
   if(!raw||typeof raw!=='object'||Array.isArray(raw))throw Error('Invalid scene feature.');
   const f=raw as Record<string,unknown>,id=compact(f.id),label=compact(f.label);
   const position=f.position as BattlefieldPoint;
-  if(!slug.test(id)||ids.has(id)||!['clue','trap','mechanism','key'].includes(String(f.kind))||
+  if(!slug.test(id)||ids.has(id)||!['clue','trap','mechanism','key','obstacle'].includes(String(f.kind))||
     label.length<2||label.length>90||!position||!battlefieldContains(map,position)||
-    ![10,15,20].includes(Number(f.dc))||!['Investigation','Perception'].includes(String(f.skill))||
+    ![10,15,20].includes(Number(f.dc))||
+    (f.kind==='obstacle'?f.skill!=='Athletics':!['Investigation','Perception'].includes(String(f.skill)))||
     (f.discovered!==undefined&&typeof f.discovered!=='boolean')||
     (f.disarmed!==undefined&&(f.kind!=='trap'||typeof f.disarmed!=='boolean'||!f.discovered&&f.disarmed))||
     (f.triggered!==undefined&&(f.kind!=='trap'||typeof f.triggered!=='boolean'||!f.discovered&&f.triggered))||
     (f.trapEffect!==undefined&&(f.kind!=='trap'||!trapEffectValid(f.trapEffect)||
       (f.targetObjectId===undefined&&battlefieldBlocked(map,position))))||
-    (f.targetObjectId!==undefined&&(f.kind!=='trap'||!slug.test(compact(f.targetObjectId))||
-      !validDoor(map,String(f.targetObjectId))||
+    (f.targetObjectId!==undefined&&(!['trap','obstacle'].includes(String(f.kind))||!slug.test(compact(f.targetObjectId))||
+      (f.kind==='trap'?!validDoor(map,String(f.targetObjectId)):!map.objects.some(o=>o.id===f.targetObjectId))||
       !objectAtPosition(map,String(f.targetObjectId),position)))||
+    (f.obstacleMode!==undefined&&(f.kind!=='obstacle'||!['shift','lift'].includes(String(f.obstacleMode))))||
+    (f.weightLb!==undefined&&(f.kind!=='obstacle'||!Number.isSafeInteger(f.weightLb)||Number(f.weightLb)<1||Number(f.weightLb)>900))||
+    (f.completed!==undefined&&(f.kind!=='obstacle'||typeof f.completed!=='boolean'||f.completed&&(!f.discovered||f.obstacleMode!=='lift')))||
+    (f.kind==='obstacle'&&(!f.targetObjectId||!f.obstacleMode||!f.weightLb||
+      !map.objects.some(o=>o.id===f.targetObjectId&&!o.destroyed&&
+        (f.obstacleMode==='lift'?['door','window'].includes(o.kind):
+        ['statue','cargo','rock','table'].includes(o.kind)&&o.width===1&&o.height===1)&&
+        (f.obstacleMode!=='lift'||o.forceDC===undefined||o.forceDC===f.dc))))||
     (f.linkedObjectId!==undefined&&(f.kind!=='mechanism'||!slug.test(compact(f.linkedObjectId))||
       !validDoor(map,String(f.linkedObjectId))))||
     (f.requiresFeatureId!==undefined&&(f.kind!=='mechanism'||!slug.test(compact(f.requiresFeatureId))))||
@@ -155,14 +167,16 @@ function normalizeFeatures(value:unknown,map:Battlefield):ExplorationFeature[]{
     ...(f.kind==='trap'&&f.disarmed===true?{disarmed:true}:{}),
     ...(f.kind==='trap'&&f.triggered===true?{triggered:true}:{}),
     ...(f.kind==='trap'&&f.trapEffect!==undefined?{trapEffect:{...(f.trapEffect as TrapEffect)}}:{}),
-    ...(f.kind==='trap'&&f.targetObjectId!==undefined?{targetObjectId:String(f.targetObjectId)}:{}),
+    ...((f.kind==='trap'||f.kind==='obstacle')&&f.targetObjectId!==undefined?{targetObjectId:String(f.targetObjectId)}:{}),
     ...(f.kind==='mechanism'&&f.linkedObjectId!==undefined?{linkedObjectId:String(f.linkedObjectId)}:{}),
     ...(f.kind==='mechanism'&&f.requiresFeatureId!==undefined?{requiresFeatureId:String(f.requiresFeatureId)}:{}),
     ...(f.kind==='mechanism'&&f.activated===true?{activated:true}:{}),
     ...(f.kind==='mechanism'&&Array.isArray(f.requiresMechanismIds)?{requiresMechanismIds:[...f.requiresMechanismIds] as string[]}:{}),
     ...(f.kind==='mechanism'&&f.requiresKeyId!==undefined?{requiresKeyId:String(f.requiresKeyId)}:{}),
     ...(f.kind==='mechanism'&&f.rotation!==undefined?{rotation:{...(f.rotation as ExplorationFeature['rotation'])!}}:{}),
-    ...(f.kind==='key'&&f.collected===true?{collected:true}:{})};
+    ...(f.kind==='key'&&f.collected===true?{collected:true}:{}),
+    ...(f.kind==='obstacle'?{obstacleMode:f.obstacleMode as 'shift'|'lift',weightLb:Number(f.weightLb)}:{}),
+    ...(f.kind==='obstacle'&&f.completed===true?{completed:true}:{})};
  });
  for(const f of normalized){
   if(f.kind==='mechanism'){
@@ -175,6 +189,8 @@ function normalizeFeatures(value:unknown,map:Battlefield):ExplorationFeature[]{
   if(f.kind==='trap'&&f.targetObjectId&&
     normalized.filter(x=>x.kind==='trap'&&x.targetObjectId===f.targetObjectId).length>1)
     throw Error('A door may have only one saved trap.');
+  if(f.kind==='obstacle'&&normalized.filter(x=>x.kind==='obstacle'&&x.targetObjectId===f.targetObjectId).length>1)
+    throw Error('An object may have only one heavy obstacle definition.');
  }
  // Detect cycles before any state is saved: no mechanism can depend on itself indirectly.
  const visiting=new Set<string>(),done=new Set<string>();
@@ -188,11 +204,54 @@ function normalizeFeatures(value:unknown,map:Battlefield):ExplorationFeature[]{
  for(const f of normalized.filter(f=>f.kind==='mechanism'))visit(f.id);
  return normalized;
 }
-export function sceneCheckRequest(campaign:Campaign,request:unknown,check:{skill:string;tool?:string;token:string}):PendingSceneCheck|undefined{
+/** Validate the saved geometry before a sealed Athletics check and on result.
+ * Heavy shifts move one five-foot cell and cannot overlay other saved features. */
+function validHeavyShift(scene:ExplorationScene,feature:ExplorationFeature,x:number,y:number):boolean{
+ const o=scene.battlefield.objects.find(obj=>obj.id===feature.targetObjectId);
+ if(!o||o.destroyed||o.width!==1||o.height!==1||
+    !Number.isInteger(x)||!Number.isInteger(y)||Math.abs(o.x-x)+Math.abs(o.y-y)!==1||
+    distance(scene.playerPosition,{x:o.x,y:o.y})>1)return false;
+ const rest={...scene.battlefield,objects:scene.battlefield.objects.filter(obj=>obj.id!==o.id)};
+ const target={x,y};
+ return battlefieldContains(rest,target)&&!battlefieldBlocked(rest,target)&&
+   !(x===scene.playerPosition.x&&y===scene.playerPosition.y)&&
+   !scene.features?.some(f=>f.id!==feature.id&&f.position.x===x&&f.position.y===y) &&
+   !rest.objects.some(obj=>x>=obj.x&&x<obj.x+obj.width&&y>=obj.y&&y<obj.y+obj.height);
+}
+const heavyDirection=(from:BattlefieldPoint,to:BattlefieldPoint):'north'|'south'|'east'|'west'|undefined=>
+ to.x===from.x&&to.y===from.y-1?'north':to.x===from.x&&to.y===from.y+1?'south':
+ to.y===from.y&&to.x===from.x+1?'east':to.y===from.y&&to.x===from.x-1?'west':undefined;
+function heavyEligible(campaign:Campaign,scene:ExplorationScene,feature:ExplorationFeature,
+ goal:'heavy-shift'|'heavy-lift',target?:BattlefieldPoint):boolean{
+ if(feature.kind!=='obstacle'||!feature.discovered||feature.completed||
+    feature.obstacleMode!==(goal==='heavy-shift'?'shift':'lift')||!campaign.character||
+    (campaign.character.currentHitPoints??1)<=0||campaign.pendingTrapSave||
+    (feature.weightLb??Infinity)>campaign.character.scores.str*30)return false;
+ const o=scene.battlefield.objects.find(obj=>obj.id===feature.targetObjectId);
+ if(!o||o.destroyed||!battlefieldOpeningWithinReach(o,scene.playerPosition))return false;
+ if(goal==='heavy-lift')return ['door','window'].includes(o.kind)&&!!o.locked&&target===undefined;
+ return !!target&&validHeavyShift(scene,feature,target.x,target.y);
+}
+export function sceneCheckRequest(campaign:Campaign,request:unknown,check:{skill:string;tool?:string;token:string},playerMessage=''):PendingSceneCheck|undefined{
  const scene=campaign.explorationScene;
  if(!request||typeof request!=='object'||!scene||!scene.visible||scene.location!==campaign.location)return undefined;
  const intent=request as Record<string,unknown>;
- if(intent.sceneId!==scene.id||typeof intent.featureId!=='string'||!['discover','disarm','unlock'].includes(String(intent.goal)))return undefined;
+ if(intent.sceneId!==scene.id||typeof intent.featureId!=='string'||!['discover','disarm','unlock','heavy-shift','heavy-lift'].includes(String(intent.goal)))return undefined;
+ if(intent.goal==='heavy-shift'||intent.goal==='heavy-lift'){
+  const feature=scene.features?.find(f=>f.id===intent.featureId&&f.kind==='obstacle');
+  const target=intent.goal==='heavy-shift'?{x:intent.x as number,y:intent.y as number}:undefined;
+  if(!feature||check.skill!=='Athletics'||check.tool||
+    !heavyEligible(campaign,scene,feature,intent.goal,target)||
+    !playerMessage.toLowerCase().includes(feature.label.toLowerCase())||!heavyIntent.test(playerMessage)||
+    (intent.goal==='heavy-lift'&&(intent.x!==undefined||intent.y!==undefined))||
+    (target&&(!shiftIntent.test(playerMessage)||
+      !playerMessage.toLowerCase().includes(heavyDirection(
+       scene.battlefield.objects.find(o=>o.id===feature.targetObjectId)!,target)??'__missing_direction__'))))
+   return undefined;
+  return {sceneId:scene.id,featureId:feature.id,goal:intent.goal,token:check.token,
+    ...(target?{x:target.x,y:target.y}:{})};
+ }
+ if(intent.x!==undefined||intent.y!==undefined)return undefined;
  if(intent.goal==='unlock'){
   const object=validDoor(scene.battlefield,intent.featureId);
   if(!object||!object.locked||!toolOwned(campaign)||
@@ -234,6 +293,30 @@ export function resolveSceneCheck(campaign:Campaign,token:string,success:boolean
    pendingTrapSave:{sceneId:scene.id,featureId:feature.id,stage:'hazard'},
    journal:[...campaign.journal,{id:'trap-disarm-'+scene.id+'-'+feature.id,kind:'system',
     text:'Disarming '+feature.label+' failed. The trap springs; resolve the saved '+feature.trapEffect.saveAbility.toUpperCase()+' saving throw.',createdAt:campaign.updatedAt}]};
+ }
+ if(pending.goal==='heavy-shift'||pending.goal==='heavy-lift'){
+  const f=scene.features?.find(feature=>feature.id===pending.featureId&&feature.kind==='obstacle');
+  const target=pending.goal==='heavy-shift'?{x:pending.x!,y:pending.y!}:undefined;
+  if(!f||!heavyEligible(campaign,scene,f,pending.goal,target))return rest;
+  const o=scene.battlefield.objects.find(obj=>obj.id===f.targetObjectId)!;
+  if(pending.goal==='heavy-shift'){
+   const battlefield={...scene.battlefield,objects:scene.battlefield.objects.map(obj=>
+     obj.id===o.id?{...obj,x:target!.x,y:target!.y}:obj)};
+   const features=scene.features!.map(feature=>feature.id===f.id?{...feature,position:{x:target!.x,y:target!.y}}:feature);
+   return {...rest,explorationScene:{...scene,battlefield,features,updatedAt:campaign.updatedAt},
+     journal:[...campaign.journal,{id:'heavy-shift-'+crypto.randomUUID(),kind:'system',
+       text:'Athletics success: moved '+f.label+' one square; position saved.',createdAt:campaign.updatedAt}]};
+  }
+  const trap=scene.features?.find(feature=>feature.kind==='trap'&&feature.targetObjectId===o.id&&
+    !feature.disarmed&&!feature.triggered&&feature.trapEffect);
+  const battlefield={...scene.battlefield,objects:scene.battlefield.objects.map(obj=>
+    obj.id===o.id?{...obj,locked:false,...(trap?{}:{open:true})}:obj)};
+  const features=scene.features!.map(feature=>feature.id===f.id?{...feature,completed:true}:
+    feature.id===trap?.id?{...feature,discovered:true,triggered:true}:feature);
+  return {...rest,explorationScene:{...scene,battlefield,features,updatedAt:campaign.updatedAt},
+    ...(trap?{pendingTrapSave:{sceneId:scene.id,featureId:trap.id,stage:'hazard' as const}}:{}),
+    journal:[...campaign.journal,{id:'heavy-lift-'+scene.id+'-'+f.id,kind:'system',
+      text:'Athletics success: '+f.label+' lifted'+(trap?' but a trap springs; resolve the saved saving throw.':'. The gate is open.'),createdAt:campaign.updatedAt}]};
  }
  if(pending.goal==='unlock'){
   const object=validDoor(scene.battlefield,pending.featureId);
@@ -447,7 +530,7 @@ export function applyDmSceneAction(campaign:Campaign,action:unknown,now=new Date
   if(!square)throw Error('Scene contains no accessible position.');
   playerPosition=square;
  }
- const features=a.features===undefined?undefined:normalizeFeatures(a.features,battlefield).map(f=>({...f,discovered:f.kind==='mechanism',disarmed:undefined,triggered:undefined,activated:undefined,collected:undefined}));
+ const features=a.features===undefined?undefined:normalizeFeatures(a.features,battlefield).map(f=>({...f,discovered:f.kind==='mechanism'||f.kind==='obstacle',disarmed:undefined,triggered:undefined,activated:undefined,collected:undefined,completed:undefined}));
  return {...campaign,explorationScene:{id:a.id,title:a.title.trim(),location:campaign.location,
   visible:true,battlefield,playerPosition,updatedAt:now,
   ...(features?{features}:{}),...(typeof a.templateId==='string'?{templateId:a.templateId as SoloEncounterId,seed}:{})}};

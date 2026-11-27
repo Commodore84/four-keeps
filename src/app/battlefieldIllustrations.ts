@@ -12,6 +12,7 @@ export function battlefieldTileName(map:Battlefield,object?:BattlefieldObject,x?
   // A single multi-square prop uses one stable sprite across all its cells.
   const variant=x===undefined||y===undefined?-1:battlefieldTileVariant(object.x,object.y,object.kind);
   if(variant===3&&object.kind==='tree')return 'tree-deep';
+  if(object.kind==='statue')return 'pillar';
   if(variant===2&&object.kind==='rock')return 'rock-moss';
   if(variant===1&&object.kind==='crate')return 'crate-weathered';
   if(variant===3&&object.kind==='cargo')return 'cargo-rusted';
