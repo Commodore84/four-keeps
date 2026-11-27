@@ -59,7 +59,7 @@ export function ExplorationSceneMap({scene,onInspect}:{scene:ExplorationScene;on
     <button type="button" aria-label="Fit scene map" onClick={fit} className="min-h-11 rounded border border-gold/40 px-3 text-xs text-gold">Fit</button>
    </div>
   </div>
-  <ClassicCombatMapFrame ref={frame} className={map.height<=2?"h-[108px] max-h-[40dvh]":map.height<=4?"h-[156px] max-h-[40dvh]":map.width<=12&&map.height<=10?"h-[240px] max-h-[40dvh]":"h-[290px] max-h-[40dvh]"} style={{overflow:'auto',touchAction:'pan-x pan-y'}}>
+  <ClassicCombatMapFrame ref={frame} data-testid="exploration-scene-map-frame" style={{height:map.height<=2?108:map.height<=4?156:map.width<=12&&map.height<=10?240:290,maxHeight:'40dvh',overflow:'auto',touchAction:'pan-x pan-y'}}>
    <ClassicCombatGrid size={map.width} height={map.height} zoom={zoom} dynamic theme={map.theme} ariaLabel="DM-presented exploration map">
     {Array.from({length:map.width*map.height},(_,i)=>{
      const x=i%map.width,y=Math.floor(i/map.width),own=x===scene.playerPosition.x&&y===scene.playerPosition.y;

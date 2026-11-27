@@ -3008,6 +3008,7 @@ test('iPhone pushing a crate updates persistent physical exploration geometry',a
  await page.getByLabel('Message the Dungeon Master').fill('I enter the pantry.');
  await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
  const map=page.getByLabel('DM scene map');await expect(map).toBeVisible();
+ await expect(map.getByTestId('exploration-scene-map-frame')).toHaveCSS('height','156px');
  await map.getByRole('gridcell',{name:'Inspect crate at 2, 1'}).click();
  await expect(map.getByRole('button',{name:'Push crate south'})).toBeVisible();
  await map.getByRole('button',{name:'Push crate south'}).click();
