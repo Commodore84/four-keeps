@@ -1,7 +1,7 @@
 import {describe,it,expect} from 'vitest';
-import {battlefieldBlocked,battlefieldCover,type Battlefield} from './battlefield';
+import {battlefieldBlocked,battlefieldCover,battlefieldOpaqueSightBlocked,type Battlefield} from './battlefield';
 import {generateBattlefield} from './battlefieldGenerator';
-import {enemyRole,isConcealedFrom,selectEnemyTactic,tacticalSight,obscuredAt} from './tacticalEnemyAI';
+import {enemyRole,enemyHasAttackLine,isConcealedFrom,selectEnemyTactic,tacticalSight,obscuredAt} from './tacticalEnemyAI';
 import {newCampaign,rollDuelInitiative,resolveDuelEnemyTurn,type Campaign} from './campaign';
 import {makeCombatLabEncounter} from './combatLab';
 
@@ -134,4 +134,86 @@ describe('Phase 3 tactical awareness',()=>{
   expect(enemyRole('Bandit')).toBe('bandit');
   expect(enemyRole('Giant Rat')).toBe('rat');
  });
+ it('never treats a center-blocked, partially covered ray as a legal ranged shot',()=>{
+  const map:Battlefield={width:24,height:20,objects:[{id:'pillar',kind:'pillar',x:10,y:9,width:1,height:1}]};
+  const candidates=Array.from({length:20},(_,y)=>({x:3,y})).flatMap(from=>
+   Array.from({length:20},(_,y)=>({from,to:{x:20,y}})));
+  const blocked=candidates.find(({from,to})=>battlefieldOpaqueSightBlocked(map,from,to)&&
+   battlefieldCover(map,from,to)!=='total');
+  expect(blocked).toBeDefined();
+  expect(enemyHasAttackLine(map,blocked!.from,blocked!.to)).toBe(false);
+  const plan=selectEnemyTactic({map,start:blocked!.from,target:blocked!.to,speedFeet:0,role:'bandit'});
+  expect(plan.mode).toBe('wait');
+ });
+ it('routes melee foes toward an actual opening, not a nearer dead end',()=>{
+  const map:Battlefield={width:18,height:14,objects:[
+   {id:'barrier',kind:'wall',x:7,y:0,width:1,height:12}]};
+  const target={x:12,y:4},start={x:4,y:4};
+  const first=selectEnemyTactic({map,start,target,speedFeet:30,role:'rat'});
+  expect(first.position.y).toBeGreaterThan(4);
+  let position=start;
+  for(let i=0;i<7;i++){
+   const plan=selectEnemyTactic({map,start:position,target,speedFeet:30,role:'rat'});
+   expect(battlefieldBlocked(map,plan.position)).toBe(false);
+   position=plan.position;
+  }
+  expect(Math.max(Math.abs(position.x-target.x),Math.abs(position.y-target.y))).toBeLessThanOrEqual(1);
+ });
+ it('opens an unlocked obstructing door but never crosses a closed or locked one',()=>{
+  const walls=[
+   {id:'north',kind:'wall' as const,x:7,y:0,width:1,height:6},
+   {id:'south',kind:'wall' as const,x:7,y:7,width:1,height:7}
+  ];
+  const door={id:'gate',kind:'door' as const,x:7,y:6,width:1,height:1};
+  const map:Battlefield={width:18,height:14,objects:[...walls,door]};
+  const opts={start:{x:3,y:6},target:{x:12,y:6},speedFeet:30,role:'rat' as const};
+  const plan=selectEnemyTactic({map,...opts});
+  expect(plan.position.x).toBeLessThan(7);
+  expect(plan.openingId).toBe('gate');
+  const opened=resolveDuelEnemyTurn(fixture('Giant Rat',map,opts.start,opts.target));
+  expect(opened.combat?.battlefield?.objects.find(o=>o.id==='gate')?.open).toBe(true);
+  expect(opened.combat?.enemyPosition?.x).toBeLessThan(7);
+  const locked:Battlefield={...map,objects:[...walls,{...door,locked:true}]};
+  expect(selectEnemyTactic({map:locked,...opts}).openingId).toBeUndefined();
+  const held=resolveDuelEnemyTurn(fixture('Giant Rat',locked,opts.start,opts.target));
+  expect(held.combat?.battlefield?.objects.find(o=>o.id==='gate')?.open).not.toBe(true);
+ });
+ it('keeps generated warehouse rats spread while avoiding very distant idle starts',()=>{
+  for(let i=0;i<20;i++){
+   const g=generateBattlefield('warehouse-vermin','pacing-'+i);
+   const player=g.starts[0];
+   const ranges=g.enemyStarts.map(enemy=>Math.max(Math.abs(enemy.x-player.x),Math.abs(enemy.y-player.y)));
+   expect(Math.max(...ranges)).toBeLessThanOrEqual(24);
+   expect(Math.max(Math.abs(g.enemyStarts[0].x-g.enemyStarts[1].x),
+    Math.abs(g.enemyStarts[0].y-g.enemyStarts[1].y))).toBeGreaterThanOrEqual(8);
+  }
+ });
+
+ it('does not execute a ranged attack or deal damage through solid geometry',()=>{
+  const wall:Battlefield={width:24,height:18,objects:[
+   {id:'solid-wall',kind:'wall',x:10,y:0,width:1,height:18}]};
+  const battle=fixture('Bandit',wall,{x:5,y:9},{x:18,y:9});
+  const hp=battle.character?.currentHitPoints;
+  const resolved=resolveDuelEnemyTurn(battle);
+  expect(resolved.combat?.enemyLastTurn).not.toContain('fires');
+  expect(resolved.combat?.enemyLastTurn).toContain('waits out of range');
+  expect(resolved.character?.currentHitPoints).toBe(hp);
+ });
+ it('goblins preserve greater standoff distance than bandits when both have clear shots',()=>{
+  const target={x:3,y:8},start={x:15,y:8};
+  const goblin=selectEnemyTactic({map:open,start,target,role:'goblin',speedFeet:30});
+  const bandit=selectEnemyTactic({map:open,start,target,role:'bandit',speedFeet:30});
+  expect(goblin.mode).toBe('ranged');
+  expect(bandit.mode).toBe('ranged');
+  expect(goblin.distanceFeet).toBeGreaterThan(bandit.distanceFeet);
+ });
+
+ it('never invents an unlisted ranged weapon for a named enemy',()=>{
+  const goblin=fixture('Goblin Warrior');
+  delete goblin.combat!.classicAdventure!.first.rangedWeapon;
+  const resolved=resolveDuelEnemyTurn(goblin);
+  expect(resolved.combat?.enemyLastTurn).not.toContain('fires');
+  expect(resolved.combat?.enemyLastTurn).not.toContain('Shortbow');
+ });
+
 });

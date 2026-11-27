@@ -109,3 +109,13 @@ The shared generator now spreads enemies across physically valid tactical region
 - Persistent favorite action dock stays as before. Expanded contextual panel caps at 30dvh / 250px; More displays 4 columns of touch-friendly choices; long catalogs scroll within capped panel as needed. Detailed Controls is available with a close button and max 36dvh rather than 72%, preserving forced reaction controls.
 - Tests: `tests/e2e/scene-interface.spec.ts` Option B layout, `tests/e2e/shell.spec.ts` theme assertions and existing full iPhone suite. Verify exact-SHA full CI + Vercel READY before a protected non-forced foundation fast-forward.
 - Continue to estimate chat capacity approximately every five user requests in future Four Keeps continuation prompts.
+
+
+### Phase 3 encounter pacing and tactical AI (v27)
+- Tactical changes are isolated on feat/v27-encounter-pacing-tactical-ai from foundation 47030a5caccf42e20b04d8b2ab476a0e1950fdef, subject to full verification before publication. Do not publish without exact-SHA full CI, iPhone artifacts, Vercel READY and protected fast-forward.
+- Enemy attacks now require directional cover legality and symmetric physical line of sight, including at execution time. Closed doors, walls, pillars and trees cannot be shot through merely because a directional silhouette reports partial cover.
+- selectEnemyTactic uses deterministic multi-turn approach distances to physically accessible melee or ranged firing squares. It respects difficult terrain, corner rules, occupying enemies, and locked openings. Enemies can open reachable unlocked doors as their free object interaction but cannot move through them until open.
+- Rats close toward melee and retain Pack Tactics. Goblins prefer longer standoff and protected lines; bandits prefer closer crossbow lanes and separation from allies. Hidden foes are searched for at last-known positions, not tracked through walls.
+- Warehouse rat zones are closer to the entry than before, retain large map dimensions, separate the two enemies by at least eight grid cells, and preserve seeded ambush/distant variation. Roadside and ruins spawn geography remains unchanged.
+- Regression coverage: src/game/tacticalEnemyAI.test.ts (physical sight, long routes, doors, role distances, attack execution and deployment pacing), src/game/battlefield.test.ts (seeded access/variation), and the existing iPhone Combat Lab tests/e2e/shell.spec.ts flow.
+- Continue approximate chat-capacity warnings every five user requests.

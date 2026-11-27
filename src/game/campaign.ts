@@ -1107,7 +1107,7 @@ export function resolveDuelEnemyTurn(campaign:Campaign):Campaign {
  let position={...startingPosition};
  const tacticalPlan:EnemyTacticalPlan|undefined=combat.battlefield&&combat.classicAdventure?
   selectEnemyTactic({map:combat.battlefield,start:startingPosition,target:playerPosition,
-   ally:otherPosition,speedFeet:speed*5,role:enemyRole(currentName),hidden:!!combat.playerHidden,
+   ally:otherPosition,speedFeet:speed*5,role:enemyRole(currentName),rangedAvailable:!!opponent?.rangedWeapon,hidden:!!combat.playerHidden,
    lastKnown:combat.lastKnownPlayerPosition}):undefined;
  let movedFeet=0;
  if(tacticalPlan){position=tacticalPlan.position;movedFeet=tacticalPlan.movementFeet;}
@@ -1151,15 +1151,20 @@ export function resolveDuelEnemyTurn(campaign:Campaign):Campaign {
    (foundBySearch?'. Nighthawk discovered.':'. No trace of Nighthawk found.'):
    ' Searches the last known location without finding Nighthawk.'):'';
  const roleNote=tacticalPlan?(tacticalPlan.reason+'. '):'';
+ const openedDoor=tacticalPlan?.openingId&&combat.battlefield?.objects.some(o=>o.id===tacticalPlan.openingId&&!o.locked&&!o.open&&!o.destroyed)
+  ?tacticalPlan.openingId:undefined;
+ const nextBattlefield=openedDoor?toggleBattlefieldOpening(combat.battlefield!,openedDoor):combat.battlefield;
  const standDescription=(standing?'Enemy stands from Prone, spending 15 feet of movement. ':'')+
   (movedFeet?'Moves '+movedFeet+' feet to ('+(position.x+1)+', '+(position.y+1)+'). ':'')+
-  roleNote+(spotted?' Nighthawk is spotted in the open.':'')+searchMessage+
+  roleNote+(openedDoor?'Opens the unlocked door. ':'')+(spotted?' Nighthawk is spotted in the open.':'')+searchMessage+
   ((!tacticalPlan||tacticalPlan.mode==='wait')&&!inReach&&!owlInReach?
    ' Cannot reach Nighthawk'+(combat.owl&&combat.owl.hp>0?' or Owl':'')+'; no melee attack. ':'');
  const character=campaign.character??prototypeNighthawk;
  const die=(sides:number)=>crypto.getRandomValues(new Uint32Array(1))[0]%sides+1;
  const cover=combat.battlefield?battlefieldCover(combat.battlefield,position,targetOwl?combat.owl!.position:playerPosition):0;
- const canAttack=(tacticalPlan?(tacticalPlan.mode==='ranged'||tacticalPlan.mode==='melee'&&inReach||targetOwl)&&!searching&&!stillHidden:targetOwl||inReach)&&cover!=='total';
+ const attackTarget=targetOwl?combat.owl!.position:playerPosition;
+ const hasClearAttackLine=!combat.battlefield||!battlefieldOpaqueSightBlocked(combat.battlefield,position,attackTarget);
+ const canAttack=(tacticalPlan?(tacticalPlan.mode==='ranged'||tacticalPlan.mode==='melee'&&inReach||targetOwl)&&!searching&&!stillHidden:targetOwl||inReach)&&cover!=='total'&&hasClearAttackLine;
  const rangedWeapon=tacticalPlan?.mode==='ranged'?opponent?.rangedWeapon:undefined;
  const first=canAttack?die(20):0;
  const dodging=targetOwl?false:combat.lastAction==='Dodge'||!!stillHidden||tacticalPlan?.mode==='ranged'&&distance(position,playerPosition)<=1||tacticalPlan?.mode==='ranged'&&tacticalPlan.distanceFeet>(rangedWeapon?.normalFeet??80);
@@ -1194,7 +1199,7 @@ export function resolveDuelEnemyTurn(campaign:Campaign):Campaign {
  const followingIndex=turn.index;
  const nextRound=turn.round;
  const nextOwl=owlDestroyed?undefined:targetOwl&&combat.owl?{...combat.owl,hp:owlAfter??combat.owl.hp}:combat.owl;
- const nextCombat={...combat,readiedAction:combat.order[followingIndex]==='Nighthawk'?undefined:combat.readiedAction,owl:followingIndex!==undefined&&combat.order[followingIndex]==='Nighthawk'?refreshOwlForNighthawkTurn({...combat,owl:nextOwl,round:nextRound}):nextOwl,enemyPosition:secondEnemyTurn?combat.enemyPosition:position,playerHidden:stillHidden,enemySearchResult:searchMessage||undefined,lastKnownPlayerPosition:stillHidden?combat.lastKnownPlayerPosition:playerPosition,secondEnemy:secondEnemyTurn&&combat.secondEnemy?{...combat.secondEnemy,position,prone:false}:combat.secondEnemy,enemyProne:secondEnemyTurn?combat.enemyProne:false,turnIndex:followingIndex,round:nextRound,reactionUsed:false,enemyReactionUsed:secondEnemyTurn?combat.enemyReactionUsed:false,secondEnemyReactionUsed:secondEnemyTurn?false:combat.secondEnemyReactionUsed,movementUsed:0,movementAllowance:35,actionUsed:false,objectInteractionUsed:false,bonusActionUsed:false,steadyAim:false,disengaged:false,sneakAttackUsedThisTurn:false,sneakAttackEligible:false,spellSlotExpendedThisTurn:false,lastAction:undefined,attack:undefined,enemyLastTurn:detail,status:defeated?'completed' as const:combat.status,outcome:defeated?'player-defeated' as const:combat.outcome};
+ const nextCombat={...combat,...(openedDoor?{battlefield:nextBattlefield}:{}),readiedAction:combat.order[followingIndex]==='Nighthawk'?undefined:combat.readiedAction,owl:followingIndex!==undefined&&combat.order[followingIndex]==='Nighthawk'?refreshOwlForNighthawkTurn({...combat,owl:nextOwl,round:nextRound}):nextOwl,enemyPosition:secondEnemyTurn?combat.enemyPosition:position,playerHidden:stillHidden,enemySearchResult:searchMessage||undefined,lastKnownPlayerPosition:stillHidden?combat.lastKnownPlayerPosition:playerPosition,secondEnemy:secondEnemyTurn&&combat.secondEnemy?{...combat.secondEnemy,position,prone:false}:combat.secondEnemy,enemyProne:secondEnemyTurn?combat.enemyProne:false,turnIndex:followingIndex,round:nextRound,reactionUsed:false,enemyReactionUsed:secondEnemyTurn?combat.enemyReactionUsed:false,secondEnemyReactionUsed:secondEnemyTurn?false:combat.secondEnemyReactionUsed,movementUsed:0,movementAllowance:35,actionUsed:false,objectInteractionUsed:false,bonusActionUsed:false,steadyAim:false,disengaged:false,sneakAttackUsedThisTurn:false,sneakAttackEligible:false,spellSlotExpendedThisTurn:false,lastAction:undefined,attack:undefined,enemyLastTurn:detail,status:defeated?'completed' as const:combat.status,outcome:defeated?'player-defeated' as const:combat.outcome};
  const concentrationCheck=!targetOwl&&damage>0&&!!campaign.concentration;
  const concentrationRoll=concentrationCheck?die(20):undefined;
  const concentrationBonus=abilityModifier(character.scores.con);

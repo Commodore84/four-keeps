@@ -188,7 +188,7 @@ export function generateBattlefield(environment:BattlefieldEnvironment,seed:stri
  const ambush=pick(0,99)<20;
  const near={x0:5,x1:10,y0:mid-5,y1:mid+5};
  const regions=environment==='warehouse-vermin'
-   ?[{x0:15,x1:24,y0:9,y1:14},{x0:27,x1:35,y0:18,y1:22}]
+   ?[{x0:15,x1:22,y0:6,y1:14},{x0:19,x1:27,y0:20,y1:29}]
    :environment==='roadside-bandit'
    ?[{x0:11,x1:26,y0:7,y1:23},{x0:12,x1:27,y0:38,y1:53}]
    :[{x0:17,x1:29,y0:7,y1:17},{x0:31,x1:43,y0:24,y1:35}];
@@ -210,6 +210,9 @@ export function generateBattlefield(environment:BattlefieldEnvironment,seed:stri
  for(const first of candidates[0]){
   for(const second of candidates[1]){
    if(first.x===second.x&&first.y===second.y)continue;
+   // Close enough for advancing rats to contribute within roughly two turns
+   // of mutual approach, without clustering two foes into the same lane.
+   if(environment==='warehouse-vermin'&&Math.max(Math.abs(first.x-second.x),Math.abs(first.y-second.y))<8)continue;
    const trial={battlefield,starts,enemyStarts:[first,second],exits};
    if(!validateGeneratedBattlefield(trial))continue;
    enemyStarts.splice(0,2,first,second);
