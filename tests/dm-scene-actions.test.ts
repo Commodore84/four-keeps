@@ -195,3 +195,39 @@ it('binds authored rig and helper methods to sealed Strength (Athletics) checks'
  const withoutCrowbar=response();await handler(req('I push the Stone Dais east using my crowbar.',state),withoutCrowbar);
  expect(withoutCrowbar.body.checkRequest?.sceneCheck).toBeUndefined();
 });
+
+it('only passes mapped NPC actions for established world people who were explicitly asked',async()=>{
+ const npcWorld={npcs:[{id:'mara-vell',name:'Mara Vell',role:'Guide',location:'Dasahi',relationship:'Cautious',notes:[]}]};
+ const state={...gameState,scene:{...scene,npcs:[{npcId:'mara-vell',position:{x:2,y:2},strength:12}]}};
+ const makeReq=(message:string,overrides=state)=>({...req(message,overrides),body:{...req(message,overrides).body,world:npcWorld}});
+ setup({narration:'Mara considers the request.',sceneAction:{type:'npc',id:'hidden-cellar',npcId:'mara-vell',behavior:'follow'}});
+ const yes=response();await handler(makeReq('I ask Mara Vell to follow me.'),yes);
+ expect(yes.code).toBe(200);
+ expect(yes.body.sceneAction).toEqual({type:'npc',id:'hidden-cellar',npcId:'mara-vell',behavior:'follow'});
+ const wrong=response();await handler(makeReq('I keep walking.'),wrong);
+ expect(wrong.body.sceneAction).toBeNull();
+ const absent=response();await handler(makeReq('I ask Mara Vell to follow me.',{...state,scene:{...scene,npcs:[]}}),absent);
+ expect(absent.body.sceneAction).toBeNull();
+ setup({narration:'Mara refuses to accompany you.',sceneAction:null});
+ const refused=response();await handler(makeReq('I ask Mara Vell to follow me.'),refused);
+ expect(refused.body.sceneAction).toBeNull();
+});
+it('binds dynamic heavy assistance to the same mapped NPC and world name',async()=>{
+ const npcWorld={npcs:[{id:'mara-vell',name:'Mara Vell',role:'Guide',location:'Dasahi',relationship:'Helpful',notes:[]}]};
+ const state={...gameState,scene:{...scene,
+  playerPosition:{x:2,y:1},npcs:[{npcId:'mara-vell',position:{x:2,y:2},strength:12}],
+  features:[{id:'stone-effort',kind:'obstacle',label:'Stone Block',position:{x:3,y:2},
+   dc:15,skill:'Athletics',targetObjectId:'stone-one',obstacleMode:'shift',weightLb:340,
+   helperNpcId:'mara-vell',discovered:true}],
+  objects:[{id:'stone-one',kind:'cargo',x:3,y:2,width:1,height:1}]}};
+ const makeReq=(message:string,overrides=state)=>({...req(message,overrides),body:{...req(message,overrides).body,world:npcWorld}});
+ setup({narration:'Mara helps brace the stone.',checkRequest:{skill:'Athletics',difficulty:'moderate',
+  reason:'Move Stone Block',sceneCheck:{sceneId:'hidden-cellar',featureId:'stone-effort',
+   goal:'heavy-shift',x:4,y:2,method:'helper'}}});
+ const accepted=response();await handler(makeReq('I push the Stone Block one square east with help from Mara Vell.'),accepted);
+ expect(accepted.body.checkRequest?.sceneCheck).toMatchObject({method:'helper',featureId:'stone-effort'});
+ expect(accepted.body.checkRequest?.mode).toBe('advantage');
+ const absent=response();await handler(makeReq('I push the Stone Block one square east with help from Mara Vell.',
+  {...state,scene:{...state.scene,npcs:[]}}),absent);
+ expect(absent.body.checkRequest?.sceneCheck).toBeUndefined();
+});

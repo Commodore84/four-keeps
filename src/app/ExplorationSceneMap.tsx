@@ -1,5 +1,6 @@
 import {useEffect,useRef,useState} from 'react';
 import type {ExplorationScene} from '../game/explorationScene';
+import type {NPCRecord} from '../game/world';
 import {objectAt,battlefieldBlocked,type BattlefieldObject} from '../game/battlefield';
 import {battlefieldTileName,battlefieldObjectArtworkStyle} from './battlefieldIllustrations';
 import {ClassicCombatGrid} from './ClassicCombatPresentation';
@@ -7,28 +8,38 @@ import {ClassicCombatMapFrame} from './ClassicCombatMapFrame';
 
 /** A noncombat view of the exact saved combat geometry. The conversation is
  * authoritative for exploration intentions; this view spends no actions or movement. */
-export function ExplorationSceneMap({scene,onInspect,canUseCrowbar=false}:{scene:ExplorationScene;onInspect:(text:string)=>void;canUseCrowbar?:boolean}){
+export function ExplorationSceneMap({scene,onInspect,canUseCrowbar=false,npcRecords=[]}:{scene:ExplorationScene;onInspect:(text:string)=>void;canUseCrowbar?:boolean;npcRecords?:NPCRecord[]}){
  const [heavyMethod,setHeavyMethod]=useState<'solo'|'crowbar'|'rig'|'helper'>('solo');
  const [zoom,setZoom]=useState(1);
  const [selectedId,setSelectedId]=useState<string|null>(null);
+ const [selectedNpcId,setSelectedNpcId]=useState<string|null>(null);
  const [selectedSquare,setSelectedSquare]=useState<{x:number;y:number}|null>(null);
  const frame=useRef<HTMLDivElement>(null);
  const map=scene.battlefield;
  const selected=map.objects.find(obj=>obj.id===selectedId&&!obj.destroyed);
+ const namedNpc=(id:string)=>npcRecords.find(n=>n.id===id)?.name??id;
+ const selectedNpc=scene.npcs?.find(n=>n.npcId===selectedNpcId);
+ const selectedNpcName=selectedNpc?namedNpc(selectedNpc.npcId):'';
  const selectedFeature=selectedSquare?scene.features?.find(f=>f.discovered&&!(f.kind==='key'&&f.collected)&&f.position.x===selectedSquare.x&&f.position.y===selectedSquare.y):undefined;
  const selectedDoorTrap=selected?scene.features?.find(f=>f.kind==='trap'&&f.targetObjectId===selected.id&&f.discovered):undefined;
  const selectedObstacle=selected?scene.features?.find(f=>f.kind==='obstacle'&&f.targetObjectId===selected.id&&f.discovered):undefined;
+ const npcHelper=selectedObstacle?.helperNpcId?scene.npcs?.find(n=>n.npcId===selectedObstacle.helperNpcId):undefined;
+ const helperRecord=npcHelper?npcRecords.find(n=>n.id===npcHelper.npcId):undefined;
+ const selectedHelper=npcHelper&&selected&&helperRecord&&
+   npcHelper.position.x>=selected.x-1&&npcHelper.position.x<=selected.x+selected.width&&
+   npcHelper.position.y>=selected.y-1&&npcHelper.position.y<=selected.y+selected.height?
+   {label:helperRecord.name,strength:npcHelper.strength,position:npcHelper.position}:selectedObstacle?.helper;
  const availableMethod=heavyMethod==='crowbar'&&selectedObstacle?.leveragePoint&&canUseCrowbar?'crowbar':
    heavyMethod==='rig'&&selectedObstacle?.rig?'rig':
-   heavyMethod==='helper'&&selectedObstacle?.helper?'helper':'solo';
+   heavyMethod==='helper'&&selectedHelper?'helper':'solo';
  const methodWords=availableMethod==='crowbar'?' using my crowbar':
    availableMethod==='rig'?' using the '+selectedObstacle!.rig!.label:
-   availableMethod==='helper'?' with help from '+selectedObstacle!.helper!.label:'';
+   availableMethod==='helper'?' with help from '+selectedHelper!.label:'';
  const methodOptions=selectedObstacle?[
   {value:'solo' as const,label:'Solo'},
   ...(selectedObstacle.leveragePoint&&canUseCrowbar?[{value:'crowbar' as const,label:'Crowbar'}]:[]),
   ...(selectedObstacle.rig?[{value:'rig' as const,label:selectedObstacle.rig.label}]:[]),
-  ...(selectedObstacle.helper?[{value:'helper' as const,label:'Help: '+selectedObstacle.helper.label}]:[])
+  ...(selectedHelper?[{value:'helper' as const,label:'Help: '+selectedHelper.label}]:[])
  ]:[];
  const focus=(next:number)=>{
   const el=frame.current;
@@ -78,10 +89,19 @@ export function ExplorationSceneMap({scene,onInspect,canUseCrowbar=false}:{scene
     {Array.from({length:map.width*map.height},(_,i)=>{
      const x=i%map.width,y=Math.floor(i/map.width),own=x===scene.playerPosition.x&&y===scene.playerPosition.y;
      const obj=objectAt(map,{x,y}).find(o=>!o.destroyed);
+     const npc=scene.npcs?.find(n=>n.position.x===x&&n.position.y===y);
      const blocked=battlefieldBlocked(map,{x,y});
      const interact=!!obj&&['door','window','table','crate','cargo','chair','pillar','rock','statue','tree'].includes(obj.kind);
      const feature=scene.features?.find(f=>f.discovered&&!(f.kind==='key'&&f.collected)&&f.position.x===x&&f.position.y===y);
      const content=own?<span aria-label="Character location" className="relative z-10 flex h-4 w-4 items-center justify-center rounded-full border border-white bg-amber-300 text-[10px] font-bold text-black">P</span>:null;
+     if(npc)return <button key={i} type="button" role="gridcell"
+       aria-label={'Talk to '+namedNpc(npc.npcId)+' at '+(x+1)+', '+(y+1)}
+       aria-pressed={selectedNpcId===npc.npcId}
+       onClick={()=>{setSelectedNpcId(npc.npcId);setSelectedId(null);setSelectedSquare(null);}}
+       data-terrain-art={battlefieldTileName(map,obj,x,y)} style={{gridColumnStart:x+1,gridRowStart:y+1,minHeight:0,borderRadius:0}}
+       className={'relative aspect-square min-w-0 border '+(selectedNpcId===npc.npcId?'border-gold bg-gold/15':'border-white/15')}>
+       <span className="relative z-10 flex h-5 min-w-5 items-center justify-center rounded-full border border-sky-300 bg-slate-900 text-[10px] font-bold text-sky-100">N</span>
+     </button>;
      const styles={gridColumnStart:x+1,gridRowStart:y+1,minHeight:0,borderRadius:0,...battlefieldObjectArtworkStyle(obj,x,y,zoom)};
      if(!interact && feature)return <button key={i} type="button" role="gridcell" aria-label={'Examine '+feature.kind+' '+feature.label}
       onClick={()=>{setSelectedId(null);setSelectedSquare({x,y});}}
@@ -89,12 +109,29 @@ export function ExplorationSceneMap({scene,onInspect,canUseCrowbar=false}:{scene
       className="relative aspect-square min-w-0 border border-amber-400/50 text-[10px] text-gold">{content??(feature.kind==='mechanism'?(feature.activated?'✓':'◉'):feature.kind==='key'?'⚿':feature.kind==='trap'?(feature.disarmed?'✓':feature.triggered?'!':'?'):'?')}</button>;
      return interact?<button type="button" key={i} role="gridcell" data-terrain-art={battlefieldTileName(map,obj,x,y)}
       aria-label={'Inspect '+label(obj!)+' at '+(x+1)+', '+(y+1)} aria-pressed={selectedId===obj!.id}
-      onClick={()=>{setSelectedId(obj!.id);setSelectedSquare(null);}} style={styles}
+      onClick={()=>{setSelectedId(obj!.id);setSelectedSquare(null);setSelectedNpcId(null);}} style={styles}
       className={'relative aspect-square min-w-0 border '+(selectedId===obj!.id?'border-gold bg-gold/15':'border-white/10')}>{content}</button>:
       <button key={i} type="button" role="gridcell" aria-label={own?'Character location':blocked?'Blocked square '+(x+1)+', '+(y+1):'Explore square '+(x+1)+', '+(y+1)} disabled={blocked} onClick={()=>{setSelectedId(null);setSelectedSquare({x,y});}} data-terrain-art={battlefieldTileName(map,obj,x,y)} style={styles} className="relative aspect-square min-w-0 border border-white/10">{content}</button>;
     })}
    </ClassicCombatGrid>
   </ClassicCombatMapFrame>
+  {selectedNpc&&<div role="group" aria-label="Selected scene NPC"
+   className="flex flex-wrap items-center gap-2 rounded-lg border border-sky-500/30 p-2 text-xs">
+   <span className="font-semibold text-sky-100">{selectedNpcName}{selectedNpc.following?' · Following':''}</span>
+   <button type="button" onClick={()=>onInspect('I speak with '+selectedNpcName+' about what we have found.')}
+    className="min-h-11 rounded border border-white/20 px-2">Speak</button>
+   <button type="button" onClick={()=>onInspect('I ask '+selectedNpcName+(selectedNpc.following?' to wait here.':' to follow me.'))}
+    className="min-h-11 rounded border border-white/20 px-2">{selectedNpc.following?'Ask to wait':'Ask to follow'}</button>
+   {selectedSquare&&<button type="button"
+    onClick={()=>onInspect('I ask '+selectedNpcName+' to move to square '+(selectedSquare.x+1)+', '+(selectedSquare.y+1)+'.')}
+    className="min-h-11 rounded border border-white/20 px-2">Ask to move here</button>}
+   {selectedFeature&&<button type="button"
+    onClick={()=>onInspect('I ask '+selectedNpcName+' to '+(selectedFeature.kind==='mechanism'?(selectedFeature.rotation?'rotate':'operate'):'inspect')+
+      ' the '+selectedFeature.label+(selectedFeature.rotation?' one step clockwise.':'.'))}
+    className="min-h-11 rounded border border-white/20 px-2">
+    {selectedFeature.kind==='mechanism'?'Ask to operate':'Ask to inspect'}
+   </button>}
+  </div>}
   {selected&&<div aria-label="Selected exploration object" className="flex items-center justify-between gap-2 rounded-lg border border-gold/30 p-2 text-sm">
    <span>{label(selected)} · {selected.x+1}, {selected.y+1}</span>
    <div className="flex gap-1">

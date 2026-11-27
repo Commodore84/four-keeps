@@ -39,3 +39,8 @@ This document distinguishes **present functionality**, **unpublished candidates*
 ## v29 continuation — expanded heavy scene affordances (2026-11-27)
 - Extends published heavy-check foundation `7fc3a1403f705ce6a31b651c1510b217107486d8` with rectangular prop collision-safe movement and initial-scene-authored named rig/helper or owned crowbar leverage, all bound to sealed Athletics checks. Existing Strength/carrying rules are reused for Goliath and temporary Strength, and exact helper/rig identity is required in player text; no hidden NPC spawning or free bonuses.
 - Maintain the isolated worktree and historical dirty work. New `explorationExtendedHeavy.test.ts`, DM API tests and iPhone Old Quarry evidence must pass exact-SHA full release checks before foundation publication.
+
+## v29 persistent exploration NPC integration (2026-11-27)
+- Extends the verified foundation `852a54816c90aa7466aea409065d05e3a5edf4a6` without replacing the combat engine or historical NPC world records. Adds saved scene NPC positions and following state linked by canonical `world.npcs` IDs, conservative existing-map pathing, DM-adjudicated consent, adjacent NPC mechanism inspection/operation, and dynamic mapped helpers for sealed heavy-object checks.
+- NPC world relationships and notes remain governed by the existing world merge. No NPCs are invented by rendering the map, and dialogue cannot silently mutate physics. NPC independent skill checks, cross-scene travel, combat allies and autonomous decisions remain deferred.
+- Evidence: `explorationNpc.test.ts`, `dm-scene-actions.test.ts`, and Playwright `persistent-exploration-npc-iphone.png`. Preserve the isolated feature worktree until exact-SHA full CI and Vercel READY release.

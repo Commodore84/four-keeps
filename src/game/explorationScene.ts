@@ -1,4 +1,5 @@
 import type {Campaign} from './campaign';
+import type {NPCRecord} from './world';
 import {carryingCapacity} from './carryingCapacity';
 import {battlefieldBlocked,battlefieldContains,battlefieldOpeningWithinReach,battlefieldDifficult,battlefieldOpaqueSightBlocked,toggleBattlefieldOpening,validateBattlefield,type Battlefield,type BattlefieldPoint} from './battlefield';
 import {buildSoloEncounter,SOLO_ROGUE_ENCOUNTERS,type SoloEncounterId} from './encounterDirector';
@@ -8,7 +9,11 @@ import {buildSoloEncounter,SOLO_ROGUE_ENCOUNTERS,type SoloEncounterId} from './e
 export interface ExplorationScene {
  id:string; title:string; location:string; visible:boolean; battlefield:Battlefield;
  playerPosition:BattlefieldPoint; templateId?:SoloEncounterId; seed?:string; updatedAt:string;
- features?:ExplorationFeature[];
+ features?:ExplorationFeature[];npcs?:SceneNpc[];
+}
+export interface SceneNpc {
+ /** Exact stable world record ID, never a second identity or separate relationship. */
+ npcId:string;position:BattlefieldPoint;strength:number;following?:boolean;
 }
 export type ExplorationFeature={
  id:string;kind:'clue'|'trap'|'mechanism'|'key'|'obstacle';label:string;position:BattlefieldPoint;
@@ -30,6 +35,8 @@ export type ExplorationFeature={
  leveragePoint?:boolean;
  rig?:{label:string;multiplier:2};
  helper?:{label:string;strength:number;position:BattlefieldPoint};
+ /** Dynamic helper resolves through a present NPC with the same world identity. */
+ helperNpcId?:string;
 };
 /** Trap profiles are part of the saved DM scene; no effect may be invented
  * when a roll resolves. Older saved traps without a profile remain harmless. */
@@ -64,14 +71,15 @@ const trapEffectValid=(value:unknown):value is TrapEffect=>{
 };
 export type SceneCheckIntent={sceneId:string;featureId:string;goal:'discover'|'disarm'|'unlock'|'heavy-shift'|'heavy-lift';x?:number;y?:number;method?:'crowbar'|'rig'|'helper'};
 export type PendingSceneCheck=SceneCheckIntent&{token:string};
-type SceneShow={type:'show';id:string;title:string;templateId?:SoloEncounterId;battlefield?:unknown;features?:unknown[]};
+type SceneShow={type:'show';id:string;title:string;templateId?:SoloEncounterId;battlefield?:unknown;features?:unknown[];npcs?:unknown[]};
 type SceneMove={type:'move';id:string;x:number;y:number};
+type SceneNpcAction={type:'npc';id:string;npcId:string;behavior:'move'|'follow'|'wait'|'operate'|'inspect';x?:number;y?:number;featureId?:string};
 type SceneHide={type:'hide'};
 type SceneOpening={type:'open'|'close';id:string;objectId:string};
 type SceneActivation={type:'activate';id:string;featureId:string};
 type SceneTake={type:'take';id:string;featureId:string};
 type SceneShift={type:'shift';id:string;objectId:string;x:number;y:number};
-export type DmSceneAction=SceneShow|SceneHide|SceneOpening|SceneMove|SceneActivation|SceneShift|SceneTake;
+export type DmSceneAction=SceneShow|SceneHide|SceneOpening|SceneMove|SceneActivation|SceneShift|SceneTake|SceneNpcAction;
 const slug=/^[a-z0-9][a-z0-9-]{2,63}$/;
 const compact=(value:unknown)=>typeof value==='string'?value.trim():'';
 const isTemplate=(id:string):id is SoloEncounterId=>Object.hasOwn(SOLO_ROGUE_ENCOUNTERS,id);
@@ -89,8 +97,10 @@ const around=[[-1,0],[0,-1],[0,1],[1,0],[-1,-1],[-1,1],[1,-1],[1,1]] as const;
 const distance=(a:BattlefieldPoint,b:BattlefieldPoint)=>Math.max(Math.abs(a.x-b.x),Math.abs(a.y-b.y));
 /** Pure path validation, with the exact authoritative blocked/difficult terrain.
  * No character position changes until a player movement intent and DM action agree. */
-export function explorationRoute(map:Battlefield,start:BattlefieldPoint,target:BattlefieldPoint){
- if(map.width*map.height>4096||battlefieldBlocked(map,start)||battlefieldBlocked(map,target))return undefined;
+export function explorationRoute(map:Battlefield,start:BattlefieldPoint,target:BattlefieldPoint,occupied:BattlefieldPoint[]=[]){
+ const occupiedKeys=new Set(occupied.map(positionKey));
+ const blocked=(point:BattlefieldPoint)=>battlefieldBlocked(map,point)||occupiedKeys.has(positionKey(point));
+ if(map.width*map.height>4096||blocked(start)||blocked(target))return undefined;
  const costs=new Map<string,number>([[positionKey(start),0]]);
  const parents=new Map<string,string>();
  const cells=new Map<string,BattlefieldPoint>([[positionKey(start),start]]);
@@ -108,8 +118,8 @@ export function explorationRoute(map:Battlefield,start:BattlefieldPoint,target:B
   }
   for(const [dx,dy] of around){
    const next={x:point.x+dx,y:point.y+dy};
-   if(battlefieldBlocked(map,next)||dx&&dy&&(battlefieldBlocked(map,{x:point.x+dx,y:point.y})||
-     battlefieldBlocked(map,{x:point.x,y:point.y+dy})))continue;
+   if(blocked(next)||dx&&dy&&(blocked({x:point.x+dx,y:point.y})||
+     blocked({x:point.x,y:point.y+dy})))continue;
    const nextCost=cost+(battlefieldDifficult(map,next)?10:5);
    const key=positionKey(next);
    if(nextCost>=(costs.get(key)??Infinity))continue;
@@ -120,6 +130,59 @@ export function explorationRoute(map:Battlefield,start:BattlefieldPoint,target:B
 }
 const objectAtPosition=(map:Battlefield,id:string,p:BattlefieldPoint)=>
  map.objects.some(o=>o.id===id&&p.x>=o.x&&p.x<o.x+o.width&&p.y>=o.y&&p.y<o.y+o.height);
+function normalizeSceneNpcs(value:unknown,map:Battlefield,player:BattlefieldPoint):SceneNpc[]{
+ if(!Array.isArray(value)||value.length>12)throw Error('Invalid scene NPC placements.');
+ const seen=new Set<string>(),positions=new Set<string>([positionKey(player)]);
+ return value.map(raw=>{
+  if(!raw||typeof raw!=='object'||Array.isArray(raw))throw Error('Invalid scene NPC placement.');
+  const n=raw as Record<string,unknown>,npcId=compact(n.npcId),p=n.position as BattlefieldPoint;
+  if(!slug.test(npcId)||seen.has(npcId)||Object.keys(n).some(k=>!['npcId','position','strength','following'].includes(k))||
+    !p||typeof p!=='object'||!Number.isInteger(p.x)||!Number.isInteger(p.y)||
+    !battlefieldContains(map,p)||battlefieldBlocked(map,p)||positions.has(positionKey(p))||
+    !Number.isInteger(n.strength)||Number(n.strength)<1||Number(n.strength)>30||
+    (n.following!==undefined&&typeof n.following!=='boolean'))
+   throw Error('Invalid scene NPC placement.');
+  seen.add(npcId);positions.add(positionKey(p));
+  return {npcId,position:{x:p.x,y:p.y},strength:n.strength as number,
+    ...(n.following===true?{following:true}:{})};
+ });
+}
+const npcKnown=(campaign:Campaign,npcId:string):NPCRecord|undefined=>
+ campaign.world?.npcs.find(n=>n.id===npcId);
+const occupiedFor=(scene:ExplorationScene,excludeId?:string)=>[
+ ...(scene.npcs??[]).filter(n=>n.npcId!==excludeId).map(n=>n.position)
+];
+function sceneNpcPath(scene:ExplorationScene,npcId:string,target:BattlefieldPoint){
+ const npc=scene.npcs?.find(n=>n.npcId===npcId);
+ if(!npc)return undefined;
+ const occupied=[scene.playerPosition,...occupiedFor(scene,npcId),
+   ...(scene.features??[]).filter(f=>f.kind==='trap'&&!f.targetObjectId&&!f.disarmed&&!f.triggered&&f.trapEffect).map(f=>f.position)];
+ return explorationRoute(scene.battlefield,npc.position,target,occupied);
+}
+/** Movement of previously consenting followers is bounded to 30 feet, not teleportation. */
+function advanceFollowers(scene:ExplorationScene,playerTarget:BattlefieldPoint):SceneNpc[]|undefined{
+ if(!scene.npcs?.some(n=>n.following))return scene.npcs;
+ const updated=scene.npcs.map(n=>({...n,position:{...n.position}}));
+ const traps=(scene.features??[]).filter(f=>f.kind==='trap'&&!f.targetObjectId&&!f.disarmed&&!f.triggered&&f.trapEffect).map(f=>f.position);
+ for(const npc of updated.filter(n=>n.following)){
+  const occupied=[playerTarget,...updated.filter(n=>n.npcId!==npc.npcId).map(n=>n.position),...traps];
+  const routes=around.map(([dx,dy])=>({x:playerTarget.x+dx,y:playerTarget.y+dy}))
+    .filter(p=>battlefieldContains(scene.battlefield,p)&&!battlefieldBlocked(scene.battlefield,p)&&
+      !occupied.some(o=>o.x===p.x&&o.y===p.y))
+    .map(p=>explorationRoute(scene.battlefield,npc.position,p,occupied)).filter((r):r is NonNullable<typeof r>=>!!r)
+    .sort((a,b)=>a.distanceFeet-b.distanceFeet||a.route.length-b.route.length);
+  if(!routes.length)continue;
+  let traveled=0,at=npc.position;
+  for(let i=1;i<routes[0].route.length;i++){
+   const step=routes[0].route[i];
+   const feet=battlefieldDifficult(scene.battlefield,step)?10:5;
+   if(traveled+feet>30)break;
+   traveled+=feet;at=step;
+  }
+  npc.position={...at};
+ }
+ return updated;
+}
 function normalizeFeatures(value:unknown,map:Battlefield):ExplorationFeature[]{
  if(!Array.isArray(value)||value.length>12)throw Error('Invalid scene features.');
  const ids=new Set<string>();
@@ -148,6 +211,7 @@ function normalizeFeatures(value:unknown,map:Battlefield):ExplorationFeature[]{
       String((f.rig as Record<string,unknown>).label).length>60||
       String((f.rig as Record<string,unknown>).label).trim().length<2||
       (f.rig as Record<string,unknown>).multiplier!==2))||
+    (f.helperNpcId!==undefined&&(f.kind!=='obstacle'||!slug.test(compact(f.helperNpcId))||f.helper!==undefined))||
     (f.helper!==undefined&&(f.kind!=='obstacle'||!f.helper||typeof f.helper!=='object'||Array.isArray(f.helper)||
       Object.keys(f.helper).some(key=>!['label','strength','position'].includes(key))||
       typeof (f.helper as Record<string,unknown>).label!=='string'||
@@ -201,6 +265,7 @@ function normalizeFeatures(value:unknown,map:Battlefield):ExplorationFeature[]{
     ...(f.kind==='obstacle'?{obstacleMode:f.obstacleMode as 'shift'|'lift',weightLb:Number(f.weightLb)}:{}),
     ...(f.kind==='obstacle'&&f.leveragePoint===true?{leveragePoint:true}:{}),
     ...(f.kind==='obstacle'&&f.rig?{rig:{label:String((f.rig as {label:string}).label),multiplier:2 as const}}:{}),
+    ...(f.kind==='obstacle'&&f.helperNpcId!==undefined?{helperNpcId:String(f.helperNpcId)}:{}),
     ...(f.kind==='obstacle'&&f.helper?{helper:{label:String((f.helper as {label:string}).label),
       strength:Number((f.helper as {strength:number}).strength),
       position:{...(f.helper as {position:BattlefieldPoint}).position}}}:{}),
@@ -246,6 +311,7 @@ function validHeavyShift(scene:ExplorationScene,feature:ExplorationFeature,x:num
   if(!battlefieldContains(scene.battlefield,cell)||
      cell.x===scene.playerPosition.x&&cell.y===scene.playerPosition.y||
      feature.helper?.position.x===cell.x&&feature.helper?.position.y===cell.y||
+     scene.npcs?.some(n=>n.position.x===cell.x&&n.position.y===cell.y)||
      rest.some(obj=>cell.x>=obj.x&&cell.x<obj.x+obj.width&&cell.y>=obj.y&&cell.y<obj.y+obj.height)||
      scene.features?.some(f=>f.id!==feature.id&&f.position.x===cell.x&&f.position.y===cell.y))
     return false;
@@ -260,6 +326,12 @@ const heavyDirection=(from:BattlefieldPoint,to:BattlefieldPoint):'north'|'south'
 function ownsCrowbar(campaign:Campaign):boolean{
  return (campaign.inventoryLedger?.gear??[]).some(item=>item.quantity>0&&item.name.toLowerCase()==='crowbar');
 }
+function resolvedNpcHelper(campaign:Campaign,scene:ExplorationScene,feature:ExplorationFeature){
+ if(!feature.helperNpcId)return feature.helper;
+ const npc=scene.npcs?.find(n=>n.npcId===feature.helperNpcId);
+ const record=npcKnown(campaign,feature.helperNpcId);
+ return npc&&record?{label:record.name,strength:npc.strength,position:npc.position}:undefined;
+}
 function heavyEligible(campaign:Campaign,scene:ExplorationScene,feature:ExplorationFeature,
  goal:'heavy-shift'|'heavy-lift',target?:BattlefieldPoint,method?:SceneCheckIntent['method']):boolean{
  if(feature.kind!=='obstacle'||!feature.discovered||feature.completed||
@@ -269,10 +341,10 @@ function heavyEligible(campaign:Campaign,scene:ExplorationScene,feature:Explorat
  if(!o||o.destroyed||!battlefieldOpeningWithinReach(o,scene.playerPosition))return false;
  if(method==='crowbar'&&(!feature.leveragePoint||!ownsCrowbar(campaign)))return false;
  if(method==='rig'&&!feature.rig)return false;
- if(method==='helper'&&(!feature.helper||
-   !battlefieldOpeningWithinReach(o,feature.helper.position)))return false;
+ const helper=resolvedNpcHelper(campaign,scene,feature);
+ if(method==='helper'&&(!helper||!battlefieldOpeningWithinReach(o,helper.position)))return false;
  const base=(carryingCapacity(campaign)??0)*2;
- const max=(method==='rig'?base*2:base)+(method==='helper'?(feature.helper?.strength??0)*30:0);
+ const max=(method==='rig'?base*2:base)+(method==='helper'?(helper?.strength??0)*30:0);
  if((feature.weightLb??Infinity)>max)return false;
  if(goal==='heavy-lift')return ['door','window'].includes(o.kind)&&!!o.locked&&target===undefined;
  return !!target&&validHeavyShift(scene,feature,target.x,target.y);
@@ -291,7 +363,7 @@ export function sceneCheckRequest(campaign:Campaign,request:unknown,check:{skill
     !heavyEligible(campaign,scene,feature,intent.goal,target,method)||
     (method==='crowbar'&&!/\bcrowbar\b/i.test(playerMessage))||
     (method==='rig'&&!playerMessage.toLowerCase().includes(feature.rig?.label.toLowerCase()??'__missing_rig__'))||
-    (method==='helper'&&!playerMessage.toLowerCase().includes(feature.helper?.label.toLowerCase()??'__missing_helper__'))||
+    (method==='helper'&&!playerMessage.toLowerCase().includes(resolvedNpcHelper(campaign,scene,feature)?.label.toLowerCase()??'__missing_helper__'))||
     !playerMessage.toLowerCase().includes(feature.label.toLowerCase())||!heavyIntent.test(playerMessage)||
     (intent.goal==='heavy-lift'&&(intent.x!==undefined||intent.y!==undefined))||
     (target&&(!shiftIntent.test(playerMessage)||
@@ -396,9 +468,12 @@ export function normalizeExplorationScene(value:unknown):ExplorationScene|undefi
   const templateId=typeof o.templateId==='string'&&isTemplate(o.templateId)?o.templateId:undefined;
   const seed=typeof o.seed==='string'&&o.seed.length<=150?o.seed:undefined;
   const features=o.features===undefined?undefined:normalizeFeatures(o.features,battlefield);
+  const npcs=o.npcs===undefined?undefined:normalizeSceneNpcs(o.npcs,battlefield,p);
+  for(const feature of features??[])if(feature.helperNpcId&&!npcs?.some(n=>n.npcId===feature.helperNpcId))
+   throw Error('Missing mapped NPC helper.');
   return {id:o.id as string,title:o.title as string,location:o.location as string,
    visible:o.visible,battlefield,playerPosition:{x:p.x,y:p.y},updatedAt:o.updatedAt,
-   ...(templateId?{templateId}:{}),...(seed?{seed}:{}),...(features?{features}:{})};
+   ...(templateId?{templateId}:{}),...(seed?{seed}:{}),...(features?{features}:{}),...(npcs?{npcs}:{})};
  }catch{return undefined;}
 }
 
@@ -415,6 +490,61 @@ export function applyDmSceneAction(campaign:Campaign,action:unknown,now=new Date
   if(Object.keys(a).some(k=>k!=='type'))throw Error('Invalid scene dismissal.');
   return before?{...campaign,explorationScene:{...before,visible:false,updatedAt:now}}:campaign;
  }
+ if(a.type==='npc'){
+  if(!before||!before.visible||before.location!==campaign.location||a.id!==before.id||
+   campaign.pendingTrapSave||(campaign.character?.currentHitPoints??1)<=0||
+   typeof a.npcId!=='string'||!['move','follow','wait','operate','inspect'].includes(String(a.behavior))||
+   Object.keys(a).some(k=>!['type','id','npcId','behavior','x','y','featureId'].includes(k)))
+   throw Error('An NPC action requires an active, safe exploration scene.');
+  const npc=before.npcs?.find(n=>n.npcId===a.npcId);
+  const record=npc&&npcKnown(campaign,npc.npcId);
+  if(!npc||!record||!playerMessage.toLowerCase().includes(record.name.toLowerCase())||
+    !/\b(?:ask|tell|request|invite|instruct|persuade|convince|call|signal)\b/i.test(playerMessage))
+   throw Error('The named NPC must already exist and the player must make a request.');
+  if(a.behavior==='follow'||a.behavior==='wait'){
+   if(a.x!==undefined||a.y!==undefined||a.featureId!==undefined||
+     !(a.behavior==='follow'?/\b(?:follow|come along|join me|come with)\b/i:/\b(?:wait|stay|hold position|stop following)\b/i).test(playerMessage))
+    throw Error('NPC following requires an explicit matching request.');
+   const npcs=before.npcs!.map(n=>{if(n.npcId!==npc.npcId)return n;const {following:_previous,...rest}=n;return {...rest,...(a.behavior==='follow'?{following:true}:{})};});
+   return {...campaign,explorationScene:{...before,npcs,updatedAt:now},
+    journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',
+     text:record.name+(a.behavior==='follow'?' agrees to follow.':' agrees to wait.'),createdAt:now}]};
+  }
+  if(a.behavior==='move'){
+   if(!Number.isInteger(a.x)||!Number.isInteger(a.y)||a.featureId!==undefined||
+     !movementIntent.test(playerMessage))throw Error('NPC movement requires a destination and explicit request.');
+   const target={x:a.x as number,y:a.y as number};
+   if(!new RegExp('\\bsquare\\s+'+(target.x+1)+'\\s*,\\s*'+(target.y+1)+'\\b','i').test(playerMessage))
+    throw Error('NPC movement must match the requested square.');
+   const path=sceneNpcPath(before,npc.npcId,target);
+   if(!path||path.distanceFeet>60)throw Error('NPC destination is unreachable within a normal exploration move.');
+   const npcs=before.npcs!.map(n=>n.npcId===npc.npcId?{...n,position:target}:n);
+   return {...campaign,explorationScene:{...before,npcs,updatedAt:now}};
+  }
+  if(typeof a.featureId!=='string'||a.x!==undefined||a.y!==undefined)
+   throw Error('NPC interaction requires a saved target feature.');
+  const feature=before.features?.find(f=>f.id===a.featureId&&f.discovered);
+  if(!feature||distance(npc.position,feature.position)>1||
+    battlefieldOpaqueSightBlocked(before.battlefield,npc.position,feature.position)||
+    !playerMessage.toLowerCase().includes(feature.label.toLowerCase()))
+   throw Error('The named NPC cannot reach the requested feature.');
+  if(a.behavior==='inspect'){
+   if(!/\b(?:inspect|investigate|examine|search|look at|study)\b/i.test(playerMessage))
+    throw Error('NPC inspection requires a matching player request.');
+   // An NPC may investigate, but a mere narrative action cannot reveal concealed clues.
+   return {...campaign,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',
+     text:record.name+' examines '+feature.label+'. Any discoveries require separate adjudication.',createdAt:now}]};
+  }
+  if(a.behavior==='operate'){
+   if(feature.kind!=='mechanism'||!activationIntent.test(playerMessage))throw Error('NPC can operate only a known mechanism.');
+   const actorScene={...before,playerPosition:npc.position};
+   const result=applyDmSceneAction({...campaign,explorationScene:actorScene},
+     {type:'activate',id:before.id,featureId:feature.id},now,playerMessage);
+   const last=result.journal.at(-1);
+   return {...result,explorationScene:{...result.explorationScene!,playerPosition:before.playerPosition},
+     journal:last?[...result.journal.slice(0,-1),{...last,text:record.name+': '+last.text}]:result.journal};
+  }
+ }
  if(a.type==='move'){
   if(campaign.pendingTrapSave)throw Error('Resolve the triggered trap before moving.');
   if((campaign.character?.currentHitPoints??1)<=0)throw Error('An unconscious character cannot move.');
@@ -422,7 +552,7 @@ export function applyDmSceneAction(campaign:Campaign,action:unknown,now=new Date
     !Number.isInteger(a.x)||!Number.isInteger(a.y)||Object.keys(a).some(k=>!['type','id','x','y'].includes(k))||
     !movementIntent.test(playerMessage))throw Error('Movement requires the player to request it in this scene.');
   const target={x:a.x as number,y:a.y as number};
-  const path=explorationRoute(before.battlefield,before.playerPosition,target);
+  const path=explorationRoute(before.battlefield,before.playerPosition,target,occupiedFor(before));
   if(!path)throw Error('No traversable route to the requested square.');
   const trapStep=path.route.slice(1).find(point=>
     before.features?.some(f=>f.kind==='trap'&&!f.disarmed&&!f.triggered&&f.trapEffect&&
@@ -438,7 +568,8 @@ export function applyDmSceneAction(campaign:Campaign,action:unknown,now=new Date
        kind:'system',text:'Movement stops: '+trap.label+' triggers. Roll the '+trap.trapEffect!.saveAbility.toUpperCase()+
        ' save before continuing.',createdAt:now}]};
   }
-  return {...campaign,explorationScene:{...before,playerPosition:target,updatedAt:now}};
+  return {...campaign,explorationScene:{...before,playerPosition:target,
+    ...(before.npcs?{npcs:advanceFollowers(before,target)}:{}),updatedAt:now}};
  }
  if(a.type==='shift'){
   if(campaign.pendingTrapSave)throw Error('Resolve the triggered trap before manipulating objects.');
@@ -554,7 +685,7 @@ export function applyDmSceneAction(campaign:Campaign,action:unknown,now=new Date
  }
  if(a.type!=='show'||typeof a.id!=='string'||!slug.test(a.id)||
     typeof a.title!=='string'||!a.title.trim()||a.title.length>100||
-    Object.keys(a).some(k=>!['type','id','title','templateId','battlefield','features'].includes(k)))
+    Object.keys(a).some(k=>!['type','id','title','templateId','battlefield','features','npcs'].includes(k)))
   throw Error('Invalid DM scene declaration.');
  if(a.templateId!==undefined&&a.battlefield!==undefined)throw Error('Choose one authoritative map source.');
  if(a.templateId!==undefined&&(!isTemplate(compact(a.templateId))))throw Error('Unknown scene template.');
@@ -563,6 +694,7 @@ export function applyDmSceneAction(campaign:Campaign,action:unknown,now=new Date
   if(a.templateId!==undefined&&matching.templateId!==a.templateId)throw Error('Cannot replace a saved scene template.');
   if(a.battlefield!==undefined)throw Error('Cannot silently replace existing scene geometry.');
   if(a.features!==undefined)throw Error('Cannot rewrite discovered features on a saved scene.');
+  if(a.npcs!==undefined)throw Error('Cannot reset NPC placements on a saved scene.');
   return {...campaign,explorationScene:{...matching,title:a.title.trim(),visible:true,updatedAt:now}};
  }
  let battlefield:Battlefield,playerPosition:BattlefieldPoint,seed:string|undefined;
@@ -582,9 +714,19 @@ export function applyDmSceneAction(campaign:Campaign,action:unknown,now=new Date
   playerPosition=square;
  }
  const features=a.features===undefined?undefined:normalizeFeatures(a.features,battlefield).map(f=>({...f,discovered:f.kind==='mechanism'||f.kind==='obstacle',disarmed:undefined,triggered:undefined,activated:undefined,collected:undefined,completed:undefined}));
+ const npcs=a.npcs===undefined?undefined:normalizeSceneNpcs(a.npcs,battlefield,playerPosition);
+ if(npcs?.some(n=>n.following))throw Error('An initial scene cannot assume NPC agreement to follow.');
+ for(const npc of npcs??[]){
+  if(!npcKnown(campaign,npc.npcId))throw Error('A mapped NPC must reference an established world person.');
+  if(features?.some(f=>f.kind==='trap'&&!f.targetObjectId&&f.trapEffect&&
+     f.position.x===npc.position.x&&f.position.y===npc.position.y))
+   throw Error('NPCs may not spawn on an active floor hazard.');
+ }
+ for(const feature of features??[])if(feature.helperNpcId&&!npcs?.some(n=>n.npcId===feature.helperNpcId))
+  throw Error('A dynamic helper must reference an established mapped NPC.');
  return {...campaign,explorationScene:{id:a.id,title:a.title.trim(),location:campaign.location,
   visible:true,battlefield,playerPosition,updatedAt:now,
-  ...(features?{features}:{}),...(typeof a.templateId==='string'?{templateId:a.templateId as SoloEncounterId,seed}:{})}};
+  ...(features?{features}:{}),...(npcs?{npcs}:{}),...(typeof a.templateId==='string'?{templateId:a.templateId as SoloEncounterId,seed}:{})}};
 }
 
 /** Keep identical map geometry across exploration and the matching encounter. */

@@ -3315,3 +3315,87 @@ test('iPhone multi-square heavy dais with named helper and prebuilt winch persis
  expect(persisted.explorationScene.battlefield.objects[1]).toMatchObject({open:true,locked:false});
  expect(persisted.explorationScene.features.find((f:any)=>f.id==='counterweight-effort').completed).toBe(true);
 });
+
+test('iPhone persistent NPC can speak, rotate a mechanism, follow and help move a heavy block',async({page})=>{
+ test.setTimeout(180000);
+ await createAndImport(page,'rogue');
+ await page.evaluate(()=>{localStorage.setItem('four-keeps-access-code','browser-test-code');localStorage.setItem('four-keeps-dm-mode','on');});
+ const sceneId='npcs-quarry-hall';
+ const npc={name:'Mara Vell',role:'Guide',location:'Dasahi',relationship:'Guarded but curious',notes:['Knows the quarry']};
+ await page.route('**/api/dm',async route=>{
+  const body=route.request().postDataJSON(),message=String(body.message??'');
+  const shared={newFacts:[],worldUpdates:{}};
+  if(body.opening){await route.fulfill({json:{...shared,narration:'The old quarry stands a short walk away.'}});return;}
+  if(body.checkToken){const dice=body.dice;await route.fulfill({json:{...shared,narration:'Together you shift the stone.',
+   checkResult:{skill:'Athletics',dice,kept:dice[0],modifier:20,total:dice[0]+20,success:true}}});return;}
+  const movement=message.match(/^I walk to square (\d+), (\d+)/);
+  const sceneAction=message==='I enter the quarry with Mara Vell.'?
+   {type:'show',id:sceneId,title:'Old Quarry',battlefield:{width:9,height:6,objects:[
+    {id:'quarry-block',kind:'cargo',x:3,y:3,width:1,height:1},
+    {id:'sealed-gate',kind:'door',x:7,y:2,width:1,height:1,locked:true,lockDC:20}
+   ]},features:[
+    {id:'north-statue',kind:'mechanism',label:'North Statue',position:{x:3,y:2},
+      dc:15,skill:'Investigation',rotation:{positions:4,current:0,target:2}},
+    {id:'stone-effort',kind:'obstacle',label:'Stone Block',position:{x:3,y:3},
+      dc:15,skill:'Athletics',targetObjectId:'quarry-block',obstacleMode:'shift',
+      weightLb:340,helperNpcId:'mara-vell'}
+   ],npcs:[{npcId:'mara-vell',position:{x:2,y:2},strength:12}]}:
+   movement?{type:'move',id:sceneId,x:Number(movement[1])-1,y:Number(movement[2])-1}:
+   message.startsWith('I ask Mara Vell to rotate the North Statue')?
+     {type:'npc',id:sceneId,npcId:'mara-vell',behavior:'operate',featureId:'north-statue'}:
+   message.startsWith('I ask Mara Vell to follow me.')?
+     {type:'npc',id:sceneId,npcId:'mara-vell',behavior:'follow'}:
+   message.startsWith('I ask Mara Vell to move to square 4, 2.')?
+     {type:'npc',id:sceneId,npcId:'mara-vell',behavior:'move',x:3,y:1}:null;
+  const checkRequest=message.startsWith('I push the Stone Block one square east')?
+    {skill:'Athletics',mode:'advantage',reason:'Mara assists the stone push',token:'mara-heavy-assist',
+     sceneCheck:{sceneId,featureId:'stone-effort',goal:'heavy-shift',x:4,y:3,method:'helper'}}:null;
+  const worldUpdates=message==='I enter the quarry with Mara Vell.'?{npcs:[npc]}:
+   message.startsWith('I speak with Mara Vell')?{npcs:[{...npc,relationship:'Trusting and helpful',notes:['Agreed to assist the player']}]}:{};
+  await route.fulfill({json:{...shared,narration:'Mara studies the old quarry machinery.',sceneAction,checkRequest,worldUpdates}});
+ });
+ await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();
+ await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await expect.poll(async()=>(await saved(page))?.journal?.some((e:any)=>e.id?.endsWith('-dm-opening'))).toBe(true);
+ async function say(message:string){await page.getByLabel('Message the Dungeon Master').fill(message);
+  await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();}
+ await say('I enter the quarry with Mara Vell.');
+ const map=page.getByLabel('DM scene map');
+ await expect(map).toBeVisible();
+ await expect(map.getByRole('gridcell',{name:'Talk to Mara Vell at 3, 3'})).toBeVisible();
+ await map.getByRole('gridcell',{name:'Talk to Mara Vell at 3, 3'}).click();
+ await page.getByRole('button',{name:'Speak',exact:true}).click();
+ await expect(page.getByLabel('Message the Dungeon Master')).toHaveValue(/speak with Mara Vell/);
+ await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
+ await expect.poll(async()=> (await saved(page))?.world?.npcs?.find((n:any)=>n.id==='mara-vell')?.relationship).toBe('Trusting and helpful');
+ await map.getByRole('gridcell',{name:'Examine mechanism North Statue'}).click();
+ await page.getByRole('button',{name:'Ask to operate'}).click();
+ await expect(page.getByLabel('Message the Dungeon Master')).toHaveValue(/rotate the North Statue/);
+ await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
+ await expect.poll(async()=> (await saved(page))?.explorationScene?.features?.find((f:any)=>f.id==='north-statue')?.rotation?.current).toBe(1);
+ await say('I ask Mara Vell to rotate the North Statue one step clockwise.');
+ await expect.poll(async()=> (await saved(page))?.explorationScene?.features?.find((f:any)=>f.id==='north-statue')?.activated).toBe(true);
+ await map.getByRole('gridcell',{name:'Talk to Mara Vell at 3, 3'}).click();
+ await page.getByRole('button',{name:'Ask to follow'}).click();
+ await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
+ await expect.poll(async()=> (await saved(page))?.explorationScene?.npcs?.[0]?.following).toBe(true);
+ await say('I walk to square 3, 4');
+ await expect.poll(async()=>(await saved(page))?.explorationScene?.playerPosition).toEqual({x:2,y:3});
+ await map.getByRole('gridcell',{name:'Inspect cargo at 4, 4'}).click();
+ await page.getByRole('button',{name:'Help: Mara Vell'}).click();
+ await page.getByRole('button',{name:'Push heavy Stone Block east'}).click();
+ await expect(page.getByLabel('Message the Dungeon Master')).toHaveValue(/with help from Mara Vell/);
+ await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
+ await expect(page.getByRole('button',{name:'Roll Athletics'})).toBeVisible();
+ expect((await saved(page)).explorationScene.battlefield.objects[0]).toMatchObject({x:3,y:3});
+ await page.getByRole('button',{name:'Roll Athletics'}).click();
+ await expect.poll(async()=> (await saved(page))?.explorationScene?.battlefield?.objects?.[0]?.x).toBe(4);
+ await page.screenshot({path:'test-results/persistent-exploration-npc-iphone.png'});
+ await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();
+ await page.getByRole('button',{name:'Continue Adventure'}).click();
+ const persisted=await saved(page);
+ expect(persisted.explorationScene.features.find((f:any)=>f.id==='north-statue').activated).toBe(true);
+ expect(persisted.explorationScene.battlefield.objects[0].x).toBe(4);
+ expect(persisted.explorationScene.npcs[0].following).toBe(true);
+ expect(persisted.world.npcs.find((n:any)=>n.id==='mara-vell').relationship).toBe('Trusting and helpful');
+});
