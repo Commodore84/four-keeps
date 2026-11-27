@@ -57,3 +57,14 @@ it('requires owned Thieves Tools for an established trap and binds disarm checks
  expect(denied.body.checkRequest).toBeNull();
  expect(denied.body.narration).toContain('not in your inventory');
 });
+
+it('preserves a bounded DM-authored trap effect in the initial scene declaration',async()=>{
+ const effect={saveAbility:'dex',saveDC:15,damageDice:'2d6',damageType:'piercing',onSave:'half'};
+ setup({narration:'A narrow corridor lies ahead.',sceneAction:{type:'show',id:'hazard-corridor',
+  title:'The Narrow Corridor',battlefield:{width:7,height:1,objects:[]},
+  features:[{id:'floor-spikes',kind:'trap',label:'Floor spikes',position:{x:3,y:0},
+   dc:15,skill:'Perception',trapEffect:effect}]}});
+ const result=response();await handler(req('I enter the passage carefully.'),result);
+ expect(result.code).toBe(200);
+ expect(result.body.sceneAction?.features?.[0]?.trapEffect).toEqual(effect);
+});

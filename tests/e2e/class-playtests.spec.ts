@@ -2777,3 +2777,63 @@ test('iPhone conversation moves on verified geometry and discovers and disarms s
  expect(persisted.explorationScene.features[1].disarmed).toBe(true);
  expect(requests.some(m=>m.includes('search the desk'))).toBe(true);
 });
+
+
+test('iPhone mapped travel stops at an armed trap, saves damage and resumes after the saving throw',async({page})=>{
+ test.setTimeout(115000);
+ await createAndImport(page,'rogue');
+ await page.evaluate(()=>{localStorage.setItem('four-keeps-access-code','browser-test-code');localStorage.setItem('four-keeps-dm-mode','on');});
+ await page.route('**/api/dm',async route=>{
+  const request=route.request().postDataJSON(),message=String(request.message??'');
+  const shared={newFacts:[],worldUpdates:{}};
+  if(request.opening){await route.fulfill({json:{...shared,narration:'The town is quiet.'}});return;}
+  const sceneId='trapped-passage';
+  const sceneAction=message.includes('enter the passage')?
+   {type:'show',id:sceneId,title:'Old Passage',battlefield:{width:7,height:1,objects:[]},
+    features:[{id:'floor-spikes',kind:'trap',label:'Spiked floor plate',position:{x:3,y:0},
+     dc:15,skill:'Perception',trapEffect:{saveAbility:'dex',saveDC:15,damageDice:'2d6',damageType:'piercing',onSave:'half'}}]}:
+   /(?:walk|continue) to the exit/.test(message)?{type:'move',id:sceneId,x:6,y:0}:null;
+  await route.fulfill({json:{...shared,sceneAction,narration:'You proceed cautiously through the old passage.'}});
+ });
+ await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();
+ await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await expect.poll(async()=> (await saved(page))?.journal?.some((j:any)=>j.id?.endsWith('-dm-opening'))).toBe(true);
+ async function say(message:string){
+  await page.getByLabel('Message the Dungeon Master').fill(message);
+  await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
+ }
+ await say('I enter the passage carefully.');
+ await expect(page.getByLabel('DM scene map')).toBeVisible();
+ const initial=await saved(page),originalHp=initial.character.currentHitPoints;
+ expect(initial.explorationScene.features[0].discovered).toBe(false);
+ await say('I walk to the exit.');
+ await expect.poll(async()=> (await saved(page))?.pendingTrapSave?.stage).toBe('hazard');
+ const trapped=await saved(page);
+ expect(trapped.explorationScene.playerPosition).toEqual({x:3,y:0});
+ expect(trapped.explorationScene.features[0]).toMatchObject({triggered:true,discovered:true});
+ expect(trapped.character.currentHitPoints).toBe(originalHp);
+ const prompt=page.getByRole('group',{name:'Triggered trap saving throw'});
+ await expect(prompt).toContainText('Dexterity saving throw');
+ await expect(page.getByLabel('DM scene map').getByRole('gridcell',{name:'Examine trap Spiked floor plate'})).toBeVisible();
+ await expect(prompt.getByRole('button',{name:'Roll saving throw'})).toBeVisible();
+ await prompt.scrollIntoViewIfNeeded();
+ await page.screenshot({path:'test-results/triggered-trap-before-saving-iphone.png'});
+ await say('I continue to the exit.');
+ expect((await saved(page)).pendingTrapSave?.stage).toBe('hazard');
+ expect((await saved(page)).explorationScene.playerPosition).toEqual({x:3,y:0});
+ // Further travel is blocked until the dice are resolved, even if narration suggests otherwise.
+ await prompt.getByRole('button',{name:'Roll saving throw'}).click();
+ await expect.poll(async()=> (await saved(page))?.pendingTrapSave).toBeUndefined();
+ const resolved=await saved(page);
+ expect(resolved.character.currentHitPoints).toBeLessThan(originalHp); // 2d6, save halves damage: at least 1
+ expect(resolved.journal.some((j:any)=>j.id==='trap-hazard-trapped-passage-floor-spikes')).toBe(true);
+ await say('I continue to the exit.');
+ await expect.poll(async()=> (await saved(page))?.explorationScene?.playerPosition).toEqual({x:6,y:0});
+ expect((await saved(page)).pendingTrapSave).toBeUndefined();
+ await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();
+ await page.getByRole('button',{name:'Continue Adventure'}).click();
+ const again=await saved(page);
+ expect(again.character.currentHitPoints).toEqual(resolved.character.currentHitPoints);
+ expect(again.explorationScene.features[0].triggered).toBe(true);
+ expect(again.explorationScene.playerPosition).toEqual({x:6,y:0});
+});

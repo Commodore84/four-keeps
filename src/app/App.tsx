@@ -1,6 +1,6 @@
 import {CombatDeploymentMap} from './CombatDeploymentMap';
 import {ExplorationSceneMap} from './ExplorationSceneMap';
-import {applyDmSceneAction,sceneCheckRequest,resolveSceneCheck,syncSceneWithCombat} from '../game/explorationScene';
+import {applyDmSceneAction,sceneCheckRequest,resolveSceneCheck,pendingTrapEffect,pendingTrapRoll,resolvePendingTrap,syncSceneWithCombat} from '../game/explorationScene';
 import {objectAt,battlefieldOpeningWithinReach,battlefieldBlocked,battlefieldCover} from '../game/battlefield';
 import {battlefieldTileName,battlefieldTileVariant,battlefieldObjectArtworkStyle} from './battlefieldIllustrations';
 import {battlefieldVisibleIndices,type BattlefieldViewport} from './battlefieldViewport';
@@ -771,6 +771,36 @@ export function App() {
     finally { setSaving(false); }
   }
 
+  async function resolveTrapSavingThrow(){
+    if(saving||!campaign?.pendingTrapSave)return;
+    const pending=campaign.pendingTrapSave,effect=pendingTrapEffect(campaign);
+    if(!effect){setNotice('The saved trap event is incomplete; no damage has been applied.');return;}
+    setSaving(true);
+    try{
+      const rollDie=(sides:number)=>{
+        const bytes=new Uint8Array(1);
+        const limit=Math.floor(256/sides)*sides;
+        do{crypto.getRandomValues(bytes);}while(bytes[0]>=limit);
+        return bytes[0]%sides+1;
+      };
+      const damage=pending.stage==='hazard'?
+        Array.from({length:Number(effect.damageDice[0])},()=>rollDie(Number(effect.damageDice.slice(2)))):[];
+      const locked=pendingTrapRoll(campaign,pending.die??rollDie(20),pending.damageDice??damage);
+      // Save rolled dice before applying any changes so retry/reload cannot reroll.
+      await localCampaignStorage.save(locked);
+      setCampaign(locked);setCampaigns(items=>items.map(item=>item.id===locked.id?locked:item));
+      const ability=pending.stage==='concentration'?'con':effect.saveAbility;
+      const stats=statsWithTemporaryEffects(locked)??prototypeNighthawk;
+      const modifier=savingThrowModifier(stats,ability)+magicProtectionBonus(locked);
+      const result=resolvePendingTrap(locked,modifier);
+      await localCampaignStorage.save(result);
+      setCampaign(result);setCampaigns(items=>items.map(item=>item.id===result.id?result:item));
+      setNotice(result.pendingTrapSave?'Trap damage resolved. Make the concentration save before continuing.':
+        pending.stage==='concentration'?'Concentration save resolved and recorded.':'Trap saving throw resolved and recorded.');
+    }catch(error){setNotice('Trap save error: '+String(error)+' Saved dice are preserved for retry.');}
+    finally{setSaving(false);}
+  }
+
   async function resolvePendingCheck() {
     if (resolvingCheckRef.current || saving || !campaign?.pendingCheck || !accessCode) { if (!accessCode) setNotice('Enter your game access code to resolve the check.'); return; }
     resolvingCheckRef.current = true;
@@ -936,6 +966,7 @@ export function App() {
   }
 
   async function submitAdventure() {
+    if(campaign?.pendingTrapSave){setNotice('Resolve the triggered trap saving throw before continuing the adventure.');return;}
     if(campaign?.companionEncounter?.status==='active'&&campaign.companionEncounter.phaseThree){await runTacticalDm(draft);return;}
     if(pendingAdventureSpell || pendingRest || pendingTestDamage!==null || saving || pendingEquipmentUse?.campaignId===campaign?.id&&pendingEquipmentUse!==null)return;
     if(campaign?.characterIdentity && (campaign.adventureSession?.status==='encounter'||campaign.adventureSession?.pendingEncounter)){setNotice('Resolve the current encounter before continuing the Dungeon Master conversation.');return;}
@@ -1192,6 +1223,7 @@ export function App() {
 
   async function sendToDM(override?:Campaign, messageOverride?:string, alreadySaving=false) {
     const current=override??campaign;
+    if(current?.pendingTrapSave){setNotice('Resolve the pending trap save first.');return;}
     const message=messageOverride??(current?.pendingAdventureAction?.message??draft);
     if (current?.pendingClarification && !current.pendingClarification.answer) {setNotice('Answer the Dungeon Master clarification before continuing.');return;}
     if ((!alreadySaving && saving) || adventureRequestRef.current || !current || !message.trim() || current.pendingCheck || current.postCombatFollowUp || current.adventureSession?.pendingEncounter || current.characterIdentity && current.adventureSession?.status==='encounter') return;
@@ -2267,6 +2299,21 @@ export function App() {
               {saving?'Dungeon Master is responding…':'Continue with DM'}
             </button>
           </div>}
+        {activeView==='adventure' && campaign?.pendingTrapSave && <div className="mt-4 rounded-xl border border-gold/40 bg-panel p-4 space-y-2" role="group" aria-label="Triggered trap saving throw">
+          <p className="eyebrow">Exploration interrupted · trap triggered</p>
+          <p className="font-serif text-xl">
+            {campaign.pendingTrapSave.stage==='concentration'?'Constitution concentration save':
+              ({dex:'Dexterity',con:'Constitution',wis:'Wisdom'} as const)[pendingTrapEffect(campaign)?.saveAbility??'dex']+' saving throw'}
+          </p>
+          <p className="text-sm text-parchment/70">{campaign.pendingTrapSave.stage==='concentration'?
+             'Damage threatens your concentration. Resolve this save before continuing.':
+             'Movement stopped at an armed trap. Its effect will be rolled and recorded using your character saving throw.'}</p>
+          <button type="button" disabled={saving} onClick={()=>void resolveTrapSavingThrow()}
+            className="w-full min-h-11 rounded-lg bg-gold px-4 py-3 font-semibold text-ink disabled:opacity-40">
+            {campaign.pendingTrapSave.die!==undefined?'Resolve saved saving throw':'Roll saving throw'}
+          </button>
+          {campaign.pendingTrapSave.die!==undefined&&<p role="status" className="text-xs text-gold">d20: {campaign.pendingTrapSave.die} · Dice preserved for retry.</p>}
+        </div>}
         {activeView==='adventure' && campaign?.pendingCheck && <div className="mt-4 rounded-xl border border-gold/40 bg-panel p-4 space-y-2" role="group" aria-label="Pending skill check">
           <p className="eyebrow">Dungeon Master requests a check</p>
           <p className="font-serif text-xl">{campaign.pendingCheck.skill}{campaign.pendingCheck.tool?' · '+campaign.pendingCheck.tool:''} · {campaign.pendingCheck.mode}</p>

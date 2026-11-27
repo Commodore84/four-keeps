@@ -2,7 +2,7 @@ import {describe,it,expect} from 'vitest';
 import {newCampaign,isCampaign} from './campaign';
 import {beginAdventureSession,travelAdventure,proposeAdventureEncounter} from './adventureSession';
 import {adventureMemory,prepareAdventureAction,commitAdventureAction} from './adventureOrchestrator';
-import {applyDmSceneAction,explorationRoute,sceneCheckRequest,resolveSceneCheck,normalizeExplorationScene,syncSceneWithCombat} from './explorationScene';
+import {applyDmSceneAction,explorationRoute,sceneCheckRequest,resolveSceneCheck,normalizeExplorationScene,syncSceneWithCombat,pendingTrapEffect,pendingTrapRoll,resolvePendingTrap} from './explorationScene';
 import {battlefieldBlocked,type Battlefield} from './battlefield';
 import type {Campaign} from './campaign';
 
@@ -171,6 +171,114 @@ describe('conversation-primary scene authority',()=>{
   expect(scenario?.starts[0]).toEqual(position);
   expect(scenario?.entryOptions?.[0].square).toEqual(position);
   expect(scenario?.battlefield).toEqual(moved.explorationScene?.battlefield);
+ });
+
+ const dangerous={saveAbility:'dex',saveDC:15,damageDice:'2d6',damageType:'piercing',onSave:'half'} as const;
+ function trapped(){
+  return applyDmSceneAction(campaign(),{type:'show',id:'trap-corridor',title:'Old corridor',
+   battlefield:{width:7,height:1,objects:[]},
+   features:[{id:'spike-plate',kind:'trap',label:'Pressure plate',position:{x:3,y:0},
+    dc:15,skill:'Perception',trapEffect:dangerous}]},now);
+ }
+ it('interrupts path movement at first armed trap and does not secretly reach the destination',()=>{
+  const initial=trapped();
+  expect(isCampaign(initial)).toBe(true);
+  const triggered=applyDmSceneAction(initial,{type:'move',id:'trap-corridor',x:6,y:0},now,'I walk to the far doorway.');
+  expect(triggered.explorationScene?.playerPosition).toEqual({x:3,y:0});
+  expect(triggered.pendingTrapSave).toEqual({sceneId:'trap-corridor',featureId:'spike-plate',stage:'hazard'});
+  expect(triggered.explorationScene?.features?.[0]).toMatchObject({discovered:true,triggered:true,trapEffect:dangerous});
+  expect(triggered.character?.currentHitPoints).toBe(initial.character?.currentHitPoints);
+  expect(triggered.journal.at(-1)?.text).toContain('Movement stops');
+  expect(isCampaign(JSON.parse(JSON.stringify(triggered)))).toBe(true);
+  expect(()=>applyDmSceneAction(triggered,{type:'move',id:'trap-corridor',x:6,y:0},now,'I walk on.')).toThrow('Resolve');
+  expect(pendingTrapEffect(triggered)).toEqual(dangerous);
+ });
+ it('uses saved d20 and damage dice, enforces the save DC, and applies temporary HP before HP',()=>{
+  const triggered=applyDmSceneAction(trapped(),{type:'move',id:'trap-corridor',x:6,y:0},now,'I walk ahead.');
+  const character={...triggered.character!,currentHitPoints:10,maxHitPoints:10,temporaryHitPoints:3};
+  const withTemp={...triggered,character};
+  const saved=pendingTrapRoll(withTemp,17,[4,6]);
+  expect(pendingTrapRoll(saved,17,[4,6])).toBe(saved);
+  expect(()=>pendingTrapRoll(saved,18,[4,6])).toThrow('cannot be rerolled');
+  expect(()=>pendingTrapRoll(withTemp,17,[7,1])).toThrow('Invalid');
+  expect(()=>pendingTrapRoll({...saved,pendingTrapSave:{...saved.pendingTrapSave!,damageDice:[7,1]}},17,[7,1])).toThrow('Invalid');
+  expect(()=>resolvePendingTrap({...saved,pendingTrapSave:{...saved.pendingTrapSave!,damageDice:[7,1]}},0,now)).toThrow('invalid');
+  expect(isCampaign(JSON.parse(JSON.stringify(saved)))).toBe(true);
+  const resolved=resolvePendingTrap(saved,0,now);
+  expect(resolved.pendingTrapSave).toBeUndefined();
+  expect(resolved.character?.temporaryHitPoints).toBe(0);
+  expect(resolved.character?.currentHitPoints).toBe(8); // 10 raw, 5 half, 3 temp absorb
+  expect(resolved.journal.at(-1)?.text).toContain('deals 5 piercing damage');
+  expect(()=>resolvePendingTrap(resolved,0,now)).toThrow('required');
+  const next=applyDmSceneAction(resolved,{type:'move',id:'trap-corridor',x:6,y:0},now,'I continue to the far end.');
+  expect(next.pendingTrapSave).toBeUndefined();
+  expect(next.explorationScene?.playerPosition).toEqual({x:6,y:0});
+ });
+ it('a save with no damage on success leaves HP and concentration unchanged',()=>{
+  const base=trapped();
+  const harmless={...base,explorationScene:{...base.explorationScene!,
+   features:base.explorationScene!.features!.map(f=>({...f,
+    trapEffect:{...dangerous,onSave:'none' as const}}))}};
+  const trap=applyDmSceneAction(harmless,{type:'move',id:'trap-corridor',x:6,y:0},now,'I walk across.');
+  const result=resolvePendingTrap(pendingTrapRoll(trap,19,[4,5]),0,now);
+  expect(result.character?.currentHitPoints).toBe(trap.character?.currentHitPoints);
+  expect(result.pendingTrapSave).toBeUndefined();
+  expect(result.journal.at(-1)?.text).toContain('deals no damage');
+ });
+ it('handles failed trap saves and zero HP without allowing repeated trap damage',()=>{
+  const triggered=applyDmSceneAction(trapped(),{type:'move',id:'trap-corridor',x:6,y:0},now,'I run across.');
+  const character={...triggered.character!,currentHitPoints:4,maxHitPoints:10};
+  const saved=pendingTrapRoll({...triggered,character},2,[5,4]);
+  const failed=resolvePendingTrap(saved,1,now);
+  expect(failed.character?.currentHitPoints).toBe(0);
+  expect(failed.character?.conditions).toContain('Unconscious');
+  expect(failed.character?.deathSaves).toEqual({successes:0,failures:0,stable:false,dead:false});
+  expect(failed.explorationScene?.features?.[0].triggered).toBe(true);
+  expect(failed.pendingTrapSave).toBeUndefined();
+  expect(()=>applyDmSceneAction(failed,{type:'move',id:'trap-corridor',x:4,y:0},now,'I stagger forward.')).toThrow('unconscious');
+  expect(isCampaign(JSON.parse(JSON.stringify(failed)))).toBe(true);
+  // If an exceptionally powerful hit leaves at least max HP remaining after
+  // reaching 0, the 2024 massive-damage rule is instant death.
+  const nearDeath={...triggered,character:{...triggered.character!,currentHitPoints:1,maxHitPoints:10}};
+  const massive=resolvePendingTrap(pendingTrapRoll(nearDeath,1,[6,6]),0,now);
+  expect(massive.character?.deathSaves?.dead).toBe(true);
+  expect(massive.journal.at(-1)?.text).toContain('Instant death');
+ });
+ it('requires a separate saved Constitution check after trap damage while concentrating',()=>{
+  const triggered=applyDmSceneAction(trapped(),{type:'move',id:'trap-corridor',x:6,y:0},now,'I go forward.');
+  const active={...triggered,concentration:{spell:'Fog Cloud',startedAt:now},
+   spellEffects:[{id:'fog-1',spell:'Fog Cloud',status:'active' as const,createdAt:now}]};
+  const impact=resolvePendingTrap(pendingTrapRoll(active,1,[3,3]),0,now);
+  expect(impact.character?.currentHitPoints).toBe((active.character?.currentHitPoints??0)-6);
+  expect(impact.pendingTrapSave).toEqual({sceneId:'trap-corridor',featureId:'spike-plate',stage:'concentration',concentrationDC:10});
+  expect(()=>pendingTrapRoll(impact,4,[2])).toThrow('does not deal damage');
+  const locked=pendingTrapRoll(impact,6);
+  expect(isCampaign(JSON.parse(JSON.stringify(locked)))).toBe(true);
+  const lost=resolvePendingTrap(locked,0,now);
+  expect(lost.concentration).toBeUndefined();
+  expect(lost.spellEffects).toEqual([]);
+  expect(lost.pendingTrapSave).toBeUndefined();
+  const preserved=resolvePendingTrap(pendingTrapRoll(impact,19),0,now);
+  expect(preserved.concentration?.spell).toBe('Fog Cloud');
+  expect(preserved.pendingTrapSave).toBeUndefined();
+ });
+ it('does not trigger disarmed traps or invent damaging effects for older saved traps',()=>{
+  const corridor=trapped();
+  const disarmed={...corridor,explorationScene:{...corridor.explorationScene!,
+    features:corridor.explorationScene!.features!.map(f=>({...f,discovered:true,disarmed:true}))}};
+  const safe=applyDmSceneAction(disarmed,{type:'move',id:'trap-corridor',x:6,y:0},now,'I cross the room.');
+  expect(safe.pendingTrapSave).toBeUndefined();
+  expect(safe.explorationScene?.playerPosition).toEqual({x:6,y:0});
+  const old=applyDmSceneAction(campaign(),{type:'show',id:'old-room',title:'Old room',
+    battlefield:{width:3,height:1,objects:[]},
+    features:[{id:'alarm',kind:'trap',label:'Old bell',position:{x:1,y:0},dc:10,skill:'Perception'}]},now);
+  const crossed=applyDmSceneAction(old,{type:'move',id:'old-room',x:2,y:0},now,'I walk by.');
+  expect(crossed.pendingTrapSave).toBeUndefined();
+  expect(crossed.explorationScene?.playerPosition).toEqual({x:2,y:0});
+  expect(()=>applyDmSceneAction(campaign(),{type:'show',id:'bad-trap',title:'Bad trap',
+    battlefield:{width:3,height:1,objects:[]},
+    features:[{id:'bad',kind:'trap',label:'Overpowered',position:{x:1,y:0},dc:10,skill:'Perception',
+      trapEffect:{...dangerous,damageDice:'99d20'}}]})).toThrow('feature');
  });
 
 });

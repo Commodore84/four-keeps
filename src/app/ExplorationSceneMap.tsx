@@ -58,7 +58,7 @@ export function ExplorationSceneMap({scene,onInspect}:{scene:ExplorationScene;on
     <button type="button" aria-label="Fit scene map" onClick={fit} className="min-h-11 rounded border border-gold/40 px-3 text-xs text-gold">Fit</button>
    </div>
   </div>
-  <ClassicCombatMapFrame ref={frame} className={map.width<=12&&map.height<=10?"h-[240px] max-h-[40dvh]":"h-[290px] max-h-[40dvh]"} style={{overflow:'auto',touchAction:'pan-x pan-y'}}>
+  <ClassicCombatMapFrame ref={frame} className={map.height<=2?"h-[108px] max-h-[40dvh]":map.width<=12&&map.height<=10?"h-[240px] max-h-[40dvh]":"h-[290px] max-h-[40dvh]"} style={{overflow:'auto',touchAction:'pan-x pan-y'}}>
    <ClassicCombatGrid size={map.width} height={map.height} zoom={zoom} dynamic theme={map.theme} ariaLabel="DM-presented exploration map">
     {Array.from({length:map.width*map.height},(_,i)=>{
      const x=i%map.width,y=Math.floor(i/map.width),own=x===scene.playerPosition.x&&y===scene.playerPosition.y;
@@ -71,7 +71,7 @@ export function ExplorationSceneMap({scene,onInspect}:{scene:ExplorationScene;on
      if(!interact && feature)return <button key={i} type="button" role="gridcell" aria-label={'Examine '+feature.kind+' '+feature.label}
       onClick={()=>{setSelectedId(null);setSelectedSquare({x,y});}}
       data-terrain-art={battlefieldTileName(map,obj,x,y)} style={styles}
-      className="relative aspect-square min-w-0 border border-amber-400/50 text-[10px] text-gold">{content??'?'}</button>;
+      className="relative aspect-square min-w-0 border border-amber-400/50 text-[10px] text-gold">{content??(feature.kind==='trap'?(feature.disarmed?'✓':feature.triggered?'!':'?'):'?')}</button>;
      return interact?<button type="button" key={i} role="gridcell" data-terrain-art={battlefieldTileName(map,obj,x,y)}
       aria-label={'Inspect '+label(obj!)+' at '+(x+1)+', '+(y+1)} aria-pressed={selectedId===obj!.id}
       onClick={()=>{setSelectedId(obj!.id);setSelectedSquare(null);}} style={styles}
@@ -86,7 +86,7 @@ export function ExplorationSceneMap({scene,onInspect}:{scene:ExplorationScene;on
   </div>}
   {selectedSquare&&<div aria-label="Selected exploration square" className="flex items-center justify-between gap-2 rounded-lg border border-gold/30 p-2 text-sm">
    <span>{selectedFeature?
-      ((selectedFeature.kind==='trap'?(selectedFeature.disarmed?'Disarmed trap':'Trap'):'Clue')+': '+selectedFeature.label):
+      ((selectedFeature.kind==='trap'?(selectedFeature.disarmed?'Disarmed trap':selectedFeature.triggered?'Triggered trap':'Trap'):'Clue')+': '+selectedFeature.label):
       'Square '+(selectedSquare.x+1)+', '+(selectedSquare.y+1)}</span>
    <button type="button" onClick={()=>onInspect(selectedFeature?
      'I inspect the '+selectedFeature.label+' more closely.':
