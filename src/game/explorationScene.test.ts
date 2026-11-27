@@ -281,4 +281,148 @@ describe('conversation-primary scene authority',()=>{
       trapEffect:{...dangerous,damageDice:'99d20'}}]})).toThrow('feature');
  });
 
+
+ const doorPuzzle={type:'show',id:'clockwork-chamber',title:'Clockwork chamber',
+  battlefield:{width:8,height:3,objects:[
+   {id:'bronze-door',kind:'door',x:5,y:1,width:1,height:1,locked:true,lockDC:15}
+  ]},
+  features:[
+   {id:'rune-key',kind:'clue',label:'Runic sequence',position:{x:1,y:1},dc:15,skill:'Investigation'},
+   {id:'brass-wheel',kind:'mechanism',label:'Brass wheel',position:{x:2,y:0},dc:10,
+    skill:'Investigation',linkedObjectId:'bronze-door',requiresFeatureId:'rune-key'},
+   {id:'hinge-needle',kind:'trap',label:'Poisoned hinge needle',position:{x:5,y:1},
+    dc:15,skill:'Perception',targetObjectId:'bronze-door',trapEffect:
+     {saveAbility:'dex',saveDC:15,damageDice:'1d6',damageType:'poison',onSave:'half'}}
+  ]};
+ const thieves=(input:Campaign):Campaign=>({...input,inventoryLedger:{
+   currency:{CP:0,SP:0,EP:0,GP:0,PP:0},gear:[{name:'Thieves’ Tools',quantity:1}]}});
+ it('treats puzzle geometry, mechanisms and door-mounted traps as persistent validated data',()=>{
+  const shown=applyDmSceneAction(campaign(),doorPuzzle,now);
+  expect(shown.explorationScene?.features?.map(f=>f.discovered)).toEqual([false,true,false]);
+  expect(normalizeExplorationScene(JSON.parse(JSON.stringify(shown.explorationScene)))).toEqual(shown.explorationScene);
+  expect(isCampaign(shown)).toBe(true);
+  expect(()=>applyDmSceneAction(shown,{type:'show',id:doorPuzzle.id,title:doorPuzzle.title,features:[]})).toThrow('rewrite');
+  expect(()=>applyDmSceneAction(campaign(),{...doorPuzzle,id:'invalid-door',
+    features:[{...doorPuzzle.features[2],targetObjectId:'nonexistent'}]},now)).toThrow('feature');
+  expect(()=>applyDmSceneAction(campaign(),{...doorPuzzle,id:'invalid-requirement',
+    features:[doorPuzzle.features[0],{...doorPuzzle.features[1],requiresFeatureId:'missing'}]},now)).toThrow('prerequisites');
+  expect(()=>applyDmSceneAction(campaign(),{...doorPuzzle,id:'duplicate-traps',
+    features:[doorPuzzle.features[2],{...doorPuzzle.features[2],id:'second-trap'}]},now)).toThrow('one');
+ });
+ it('requires clue discovery and reach before a one-shot wheel releases the locked door',()=>{
+  let shown=applyDmSceneAction(campaign(),doorPuzzle,now);
+  expect(()=>applyDmSceneAction(shown,{type:'activate',id:doorPuzzle.id,featureId:'brass-wheel'},now,'I turn the brass wheel.')).toThrow('not accessible');
+  shown=applyDmSceneAction(shown,{type:'move',id:doorPuzzle.id,x:1,y:0},now,'I move closer to the wheel.');
+  expect(()=>applyDmSceneAction(shown,{type:'activate',id:doorPuzzle.id,featureId:'brass-wheel'},now,'I turn the wheel.')).toThrow('prerequisite');
+  const request={sceneId:doorPuzzle.id,featureId:'rune-key',goal:'discover'};
+  const bound=sceneCheckRequest(shown,request,{skill:'Investigation',token:'clue-roll'});
+  expect(bound).toBeTruthy();
+  const discovered=resolveSceneCheck({...shown,pendingSceneCheck:bound},'clue-roll',true);
+  expect(discovered.explorationScene!.features![0].discovered).toBe(true);
+  expect(()=>applyDmSceneAction(discovered,{type:'activate',id:doorPuzzle.id,featureId:'brass-wheel'},now,'I inspect the wheel.')).toThrow('explicit');
+  const released=applyDmSceneAction(discovered,{type:'activate',id:doorPuzzle.id,featureId:'brass-wheel'},now,'I turn the brass wheel.');
+  expect(released.explorationScene?.features?.[1]).toMatchObject({activated:true});
+  expect(released.explorationScene?.battlefield.objects[0]).toMatchObject({locked:false});
+  expect(()=>applyDmSceneAction(released,{type:'activate',id:doorPuzzle.id,featureId:'brass-wheel'},now,'I turn it again.')).toThrow('not accessible');
+  expect(isCampaign(JSON.parse(JSON.stringify(released)))).toBe(true);
+ });
+ it('supports a verified Thieves Tools unlock check on locked doors, without opening them',()=>{
+  let shown=applyDmSceneAction(campaign(),doorPuzzle,now);
+  shown=applyDmSceneAction(shown,{type:'move',id:doorPuzzle.id,x:4,y:0},now,'I walk toward the bronze door.');
+  // A closed door is opaque to its own center, but a nearby rogue must
+  // still be able to notice a mounted trap on the accessible door face.
+  const doorSearch=sceneCheckRequest(shown,{sceneId:doorPuzzle.id,featureId:'hinge-needle',goal:'discover'},
+    {skill:'Perception',token:'search-door'});
+  expect(doorSearch).toBeTruthy();
+  const requested={sceneId:doorPuzzle.id,featureId:'bronze-door',goal:'unlock'};
+  const check={skill:'Sleight of Hand',tool:'Thieves’ Tools',token:'lock-token'};
+  expect(sceneCheckRequest(shown,requested,check)).toBeUndefined();
+  const owned=thieves(shown);
+  const bound=sceneCheckRequest(owned,requested,check)!;
+  expect(bound).toEqual({...requested,token:'lock-token'});
+  expect(isCampaign({...owned,pendingSceneCheck:bound})).toBe(true);
+  expect(sceneCheckRequest(owned,requested,{...check,skill:'Athletics'})).toBeUndefined();
+  const failed=resolveSceneCheck({...owned,pendingSceneCheck:bound},'lock-token',false);
+  expect(failed.explorationScene?.battlefield.objects[0].locked).toBe(true);
+  const unlocked=resolveSceneCheck({...owned,pendingSceneCheck:bound},'lock-token',true);
+  expect(unlocked.explorationScene?.battlefield.objects[0]).toMatchObject({locked:false});
+  expect(isCampaign(unlocked)).toBe(true);
+  expect(sceneCheckRequest(unlocked,requested,check)).toBeUndefined();
+ });
+ it('opening an unlocked trapped door stops the interaction before any door state change',()=>{
+  let shown=applyDmSceneAction(campaign(),doorPuzzle,now);
+  shown=applyDmSceneAction(shown,{type:'move',id:doorPuzzle.id,x:4,y:0},now,'I move to the door.');
+  const unlocked={...shown,explorationScene:{...shown.explorationScene!,battlefield:{
+   ...shown.explorationScene!.battlefield,objects:shown.explorationScene!.battlefield.objects.map(o=>({...o,locked:false}))
+  }}};
+  const action={type:'open',id:doorPuzzle.id,objectId:'bronze-door'};
+  const triggered=applyDmSceneAction(unlocked,action,now,'I open the bronze door.');
+  expect(triggered.pendingTrapSave).toMatchObject({featureId:'hinge-needle',stage:'hazard'});
+  expect(triggered.explorationScene?.battlefield.objects[0].open).toBeUndefined();
+  expect(triggered.explorationScene?.features?.[2]).toMatchObject({triggered:true,discovered:true});
+  expect(()=>applyDmSceneAction(triggered,action,now,'I open it.')).toThrow('Resolve');
+  const resolved=resolvePendingTrap(pendingTrapRoll(triggered,19,[3]),1,now);
+  const opened=applyDmSceneAction(resolved,action,now,'I open the bronze door.');
+  expect(opened.explorationScene?.battlefield.objects[0].open).toBe(true);
+  expect(opened.pendingTrapSave).toBeUndefined();
+  expect(isCampaign(opened)).toBe(true);
+ });
+ it('a failed verified disarm springs an armed dangerous trap exactly once, without free narrated damage',()=>{
+  let shown=applyDmSceneAction(campaign(),doorPuzzle,now);
+  shown=applyDmSceneAction(shown,{type:'move',id:doorPuzzle.id,x:4,y:0},now,'I approach the door.');
+  const discovered={...shown,explorationScene:{...shown.explorationScene!,
+   features:shown.explorationScene!.features!.map(f=>f.id==='hinge-needle'?{...f,discovered:true}:f)}};
+  const owned=thieves(discovered);
+  const request={sceneId:doorPuzzle.id,featureId:'hinge-needle',goal:'disarm'};
+  const bound=sceneCheckRequest(owned,request,{skill:'Sleight of Hand',tool:'Thieves’ Tools',token:'disarm-attempt'})!;
+  expect(bound).toBeTruthy();
+  const failed=resolveSceneCheck({...owned,pendingSceneCheck:bound},'disarm-attempt',false);
+  expect(failed.pendingTrapSave?.featureId).toBe('hinge-needle');
+  expect(failed.explorationScene?.features?.[2]).toMatchObject({triggered:true,disarmed:undefined});
+  expect(failed.character?.currentHitPoints).toBe(owned.character?.currentHitPoints);
+  expect(sceneCheckRequest(failed,request,{skill:'Sleight of Hand',tool:'Thieves’ Tools',token:'again'})).toBeUndefined();
+  expect(isCampaign(failed)).toBe(true);
+  const once=resolveSceneCheck(failed,'disarm-attempt',false);
+  expect(once).toBe(failed);
+  const resolved=resolvePendingTrap(pendingTrapRoll(failed,20,[4]),0,now);
+  expect(resolved.pendingTrapSave).toBeUndefined();
+  expect(resolved.journal.filter(j=>j.id==='trap-disarm-'+doorPuzzle.id+'-hinge-needle')).toHaveLength(1);
+  const successful=resolveSceneCheck({...owned,pendingSceneCheck:bound},'disarm-attempt',true);
+  expect(successful.explorationScene?.features?.[2]).toMatchObject({disarmed:true,triggered:undefined});
+ });
+
+
+ it('moves a small crate only to a reachable adjacent free cell with matching player direction',()=>{
+  const scene=applyDmSceneAction(campaign(),{type:'show',id:'crate-room',title:'Storage room',
+   battlefield:{width:5,height:3,objects:[
+    {id:'small-crate',kind:'crate',x:1,y:0,width:1,height:1},
+    {id:'stone-pillar',kind:'pillar',x:2,y:0,width:1,height:1}]}
+  },now);
+  expect(()=>applyDmSceneAction(scene,{type:'shift',id:'crate-room',objectId:'small-crate',x:1,y:1},now,
+    'I inspect the crate.')).toThrow('explicit');
+  expect(()=>applyDmSceneAction(scene,{type:'shift',id:'crate-room',objectId:'small-crate',x:2,y:0},now,
+    'I push the crate east.')).toThrow('blocked');
+  expect(()=>applyDmSceneAction(scene,{type:'shift',id:'crate-room',objectId:'small-crate',x:0,y:0},now,
+    'I pull the crate west.')).toThrow('occupied');
+  expect(()=>applyDmSceneAction(scene,{type:'shift',id:'crate-room',objectId:'small-crate',x:1,y:1},now,
+    'I push the crate east.')).toThrow('direction');
+  expect(()=>applyDmSceneAction(scene,{type:'shift',id:'crate-room',objectId:'stone-pillar',x:3,y:0},now,
+    'I push the pillar east.')).toThrow('cannot be shifted');
+  const moved=applyDmSceneAction(scene,{type:'shift',id:'crate-room',objectId:'small-crate',x:1,y:1},now,
+    'I push the crate south.');
+  expect(moved.explorationScene?.battlefield.objects[0]).toMatchObject({x:1,y:1});
+  expect(scene.explorationScene?.battlefield.objects[0]).toMatchObject({x:1,y:0});
+  expect(moved.explorationScene?.playerPosition).toEqual({x:0,y:0});
+  expect(isCampaign(moved)).toBe(true);
+  expect(normalizeExplorationScene(JSON.parse(JSON.stringify(moved.explorationScene)))).toEqual(moved.explorationScene);
+ });
+ it('cannot shift an object onto an armed floor trap or another object',()=>{
+  const scene=applyDmSceneAction(campaign(),{type:'show',id:'trapped-storage',title:'Storage',
+   battlefield:{width:4,height:3,objects:[{id:'crate',kind:'crate',x:1,y:0,width:1,height:1}]},
+   features:[{id:'pressure',kind:'trap',label:'Pressure plate',position:{x:1,y:1},
+    dc:15,skill:'Perception',trapEffect:dangerous}]},now);
+  expect(()=>applyDmSceneAction(scene,{type:'shift',id:'trapped-storage',objectId:'crate',x:1,y:1},now,
+    'I push the crate south.')).toThrow('unsafe');
+ });
+
 });

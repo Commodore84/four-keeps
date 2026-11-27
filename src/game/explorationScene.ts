@@ -10,9 +10,13 @@ export interface ExplorationScene {
  features?:ExplorationFeature[];
 }
 export type ExplorationFeature={
- id:string;kind:'clue'|'trap';label:string;position:BattlefieldPoint;
+ id:string;kind:'clue'|'trap'|'mechanism';label:string;position:BattlefieldPoint;
  dc:10|15|20;skill:'Investigation'|'Perception';discovered:boolean;disarmed?:boolean;
  triggered?:boolean;trapEffect?:TrapEffect;
+ /** Traps mounted on a specific door/window trigger from object interaction, not walking. */
+ targetObjectId?:string;
+ /** A persistent physical lever/plate/button. Requires discovery of an established clue. */
+ linkedObjectId?:string;requiresFeatureId?:string;activated?:boolean;
 };
 /** Trap profiles are part of the saved DM scene; no effect may be invented
  * when a roll resolves. Older saved traps without a profile remain harmless. */
@@ -45,16 +49,24 @@ const trapEffectValid=(value:unknown):value is TrapEffect=>{
   ['piercing','poison','fire','bludgeoning'].includes(String(e.damageType))&&
   ['half','none'].includes(String(e.onSave));
 };
-export type SceneCheckIntent={sceneId:string;featureId:string;goal:'discover'|'disarm'};
+export type SceneCheckIntent={sceneId:string;featureId:string;goal:'discover'|'disarm'|'unlock'};
 export type PendingSceneCheck=SceneCheckIntent&{token:string};
 type SceneShow={type:'show';id:string;title:string;templateId?:SoloEncounterId;battlefield?:unknown;features?:unknown[]};
 type SceneMove={type:'move';id:string;x:number;y:number};
 type SceneHide={type:'hide'};
 type SceneOpening={type:'open'|'close';id:string;objectId:string};
-export type DmSceneAction=SceneShow|SceneHide|SceneOpening|SceneMove;
+type SceneActivation={type:'activate';id:string;featureId:string};
+type SceneShift={type:'shift';id:string;objectId:string;x:number;y:number};
+export type DmSceneAction=SceneShow|SceneHide|SceneOpening|SceneMove|SceneActivation|SceneShift;
 const slug=/^[a-z0-9][a-z0-9-]{2,63}$/;
 const compact=(value:unknown)=>typeof value==='string'?value.trim():'';
 const isTemplate=(id:string):id is SoloEncounterId=>Object.hasOwn(SOLO_ROGUE_ENCOUNTERS,id);
+const shiftIntent=/\b(?:push|pull|move|drag|slide|shove|shift|reposition)\b/i;
+const activationIntent=/\b(?:pull|push|press|turn|flip|activate|operate|use|slide|rotate|twist|lift|move|throw|trigger)\b/i;
+const openingIntent=/\b(?:open|close|shut|push|pull|turn|lift|slide|unlock)\b/i;
+const toolOwned=(campaign:Campaign)=>(campaign.inventoryLedger?.gear??[]).some(item=>
+ item.quantity>0&&item.name.toLowerCase().replace(/[’']/g,'')==='thieves tools');
+const validDoor=(map:Battlefield,id:string)=>map.objects.find(o=>o.id===id&&['door','window'].includes(o.kind)&&!o.destroyed);
 const movementIntent=/\b(?:move|walk|go|head|approach|step|sneak|creep|run|cross|enter|follow|advance|retreat|return|travel|climb|continue|proceed|keep going)\b/i;
 const positionKey=(p:BattlefieldPoint)=>p.x+','+p.y;
 const around=[[-1,0],[0,-1],[0,1],[1,0],[-1,-1],[-1,1],[1,-1],[1,1]] as const;
@@ -90,43 +102,79 @@ export function explorationRoute(map:Battlefield,start:BattlefieldPoint,target:B
  }
  return undefined;
 }
+const objectAtPosition=(map:Battlefield,id:string,p:BattlefieldPoint)=>
+ map.objects.some(o=>o.id===id&&p.x>=o.x&&p.x<o.x+o.width&&p.y>=o.y&&p.y<o.y+o.height);
 function normalizeFeatures(value:unknown,map:Battlefield):ExplorationFeature[]{
  if(!Array.isArray(value)||value.length>12)throw Error('Invalid scene features.');
  const ids=new Set<string>();
- return value.map(raw=>{
+ const normalized=value.map(raw=>{
   if(!raw||typeof raw!=='object'||Array.isArray(raw))throw Error('Invalid scene feature.');
   const f=raw as Record<string,unknown>,id=compact(f.id),label=compact(f.label);
   const position=f.position as BattlefieldPoint;
-  if(!slug.test(id)||ids.has(id)||!['clue','trap'].includes(String(f.kind))||
+  if(!slug.test(id)||ids.has(id)||!['clue','trap','mechanism'].includes(String(f.kind))||
     label.length<2||label.length>90||!position||!battlefieldContains(map,position)||
     ![10,15,20].includes(Number(f.dc))||!['Investigation','Perception'].includes(String(f.skill))||
     (f.discovered!==undefined&&typeof f.discovered!=='boolean')||
     (f.disarmed!==undefined&&(f.kind!=='trap'||typeof f.disarmed!=='boolean'||!f.discovered&&f.disarmed))||
     (f.triggered!==undefined&&(f.kind!=='trap'||typeof f.triggered!=='boolean'||!f.discovered&&f.triggered))||
-    (f.trapEffect!==undefined&&(f.kind!=='trap'||!trapEffectValid(f.trapEffect)||battlefieldBlocked(map,position))))
+    (f.trapEffect!==undefined&&(f.kind!=='trap'||!trapEffectValid(f.trapEffect)||
+      (f.targetObjectId===undefined&&battlefieldBlocked(map,position))))||
+    (f.targetObjectId!==undefined&&(f.kind!=='trap'||!slug.test(compact(f.targetObjectId))||
+      !validDoor(map,String(f.targetObjectId))||
+      !objectAtPosition(map,String(f.targetObjectId),position)))||
+    (f.linkedObjectId!==undefined&&(f.kind!=='mechanism'||!slug.test(compact(f.linkedObjectId))||
+      !validDoor(map,String(f.linkedObjectId))))||
+    (f.requiresFeatureId!==undefined&&(f.kind!=='mechanism'||!slug.test(compact(f.requiresFeatureId))))||
+    (f.activated!==undefined&&(f.kind!=='mechanism'||typeof f.activated!=='boolean'||f.activated&&!f.discovered)))
     throw Error('Invalid scene feature.');
   ids.add(id);
-  return {id,kind:f.kind as 'clue'|'trap',label,position:{x:position.x,y:position.y},
+  return {id,kind:f.kind as ExplorationFeature['kind'],label,position:{x:position.x,y:position.y},
     dc:f.dc as 10|15|20,skill:f.skill as ExplorationFeature['skill'],discovered:f.discovered===true,
     ...(f.kind==='trap'&&f.disarmed===true?{disarmed:true}:{}),
     ...(f.kind==='trap'&&f.triggered===true?{triggered:true}:{}),
-    ...(f.kind==='trap'&&f.trapEffect!==undefined?{trapEffect:{...(f.trapEffect as TrapEffect)}}:{})};
+    ...(f.kind==='trap'&&f.trapEffect!==undefined?{trapEffect:{...(f.trapEffect as TrapEffect)}}:{}),
+    ...(f.kind==='trap'&&f.targetObjectId!==undefined?{targetObjectId:String(f.targetObjectId)}:{}),
+    ...(f.kind==='mechanism'&&f.linkedObjectId!==undefined?{linkedObjectId:String(f.linkedObjectId)}:{}),
+    ...(f.kind==='mechanism'&&f.requiresFeatureId!==undefined?{requiresFeatureId:String(f.requiresFeatureId)}:{}),
+    ...(f.kind==='mechanism'&&f.activated===true?{activated:true}:{})};
  });
+ for(const f of normalized){
+  if(f.kind==='mechanism'){
+   if(!f.linkedObjectId||f.requiresFeatureId===f.id||
+      f.requiresFeatureId&&!normalized.some(x=>x.id===f.requiresFeatureId&&x.kind==='clue'))
+    throw Error('Invalid scene mechanism prerequisites.');
+  }
+  if(f.kind==='trap'&&f.targetObjectId&&
+    normalized.filter(x=>x.kind==='trap'&&x.targetObjectId===f.targetObjectId).length>1)
+    throw Error('A door may have only one saved trap.');
+ }
+ return normalized;
 }
 export function sceneCheckRequest(campaign:Campaign,request:unknown,check:{skill:string;tool?:string;token:string}):PendingSceneCheck|undefined{
  const scene=campaign.explorationScene;
  if(!request||typeof request!=='object'||!scene||!scene.visible||scene.location!==campaign.location)return undefined;
  const intent=request as Record<string,unknown>;
- if(intent.sceneId!==scene.id||typeof intent.featureId!=='string'||!['discover','disarm'].includes(String(intent.goal)))return undefined;
+ if(intent.sceneId!==scene.id||typeof intent.featureId!=='string'||!['discover','disarm','unlock'].includes(String(intent.goal)))return undefined;
+ if(intent.goal==='unlock'){
+  const object=validDoor(scene.battlefield,intent.featureId);
+  if(!object||!object.locked||!toolOwned(campaign)||
+     !battlefieldOpeningWithinReach(object,scene.playerPosition)||
+     check.skill!=='Sleight of Hand'||check.tool?.toLowerCase().replace(/[’']/g,'')!=='thieves tools')
+    return undefined;
+  return {sceneId:scene.id,featureId:object.id,goal:'unlock',token:check.token};
+ }
  const feature=scene.features?.find(x=>x.id===intent.featureId);
  if(!feature)return undefined;
  if(intent.goal==='discover'){
-  if(feature.discovered||check.skill!==feature.skill||distance(scene.playerPosition,feature.position)>6||
-    battlefieldOpaqueSightBlocked(scene.battlefield,scene.playerPosition,feature.position))return undefined;
+  const mounted=feature.kind==='trap'&&feature.targetObjectId?
+    validDoor(scene.battlefield,feature.targetObjectId):undefined;
+  // Inspect the near face of a physical door, not a ray through its opaque center.
+  if(feature.discovered||check.skill!==feature.skill||
+     (mounted? !battlefieldOpeningWithinReach(mounted,scene.playerPosition):
+      distance(scene.playerPosition,feature.position)>6||
+      battlefieldOpaqueSightBlocked(scene.battlefield,scene.playerPosition,feature.position)))return undefined;
  }else{
-  const hasTools=(campaign.inventoryLedger?.gear??[]).some(item=>item.quantity>0&&
-    item.name.toLowerCase().replace(/[’']/g,'')==='thieves tools');
-  if(feature.kind!=='trap'||!feature.discovered||feature.disarmed||!hasTools||check.skill!=='Sleight of Hand'||
+  if(feature.kind!=='trap'||!feature.discovered||feature.disarmed||feature.triggered||!toolOwned(campaign)||check.skill!=='Sleight of Hand'||
      distance(scene.playerPosition,feature.position)>1||
      check.tool?.toLowerCase().replace(/[’']/g,'')!=='thieves tools')return undefined;
  }
@@ -138,7 +186,23 @@ export function resolveSceneCheck(campaign:Campaign,token:string,success:boolean
  if(!pending||pending.token!==token)return campaign;
  const {pendingSceneCheck:_pending,...rest}=campaign;
  const scene=campaign.explorationScene;
- if(!scene||scene.id!==pending.sceneId||!scene.visible||scene.location!==campaign.location||!success)return rest;
+ if(!scene||scene.id!==pending.sceneId||!scene.visible||scene.location!==campaign.location)return rest;
+ if(!success){
+  const feature=scene.features?.find(f=>f.id===pending.featureId);
+  if(pending.goal!=='disarm'||!feature||feature.kind!=='trap'||feature.disarmed||feature.triggered||!feature.trapEffect)
+   return rest;
+  const features=scene.features!.map(f=>f.id===feature.id?{...f,discovered:true,triggered:true}:f);
+  return {...rest,explorationScene:{...scene,features,updatedAt:campaign.updatedAt},
+   pendingTrapSave:{sceneId:scene.id,featureId:feature.id,stage:'hazard'},
+   journal:[...campaign.journal,{id:'trap-disarm-'+scene.id+'-'+feature.id,kind:'system',
+    text:'Disarming '+feature.label+' failed. The trap springs; resolve the saved '+feature.trapEffect.saveAbility.toUpperCase()+' saving throw.',createdAt:campaign.updatedAt}]};
+ }
+ if(pending.goal==='unlock'){
+  const object=validDoor(scene.battlefield,pending.featureId);
+  if(!object||!object.locked)return rest;
+  return {...rest,explorationScene:{...scene,battlefield:{...scene.battlefield,
+   objects:scene.battlefield.objects.map(o=>o.id===object.id?{...o,locked:false}:o)},updatedAt:campaign.updatedAt}};
+ }
  const features=scene.features?.map(f=>f.id!==pending.featureId?f:
    pending.goal==='discover'&&!f.discovered?{...f,discovered:true}:
    pending.goal==='disarm'&&f.kind==='trap'&&f.discovered&&!f.disarmed?{...f,disarmed:true}:f);
@@ -204,7 +268,67 @@ export function applyDmSceneAction(campaign:Campaign,action:unknown,now=new Date
   }
   return {...campaign,explorationScene:{...before,playerPosition:target,updatedAt:now}};
  }
+ if(a.type==='shift'){
+  if(campaign.pendingTrapSave)throw Error('Resolve the triggered trap before manipulating objects.');
+  if((campaign.character?.currentHitPoints??1)<=0)throw Error('An unconscious character cannot move objects.');
+  if(!before||!before.visible||before.location!==campaign.location||a.id!==before.id||
+    typeof a.objectId!=='string'||!Number.isInteger(a.x)||!Number.isInteger(a.y)||
+    Object.keys(a).some(k=>!['type','id','objectId','x','y'].includes(k))||
+    !shiftIntent.test(playerMessage))throw Error('Moving an object requires explicit player intent.');
+  const obj=before.battlefield.objects.find(o=>o.id===a.objectId);
+  if(!obj||!['crate','chair'].includes(obj.kind)||obj.destroyed||obj.width!==1||obj.height!==1)
+    throw Error('This scene object cannot be shifted without a separate ruling.');
+  if(distance(before.playerPosition,{x:obj.x,y:obj.y})>1||
+    Math.abs(obj.x-(a.x as number))+Math.abs(obj.y-(a.y as number))!==1)
+    throw Error('The object is out of reach or cannot move that far.');
+  const direction={dx:(a.x as number)-obj.x,dy:(a.y as number)-obj.y};
+  const words=playerMessage.toLowerCase();
+  if(/\b(?:north|up)\b/.test(words)&&direction.dy!==-1||
+     /\b(?:south|down)\b/.test(words)&&direction.dy!==1||
+     /\b(?:east|right)\b/.test(words)&&direction.dx!==1||
+     /\b(?:west|left)\b/.test(words)&&direction.dx!==-1)
+    throw Error('The object direction does not match the player request.');
+  const destination={x:a.x as number,y:a.y as number};
+  const rest={...before.battlefield,objects:before.battlefield.objects.filter(o=>o.id!==obj.id)};
+  if(!battlefieldContains(rest,destination)||battlefieldBlocked(rest,destination)||
+    rest.objects.some(o=>destination.x>=o.x&&destination.x<o.x+o.width&&destination.y>=o.y&&destination.y<o.y+o.height)||
+    destination.x===before.playerPosition.x&&destination.y===before.playerPosition.y||
+    before.features?.some(f=>f.kind==='trap'&&!f.disarmed&&!f.triggered&&f.trapEffect&&
+      destination.x===f.position.x&&destination.y===f.position.y))
+    throw Error('The object destination is blocked, occupied or unsafe.');
+  const battlefield={...before.battlefield,objects:before.battlefield.objects.map(o=>
+    o.id===obj.id?{...o,x:destination.x,y:destination.y}:o)};
+  return {...campaign,explorationScene:{...before,battlefield,updatedAt:now},
+    journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',
+      text:'Moved '+obj.kind+' '+obj.id+' to square '+(destination.x+1)+','+(destination.y+1)+'.',createdAt:now}]};
+ }
+ if(a.type==='activate'){
+  if(campaign.pendingTrapSave)throw Error('Resolve the triggered trap before using a mechanism.');
+  if((campaign.character?.currentHitPoints??1)<=0)throw Error('An unconscious character cannot use a mechanism.');
+  if(!before||!before.visible||before.location!==campaign.location||a.id!==before.id||
+   typeof a.featureId!=='string'||Object.keys(a).some(k=>!['type','id','featureId'].includes(k))||
+   !activationIntent.test(playerMessage))throw Error('Activation requires an explicit player interaction.');
+  const mechanism=before.features?.find(f=>f.kind==='mechanism'&&f.id===a.featureId);
+  if(!mechanism||!mechanism.discovered||mechanism.activated||!mechanism.linkedObjectId||
+    distance(before.playerPosition,mechanism.position)>1||
+    battlefieldOpaqueSightBlocked(before.battlefield,before.playerPosition,mechanism.position))
+    throw Error('The mechanism is not accessible.');
+  if(mechanism.requiresFeatureId&&!before.features?.some(f=>f.id===mechanism.requiresFeatureId&&f.kind==='clue'&&f.discovered))
+    throw Error('The mechanism prerequisite has not been discovered.');
+  const target=validDoor(before.battlefield,mechanism.linkedObjectId);
+  if(!target)throw Error('The linked opening is no longer present.');
+  // The lever releases its lock; the player must still explicitly open it.
+  const battlefield={...before.battlefield,objects:before.battlefield.objects.map(o=>
+    o.id===target.id?{...o,locked:false}:o)};
+  const features=before.features!.map(f=>f.id===mechanism.id?{...f,activated:true}:f);
+  return {...campaign,explorationScene:{...before,battlefield,features,updatedAt:now},
+   journal:[...campaign.journal,{id:'mechanism-'+before.id+'-'+mechanism.id,kind:'system',
+    text:'You activate '+mechanism.label+'. The mechanism releases '+target.id+'.',createdAt:now}]};
+ }
  if(a.type==='open'||a.type==='close'){
+  if(campaign.pendingTrapSave)throw Error('Resolve the triggered trap before manipulating an opening.');
+  if((campaign.character?.currentHitPoints??1)<=0)throw Error('An unconscious character cannot open a door.');
+  if(playerMessage&&!openingIntent.test(playerMessage))throw Error('An opening requires explicit player interaction.');
   if(!before||!before.visible||before.location!==campaign.location||a.id!==before.id||
     typeof a.objectId!=='string'||Object.keys(a).some(k=>!['type','id','objectId'].includes(k)))
    throw Error('The scene object is no longer present.');
@@ -213,6 +337,16 @@ export function applyDmSceneAction(campaign:Campaign,action:unknown,now=new Date
   if(!['door','window'].includes(obj.kind)||obj.destroyed||obj.locked||
     !['open','close'].includes(a.type)||Boolean(obj.open)===(a.type==='open'))
    throw Error('The opening cannot be changed by narration.');
+  const trap=a.type==='open'&&before.features?.find(f=>f.kind==='trap'&&f.targetObjectId===obj.id&&
+    !f.disarmed&&!f.triggered&&f.trapEffect);
+  if(trap){
+   if(!campaign.character)throw Error('The character sheet is needed to resolve a dangerous door.');
+   const features=before.features!.map(f=>f.id===trap.id?{...f,discovered:true,triggered:true}:f);
+   return {...campaign,explorationScene:{...before,features,updatedAt:now},
+    pendingTrapSave:{sceneId:before.id,featureId:trap.id,stage:'hazard'},updatedAt:now,
+    journal:[...campaign.journal,{id:'trap-door-'+before.id+'-'+trap.id,kind:'system',
+     text:'Opening '+obj.id+' springs '+trap.label+'. Resolve the saving throw before trying again.',createdAt:now}]};
+  }
   const battlefield=toggleBattlefieldOpening(before.battlefield,obj.id,[before.playerPosition]);
   return {...campaign,explorationScene:{...before,battlefield,updatedAt:now}};
  }
@@ -245,7 +379,7 @@ export function applyDmSceneAction(campaign:Campaign,action:unknown,now=new Date
   if(!square)throw Error('Scene contains no accessible position.');
   playerPosition=square;
  }
- const features=a.features===undefined?undefined:normalizeFeatures(a.features,battlefield).map(f=>({...f,discovered:false,disarmed:undefined,triggered:undefined}));
+ const features=a.features===undefined?undefined:normalizeFeatures(a.features,battlefield).map(f=>({...f,discovered:f.kind==='mechanism',disarmed:undefined,triggered:undefined,activated:undefined}));
  return {...campaign,explorationScene:{id:a.id,title:a.title.trim(),location:campaign.location,
   visible:true,battlefield,playerPosition,updatedAt:now,
   ...(features?{features}:{}),...(typeof a.templateId==='string'?{templateId:a.templateId as SoloEncounterId,seed}:{})}};

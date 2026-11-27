@@ -68,3 +68,31 @@ it('preserves a bounded DM-authored trap effect in the initial scene declaration
  expect(result.code).toBe(200);
  expect(result.body.sceneAction?.features?.[0]?.trapEffect).toEqual(effect);
 });
+
+it('binds locked-door tool checks to the saved fixture DC, rather than a fabricated scene feature',async()=>{
+ const state={...gameState,scene:{...scene,objects:[{id:'bronze-door',kind:'door',locked:true,lockDC:10,open:false}]}};
+ setup({narration:'The lock requires fine tools.',checkRequest:{
+   skill:'Sleight of Hand',tool:'Thieves’ Tools',difficulty:'easy',mode:'normal',
+   sceneCheck:{sceneId:'hidden-cellar',featureId:'bronze-door',goal:'unlock'}}});
+ const approved=response();await handler(req('I pick the lock using my Thieves’ Tools.',state),approved);
+ expect(approved.body.checkRequest?.sceneCheck).toEqual({sceneId:'hidden-cellar',featureId:'bronze-door',goal:'unlock'});
+ expect(approved.body.checkRequest?.token).toBeTruthy();
+ const denied=response();await handler(req('I pick the lock.',{...state,scene:{...state.scene,objects:[{id:'bronze-door',kind:'door',locked:true,lockDC:20}]}}),denied);
+ expect(denied.body.checkRequest).toBeNull();
+});
+it('preserves the explicit mechanism operation only for matching player intent',async()=>{
+ setup({narration:'The brass wheel clicks.',sceneAction:{type:'activate',id:'hidden-cellar',featureId:'brass-wheel'}});
+ const active=response();await handler(req('I turn the brass wheel.'),active);
+ expect(active.body.sceneAction).toEqual({type:'activate',id:'hidden-cellar',featureId:'brass-wheel'});
+ const passive=response();await handler(req('I study the brass wheel.'),passive);
+ expect(passive.body.sceneAction).toBeNull();
+});
+
+it('requires a player request before returning a one-cell object shift',async()=>{
+ setup({narration:'The crate scrapes.',sceneAction:{type:'shift',id:'hidden-cellar',
+  objectId:'small-crate',x:3,y:2}});
+ const active=response();await handler(req('I push the crate east.'),active);
+ expect(active.body.sceneAction).toEqual({type:'shift',id:'hidden-cellar',objectId:'small-crate',x:3,y:2});
+ const passive=response();await handler(req('I inspect the crate.'),passive);
+ expect(passive.body.sceneAction).toBeNull();
+});

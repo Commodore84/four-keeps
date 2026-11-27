@@ -2837,3 +2837,245 @@ test('iPhone mapped travel stops at an armed trap, saves damage and resumes afte
  expect(again.explorationScene.features[0].triggered).toBe(true);
  expect(again.explorationScene.playerPosition).toEqual({x:6,y:0});
 });
+
+
+test('iPhone clue-gated mechanism unlocks a trapped door with saved consequences',async({page})=>{
+ test.setTimeout(130000);
+ await createAndImport(page,'rogue');
+ await page.evaluate(()=>{localStorage.setItem('four-keeps-access-code','browser-test-code');localStorage.setItem('four-keeps-dm-mode','on');});
+ await page.route('**/api/dm',async route=>{
+  const body=route.request().postDataJSON(),message=String(body.message??'');
+  const shared={newFacts:[],worldUpdates:{}};
+  if(body.opening){await route.fulfill({json:{...shared,narration:'A path leads toward an old workshop.'}});return;}
+  if(body.checkToken){const dice=body.dice;await route.fulfill({json:{...shared,narration:'You decipher the runes correctly.',
+   checkResult:{skill:'Investigation',dice,kept:dice[0],modifier:20,total:dice[0]+20,success:true}}});return;}
+  const sceneId='clockwork-workshop';
+  const sceneAction=message.startsWith('I enter the workshop')?
+   {type:'show',id:sceneId,title:'Clockwork Workshop',battlefield:{width:8,height:3,
+      objects:[{id:'bronze-door',kind:'door',x:5,y:1,width:1,height:1,locked:true,lockDC:15}]},
+    features:[
+     {id:'rune-key',kind:'clue',label:'Runic sequence',position:{x:1,y:1},dc:15,skill:'Investigation'},
+     {id:'brass-wheel',kind:'mechanism',label:'Brass wheel',position:{x:1,y:0},dc:10,skill:'Investigation',
+      linkedObjectId:'bronze-door',requiresFeatureId:'rune-key'},
+     {id:'hinge-needle',kind:'trap',label:'Hinge needle',position:{x:5,y:1},dc:15,skill:'Perception',
+      targetObjectId:'bronze-door',trapEffect:{saveAbility:'dex',saveDC:15,damageDice:'1d6',damageType:'poison',onSave:'half'}}
+    ]}:
+   message.startsWith('I pull the Brass wheel')?
+    {type:'activate',id:sceneId,featureId:'brass-wheel'}:
+   message.startsWith('I move to square')?
+    {type:'move',id:sceneId,x:4,y:0}:
+   message.startsWith('I open the door')?
+    {type:'open',id:sceneId,objectId:'bronze-door'}:null;
+  const checkRequest=message.startsWith('I investigate the runes')?
+    {skill:'Investigation',mode:'normal',reason:'Study the runic sequence',token:'rune-token',
+     sceneCheck:{sceneId,featureId:'rune-key',goal:'discover'}}:null;
+  await route.fulfill({json:{...shared,narration:'The workshop mechanism responds to your actions.',sceneAction,checkRequest}});
+ });
+ await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();
+ await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await expect.poll(async()=>(await saved(page))?.journal?.some((e:any)=>e.id?.endsWith('-dm-opening'))).toBe(true);
+ async function say(message:string){await page.getByLabel('Message the Dungeon Master').fill(message);
+  await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();}
+ await say('I enter the workshop carefully.');
+ const scene=page.getByLabel('DM scene map');await expect(scene).toBeVisible();
+ const first=await saved(page);
+ expect(first.explorationScene.features.map((f:any)=>f.discovered)).toEqual([false,true,false]);
+ await scene.getByRole('gridcell',{name:'Examine mechanism Brass wheel'}).click();
+ await expect(scene.getByRole('button',{name:'Use mechanism'})).toBeVisible();
+ await say('I investigate the runes on the wall.');
+ await expect(page.getByRole('button',{name:'Roll Investigation'})).toBeVisible();
+ await page.getByRole('button',{name:'Roll Investigation'}).click();
+ await expect.poll(async()=> (await saved(page))?.explorationScene?.features?.[0]?.discovered).toBe(true);
+ await scene.getByRole('gridcell',{name:'Examine mechanism Brass wheel'}).click();
+ await scene.getByRole('button',{name:'Use mechanism'}).click();
+ await expect(page.getByLabel('Message the Dungeon Master')).toHaveValue(/I pull the Brass wheel/);
+ await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
+ await expect.poll(async()=>(await saved(page))?.explorationScene?.features?.[1]?.activated).toBe(true);
+ expect((await saved(page)).explorationScene.battlefield.objects[0]).toMatchObject({locked:false});
+ await scene.getByRole('gridcell',{name:'Explore square 5, 1'}).click();
+ await scene.getByRole('button',{name:'Ask DM to move'}).click();
+ await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
+ await expect.poll(async()=>(await saved(page))?.explorationScene?.playerPosition).toEqual({x:4,y:0});
+ await scene.getByRole('gridcell',{name:'Inspect door at 6, 2'}).click();
+ await scene.getByRole('button',{name:'Open'}).click();
+ await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
+ await expect.poll(async()=>(await saved(page))?.pendingTrapSave?.featureId).toBe('hinge-needle');
+ const sprung=await saved(page);
+ expect(sprung.explorationScene.battlefield.objects[0].open).not.toBe(true);
+ expect(sprung.explorationScene.features[2]).toMatchObject({triggered:true,discovered:true});
+ const trap=page.getByRole('group',{name:'Triggered trap saving throw'});
+ await expect(trap.getByRole('button',{name:'Roll saving throw'})).toBeVisible();
+ await page.screenshot({path:'test-results/clockwork-door-trap-iphone.png'});
+ await trap.getByRole('button',{name:'Roll saving throw'}).click();
+ await expect.poll(async()=>(await saved(page))?.pendingTrapSave).toBeUndefined();
+ await say('I open the door bronze-door.');
+ await expect.poll(async()=>(await saved(page))?.explorationScene?.battlefield?.objects?.[0]?.open).toBe(true);
+ await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();
+ await page.getByRole('button',{name:'Continue Adventure'}).click();
+ const persisted=await saved(page);
+ expect(persisted.explorationScene.features.map((f:any)=>[f.discovered,f.activated??false,f.triggered??false]))
+  .toEqual([[true,false,false],[true,true,false],[true,false,true]]);
+ expect(persisted.explorationScene.battlefield.objects[0]).toMatchObject({locked:false,open:true});
+});
+
+test('iPhone failed disarm triggers a persisted trap once and requires a saving throw',async({page})=>{
+ test.setTimeout(110000);
+ await createAndImport(page,'rogue');
+ // Give the imported rogue the tool through its actual inventory ledger, not a mocked rule shortcut.
+ await page.evaluate(async()=>{
+  const db=await new Promise<IDBDatabase>((resolve,reject)=>{const r=indexedDB.open('four-keeps-local',1);
+   r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});
+  const tx=db.transaction('campaigns','readwrite'),store=tx.objectStore('campaigns');
+  const list=await new Promise<any[]>(resolve=>{const r=store.getAll();r.onsuccess=()=>resolve(r.result);});
+  const c=list[0],ledger=c.inventoryLedger??{currency:{CP:0,SP:0,EP:0,GP:0,PP:0},gear:[]};
+  if(!ledger.gear.some((g:any)=>g.name==='Thieves’ Tools'&&g.quantity>0))ledger.gear.push({name:'Thieves’ Tools',quantity:1});
+  c.inventoryLedger=ledger;store.put(c);
+  await new Promise<void>((resolve,reject)=>{tx.oncomplete=()=>resolve();tx.onerror=()=>reject(tx.error);});db.close();
+ });
+ await page.evaluate(()=>{localStorage.setItem('four-keeps-access-code','browser-test-code');localStorage.setItem('four-keeps-dm-mode','on');});
+ await page.route('**/api/dm',async route=>{
+  const body=route.request().postDataJSON(),message=String(body.message??'');
+  const shared={newFacts:[],worldUpdates:{}};
+  if(body.opening){await route.fulfill({json:{...shared,narration:'A stone alcove waits.'}});return;}
+  if(body.checkToken){const dice=body.dice,failed=body.checkToken==='fail-disarm';
+   await route.fulfill({json:{...shared,narration:failed?'The delicate mechanism springs!':'You find the small mechanism.',
+   checkResult:{skill:failed?'Sleight of Hand':'Perception',tool:failed?'Thieves’ Tools':undefined,
+    dice,kept:dice[0],modifier:failed?0:20,total:dice[0]+(failed?0:20),success:!failed}}});
+   return;}
+  const sceneId='alcove-failure';
+  const sceneAction=message.startsWith('I enter the alcove')?
+   {type:'show',id:sceneId,title:'Stone Alcove',battlefield:{width:5,height:2,objects:[]},
+    features:[{id:'needle',kind:'trap',label:'Spring needle',position:{x:1,y:0},dc:15,skill:'Perception',
+     trapEffect:{saveAbility:'dex',saveDC:15,damageDice:'1d4',damageType:'piercing',onSave:'none'}}]}:null;
+  const checkRequest=message.startsWith('I search the floor')?
+   {skill:'Perception',mode:'normal',reason:'Check for a trap',token:'find-needle',
+    sceneCheck:{sceneId,featureId:'needle',goal:'discover'}}:
+    message.startsWith('I disarm the Spring needle')?
+   {skill:'Sleight of Hand',tool:'Thieves’ Tools',mode:'normal',reason:'Disarm the needle',token:'fail-disarm',
+    sceneCheck:{sceneId,featureId:'needle',goal:'disarm'}}:null;
+  await route.fulfill({json:{...shared,narration:'You examine the alcove.',sceneAction,checkRequest}});
+ });
+ await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();
+ await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await expect.poll(async()=>(await saved(page))?.journal?.some((e:any)=>e.id?.endsWith('-dm-opening'))).toBe(true);
+ async function say(message:string){await page.getByLabel('Message the Dungeon Master').fill(message);
+  await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();}
+ await say('I enter the alcove.');
+ await expect(page.getByLabel('DM scene map')).toBeVisible();
+ await say('I search the floor for traps.');
+ await expect(page.getByRole('button',{name:'Roll Perception'})).toBeVisible();
+ await page.getByRole('button',{name:'Roll Perception'}).click();
+ await expect.poll(async()=>(await saved(page))?.explorationScene?.features?.[0]?.discovered).toBe(true);
+ const originalHp=(await saved(page)).character.currentHitPoints;
+ await say('I disarm the Spring needle using my Thieves’ Tools.');
+ await expect(page.getByRole('button',{name:'Roll Sleight of Hand'})).toBeVisible();
+ await page.getByRole('button',{name:'Roll Sleight of Hand'}).click();
+ await expect.poll(async()=>(await saved(page))?.pendingTrapSave?.featureId).toBe('needle');
+ const triggered=await saved(page);
+ expect(triggered.explorationScene.features[0]).toMatchObject({triggered:true,disarmed:undefined});
+ expect(triggered.character.currentHitPoints).toBe(originalHp);
+ await page.getByRole('group',{name:'Triggered trap saving throw'}).getByRole('button',{name:'Roll saving throw'}).click();
+ await expect.poll(async()=>(await saved(page))?.pendingTrapSave).toBeUndefined();
+ const concluded=await saved(page);
+ expect(concluded.journal.filter((e:any)=>e.id==='trap-disarm-alcove-failure-needle')).toHaveLength(1);
+ await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();
+ await page.getByRole('button',{name:'Continue Adventure'}).click();
+ const again=await saved(page);
+ expect(again.explorationScene.features[0]).toMatchObject({triggered:true});
+ expect(again.journal.filter((e:any)=>e.id==='trap-disarm-alcove-failure-needle')).toHaveLength(1);
+ expect(again.pendingTrapSave).toBeUndefined();
+});
+
+
+test('iPhone pushing a crate updates persistent physical exploration geometry',async({page})=>{
+ test.setTimeout(100000);
+ await createAndImport(page,'rogue');
+ await page.evaluate(()=>{localStorage.setItem('four-keeps-access-code','browser-test-code');localStorage.setItem('four-keeps-dm-mode','on');});
+ await page.route('**/api/dm',async route=>{
+  const body=route.request().postDataJSON(),message=String(body.message??'');
+  const shared={newFacts:[],worldUpdates:{}};
+  if(body.opening){await route.fulfill({json:{...shared,narration:'You approach the pantry.'}});return;}
+  const sceneAction=message.startsWith('I enter the pantry')?
+   {type:'show',id:'crate-pantry',title:'Pantry',battlefield:{width:5,height:3,
+     objects:[{id:'spare-crate',kind:'crate',x:1,y:0,width:1,height:1}]}}:
+   message.startsWith('I push the crate spare-crate one square south')?
+    {type:'shift',id:'crate-pantry',objectId:'spare-crate',x:1,y:1}:null;
+  await route.fulfill({json:{...shared,narration:'The crate scrapes along the stone floor.',sceneAction}});
+ });
+ await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();
+ await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await expect.poll(async()=>(await saved(page))?.journal?.some((e:any)=>e.id?.endsWith('-dm-opening'))).toBe(true);
+ await page.getByLabel('Message the Dungeon Master').fill('I enter the pantry.');
+ await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
+ const map=page.getByLabel('DM scene map');await expect(map).toBeVisible();
+ await map.getByRole('gridcell',{name:'Inspect crate at 2, 1'}).click();
+ await expect(map.getByRole('button',{name:'Push crate south'})).toBeVisible();
+ await map.getByRole('button',{name:'Push crate south'}).click();
+ await expect(page.getByLabel('Message the Dungeon Master')).toHaveValue(/one square south/);
+ await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
+ await expect.poll(async()=>(await saved(page))?.explorationScene?.battlefield?.objects?.[0]?.y).toBe(1);
+ await expect(map.getByRole('gridcell',{name:'Inspect crate at 2, 2'})).toBeVisible();
+ await map.scrollIntoViewIfNeeded();
+ await page.screenshot({path:'test-results/scene-movable-crate-iphone.png'});
+ await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();
+ await page.getByRole('button',{name:'Continue Adventure'}).click();
+ expect((await saved(page)).explorationScene.battlefield.objects[0]).toMatchObject({x:1,y:1});
+});
+
+
+test('iPhone sealed lockpicking check unlocks a door and persists it without bypassing opening',async({page})=>{
+ test.setTimeout(110000);
+ await createAndImport(page,'rogue');
+ await page.evaluate(async()=>{
+  const db=await new Promise<IDBDatabase>((resolve,reject)=>{const r=indexedDB.open('four-keeps-local',1);
+   r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});
+  const tx=db.transaction('campaigns','readwrite'),store=tx.objectStore('campaigns');
+  const list=await new Promise<any[]>(resolve=>{const r=store.getAll();r.onsuccess=()=>resolve(r.result);});
+  const c=list[0],ledger=c.inventoryLedger??{currency:{CP:0,SP:0,EP:0,GP:0,PP:0},gear:[]};
+  if(!ledger.gear.some((g:any)=>g.name==='Thieves’ Tools'&&g.quantity>0))ledger.gear.push({name:'Thieves’ Tools',quantity:1});
+  c.inventoryLedger=ledger;store.put(c);
+  await new Promise<void>((resolve,reject)=>{tx.oncomplete=()=>resolve();tx.onerror=()=>reject(tx.error);});db.close();
+ });
+ await page.evaluate(()=>{localStorage.setItem('four-keeps-access-code','browser-test-code');localStorage.setItem('four-keeps-dm-mode','on');});
+ await page.route('**/api/dm',async route=>{
+  const body=route.request().postDataJSON(),message=String(body.message??'');
+  const shared={newFacts:[],worldUpdates:{}};
+  if(body.opening){await route.fulfill({json:{...shared,narration:'The cellar is nearby.'}});return;}
+  if(body.checkToken){const dice=body.dice;await route.fulfill({json:{...shared,
+    narration:'The tumblers click into place.',
+    checkResult:{skill:'Sleight of Hand',tool:'Thieves’ Tools',dice,kept:dice[0],
+      modifier:20,total:dice[0]+20,success:true}}});return;}
+  const sceneId='locked-cellar';
+  const sceneAction=message.startsWith('I enter the locked cellar')?
+    {type:'show',id:sceneId,title:'Locked Cellar',battlefield:{width:4,height:2,
+      objects:[{id:'small-door',kind:'door',x:1,y:0,width:1,height:1,locked:true,lockDC:15}]}}:
+    message.startsWith('I open the door small-door')?
+    {type:'open',id:sceneId,objectId:'small-door'}:null;
+  const checkRequest=message.startsWith('I use my Thieves’ Tools to pick')?
+    {skill:'Sleight of Hand',tool:'Thieves’ Tools',mode:'normal',reason:'Pick the cellar lock',
+     token:'sealed-cellar-lock',sceneCheck:{sceneId,featureId:'small-door',goal:'unlock'}}:null;
+  await route.fulfill({json:{...shared,sceneAction,checkRequest,narration:'The door remains in front of you.'}});
+ });
+ await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();
+ await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await expect.poll(async()=>(await saved(page))?.journal?.some((e:any)=>e.id?.endsWith('-dm-opening'))).toBe(true);
+ await page.getByLabel('Message the Dungeon Master').fill('I enter the locked cellar.');
+ await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
+ const map=page.getByLabel('DM scene map');await expect(map).toBeVisible();
+ await map.getByRole('gridcell',{name:'Inspect Locked door at 2, 1'}).click();
+ await map.getByRole('button',{name:'Pick lock'}).click();
+ await expect(page.getByLabel('Message the Dungeon Master')).toHaveValue(/Thieves. Tools to pick/);
+ await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
+ await expect.poll(async()=>(await saved(page))?.pendingSceneCheck?.goal).toBe('unlock');
+ await expect(page.getByRole('button',{name:'Roll Sleight of Hand'})).toBeVisible();
+ await page.getByRole('button',{name:'Roll Sleight of Hand'}).click();
+ await expect.poll(async()=>(await saved(page))?.explorationScene?.battlefield?.objects?.[0]?.locked).toBe(false);
+ const unlocked=await saved(page);expect(unlocked.explorationScene.battlefield.objects[0].open).not.toBe(true);
+ await map.getByRole('gridcell',{name:'Inspect door at 2, 1'}).click();
+ await map.getByRole('button',{name:'Open'}).click();
+ await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
+ await expect.poll(async()=>(await saved(page))?.explorationScene?.battlefield?.objects?.[0]?.open).toBe(true);
+ await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();
+ await page.getByRole('button',{name:'Continue Adventure'}).click();
+ expect((await saved(page)).explorationScene.battlefield.objects[0]).toMatchObject({locked:false,open:true});
+});
