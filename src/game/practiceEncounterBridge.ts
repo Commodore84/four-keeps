@@ -7,9 +7,10 @@ import {TACTICAL_PROFILES,type ScenarioActor} from './combatScenario';
  * their saved state into the *existing* Begin Practice Encounter combat.
  * This is deliberately idempotent and never overwrites an active classic fight.
  *
- * The classic renderer accepts a player of any class for baseline weapon and
- * unarmed attacks. Multi-ally and >2-foe encounters remain on their existing
- * system rather than silently losing actors.
+ * Outside disposable Combat Lab, only Rogue encounters migrate to classic.
+ * Other classes retain their existing full-featured encounter path; the Lab
+ * permits any imported class for baseline ordinary weapon/unarmed tests.
+ * Multi-ally and >2-foe scenarios are never silently truncated.
  */
 export function restorePracticeEncounter(campaign:Campaign):Campaign {
  if(campaign.combat||campaign.pendingAftermath||campaign.companionEncounter?.status==='completed')return campaign;
@@ -17,6 +18,8 @@ export function restorePracticeEncounter(campaign:Campaign):Campaign {
  const phase=recovered.companionEncounter?.phaseThree;
  const scenario=phase?.scenario??recovered.adventureSession?.pendingEncounter?.scenario;
  if(!scenario)return campaign;
+ const playerClass=recovered.characterIdentity?.classId??recovered.character?.classId??'rogue';
+ if(playerClass!=='rogue'&&!recovered.combatLab)return campaign;
  const foes=scenario.actors.filter(actor=>actor.side==='enemies');
  if(!foes.length||foes.length>2||scenario.actors.some(actor=>actor.side==='allies'))return campaign;
  const stored=recovered.companionEncounter;
