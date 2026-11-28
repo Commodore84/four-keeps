@@ -53,11 +53,20 @@ describe('reinstated Begin Practice Encounter handoff',()=>{
   expect(restored.combat?.secondEnemy?.hp).toBe(7);
   expect(restored.companionEncounter).toBe(saved.companionEncounter);
  });
- it('does not replace unrelated combats or redirect unsupported classes into Rogue-only mechanics',()=>{
-  const originalCampaign=original();
-  const current={...originalCampaign,combat:{status:'awaiting-initiative',enemyName:'Training Dummy',enemyInitiative:4,round:1}} as Campaign;
+ it('preserves existing combats and opens the same classic arena for Fighter and Monk baseline weapon tests',()=>{
+  const source=original();
+  const current={...source,combat:{status:'awaiting-initiative',enemyName:'Training Dummy',enemyInitiative:4,round:1}} as Campaign;
   expect(restorePracticeEncounter(current)).toBe(current);
-  const fighter={...originalCampaign,characterIdentity:{classId:'fighter'}} as unknown as Campaign;
-  expect(restorePracticeEncounter(fighter)).toBe(fighter);
+  for(const classId of ['fighter','monk']){
+   const imported={...source,characterIdentity:{...source.characterIdentity!,classId}} as Campaign;
+   const converted=restorePracticeEncounter(imported);
+   expect(converted).not.toBe(imported);
+   expect(converted.characterIdentity?.classId).toBe(classId);
+   expect(converted.combat?.classicAdventure?.origin).toBe('dm');
+   expect(converted.combat?.status).toBe('awaiting-initiative');
+   expect(converted.combat?.classicAdventure?.second).toBeDefined();
+   expect(imported.combat).toBeUndefined();
+   expect(restorePracticeEncounter(converted)).toBe(converted);
+  }
  });
 });
