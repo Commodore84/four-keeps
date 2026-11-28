@@ -47,6 +47,7 @@ export function BastionPlace({campaign,saving,onChange,onAdventure}:Props){
  const canManage=!!campaign&&!!b&&b.status==='established'&&b.visited&&campaign.location===b.name;
  const eligible=campaign?SPECIAL_FACILITIES.filter(d=>eligibleSpecial(campaign,d)):[];
  const activeSpecials=b?.facilities.filter(f=>f.kind==='special')??[];
+ const pendingOrders=b?.orders.filter(o=>o.status!=='resolved')??[];
  const selectable=eligible.filter(d=>d.repeatable||!activeSpecials.some(f=>f.definitionId===d.id));
  const chosen=b?.facilities.find(f=>f.id===selected);
  const chosenDefinition=chosen?.definitionId?SPECIAL_FACILITIES.find(x=>x.id===chosen.definitionId):undefined;
@@ -224,10 +225,10 @@ export function BastionPlace({campaign,saving,onChange,onAdventure}:Props){
         <button className={button} type="button" disabled={saving||!canManage} onClick={()=>void perform(()=>collectBastionSupply(campaign,item.name,Number(pickupAmount[item.name]??item.quantity)),'Supplies collected from Bastion storage.')}>Collect</button></div>
       </div>)}
     </section>}
-    {(b.construction.length>0||b.orders.length>0)&&<section className={panel+' space-y-2'} aria-label="Bastion projects">
+    {(b.construction.length>0||pendingOrders.length>0)&&<section className={panel+' space-y-2'} aria-label="Bastion projects">
       <h3 className="flex items-center gap-2 font-serif text-lg"><Clock className="h-4 w-4 text-gold"/>Ongoing work</h3>
       {b.construction.map(p=><p key={p.id} className="text-sm">{p.kind==='wall-section'?'Wall · '+(p.section??''):p.kind==='replant-garden'?'Replant Garden':p.kind==='expand-basic'?'Expand '+b.facilities.find(f=>f.id===p.facilityId)?.name:'Build '+b.facilities.find(f=>f.id===p.facilityId)?.name} · {Math.max(0,Math.ceil((p.finishesAt-minute)/1440))} days</p>)}
-      {b.orders.slice(-12).map(o=><div key={o.id} className="space-y-1 border-t border-white/10 pt-2 text-sm">
+      {pendingOrders.slice(-12).map(o=><div key={o.id} className="space-y-1 border-t border-white/10 pt-2 text-sm">
         <p className="font-medium">{b.facilities.find(f=>f.id===o.facilityId)?.name} · {o.type} · {o.status==='active'?'In progress':'DM review required'}</p>
         <p className="text-xs text-parchment/70">{o.request}</p>
         {o.status==='awaiting-dm'&&<button type="button" className={button} onClick={()=>onAdventure('At '+b.name+', the '+o.type+' order for '+(b.facilities.find(f=>f.id===o.facilityId)?.name??'the facility')+' has finished: '+o.request+'. Please adjudicate its outcome using the published 2024 Bastion rules without inventing automatic rewards.')}>Discuss finished order</button>}
