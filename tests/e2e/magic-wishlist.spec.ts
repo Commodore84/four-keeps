@@ -88,3 +88,64 @@ test('iPhone magic items menu supports favorites and persistence',async ({page})
  await page.getByRole('button',{name:'Remove Bag of Holding from Wish List'}).click();
  await expect(page.getByText('No matching items.')).toBeVisible();
 });
+
+test('iPhone build-specific magic picks and shared DM recommendation toggle',async({page})=>{
+ await page.setViewportSize({width:375,height:812});
+ await page.goto('/four-keeps/');
+ await page.getByRole('button',{name:'Settings',exact:true}).click();
+ await page.getByRole('button',{name:'Open navigation menu'}).click();
+ await page.getByRole('navigation',{name:'Primary navigation'}).getByRole('button',{name:'Developer'}).click();
+ const development=page.getByLabel('Development section');
+ if(!(await development.getByLabel('Legacy campaign creation').isVisible()))await development.locator('summary').first().click();
+ await development.getByLabel('Legacy campaign creation').getByLabel('New campaign name').fill('Stealth Archer recommendations');
+ await development.getByLabel('Legacy campaign creation').getByRole('button',{name:'New',exact:true}).click();
+ await page.evaluate(async()=>{
+  const db=await new Promise<IDBDatabase>((resolve,reject)=>{
+   const request=indexedDB.open('four-keeps-local',1);
+   request.onsuccess=()=>resolve(request.result);
+   request.onerror=()=>reject(request.error);
+  });
+  await new Promise<void>((resolve,reject)=>{
+   const tx=db.transaction('campaigns','readwrite');
+   const store=tx.objectStore('campaigns');
+   const get=store.getAll();
+   get.onsuccess=()=>{
+    for(const entry of get.result){
+      if(entry.title!=='Stealth Archer recommendations')continue;
+      entry.characterIdentity={name:'Scout',speciesId:'human',backgroundId:'criminal',classId:'rogue',draftId:'build',pronouns:'they',appearance:'',personality:'',backstory:''};
+      entry.character={...entry.character,classId:'rogue',proficientSkills:['Stealth','Perception','Sleight of Hand'],expertiseSkills:['Stealth']};
+      entry.inventoryLedger={...entry.inventoryLedger,gear:[{name:'Shortbow',quantity:1},{name:'Leather Armor',quantity:1}]};
+      entry.encounterLoadout={...entry.encounterLoadout,weaponId:'shortbow'};
+      store.put(entry);
+    }
+   };
+   tx.oncomplete=()=>{db.close();resolve();};
+   tx.onerror=()=>reject(tx.error);
+  });
+ });
+ await page.reload();
+ await page.getByRole('button',{name:'Campaigns',exact:true}).click();
+ await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await page.getByRole('button',{name:'Open navigation menu'}).click();
+ await page.getByRole('navigation',{name:'Primary navigation'}).getByRole('button',{name:'Magic Items'}).click();
+ const compendium=page.getByRole('region',{name:'Magic Item Compendium'});
+ const search=compendium.getByRole('textbox',{name:'Search magic items'});
+ await search.fill('Bracers of Archery');
+ const pick=compendium.getByRole('button',{name:/DM recommendation: 3 of 3 stars for Bracers of Archery/});
+ await expect(pick).toBeVisible();
+ await pick.click();
+ await expect(compendium.getByRole('note')).toContainText('+2 damage');
+ await page.screenshot({path:'test-results/v30-build-specific-magic-iphone.png'});
+ await search.fill('');
+ await compendium.getByRole('button',{name:'Recommended',exact:true}).click();
+ await expect(compendium.getByRole('article').count()).resolves.toBeGreaterThan(1);
+ expect(await compendium.getByRole('article').count()).toBeLessThan(511);
+ await page.getByRole('button',{name:'Open navigation menu'}).click();
+ await page.getByRole('navigation',{name:'Primary navigation'}).getByRole('button',{name:'Settings'}).click();
+ await page.getByRole('switch',{name:'DM equipment recommendations'}).uncheck();
+ await page.getByRole('button',{name:'Open navigation menu'}).click();
+ await page.getByRole('navigation',{name:'Primary navigation'}).getByRole('button',{name:'Magic Items'}).click();
+ await expect(compendium.getByRole('button',{name:'Recommended',exact:true})).toHaveCount(0);
+ await search.fill('Bracers of Archery');
+ await expect(compendium.getByRole('button',{name:/DM recommendation:.*Bracers of Archery/})).toHaveCount(0);
+});

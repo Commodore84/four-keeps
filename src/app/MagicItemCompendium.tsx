@@ -1,4 +1,7 @@
 import {CatalogJumpNavigation} from './CatalogJumpNavigation';
+import {Star} from 'lucide-react';
+import type {Campaign} from '../game/campaign';
+import {magicItemRecommendation} from '../game/magicRecommendations';
 import {useEffect,useMemo,useState} from 'react';
 import {MAGIC_ITEMS,readMagicWishlist,writeMagicWishlist} from '../game/magicWishlist';
 import {ALCHEMY_JUG_LIQUIDS,magicItemExtendedRules,magicItemUseDescription} from '../game/magicItemUseDescriptions';
@@ -68,20 +71,23 @@ export const itemSubgroup=(category:string,name:string)=>{
  if(/broom|carpet|wing|flight|flying/.test(n))return 'Flight and aerial travel';
  return 'Miscellaneous wondrous items';
 };
-export function MagicItemCompendium({campaignId}:{campaignId:string|null}){
+export function MagicItemCompendium({campaignId,campaign,showDmRecommendations=true}:{campaignId:string|null;campaign?:Campaign|null;showDmRecommendations?:boolean}){
  const [wanted,setWanted]=useState<string[]>([]);
- const [tab,setTab]=useState<'all'|'wishlist'>('all');
+ const [tab,setTab]=useState<'all'|'wishlist'|'recommended'>('all');
+ const [explainedPick,setExplainedPick]=useState<string|null>(null);
  const [search,setSearch]=useState('');
  const [category,setCategory]=useState('All');
  const [rarity,setRarity]=useState('All');
  const [group,setGroup]=useState('All');
  useEffect(()=>setWanted(campaignId?readMagicWishlist(campaignId):[]),[campaignId]);
+ useEffect(()=>{if(!showDmRecommendations&&tab==='recommended')setTab('all');},[showDmRecommendations,tab]);
+ const recommendations=useMemo(()=>new Map(showDmRecommendations?MAGIC_ITEMS.map(item=>[item.id,magicItemRecommendation(campaign??null,item)] as const):[]),[campaign,showDmRecommendations]);
  const categories=useMemo(()=>['All',...new Set(MAGIC_ITEMS.map(item=>item.category))],[]);
  const groups=useMemo(()=>['All',...new Set(MAGIC_ITEMS.map(item=>itemGroup(item.category,item.name)))].sort((a,b)=>a==='All'?-1:b==='All'?1:a.localeCompare(b)),[]);
  const subgroups=useMemo(()=>['All',...new Set(MAGIC_ITEMS.filter(item=>(category==='All'||item.category===category)&&(group==='All'||itemGroup(item.category,item.name)===group)).map(item=>itemSubgroup(item.category,item.name)))].sort((a,b)=>a==='All'?-1:b==='All'?1:a.localeCompare(b)),[category,group]);
  const [subgroup,setSubgroup]=useState('All');
  const rarities=['All','Common','Uncommon','Rare','Very Rare','Legendary','Artifact','Varies'];
- const filtered=MAGIC_ITEMS.filter(item=>(tab==='all'||wanted.includes(item.id))&&(category==='All'||item.category===category)&&(group==='All'||itemGroup(item.category,item.name)===group)&&(subgroup==='All'||itemSubgroup(item.category,item.name)===subgroup)&&(rarity==='All'||rarityTier(item.rarity)===rarity)&&item.name.toLowerCase().includes(search.trim().toLowerCase())).sort((a,b)=>itemGroup(a.category,a.name).localeCompare(itemGroup(b.category,b.name))||itemSubgroup(a.category,a.name).localeCompare(itemSubgroup(b.category,b.name))||a.name.localeCompare(b.name));
+ const filtered=MAGIC_ITEMS.filter(item=>(tab==='all'||tab==='wishlist'&&wanted.includes(item.id)||tab==='recommended'&&showDmRecommendations&&Boolean(recommendations.get(item.id)))&&(category==='All'||item.category===category)&&(group==='All'||itemGroup(item.category,item.name)===group)&&(subgroup==='All'||itemSubgroup(item.category,item.name)===subgroup)&&(rarity==='All'||rarityTier(item.rarity)===rarity)&&item.name.toLowerCase().includes(search.trim().toLowerCase())).sort((a,b)=>itemGroup(a.category,a.name).localeCompare(itemGroup(b.category,b.name))||itemSubgroup(a.category,a.name).localeCompare(itemSubgroup(b.category,b.name))||(tab==='recommended'?(recommendations.get(b.id)?.stars??0)-(recommendations.get(a.id)?.stars??0):0)||a.name.localeCompare(b.name));
  function toggle(id:string){
   if(!campaignId||MAGIC_ITEMS.some(item=>item.id===id&&isMultiVariantReference(item.rarity)))return;
   const next=wanted.includes(id)?wanted.filter(item=>item!==id):[...wanted,id];
@@ -90,8 +96,9 @@ export function MagicItemCompendium({campaignId}:{campaignId:string|null}){
  return <section aria-label="Magic Item Compendium" className="space-y-4">
   <h2 className="font-serif text-2xl text-gold">Magic Items</h2>
   <p className="text-sm text-parchment/75">Browse 2024 magic items and mark items you'd like to find. Your choices may inform future DM rewards; they never guarantee an item.</p>
+  {showDmRecommendations&&campaign?.characterIdentity&&<p className="text-xs text-parchment/65">Stars reflect build fit, not rarity or availability: 3 = excellent match, 2 = helpful, 1 = situational. Tap stars to see why.</p>}
   {!campaignId&&<p className="rounded-lg border border-gold/30 p-3 text-sm">Open a campaign to save a wish list.</p>}
-  <div className="flex gap-2"><button type="button" onClick={()=>setTab('all')} aria-pressed={tab==='all'} className={`rounded-lg border px-3 py-2 text-sm ${tab==='all'?'border-gold text-gold':'border-white/20'}`}>Browse All</button><button type="button" onClick={()=>setTab('wishlist')} aria-pressed={tab==='wishlist'} className={`rounded-lg border px-3 py-2 text-sm ${tab==='wishlist'?'border-gold text-gold':'border-white/20'}`}>Wish List ({wanted.length})</button></div>
+  <div className="flex gap-2"><button type="button" onClick={()=>setTab('all')} aria-pressed={tab==='all'} className={`rounded-lg border px-3 py-2 text-sm ${tab==='all'?'border-gold text-gold':'border-white/20'}`}>Browse All</button><button type="button" onClick={()=>setTab('wishlist')} aria-pressed={tab==='wishlist'} className={`rounded-lg border px-3 py-2 text-sm ${tab==='wishlist'?'border-gold text-gold':'border-white/20'}`}>Wish List ({wanted.length})</button>{showDmRecommendations&&campaign?.characterIdentity&&<button type="button" onClick={()=>setTab('recommended')} aria-pressed={tab==='recommended'} className={'rounded-lg border px-3 py-2 text-sm '+(tab==='recommended'?'border-gold text-gold':'border-white/20')}>Recommended</button>}</div>
   <input aria-label="Search magic items" value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search magic items" className="w-full rounded-lg border border-white/20 bg-panel p-3 text-base"/>
   <div className="grid grid-cols-2 gap-2"><label className="text-xs">Category<select aria-label="Magic item category" value={category} onChange={e=>setCategory(e.target.value)} className="mt-1 w-full rounded-lg border border-white/20 bg-panel p-2 text-base">{categories.map(c=><option key={c}>{c}</option>)}</select></label><label className="text-xs">Rarity<select aria-label="Magic item rarity" value={rarity} onChange={e=>setRarity(e.target.value)} className="mt-1 w-full rounded-lg border border-white/20 bg-panel p-2 text-base">{rarities.map(r=><option key={r}>{r}</option>)}</select></label></div>
   <label className="block text-xs">Item group<select aria-label="Magic item group" value={group} onChange={e=>setGroup(e.target.value)} className="mt-1 w-full rounded-lg border border-white/20 bg-panel p-2 text-base">{groups.map(g=><option key={g}>{g}</option>)}</select></label>
@@ -103,13 +110,16 @@ export function MagicItemCompendium({campaignId}:{campaignId:string|null}){
    const currentGroup=itemGroup(item.category,item.name),currentSubgroup=itemSubgroup(item.category,item.name);
    const newGroup=!previous||itemGroup(previous.category,previous.name)!==currentGroup;
    const newSubgroup=newGroup||itemSubgroup(previous.category,previous.name)!==currentSubgroup;
+   const recommendation=recommendations.get(item.id)??null;
    const usage=magicItemUseDescription(item);
    const extendedRules=magicItemExtendedRules(item.id);
    return <div key={item.id}>{newGroup&&<h3 id={"magic-group-"+groups.indexOf(currentGroup)} className="scroll-mt-44 mt-5 border-b border-gold/40 pb-2 font-serif text-xl text-gold">{currentGroup}</h3>}{newSubgroup&&<h4 id={"magic-subgroup-"+groups.indexOf(currentGroup)+"-"+encodeURIComponent(currentSubgroup)} className="scroll-mt-44 mt-3 text-sm font-semibold text-parchment/80">{currentSubgroup}</h4>}<article className="rounded-xl border border-white/15 bg-panel p-3">
    <div className="flex items-start gap-3">
     <button type="button" disabled={!campaignId||isMultiVariantReference(item.rarity)} aria-label={isMultiVariantReference(item.rarity)?`Choose a specific variant of ${item.name} instead`:wanted.includes(item.id)?`Remove ${item.name} from Wish List`:`Add ${item.name} to Wish List`} aria-pressed={wanted.includes(item.id)} onClick={()=>toggle(item.id)} className="rounded-lg border border-white/20 px-3 py-2 text-xl text-gold disabled:opacity-40">{wanted.includes(item.id)?'♥':'♡'}</button>
     <div className="min-w-0 flex-1">
-     <h3 className="font-semibold text-parchment">{item.name}</h3>{isMultiVariantReference(item.rarity)&&<p className="text-xs text-gold">Rules reference only — select a specific rarity or variant</p>}
+     <div className="flex flex-wrap items-center gap-1.5"><h3 className="font-semibold text-parchment">{item.name}</h3>
+      {recommendation&&<span className="relative inline-flex shrink-0 items-center"><button type="button" title={recommendation.reason} aria-label={'DM recommendation: '+recommendation.stars+' of 3 stars for '+item.name+'. '+recommendation.reason} aria-expanded={explainedPick===item.id} onClick={()=>setExplainedPick(old=>old===item.id?null:item.id)} className="inline-flex items-center gap-0.5 rounded px-0.5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-gold">{Array.from({length:recommendation.stars},(_,i)=><Star key={i} size={12} fill="currentColor" aria-hidden="true" className={recommendation.stars===3?'text-amber-300':recommendation.stars===2?'text-sky-300':'text-slate-300'}/>)}</button>{explainedPick===item.id&&<span role="note" className="absolute left-0 top-full z-30 mt-1 w-56 max-w-[75vw] rounded border border-gold/60 bg-[#151c24] p-2 text-xs leading-relaxed text-parchment shadow-xl">{recommendation.reason}</span>}</span>}
+     </div>{isMultiVariantReference(item.rarity)&&<p className="text-xs text-gold">Rules reference only — select a specific rarity or variant</p>}
      <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-parchment/65"><span className={`rounded-md border px-2 py-0.5 font-semibold ${RARITY_STYLES[rarityTier(item.rarity)]}`}>{item.rarity}</span><span>{itemGroup(item.category,item.name)} · {item.category}{item.attunement?' · Attunement':''}</span></div>
     </div>
    </div>
