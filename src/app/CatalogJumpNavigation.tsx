@@ -40,7 +40,7 @@ export function CatalogJumpNavigation({title,groups,subgroups,embedded=false,con
    const available=groups.map(group=>({id:group.id,element:document.getElementById(group.id)})).filter((entry):entry is {id:string;element:HTMLElement}=>!!entry.element);
    if(!available.length)return;
    // The section nearest the navigation's lower edge is the one the reader is viewing.
-   const threshold=(groupNav.current?.getBoundingClientRect().bottom??0)+12;
+   const threshold=(groupNav.current?.parentElement?.getBoundingClientRect().bottom??groupNav.current?.getBoundingClientRect().bottom??0)+12;
    const preceding=available.filter(entry=>entry.element.getBoundingClientRect().top<=threshold);
    const current=preceding.at(-1)??available[0];
    setActiveGroup(previous=>previous===current.id?previous:current.id);

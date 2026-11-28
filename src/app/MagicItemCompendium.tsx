@@ -2,7 +2,8 @@ import {CatalogJumpNavigation} from './CatalogJumpNavigation';
 import {Star} from 'lucide-react';
 import type {Campaign} from '../game/campaign';
 import {magicItemRecommendation} from '../game/magicRecommendations';
-import {useEffect,useMemo,useState} from 'react';
+import {useEffect,useMemo,useRef,useState} from 'react';
+import {Search,SlidersHorizontal,X} from 'lucide-react';
 import {MAGIC_ITEMS,readMagicWishlist,writeMagicWishlist} from '../game/magicWishlist';
 import {ALCHEMY_JUG_LIQUIDS,magicItemExtendedRules,magicItemUseDescription} from '../game/magicItemUseDescriptions';
 const RARITY_STYLES:Record<string,string>={
@@ -76,6 +77,9 @@ export function MagicItemCompendium({campaignId,campaign,showDmRecommendations=t
  const [tab,setTab]=useState<'all'|'wishlist'|'recommended'>('all');
  const [explainedPick,setExplainedPick]=useState<string|null>(null);
  const [search,setSearch]=useState('');
+ const [searchOpen,setSearchOpen]=useState(false);
+ const [filtersOpen,setFiltersOpen]=useState(false);
+ const filtersRef=useRef<HTMLDivElement>(null);
  const [category,setCategory]=useState('All');
  const [rarity,setRarity]=useState('All');
  const [group,setGroup]=useState('All');
@@ -88,22 +92,46 @@ export function MagicItemCompendium({campaignId,campaign,showDmRecommendations=t
  const [subgroup,setSubgroup]=useState('All');
  const rarities=['All','Common','Uncommon','Rare','Very Rare','Legendary','Artifact','Varies'];
  const filtered=MAGIC_ITEMS.filter(item=>(tab==='all'||tab==='wishlist'&&wanted.includes(item.id)||tab==='recommended'&&showDmRecommendations&&Boolean(recommendations.get(item.id)))&&(category==='All'||item.category===category)&&(group==='All'||itemGroup(item.category,item.name)===group)&&(subgroup==='All'||itemSubgroup(item.category,item.name)===subgroup)&&(rarity==='All'||rarityTier(item.rarity)===rarity)&&item.name.toLowerCase().includes(search.trim().toLowerCase())).sort((a,b)=>itemGroup(a.category,a.name).localeCompare(itemGroup(b.category,b.name))||itemSubgroup(a.category,a.name).localeCompare(itemSubgroup(b.category,b.name))||(tab==='recommended'?(recommendations.get(b.id)?.stars??0)-(recommendations.get(a.id)?.stars??0):0)||a.name.localeCompare(b.name));
+ const activeFilterCount=[category,rarity,group,subgroup].filter(value=>value!=='All').length;
+ const activeGroups=[...new Set(filtered.map(item=>itemGroup(item.category,item.name)))];
+ const activeSubgroups=[...new Set(filtered.map(item=>itemGroup(item.category,item.name)+'|'+itemSubgroup(item.category,item.name)))];
+ const openFilters=()=>{
+  setFiltersOpen(true);
+  requestAnimationFrame(()=>filtersRef.current?.scrollIntoView({behavior:'smooth',block:'start'}));
+ };
  function toggle(id:string){
   if(!campaignId||MAGIC_ITEMS.some(item=>item.id===id&&isMultiVariantReference(item.rarity)))return;
   const next=wanted.includes(id)?wanted.filter(item=>item!==id):[...wanted,id];
   try {writeMagicWishlist(campaignId,next);setWanted(next);}catch{ /* Storage unavailable; do not claim a saved favorite. */ }
  }
- return <section aria-label="Magic Item Compendium" className="space-y-4">
+ return <section aria-label="Magic Item Compendium" className="space-y-4 pt-6">
   <h2 className="font-serif text-2xl text-gold">Magic Items</h2>
   <p className="text-sm text-parchment/75">Browse 2024 magic items and mark items you'd like to find. Your choices may inform future DM rewards; they never guarantee an item.</p>
   {showDmRecommendations&&campaign?.characterIdentity&&<p className="text-xs text-parchment/65">Stars reflect build fit, not rarity or availability: 3 = excellent match, 2 = helpful, 1 = situational. Tap stars to see why.</p>}
   {!campaignId&&<p className="rounded-lg border border-gold/30 p-3 text-sm">Open a campaign to save a wish list.</p>}
-  <div className="flex gap-2"><button type="button" onClick={()=>setTab('all')} aria-pressed={tab==='all'} className={`rounded-lg border px-3 py-2 text-sm ${tab==='all'?'border-gold text-gold':'border-white/20'}`}>Browse All</button><button type="button" onClick={()=>setTab('wishlist')} aria-pressed={tab==='wishlist'} className={`rounded-lg border px-3 py-2 text-sm ${tab==='wishlist'?'border-gold text-gold':'border-white/20'}`}>Wish List ({wanted.length})</button>{showDmRecommendations&&campaign?.characterIdentity&&<button type="button" onClick={()=>setTab('recommended')} aria-pressed={tab==='recommended'} className={'rounded-lg border px-3 py-2 text-sm '+(tab==='recommended'?'border-gold text-gold':'border-white/20')}>Recommended</button>}</div>
-  <input aria-label="Search magic items" value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search magic items" className="w-full rounded-lg border border-white/20 bg-panel p-3 text-base"/>
-  <div className="grid grid-cols-2 gap-2"><label className="text-xs">Category<select aria-label="Magic item category" value={category} onChange={e=>setCategory(e.target.value)} className="mt-1 w-full rounded-lg border border-white/20 bg-panel p-2 text-base">{categories.map(c=><option key={c}>{c}</option>)}</select></label><label className="text-xs">Rarity<select aria-label="Magic item rarity" value={rarity} onChange={e=>setRarity(e.target.value)} className="mt-1 w-full rounded-lg border border-white/20 bg-panel p-2 text-base">{rarities.map(r=><option key={r}>{r}</option>)}</select></label></div>
-  <label className="block text-xs">Item group<select aria-label="Magic item group" value={group} onChange={e=>setGroup(e.target.value)} className="mt-1 w-full rounded-lg border border-white/20 bg-panel p-2 text-base">{groups.map(g=><option key={g}>{g}</option>)}</select></label>
-  <label className="block text-xs">Subgroup<select aria-label="Magic item subgroup" value={subgroups.includes(subgroup)?subgroup:'All'} onChange={e=>setSubgroup(e.target.value)} className="mt-1 w-full rounded-lg border border-white/20 bg-panel p-2 text-base">{subgroups.map(g=><option key={g}>{g}</option>)}</select></label>
-  <CatalogJumpNavigation title="Magic item" groups={[...new Set(filtered.map(item=>itemGroup(item.category,item.name)))].map(g=>({id:'magic-group-'+groups.indexOf(g),label:g}))} subgroups={[...new Set(filtered.map(item=>itemGroup(item.category,item.name)+'|'+itemSubgroup(item.category,item.name)))].map(key=>{const [g,sg]=key.split('|');return {id:'magic-subgroup-'+groups.indexOf(g)+'-'+encodeURIComponent(sg),label:g+' — '+sg};})}/>
+  <div aria-label="Magic item floating controls" className="sticky top-0 z-30 -mx-5 !mt-0 space-y-1 border-b border-gold/30 bg-ink px-5 py-2 shadow-lg">
+   <div className="flex items-center gap-1" aria-label="Magic item display options">
+    <div className="flex min-w-0 flex-1 gap-1" role="group" aria-label="Browse magic items">
+     <button type="button" aria-label="Browse All" onClick={()=>setTab('all')} aria-pressed={tab==='all'} className={'min-h-10 min-w-0 shrink-0 rounded-md border px-2 text-xs '+(tab==='all'?'border-gold bg-gold/15 text-gold':'border-white/25 text-parchment')}>All</button>
+     <button type="button" onClick={()=>setTab('wishlist')} aria-pressed={tab==='wishlist'} className={'min-h-10 min-w-0 shrink-0 rounded-md border px-2 text-xs '+(tab==='wishlist'?'border-gold bg-gold/15 text-gold':'border-white/25 text-parchment')}>Wish List ({wanted.length})</button>
+     {showDmRecommendations&&campaign?.characterIdentity&&<button type="button" onClick={()=>setTab('recommended')} aria-pressed={tab==='recommended'} className={'min-h-10 min-w-0 truncate rounded-md border px-2 text-xs '+(tab==='recommended'?'border-gold bg-gold/15 text-gold':'border-white/25 text-parchment')}>Recommended</button>}
+    </div>
+    <button type="button" aria-label={searchOpen?'Collapse magic item search':'Expand magic item search'} aria-expanded={searchOpen} onClick={()=>setSearchOpen(value=>!value)} className={'relative flex h-10 w-10 shrink-0 items-center justify-center rounded-md border '+(search||searchOpen?'border-gold text-gold':'border-white/25 text-parchment')}><Search size={18}/>{search&&!searchOpen&&<span className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-gold" aria-hidden="true"/>}</button>
+    <button type="button" aria-label="Show magic item filters" aria-expanded={filtersOpen} onClick={openFilters} className={'relative flex h-10 w-10 shrink-0 items-center justify-center rounded-md border '+(activeFilterCount>0||filtersOpen?'border-gold text-gold':'border-white/25 text-parchment')}><SlidersHorizontal size={18}/>{activeFilterCount>0&&<span aria-label={activeFilterCount+' active filters'} className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-gold px-0.5 text-[10px] font-bold text-ink">{activeFilterCount}</span>}</button>
+   </div>
+   {searchOpen&&<input autoFocus aria-label="Search magic items" value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search magic items" className="w-full rounded-md border border-white/25 bg-panel px-3 py-2 text-base"/>}
+   <CatalogJumpNavigation embedded contextualSubgroups title="Magic item" groups={activeGroups.map(g=>({id:'magic-group-'+groups.indexOf(g),label:g}))} subgroups={activeSubgroups.map(key=>{const [g,sg]=key.split('|');return {id:'magic-subgroup-'+groups.indexOf(g)+'-'+encodeURIComponent(sg),label:g+' — '+sg,parentId:'magic-group-'+groups.indexOf(g)};})}/>
+  </div>
+  {filtersOpen&&<div ref={filtersRef} aria-label="Magic item filter panel" className="scroll-mt-44 space-y-3 rounded-lg border border-white/20 bg-panel p-3">
+   <div className="flex items-center justify-between gap-2"><h3 className="font-semibold text-sm text-gold">Filter magic items</h3><button type="button" aria-label="Close magic item filters" onClick={()=>setFiltersOpen(false)} className="flex min-h-10 items-center gap-1 rounded border border-white/25 px-2 text-xs"><X size={15}/>Close</button></div>
+   <div className="grid grid-cols-2 gap-2">
+    <label className="text-xs">Category<select aria-label="Magic item category" value={category} onChange={e=>{setCategory(e.target.value);setGroup('All');setSubgroup('All');}} className="mt-1 w-full rounded-lg border border-white/20 bg-panel p-2 text-base">{categories.map(c=><option key={c}>{c}</option>)}</select></label>
+    <label className="text-xs">Rarity<select aria-label="Magic item rarity" value={rarity} onChange={e=>setRarity(e.target.value)} className="mt-1 w-full rounded-lg border border-white/20 bg-panel p-2 text-base">{rarities.map(r=><option key={r}>{r}</option>)}</select></label>
+   </div>
+   <label className="block text-xs">Item group<select aria-label="Magic item group" value={group} onChange={e=>{setGroup(e.target.value);setSubgroup('All');}} className="mt-1 w-full rounded-lg border border-white/20 bg-panel p-2 text-base">{groups.map(g=><option key={g}>{g}</option>)}</select></label>
+   <label className="block text-xs">Subgroup<select aria-label="Magic item subgroup" value={subgroups.includes(subgroup)?subgroup:'All'} onChange={e=>setSubgroup(e.target.value)} className="mt-1 w-full rounded-lg border border-white/20 bg-panel p-2 text-base">{subgroups.map(g=><option key={g}>{g}</option>)}</select></label>
+   {activeFilterCount>0&&<button type="button" className="min-h-10 rounded border border-gold/40 px-3 text-xs text-gold" onClick={()=>{setCategory('All');setRarity('All');setGroup('All');setSubgroup('All');}}>Clear filters</button>}
+  </div>}
   <p className="text-xs text-parchment/60">{filtered.length} items · grouped by type and subgroup · combined-variant references cannot be wishlisted</p>
   {filtered.map((item,index)=>{
    const previous=filtered[index-1];

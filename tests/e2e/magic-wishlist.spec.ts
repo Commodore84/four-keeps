@@ -24,10 +24,11 @@ test('iPhone magic items menu supports favorites and persistence',async ({page})
  expect(descriptions.every(description=>description.trim().length>0)).toBe(true);
  const armor=cards.filter({has:page.getByRole('heading',{name:'Armor +1',exact:true})});
  await expect(armor.getByText(/Armor Class/)).toBeVisible();
+ await compendium.getByRole('button',{name:'Show magic item filters'}).click();
  const groupFilter=compendium.getByRole('combobox',{name:'Magic item group'});
  const subgroupFilter=compendium.getByRole('combobox',{name:'Magic item subgroup'});
  await expect(subgroupFilter).toBeVisible();
- const stickyNav=compendium.getByLabel('Magic item section navigation');
+ const stickyNav=compendium.getByLabel('Magic item floating controls');
  await expect(stickyNav).toHaveCSS('position','sticky');
  await expect(compendium.getByText('Rules reference only — select a specific rarity or variant').first()).toBeVisible();
  await expect(compendium.getByRole('button',{name:'Choose a specific variant of Ammunition instead',exact:true})).toBeDisabled();
@@ -35,8 +36,11 @@ test('iPhone magic items menu supports favorites and persistence',async ({page})
  const groupJump=compendium.getByRole('navigation',{name:'Jump to magic item section'});
  const subgroupJump=compendium.getByRole('navigation',{name:'Jump to magic item subgroup'});
  await expect(groupJump.getByRole('button',{name:'Storage and containers'})).toBeVisible();
- await expect(subgroupJump.getByRole('button',{name:'Storage and containers — Containers and storage'})).toBeVisible();
+ await expect(subgroupJump.getByRole('button',{name:'Armor and shields — Armor'})).toBeVisible();
+ await expect(subgroupJump.getByRole('button',{name:'Storage and containers — Containers and storage'})).toHaveCount(0);
  await groupJump.getByRole('button',{name:'Storage and containers'}).click();
+ await expect(subgroupJump.getByRole('button',{name:'Storage and containers — Containers and storage'})).toBeVisible();
+ await expect(subgroupJump.getByRole('button',{name:'Armor and shields — Armor'})).toHaveCount(0);
  await expect(compendium.getByRole('heading',{name:'Storage and containers',exact:true})).toBeVisible();
  await subgroupJump.getByRole('button',{name:'Storage and containers — Containers and storage'}).click();
  const storageGroupId=await compendium.getByRole('heading',{name:'Storage and containers',exact:true}).getAttribute('id');
@@ -44,6 +48,16 @@ test('iPhone magic items menu supports favorites and persistence',async ({page})
  const storageHeading=compendium.locator('[id="'+storageGroupId!.replace('magic-group-','magic-subgroup-')+'-Containers%20and%20storage"]');
  await expect(storageHeading).toBeVisible();
  await expect.poll(async()=>storageHeading.evaluate(element=>{const heading=element.getBoundingClientRect();const main=document.getElementById('main-content')?.getBoundingClientRect();return !!main&&heading.top>=main.top&&heading.top<main.top+240;})).toBe(true);
+ await page.locator('#main-content').evaluate(element=>{element.scrollTop=Math.max(800,element.scrollTop);});
+ await expect.poll(async()=>{
+  const sticky=await stickyNav.boundingBox(),main=await page.locator('#main-content').boundingBox();
+  return sticky&&main?Math.round(sticky.y-main.y):999;
+ }).toBeLessThanOrEqual(3);
+ await expect(groupJump.getByRole('button',{name:'Storage and containers'})).toHaveAttribute('aria-current','location');
+ await expect(subgroupJump.getByRole('button',{name:'Storage and containers — Containers and storage'})).toBeVisible();
+ await page.screenshot({path:'test-results/v30-magic-sticky-scroll-iphone.png'});
+ await stickyNav.getByRole('button',{name:'Show magic item filters'}).click();
+ await expect(compendium.getByLabel('Magic item filter panel')).toBeInViewport();
  await expect(compendium.locator('article details')).toHaveCount(0);
  await expect(compendium.getByRole('heading',{name:'Weapons',exact:true})).toBeVisible();
  await groupFilter.selectOption('Weapons');
@@ -53,6 +67,7 @@ test('iPhone magic items menu supports favorites and persistence',async ({page})
  await rarityFilter.selectOption('Rare');
  await expect(compendium.getByRole('article').first().locator('span.text-blue-300')).toHaveText('Rare');
  await rarityFilter.selectOption('All');
+ await compendium.getByRole('button',{name:'Expand magic item search'}).click();
  const search=page.getByRole('textbox',{name:'Search magic items'});
  await search.fill('Alchemy Jug');
  const jug=cards.filter({has:page.getByRole('heading',{name:'Alchemy Jug',exact:true})});
@@ -129,6 +144,7 @@ test('iPhone build-specific magic picks and shared DM recommendation toggle',asy
  await page.getByRole('button',{name:'Open navigation menu'}).click();
  await page.getByRole('navigation',{name:'Primary navigation'}).getByRole('button',{name:'Magic Items'}).click();
  const compendium=page.getByRole('region',{name:'Magic Item Compendium'});
+ await compendium.getByRole('button',{name:'Expand magic item search'}).click();
  const search=compendium.getByRole('textbox',{name:'Search magic items'});
  await search.fill('Bracers of Archery');
  const pick=compendium.getByRole('button',{name:/DM recommendation: 3 of 3 stars for Bracers of Archery/});
@@ -150,6 +166,7 @@ test('iPhone build-specific magic picks and shared DM recommendation toggle',asy
  await page.getByRole('button',{name:'Open navigation menu'}).click();
  await page.getByRole('navigation',{name:'Primary navigation'}).getByRole('button',{name:'Magic Items'}).click();
  await expect(compendium.getByRole('button',{name:'Recommended',exact:true})).toHaveCount(0);
+ await compendium.getByRole('button',{name:'Expand magic item search'}).click();
  await search.fill('Bracers of Archery');
  await expect(compendium.getByRole('button',{name:/DM recommendation:.*Bracers of Archery/})).toHaveCount(0);
 });
