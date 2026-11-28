@@ -3597,6 +3597,7 @@ test('iPhone Garden harvest produces stored supplies that must be collected at t
  await expect.poll(async()=>(await saved(page)).bastion.stores?.[0]?.name).toBe('Potion of Healing');
  const harvested=await saved(page);
  expect(harvested.bastion.orders[0].status).toBe('resolved');
+ await expect(place.getByLabel('Bastion projects')).toHaveCount(0);
  expect(harvested.inventoryLedger.gear.filter((x:any)=>x.name==='Potion of Healing')).toHaveLength(0);
  await expect(place.getByLabel('Bastion storage')).toContainText('Potion of Healing');
  await place.getByRole('button',{name:'Collect'}).click();
