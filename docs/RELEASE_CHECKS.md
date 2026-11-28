@@ -4,11 +4,39 @@ For new-chat handoffs and recovery from GitHub clone/DNS failures, first read [C
 
 GitHub Actions minutes are limited. The full CI workflow in `.github/workflows/ci.yml` runs **only when explicitly requested**, not on development commits or foundation fast-forwards. A one-time `verify/*` branch push triggers the full suite; `workflow_dispatch` is also available once the workflow is registered on GitHub's default branch (`main`).
 
+## Current release policy — risk-based tiers (approved 2026-11-28)
+
+**This section is authoritative for all future Four Keeps sessions and supersedes older blanket language below or in historical feature notes that says every UI change requires full-suite CI.** Always classify the actual diff by risk before selecting tests. Do not spend the full release-gate time on a routine visual tweak.
+
+### Tier 1: routine, low-risk UI changes
+
+Typical scope: text and icon changes; cosmetic spacing, typography, and color; rearranging an existing menu; and local-only presentation preferences (such as hamburger-menu order) that do not change campaign state, saved gameplay, backend data, security, or rules.
+
+1. Use an isolated branch/worktree and preserve unrelated work.
+2. Run TypeScript, one production build, affected Vitest tests, and a small number of focused iPhone Playwright tests. Inspect one relevant mobile screenshot when visual changes matter. Avoid running unrelated tests.
+3. Require a READY preview deployment for the *exact candidate SHA*. Review any failure and escalate to Tier 2 if the change has broader effects or tests expose unexpected coupling.
+4. **Tier 1 can be published to `feat/clean-app-shell` after the targeted checks and exact-SHA READY preview, without creating a `verify/*` ref or running the full 1,000+-unit/180+-browser suite.** Verify ancestry is zero-behind and perform a non-forced, expected-SHA protected fast-forward. Confirm the published SHA. Do not pretend a full suite ran.
+5. Prefer batching several routine cosmetic tweaks into one coherent small release rather than separate CI/deploy cycles.
+
+### Tier 2: significant or uncertain-risk changes
+
+Always use the complete exact-SHA release gate below for combat and encounter logic, class/D&D rules, inventory/merchant purchases/currency, equipment/consumables, campaign save/load or migrations, DM/server/API integration, generated world/scene persistence, security/permissions, or changes that significantly alter behavior or touch multiple coupled systems. A small-looking change that affects these systems is Tier 2. If the impact cannot be confidently bounded, default to Tier 2.
+
+Tier 2 requires full Vitest, entire iPhone Chromium Playwright suite and uploaded artifacts, production build/TypeScript, relevant screenshot inspection, exact-SHA Vercel READY, and protected foundation fast-forward. A failed gate never authorizes publication.
+
+### Documentation-only/process changes
+
+Documentation that changes no application behavior requires review for internal consistency and a protected non-forced foundation update, **not** a redundant application build or full suite.
+
+### Periodic integration verification
+
+After several grouped Tier 1 updates or ahead of a major playtest/milestone, run one complete exact-SHA Tier 2-style integration sweep, even if the individual changes were low risk. If full integration tests uncover regressions, stop further promotion and fix them. Do not repeatedly poll unchanged CI; check at meaningful completion boundaries.
+
 ## During development
 
-Batch coherent changes on an isolated feature branch. Run targeted Vitest/Playwright checks in an executable development environment while iterating; do not make one GitHub commit per small edit just to get a CI run. Code changes to combat, inventory, merchants, persistence, and rules still require full release verification before publication.
+Batch coherent changes on an isolated feature branch. Run targeted Vitest/Playwright checks in an executable development environment while iterating; do not make one GitHub commit per small edit just to get a CI run. Tier 2 changes to combat, inventory, merchants, persistence, server integration, and rules still require full release verification before publication.
 
-## Release verification (required)
+## Tier 2 — full release verification (required for significant changes)
 
 1. Finish the candidate branch. Record its exact HEAD SHA; avoid pushing more changes after verification starts.
 2. **Reliable explicit trigger (works before the default branch is updated):** create a fresh `verify/<release-name>` branch **directly from the exact candidate commit SHA**, without additional commits. Its one-time branch push triggers the full workflow. For example, `gh api repos/Commodore84/four-keeps/git/refs -f ref='refs/heads/verify/v19-shop-release' -f sha='<candidate-sha>'`. Verify the ref resolves to the candidate SHA. Do not keep developing on the verify branch.
@@ -42,7 +70,7 @@ A deployment marked `BLOCKED` immediately, with no build events, has not reached
 
 ## Faster development and release workflow (2026-11-25)
 
-**Keep the exact-SHA full release gate. Optimize iteration, not safety.** The previous build script ran the entire Vitest suite as part of 'npm run build' and the GitHub workflow independently ran 'npm test', executing all unit tests twice per release. The build script is now only 'tsc -b && vite build'. Full release CI explicitly runs 'npm test' **once**, followed by the production TypeScript/Vite build, the complete iPhone Chromium Playwright suite and evidence upload. The Playwright Chromium browser download is cached by OS and dependency lockfile; 'playwright install --with-deps chromium' still verifies browser and system dependencies on every run. The cache is an optimization, not proof of browser compatibility.
+**Keep the exact-SHA full release gate for Tier 2. Use the targeted Tier 1 process for routine UI changes.** The previous build script ran the entire Vitest suite as part of 'npm run build' and the GitHub workflow independently ran 'npm test', executing all unit tests twice per release. The build script is now only 'tsc -b && vite build'. Full release CI explicitly runs 'npm test' **once**, followed by the production TypeScript/Vite build, the complete iPhone Chromium Playwright suite and evidence upload. The Playwright Chromium browser download is cached by OS and dependency lockfile; 'playwright install --with-deps chromium' still verifies browser and system dependencies on every run. The cache is an optimization, not proof of browser compatibility.
 
 ### During development — run only relevant checks, in one sandbox
 
@@ -53,4 +81,4 @@ A deployment marked `BLOCKED` immediately, with no build events, has not reached
 5. Commit an exact candidate SHA, push a fresh one-time 'verify/*' ref, and let the single authoritative GitHub Actions run exercise the **entire** unit suite and iPhone browser suite. Vercel READY may build in parallel; recheck both before fast-forwarding the foundation. A failed full gate requires a fix and a fresh exact-SHA verify branch; never promote on partial results.
 6. Avoid wasteful repeated polling and duplicate CI runs. Check the status at meaningful stage boundaries; when a stage is still running, do not recreate or manually rerun its tests on another runner. Keep explicit final reports of source SHA, actual CI totals, screenshots for UI work, deployment state and remaining limitations.
 
-**Do not claim a promised duration.** Small UI fixes will often be shorter because work is tested in focused batches and Vitest is no longer duplicated, but CI runner load, true regressions and Vercel deployment times still vary. Never weaken the full release gate to hit an artificial time estimate.
+**Do not claim a promised duration.** Small UI fixes will often be shorter because work is tested in focused batches and Vitest is no longer duplicated, but CI runner load, true regressions and Vercel deployment times still vary. Never weaken the Tier 2 full release gate to hit an artificial time estimate; equally, do not apply it to every Tier 1 change.
