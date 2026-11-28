@@ -177,14 +177,18 @@ const isTwoHanded=(item:Item,mode:OrdinaryAttackMode)=>mode==='versatile'||
  * The Attack action grants one draw OR stow per attack; Thrown grants its
  * own draw. The normal once-per-turn object interaction can be used as well.
  * Bonus Action attacks have no Attack-action weapon interaction. */
-export function planOrdinaryWeaponAttack(campaign:Campaign,profile:OrdinaryWeaponAttack):CombatWeaponHandPlan{
- const current=combatHeldWeapons(campaign);
+export function planOrdinaryWeaponAttack(
+ campaign:Campaign,profile:OrdinaryWeaponAttack,
+ context?:{hands?:CombatWeaponHands;objectInteractionUsed?:boolean}
+):CombatWeaponHandPlan{
+ const current=context?.hands?{...context.hands}:combatHeldWeapons(campaign);
+ const interactionUsed=context?.objectInteractionUsed??!!campaign.combat?.objectInteractionUsed;
  const hands={...current};
  const c=campaign.combat;
  const fail=(reason:string):CombatWeaponHandPlan=>({eligible:false,reason,hands:current,
-  objectInteractionUsed:!!c?.objectInteractionUsed,interactions:[],summary:reason});
+  objectInteractionUsed:interactionUsed,interactions:[],summary:reason});
  if(!profile.itemId||profile.itemId==='unarmed')
-  return {eligible:true,hands,objectInteractionUsed:!!c?.objectInteractionUsed,interactions:[],summary:'Unarmed'};
+  return {eligible:true,hands,objectInteractionUsed:interactionUsed,interactions:[],summary:'Unarmed'};
  const item=weapons.find(w=>w.id===profile.itemId);
  if(!item)return fail('Weapon not in the ordinary catalog.');
  const twoHands=isTwoHanded(item,profile.mode);
@@ -193,7 +197,7 @@ export function planOrdinaryWeaponAttack(campaign:Campaign,profile:OrdinaryWeapo
  const hasAmmo=!!profile.ammoName;
  const freeLoadingHand=hasAmmo&&!twoHands;
  let attackSwap=profile.action==='action'?1:0;
- let objectSwap=c?.objectInteractionUsed?0:1;
+ let objectSwap=interactionUsed?0:1;
  const interactions:string[]=[];
  const spend=(kind:'stow'|'draw',name:string,attackOnly=false)=>{
   // Preserve the Attack interaction for a required draw when stowing too.
@@ -267,7 +271,7 @@ export function planOrdinaryWeaponAttack(campaign:Campaign,profile:OrdinaryWeapo
  const summary=interactions.length?
   interactions.map(step=>step.replace(/ \((?:Attack|object) interaction\)/g,'')).join(' · '):
   isHeld?'Held':'Ready';
- return {eligible:true,hands,objectInteractionUsed:objectSwap===0||!!c?.objectInteractionUsed,
+ return {eligible:true,hands,objectInteractionUsed:objectSwap===0||interactionUsed,
   interactions,summary};
 }
 

@@ -3605,3 +3605,78 @@ test('iPhone Garden harvest produces stored supplies that must be collected at t
  expect((await saved(page)).bastion.stores).toHaveLength(0);
  await page.screenshot({path:'test-results/text-first-bastion-garden-iphone.png'});
 });
+
+test('iPhone normal tactical Rogue draws a carried Dagger while keeping a Shortbow in hand',async({page})=>{
+ test.setTimeout(90000);
+ await page.setViewportSize({width:390,height:844});
+ await page.addInitScript(()=>{Math.random=()=>0.5;});
+ await createAndImport(page,'rogue');
+ await page.evaluate(async()=>{
+  const db=await new Promise<IDBDatabase>((resolve,reject)=>{
+   const r=indexedDB.open('four-keeps-local',1);
+   r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);
+  });
+  const tx=db.transaction('campaigns','readwrite'),store=tx.objectStore('campaigns');
+  const campaigns=await new Promise<any[]>(resolve=>{const r=store.getAll();r.onsuccess=()=>resolve(r.result);});
+  const c=campaigns[0];
+  const gear=c.inventoryLedger?.gear??[];
+  for(const [name,count] of [['Shortbow',1],['Dagger',2],['Arrows',20]] as const){
+   const existing=gear.find((row:{name:string})=>row.name===name);
+   if(existing)existing.quantity=Math.max(existing.quantity,count);
+   else gear.push({name,quantity:count});
+  }
+  c.inventoryLedger={...(c.inventoryLedger??{currency:{CP:0,SP:0,EP:0,GP:0,PP:0}}),gear};
+  c.encounterLoadout={...c.encounterLoadout,weaponId:'shortbow',offhandWeaponId:undefined,shieldId:undefined};
+  store.put(c);
+  await new Promise<void>((resolve,reject)=>{tx.oncomplete=()=>resolve();tx.onerror=()=>reject(tx.error);});
+  db.close();
+  localStorage.setItem('four-keeps-access-code','browser-test-code');
+  localStorage.setItem('four-keeps-dm-mode','on');
+ });
+ await page.route('**/api/dm',async route=>{
+  const request=route.request().postDataJSON();
+  const shared={worldUpdates:{},newFacts:[]};
+  if(request.tacticalTurn){
+   const actor=request.gameState.tactical.active;
+   await route.fulfill({json:{...shared,narration:'The enemy holds position.',tacticalActions:[
+    {kind:'action',actor,action:'Dodge'},{kind:'end',actor}
+   ]}});return;
+  }
+  if(request.opening){await route.fulfill({json:{...shared,narration:'A bandit guards a narrow path.'}});return;}
+  await route.fulfill({json:{...shared,narration:'The bandit approaches with a weapon ready.',
+   combatStart:{enemyName:'Road bandit',battlefield:{
+    size:8,objective:'Survive the bandit.',artwork:'forest-ruins-test.svg',
+    actors:[{id:'bandit',label:'Road bandit',profile:'bandit',side:'enemies',square:{x:2,y:1}},
+     {id:'guard',label:'Watchguard',profile:'guard',side:'allies',square:{x:6,y:5}}],
+    starts:[{x:1,y:1}],difficult:[],obstacles:[],exits:[{x:0,y:1}]
+   }}
+  }});
+ });
+ await page.reload();
+ await page.getByRole('button',{name:'Campaigns',exact:true}).click();
+ await page.getByRole('button',{name:'Continue Adventure'}).click();
+ await expect.poll(async()=> (await saved(page))?.journal?.some((entry:any)=>entry.id?.endsWith('-dm-opening'))).toBe(true);
+ const composer=page.getByLabel('Message the Dungeon Master');
+ await composer.fill('The bandit advances. I prepare to fight.');
+ await page.getByRole('button',{name:'Send message to Dungeon Master'}).click();
+ const panel=page.getByRole('region',{name:'Tactical battlefield'});
+ await expect(panel.getByRole('button',{name:'Roll initiative'})).toBeVisible();
+ await panel.getByRole('button',{name:'Roll initiative'}).click();
+ const select=panel.getByLabel('Tactical attack weapon');
+ await expect(select).toBeVisible();
+ await expect(select.locator('option[value="dagger"]')).toHaveCount(1);
+ await expect(select.locator('option[value="dagger:thrown"]')).toHaveCount(1);
+ await select.selectOption('dagger');
+ await expect(panel.getByLabel('Tactical held hands')).toContainText('Shortbow / Empty');
+ await expect(panel.getByLabel('Tactical weapon interaction')).toContainText('draw Dagger');
+ await panel.screenshot({path:'test-results/iphone-unified-carried-dagger-selector.png'});
+ await panel.getByRole('button',{name:'Attack target'}).click();
+ await expect.poll(async()=> (await saved(page))?.companionEncounter?.weaponHands?.off).toBe('dagger');
+ const c=await saved(page);
+ expect(c.encounterLoadout.weaponId).toBe('shortbow');
+ expect(c.companionEncounter.weaponObjectInteractionUsed).toBe(false);
+ expect(c.inventoryLedger.gear.find((g:{name:string})=>g.name==='Dagger').quantity).toBeGreaterThanOrEqual(2);
+ await page.reload();
+ const reloaded=await saved(page);
+ expect(reloaded.companionEncounter.weaponHands).toMatchObject({main:'shortbow',off:'dagger'});
+});

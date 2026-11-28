@@ -1,3 +1,5 @@
+import {unifiedCarriedWeaponChoices,withUnifiedCarriedWeaponAttack} from './companionEncounter';
+import type {OrdinaryAttackMode} from './ordinaryWeaponCombat';
 import {magicProtectionBonus} from './magicEquipment';
 import {getMonster} from './monsterCompendium';
 import {recordMonsterSighting,recordMonsterAbility} from './monsterKnowledge';
@@ -92,20 +94,40 @@ function d20Pair(random:RollDie,advantage:boolean,disadvantage:boolean){
  const kept=b===undefined?a:advantage?Math.max(a,b):Math.min(a,b);
  return {a,b,kept};
 }
-export function tacticalPlayerAttack(campaign:Campaign,targetId:string,options:{offhand?:boolean;thrown?:boolean;sneak?:boolean;cunning?:'Trip'|'Poison'}={},random=rollDie):Campaign{
+type TacticalPlayerWeaponOptions={offhand?:boolean;thrown?:boolean;sneak?:boolean;cunning?:'Trip'|'Poison';
+ weaponId?:string;attackMode?:OrdinaryAttackMode};
+export function tacticalPlayerAttack(campaign:Campaign,targetId:string,options:TacticalPlayerWeaponOptions={},random=rollDie):Campaign{
+ if(campaign.characterIdentity&&!options.offhand){
+  const choices=unifiedCarriedWeaponChoices(campaign);
+  const chosen=options.weaponId?
+   (options.attackMode?
+    choices.find(p=>p.itemId===options.weaponId&&p.mode===options.attackMode):
+    choices.find(p=>p.itemId===options.weaponId&&
+     (options.thrown?p.mode==='thrown':p.mode==='ranged'||p.mode==='melee'))):
+   (choices.find(p=>p.itemId===campaign.encounterLoadout?.weaponId&&
+    (options.thrown?p.mode==='thrown':p.mode==='ranged'||p.mode==='melee')) ??
+    choices.find(p=>p.handPlan.eligible));
+  if(!chosen?.itemId)throw Error('Select an owned and accessible ordinary weapon');
+  return withUnifiedCarriedWeaponAttack(campaign,chosen.itemId,chosen.mode,using=>
+   tacticalPlayerAttackResolved(using,targetId,{...options,weaponId:chosen.itemId,attackMode:chosen.mode},random));
+ }
+ return tacticalPlayerAttackResolved(campaign,targetId,options,random);
+}
+function tacticalPlayerAttackResolved(campaign:Campaign,targetId:string,options:TacticalPlayerWeaponOptions,random:typeof rollDie):Campaign{
  const {battle}=requireTurn(campaign,'nighthawk');
  const target=battle.participants[targetId];
  if(!target||sameSide(battle,'nighthawk',targetId)||target.hp<=0)throw Error('Choose an active hostile target.');
  const equipped=nighthawkEquippedAttack(campaign,options.offhand?(campaign.encounterLoadout?.offhandWeaponId??''):undefined);
  const item=ITEM_BY_ID[equipped?.weaponId??''];
  if(!item||!equipped)throw Error('Equip a weapon to attack.');
- const thrown=options.thrown||item.id==='dart';
+ const thrown=options.attackMode==='thrown'||options.thrown||item.id==='dart';
  if(thrown&&!item.properties?.some(property=>property.startsWith('Thrown ')))throw Error('This weapon cannot be thrown.');
  const profile=weaponAttackProfile(item,thrown);
  const mode=companionAttackRollMode(campaign,'nighthawk',targetId,item.id,thrown);
  const {a,b,kept}=d20Pair(random,!!mode.attackAdvantage,!!mode.attackDisadvantage);
  const critical=kept===20||kept!==1&&target.conditions.includes('Unconscious')&&mode.distanceFeet<=5;
- const damage=rollDamage(equipped.damageDice,critical,random);
+ const dice=options.attackMode==='versatile'?profile.versatileDamage??equipped.damageDice:equipped.damageDice;
+ const damage=rollDamage(dice,critical,random);
  if(options.sneak){
   const count=Math.ceil((campaign.character?.level??1)/2)*(kept===20?2:1);
   const strike=options.cunning?{effect:options.cunning,saveTotal:die(random,20)+npcAbility(campaign,targetId,options.cunning==='Trip'?'dex':'con')}:undefined;
@@ -113,7 +135,7 @@ export function tacticalPlayerAttack(campaign:Campaign,targetId:string,options:{
  }
  if(options.offhand)return attackWithOffhandWeapon(campaign,targetId,a,damage,b);
  if(thrown)return attackWithThrownEquippedWeapon(campaign,'nighthawk',targetId,a,damage,profile.damageType??'Piercing',profile.maximumRange,b);
- return attackCompanionWithVerifiedStats(campaign,'nighthawk',targetId,a,damage,profile.damageType??'Bludgeoning',profile.maximumRange,b,undefined,()=>die(random,4));
+ return attackCompanionWithVerifiedStats(campaign,'nighthawk',targetId,a,damage,profile.damageType??'Bludgeoning',profile.maximumRange,b,undefined,()=>die(random,4),false,options.attackMode==='versatile');
 }
 function profileActor(campaign:Campaign,id:string):ScenarioActor|undefined{
  return campaign.companionEncounter?.phaseThree?.scenario.actors.find(actor=>actor.id===id);

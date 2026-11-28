@@ -4,7 +4,7 @@ import {ClassicCombatMapFrame} from './ClassicCombatMapFrame';
 import {ClassicCombatGrid,ClassicCombatResources,ClassicInitiativeList,classicCombatCellBase} from './ClassicCombatPresentation';
 import {UserRound,Swords} from 'lucide-react';
 import {distanceFeet,squareKey,type Square} from '../game/combatScenario';
-import {nighthawkEquippedAttack,pendingWebSave,previewCompanionMovement,primaryAttackLimit,resolveWebTurnSave,setPlayerLoadout,standCompanionFromProne} from '../game/companionEncounter';
+import {nighthawkEquippedAttack,unifiedCarriedWeaponChoices,unifiedHeldWeapons,stowUnifiedHeldWeapon,pendingWebSave,previewCompanionMovement,primaryAttackLimit,resolveWebTurnSave,setPlayerLoadout,standCompanionFromProne} from '../game/companionEncounter';
 import {ITEM_BY_ID} from '../game/creationEquipment';
 import {weaponAttackProfile} from '../game/weaponAttackProfile';
 import {
@@ -29,6 +29,7 @@ export function TacticalBattlefield({campaign,saving,onChange,onDm}:Props){
  const [showActions,setShowActions]=useState(false);
  const [selectedAction,setSelectedAction]=useState<TacticalAction>('Dash');
  const [mode,setMode]=useState('weapon');
+ const [attackWeaponId,setAttackWeaponId]=useState('');
  const [spell,setSpell]=useState('');
  const [error,setError]=useState('');
  const [zoom,setZoom]=useState(1);
@@ -66,17 +67,26 @@ export function TacticalBattlefield({campaign,saving,onChange,onDm}:Props){
   const enemies=scenario.actors.filter(actor=>actor.side==='enemies'&&(battle.participants[actor.id]?.hp??0)>0);
   if(!enemies.some(actor=>actor.id===target))setTarget(enemies[0]?.id??'');
  },[battle,scenario,target]);
- const equippedWeapon=nighthawkEquippedAttack(campaign);
- const equipment=ITEM_BY_ID[equippedWeapon?.weaponId??''];
+ const carriedAttacks=battle?.mode==='unified'&&battle.status==='active'&&campaign.characterIdentity?unifiedCarriedWeaponChoices(campaign):[];
+ const chosenAttack=carriedAttacks.find(p=>p.id===attackWeaponId) ??
+  carriedAttacks.find(p=>p.itemId===campaign.encounterLoadout?.weaponId&&p.mode!=='thrown'&&p.mode!=='versatile') ??
+  carriedAttacks.find(p=>p.handPlan.eligible);
+ const legacyWeapon=!campaign.characterIdentity?nighthawkEquippedAttack(campaign):null;
+ const equipment=ITEM_BY_ID[chosenAttack?.itemId??legacyWeapon?.weaponId??''];
  const ownedWeapons=Object.values(ITEM_BY_ID).filter(item=>item.category==='weapon'&&(campaign.inventoryLedger?.gear??[]).some(entry=>entry.quantity>0&&entry.name.toLowerCase()===item.name.toLowerCase()));
- const range=equipment?weaponAttackProfile(equipment,mode==='thrown').maximumRange:undefined;
+ const range=chosenAttack?.maximumRange??(equipment?weaponAttackProfile(equipment).maximumRange:undefined);
  const targetDistance=player&&current?distanceFeet(player,current):undefined;
- // The classic single-tap attack uses a thrown weapon outside melee reach.
- // Never offer a quick attack against a target beyond that weapon's legal range.
  const meleeProfile=equipment?weaponAttackProfile(equipment):undefined;
- const quickThrown=!!equipment&&targetDistance!==undefined&&targetDistance>(meleeProfile?.reach??5)&&!!equipment.properties?.some(property=>property.startsWith('Thrown '));
- const quickProfile=equipment?weaponAttackProfile(equipment,quickThrown):undefined;
- const quickInRange=targetDistance!==undefined&&targetDistance<=(quickProfile?.maximumRange??0);
+ const quickThrown=chosenAttack?.mode==='thrown'||
+  !!equipment&&targetDistance!==undefined&&targetDistance>(meleeProfile?.reach??5)&&!!equipment.properties?.some(property=>property.startsWith('Thrown '));
+ const quickAttack=quickThrown&&chosenAttack?.itemId?
+  carriedAttacks.find(p=>p.itemId===chosenAttack.itemId&&p.mode==='thrown')??chosenAttack:
+  chosenAttack;
+ const quickProfile=quickThrown&&equipment?weaponAttackProfile(equipment,true):undefined;
+ const quickInRange=(!campaign.characterIdentity||!!quickAttack?.handPlan.eligible)&&targetDistance!==undefined&&
+  targetDistance<=(quickProfile?.maximumRange??range??0);
+ const held=battle?.mode==='unified'&&battle.status==='active'?unifiedHeldWeapons(campaign):{};
+ const heldName=(id?:string)=>id?ITEM_BY_ID[id]?.name??id:'Empty';
  const rogue=campaign.characterIdentity?.classId==='rogue';
  const level=campaign.character?.level??1;
  const spells=['Fire Bolt','Magic Missile','Web','Cure Wounds'].filter(name=>campaign.character?.cantrips?.includes(name)||campaign.character?.preparedSpells?.includes(name));
@@ -223,7 +233,16 @@ export function TacticalBattlefield({campaign,saving,onChange,onDm}:Props){
    </div>
   </ClassicCombatMapFrame>
   {!setup&&isPlayer&&!awaitingPlayer&&<>
-   {(!equipment||!!current&&!quickInRange)&&<div aria-label="Equip weapon for combat" className="rounded-lg border border-amber-400/50 bg-panel p-2 text-sm space-y-2">
+   {campaign.characterIdentity&&<div className="flex flex-wrap items-center gap-2 rounded-lg border border-gold/25 p-2 text-xs" aria-label="Carried weapon controls">
+    <select aria-label="Tactical attack weapon" value={chosenAttack?.id??''} onChange={event=>{setAttackWeaponId(event.target.value);setMode('weapon');}} className="min-w-0 flex-1 rounded border border-gold/40 bg-panel p-2">
+      {carriedAttacks.map(profile=><option key={profile.id} value={profile.id}>{profile.name} · {profile.damageDice}{profile.handPlan.eligible?'':' · unavailable'}</option>)}
+    </select>
+    <span aria-label="Tactical held hands">Held: {heldName(held.main)} / {held.off?heldName(held.off):campaign.encounterLoadout?.shieldId?'Shield':'Empty'}</span>
+    <span aria-label="Tactical weapon interaction">{chosenAttack?.handPlan.eligible?chosenAttack.handPlan.summary:chosenAttack?.handPlan.reason??'No attack available'}</span>
+    {!battle?.weaponObjectInteractionUsed&&(['main','off'] as const).filter(hand=>held[hand]).map(hand=>
+      <button key={hand} type="button" className={button} disabled={saving} onClick={()=>void apply(()=>stowUnifiedHeldWeapon(campaign,hand),'Weapon stowed.')}>Stow {heldName(held[hand])}</button>)}
+   </div>}
+   {!campaign.characterIdentity&&(!equipment||!!current&&!quickInRange)&&<div aria-label="Equip weapon for combat" className="rounded-lg border border-amber-400/50 bg-panel p-2 text-sm space-y-2">
     <p>{equipment?'Target is beyond this weapon’s range. Move closer or switch to another owned weapon.':'Equip an owned weapon to attack. Your other combat actions remain available.'}</p>
     {ownedWeapons.length?<select aria-label="Choose weapon" className="min-h-11 w-full rounded-lg border border-gold/50 bg-panel px-2" value="" disabled={saving}
      onChange={event=>{const id=event.target.value;if(id)void apply(()=>setPlayerLoadout(campaign,'weaponId',id),'Weapon equipped.');}}>
@@ -232,8 +251,8 @@ export function TacticalBattlefield({campaign,saving,onChange,onDm}:Props){
    </div>}
    <div aria-label="Quick combat controls" className="grid grid-cols-2 gap-2 rounded-xl border border-gold/30 bg-panel/70 p-2">
     <button type="button" aria-label="Attack target" className="min-h-12 rounded-lg bg-gold px-2 text-sm font-semibold text-ink disabled:opacity-40"
-     disabled={saving||!current||!equipment||!quickInRange||!!player?.actionUsed&&((player.primaryAttacks??0)===0||(player.primaryAttacks??0)>=primaryAttackLimit(campaign))}
-     onClick={()=>void apply(()=>tacticalPlayerAttack(campaign,target,{offhand:false,thrown:quickThrown,sneak:false}),'Attack resolved.')}>Attack {current?label(target):'· Select enemy'}</button>
+     disabled={saving||!current||!equipment||!quickInRange||(!!campaign.characterIdentity&&!quickAttack?.handPlan.eligible)||!!player?.actionUsed&&((player.primaryAttacks??0)===0||(player.primaryAttacks??0)>=primaryAttackLimit(campaign))}
+     onClick={()=>void apply(()=>tacticalPlayerAttack(campaign,target,{offhand:false,thrown:quickThrown,sneak:false,weaponId:quickAttack?.itemId,attackMode:quickAttack?.mode}),'Attack resolved.')}>Attack {current?label(target):'· Select enemy'}</button>
     <button type="button" className="min-h-12 rounded-lg border border-gold/50 px-2 text-sm font-semibold disabled:opacity-40"
      disabled={saving||!destination||!preview||!!preview.error}
      onClick={()=>destination&&void apply(()=>tacticalMove(campaign,'nighthawk',destination),'Movement resolved.')}>Confirm move</button>
@@ -308,8 +327,8 @@ export function TacticalBattlefield({campaign,saving,onChange,onDm}:Props){
         {rogue&&<option value="sneak">Sneak Attack</option>}
         {rogue&&level>=5&&<><option value="trip">Cunning Strike · Trip</option><option value="poison">Cunning Strike · Poison</option></>}
        </select>
-       <button className={button} disabled={saving||!current||!equipment||!!player?.actionUsed&&mode!=='offhand'&&((player.primaryAttacks??0)===0||(player.primaryAttacks??0)>=primaryAttackLimit(campaign))}
-        onClick={()=>void apply(()=>tacticalPlayerAttack(campaign,target,{offhand:mode==='offhand',thrown:mode==='thrown',sneak:['sneak','trip','poison'].includes(mode),cunning:mode==='trip'?'Trip':mode==='poison'?'Poison':undefined}),'Attack resolved.')}>Attack</button>
+       <button className={button} disabled={saving||!current||!equipment||(!!campaign.characterIdentity&&!chosenAttack?.handPlan.eligible&&mode!=='offhand')||!!player?.actionUsed&&mode!=='offhand'&&((player.primaryAttacks??0)===0||(player.primaryAttacks??0)>=primaryAttackLimit(campaign))}
+        onClick={()=>void apply(()=>tacticalPlayerAttack(campaign,target,{offhand:mode==='offhand',thrown:mode==='thrown'||chosenAttack?.mode==='thrown',weaponId:chosenAttack?.itemId,attackMode:mode==='thrown'?'thrown':chosenAttack?.mode,sneak:['sneak','trip','poison'].includes(mode),cunning:mode==='trip'?'Trip':mode==='poison'?'Poison':undefined}),'Attack resolved.')}>Attack</button>
        {!!spells.length&&<><label className="sr-only" htmlFor="tactical-spell">Spell</label><select id="tactical-spell" className={button} value={spell} onChange={event=>setSpell(event.target.value)}><option value="">Spell</option>{spells.map(name=><option key={name}>{name}</option>)}</select>
         <button className={button} disabled={saving||player?.actionUsed||!spell||spell!=='Web'&&!target||spell==='Web'&&!destination} onClick={()=>void apply(()=>tacticalPlayerSpell(campaign,spell,target||'nighthawk',rollDie,destination),'Spell resolved.')}>Cast</button></>}
       </div>

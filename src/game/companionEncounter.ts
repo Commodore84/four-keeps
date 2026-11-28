@@ -14,6 +14,7 @@ import type {DamageType} from './subclassCombatRules';
 import {abilityModifier} from './checks';
 import {classSummary} from './creationClasses';
 import {ITEMS} from './creationEquipment';
+import {accessibleOrdinaryAttacks,planOrdinaryWeaponAttack,type OrdinaryAttackMode,type CombatWeaponHands} from './ordinaryWeaponCombat';
 import {resolveRogueMagicalAmbushSave} from './rogueMagicalAmbush';
 
 /** Isolated companion skirmish. Never mutates Campaign.combat (the Nighthawk training encounter). */
@@ -23,6 +24,10 @@ export interface CompanionEncounter {
  settlement?:{xp:number;gold:number;items:{name:string;quantity:number}[];completedAt:string};
  status:'active'|'completed';
  mode?:'companions'|'unified';
+ /** Combat-time hand occupancy, independent of preferred equipment slots. */
+ weaponHands?:CombatWeaponHands;
+ /** Normal once-per-turn object interaction (not the Attack interaction). */
+ weaponObjectInteractionUsed?:boolean;
  /** Last character-sheet HP observed at encounter creation or explicit synchronization. */
  nighthawkSheetHpSnapshot?:number;
  round:number;
@@ -355,7 +360,10 @@ export function startUnifiedEncounter(campaign:Campaign,initiative:Record<string
  if(!Number.isInteger(roll)||roll<1||roll>40||!Number.isInteger(hp)||!Number.isInteger(maxHp)||hp!<1||maxHp!<1||hp!>maxHp!||!Number.isInteger(speed)||speed!<0||speed!>120||speed!%5!==0)throw Error('Invalid Nighthawk character statistics');
  const participants:CompanionEncounter['participants']={...battle.participants,nighthawk:{...position,hp:hp!,maxHp:maxHp!,initiative:roll,conditions:(character.conditions??[]) as CompanionCondition[],deathSaves:character.deathSaves,armorClass:character.armorClass,actorKind:'party',faction:'party',speedFeet:speed!,movementSpentFeet:0,actionUsed:false,bonusActionUsed:false,dashFeet:0,disengaged:false,dodging:false,reactionUsed:false}};
  const order=Object.keys(participants).sort((a,b)=>participants[b].initiative-participants[a].initiative||a.localeCompare(b));
- return save(campaign,{...battle,mode:'unified',nighthawkSheetHpSnapshot:hp!,participants,order,log:['Unified encounter started; Nighthawk prototype combat preserved.']});
+ return save(campaign,{...battle,mode:'unified',weaponHands:{
+  main:campaign.encounterLoadout?.weaponId||undefined,
+  off:campaign.encounterLoadout?.offhandWeaponId||undefined
+ },weaponObjectInteractionUsed:false,nighthawkSheetHpSnapshot:hp!,participants,order,log:['Unified encounter started; Nighthawk prototype combat preserved.']});
 }
 /** Potential reach exits only: the DM confirms hostility, actual reach and trigger. */
 export function companionOpportunityCandidates(battle:CompanionEncounter,moverId:string,from:Cell,to:Cell):string[]{
@@ -760,7 +768,7 @@ export function endCompanionTurn(campaign:Campaign,actorId:string,rollBurning=()
  const poisonExpired=basicPoison&&nextId==='nighthawk'&&nextRound>=basicPoison.expiresRound;
  const advanced=save(clocked,{...afterOil,...(afterOil.phaseThree?{phaseThree:{...afterOil.phaseThree,
   ...(nextId==='nighthawk'?{shield:undefined,readied:undefined}:{}),
-  ...(afterOil.phaseThree.help?.by===nextId?{help:undefined}:{})}}:{}),web:afterOil.web?{...afterOil.web,checked:[]}:undefined,...{weaponFollowup:undefined},...(nextId==='nighthawk'?{lightAttack:undefined,cleaveUsed:undefined,weaponSlow:undefined}:{}),groundOil:afterOil.groundOil?.filter(o=>o.ignitedRound===undefined?nextRound<o.expiresRound:nextRound<o.ignitedRound+2||nextRound===o.ignitedRound+2&&next<=o.ignitedTurn!).map(o=>({...o,damagedActorsThisTurn:[]})),...(poisonExpired?{basicPoison:undefined}:{}),...(ammunitionPoisonExpired?{poisonedAmmunition:undefined}:{}),...(objects?{objects}:{}),participants,groundEntries:undefined,turnIndex:next,round:battle.round+(next===0?1:0),log:[...battle.log,actorId+' ended turn']});
+  ...(afterOil.phaseThree.help?.by===nextId?{help:undefined}:{})}}:{}),web:afterOil.web?{...afterOil.web,checked:[]}:undefined,...{weaponFollowup:undefined},...(nextId==='nighthawk'?{lightAttack:undefined,cleaveUsed:undefined,weaponSlow:undefined,weaponObjectInteractionUsed:false}:{}),groundOil:afterOil.groundOil?.filter(o=>o.ignitedRound===undefined?nextRound<o.expiresRound:nextRound<o.ignitedRound+2||nextRound===o.ignitedRound+2&&next<=o.ignitedTurn!).map(o=>({...o,damagedActorsThisTurn:[]})),...(poisonExpired?{basicPoison:undefined}:{}),...(ammunitionPoisonExpired?{poisonedAmmunition:undefined}:{}),...(objects?{objects}:{}),participants,groundEntries:undefined,turnIndex:next,round:battle.round+(next===0?1:0),log:[...battle.log,actorId+' ended turn']});
  if(!battle.burningCreatures?.includes(nextId)||participants[nextId].deathSaves?.dead||
     (participants[nextId].actorKind==='enemy'&&participants[nextId].hp===0))return advanced;
  const damage=rollBurning();
@@ -1968,4 +1976,101 @@ export function resolveArcaneTricksterHoldPersonEndSave(campaign:Campaign,target
  if(!Number.isInteger(total)||total<0||total>100)throw Error('Verified Wisdom save total required');
  const ch=campaign.character!,dc=8+ch.proficiencyBonus+abilityModifier(ch.scores.int),passed=total>=dc;
  return save(campaign,{...battle,rogueHoldPersonTargets:passed?battle.rogueHoldPersonTargets.filter(id=>id!==targetId):battle.rogueHoldPersonTargets,participants:{...battle.participants,[targetId]:passed?{...target,conditions:target.conditions.filter(c=>c!=='Paralyzed')}:target},log:[...battle.log,`Arcane Trickster Hold Person end save ${total} vs DC ${dc}: ${passed?'passed':'failed'}`]});
+}
+
+/** Reuse the 2024 weapon hand planner in the full class-feature engine.
+ * Preferred equipment remains unchanged: the selected carried weapon only
+ * overrides the effective attack weapon for this one adjudicated strike.
+ * The engine itself continues to resolve mastery, conditions, Sneak Attack,
+ * ammunition, hit points, and class-specific actions.
+ */
+export function unifiedCarriedWeaponChoices(campaign:Campaign) {
+ const battle=encounter(campaign);
+ if(battle.mode!=='unified'||!campaign.characterIdentity) return [];
+ const hands=battle.weaponHands??{
+  main:campaign.encounterLoadout?.weaponId,off:campaign.encounterLoadout?.offhandWeaponId
+ };
+ return accessibleOrdinaryAttacks(campaign)
+  .filter(profile=>profile.itemId&&profile.mode!=='offhand'&&profile.mode!=='monk-bonus'&&profile.mode!=='unarmed')
+  .map(profile=>{
+   const handPlan=planOrdinaryWeaponAttack(campaign,profile,{
+    hands,objectInteractionUsed:battle.weaponObjectInteractionUsed
+   });
+   const missing=profile.ammoName&&profile.count<=0?'No '+profile.ammoName+' remaining':
+    profile.mode==='thrown'&&profile.count<=0?'No '+profile.name+' remaining':undefined;
+   return {...profile,handPlan:missing?{...handPlan,eligible:false,reason:missing,summary:missing}:handPlan};
+  });
+}
+export function unifiedHeldWeapons(campaign:Campaign):CombatWeaponHands{
+ const battle=encounter(campaign);
+ if(battle.mode!=='unified')throw Error('Unified encounter required');
+ return battle.weaponHands?{...battle.weaponHands}:{
+  main:campaign.encounterLoadout?.weaponId,off:campaign.encounterLoadout?.offhandWeaponId
+ };
+}
+
+/** Stow one held weapon using the free object interaction, without spending an
+ * Action, Bonus Action, or any of this turn's Extra Attack strikes. */
+export function stowUnifiedHeldWeapon(campaign:Campaign,hand:'main'|'off'):Campaign{
+ const battle=activeActor(campaign,'nighthawk');
+ if(battle.mode!=='unified'||!campaign.characterIdentity)
+  throw Error('A character in unified combat is required');
+ if(battle.weaponObjectInteractionUsed)throw Error('Object interaction already used this turn');
+ if(battle.phaseThree?.pendingHit)throw Error('Resolve the pending reaction first');
+ const hands=unifiedHeldWeapons(campaign);
+ const weaponId=hands[hand];
+ if(!weaponId)throw Error('That hand is already empty');
+ const name=ITEMS.find(item=>item.id===weaponId)?.name??weaponId;
+ return save(campaign,{...battle,weaponHands:{...hands,[hand]:undefined},
+  weaponObjectInteractionUsed:true,log:[...battle.log,'Nighthawk stows '+name+' (free object interaction)']});
+}
+
+/** All successful weapon interactions are committed atomically with the real
+ * attack outcome. A rejected attack cannot change hands or spend inventory.
+ * This wrapper never writes a permanent preferred-loadout change. */
+export function withUnifiedCarriedWeaponAttack(
+ campaign:Campaign,weaponId:string,mode:OrdinaryAttackMode,
+ resolve:(usingWeapon:Campaign)=>Campaign
+):Campaign{
+ const battle=activeActor(campaign,'nighthawk');
+ if(battle.mode!=='unified'||!campaign.characterIdentity)
+  throw Error('An imported character in unified combat is required');
+ const selected=unifiedCarriedWeaponChoices(campaign).find(p=>p.itemId===weaponId&&p.mode===mode);
+ if(!selected)throw Error('This ordinary weapon is not carried or the attack mode is unavailable');
+ if(!selected.handPlan.eligible)throw Error(selected.handPlan.reason??'Not enough free weapon interactions');
+ const temporary:Campaign={...campaign,encounterLoadout:{
+  ...campaign.encounterLoadout,weaponId,
+  // Physical hands govern the attack, not the preferred offhand slot.
+  offhandWeaponId:selected.handPlan.hands.off
+ }};
+ const resolved=resolve(temporary);
+ const result=resolved.companionEncounter;
+ if(!result||result.status!=='active'&&result.status!=='completed')
+  throw Error('The verified unified attack did not resolve');
+ if(!result.participants.nighthawk?.actionUsed)
+  throw Error('The verified attack did not consume the required action');
+ const details=selected.handPlan.interactions.length?
+  ['Nighthawk '+selected.handPlan.interactions.join('; ')]:[];
+ return {...resolved,encounterLoadout:campaign.encounterLoadout,
+  companionEncounter:{...result,
+   weaponHands:selected.handPlan.hands,
+   weaponObjectInteractionUsed:selected.handPlan.objectInteractionUsed,
+   log:[...result.log,...details]}
+ };
+}
+
+/** Ordinary attacks use the full verified-stat/mastery engine. Thrown attacks
+ * use its dedicated immutable inventory and recovery pipeline. */
+export function attackUnifiedCarriedWeapon(
+ campaign:Campaign,weaponId:string,mode:OrdinaryAttackMode,
+ targetId:string,roll:number,damageRoll:number,damageType:DamageType,
+ rangeFeet:number,secondD20?:number,elvenAccuracyReroll?:number
+):Campaign{
+ if(!['melee','ranged','thrown','versatile'].includes(mode))
+  throw Error('Select an ordinary main-hand attack');
+ return withUnifiedCarriedWeaponAttack(campaign,weaponId,mode,using=>
+  mode==='thrown'?
+   attackWithThrownEquippedWeapon(using,'nighthawk',targetId,roll,damageRoll,damageType,rangeFeet,secondD20):
+   attackCompanionWithVerifiedStats(using,'nighthawk',targetId,roll,damageRoll,damageType,rangeFeet,secondD20,elvenAccuracyReroll,undefined,false,mode==='versatile')
+ );
 }
