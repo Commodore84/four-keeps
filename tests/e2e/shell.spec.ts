@@ -1291,7 +1291,8 @@ test('mobile hamburger navigation includes magic items and separate developer to
  await expect(page.getByRole('navigation',{name:'Primary navigation'})).toHaveCount(0);
  await menu.click();
  const nav=page.getByRole('navigation',{name:'Primary navigation'});
- await expect(nav.getByRole('button')).toHaveCount(8);
+ await expect(nav.getByRole('button')).toHaveCount(9);
+ await expect(nav.getByRole('button',{name:'Bastion',exact:true})).toBeVisible();
  await expect(nav.getByRole('button',{name:'Magic Items',exact:true})).toBeVisible();
  await expect(nav.getByRole('button',{name:'Home',exact:true})).toBeVisible();
  await expect(page.locator('header > div').first().getByRole('button',{name:'Home',exact:true})).toHaveCount(0);
