@@ -135,6 +135,10 @@ test('iPhone build-specific magic picks and shared DM recommendation toggle',asy
  await expect(pick).toBeVisible();
  await pick.click();
  await expect(compendium.getByRole('note')).toContainText('+2 damage');
+ const explanationBounds=await compendium.getByRole('note').boundingBox();
+ expect(explanationBounds).not.toBeNull();
+ expect(explanationBounds!.x).toBeGreaterThanOrEqual(0);
+ expect(explanationBounds!.x+explanationBounds!.width).toBeLessThanOrEqual(376);
  await page.screenshot({path:'test-results/v30-build-specific-magic-iphone.png'});
  await search.fill('');
  await compendium.getByRole('button',{name:'Recommended',exact:true}).click();
