@@ -13,6 +13,7 @@ import {TacticalBattlefield} from './TacticalBattlefield';
 import {ClassicCombatMapFrame} from './ClassicCombatMapFrame';
 import {ScenePortal} from './ScenePortal';
 import {sceneActionDefinitions,sanitizeScenePreferences,scenePreferencesKey,visibleSceneFavorites,type SceneActionId} from './combatScenePreferences';
+import {NAVIGATION_TAB_IDS,NAVIGATION_ORDER_STORAGE_KEY,moveNavigationItem,sanitizeNavigationOrder,type NavigationTabId} from './navigationPreferences';
 import {ClassicInitiativeList,ClassicCombatResources,ClassicCombatGrid,classicCombatCellBase} from './ClassicCombatPresentation';
 import {shouldRenderTacticalBattlefield} from './encounterRouting';
 import {executeDmTactics} from '../game/tacticalCombat';
@@ -58,7 +59,7 @@ import { CharacterCreator,readCharacterDrafts } from './CharacterCreator';
 import {campaignFromCharacterDraft,characterDraftImportOptions} from '../game/characterImport';
 import { cloneElement, useCallback, useEffect, useRef, useState } from 'react';
 import { createBackup, parseBackup } from '../game/backup';
-import { BookOpen, Bird, Blocks, Castle, Compass, Droplet, Map, RefreshCw, Send, Settings, Shield, Swords, UserRound, Users, Search, ChevronDown, MessageCircle, MapPin, GitBranch, Sparkles, MoreHorizontal, Footprints, EyeOff, SkipForward, CheckCircle2, Circle, ArrowUp, ArrowDown, X } from 'lucide-react';
+import { BookOpen, Bird, Blocks, Castle, Compass, House, WandSparkles, Droplet, Map, RefreshCw, Send, Settings, Shield, Swords, UserRound, Users, Search, ChevronDown, MessageCircle, MapPin, GitBranch, Sparkles, MoreHorizontal, Footprints, EyeOff, SkipForward, CheckCircle2, Circle, ArrowUp, ArrowDown, X } from 'lucide-react';
 import { addExchange, addNote, addRoll, beginDuel, adjustEquipment, rollDuelInitiative, chooseDuelEntry,chooseDuelDeployment, takeDuelTurnAction, utilizeCombatItem, takeCombatSkillAction, readyCombatAction, readyCombatMindSliver, resolveReadiedSpellReaction, resolveReadiedCombatReaction, resolveReadiedWeaponAttack, moveDuelToken, interactDuelBattlefieldOpening, useDuelFixtureAction, type DuelFixtureAction, moveOwl, owlHelp, owlTurnAction, tacticalRoute, tacticalOpportunityEnemies, publicCombatText, resolveEnemyOpportunity, moveTrainingDummy, resolveTrainingReaction, rollTrainingReaction, advanceDuelTestEnemyTurn, resolveDuelEnemyTurn, beginEnemyShove, beginEnemyGrapple, rollPlayerGrappleSave, beginPlayerGrappleEscape, rollPlayerGrappleEscape, rollPlayerShoveSave, standNighthawk, rollDuelAttack, shoveTrainingEnemy, hideNighthawk, searchForNighthawk, trainingMapSize, isTrainingPillar, trainingTerrain, trainingRouteCost, trainingCoverBlocksSight, canNighthawkHide, addSecondTrainingEnemy, selectTrainingTarget, grappleTrainingEnemy, escapeTrainingGrapple, concludeDuel, quitTrainingEncounter, newCampaign, awardExperience, levelUpRogue, levelUpArcaneTrickster, tricksterCantrips, tricksterSpells, isRitualSpell, castNighthawkSpell, castCombatMagicAction, resolveCombatSpellSave, resolveLaughterRepeatSave, availableCombatSpells, takeNighthawkRest, applyNighthawkDamage, minutesUntilLongRestEligible, advanceToLongRestEligibility, endNighthawkConcentration, spellRequiresConcentration, reconcileNighthawkScores, undoNighthawkScoreReconciliation, xpThresholds, type Campaign } from '../game/campaign';
 import { localCampaignStorage as baseCampaignStorage,subscribeCampaignSaveStatus,type CampaignSaveStatus } from '../game/storage';
 import {createCombatLabSessionStorage} from '../game/combatLabStorage';
@@ -167,15 +168,16 @@ const spellSummaries: Record<string,string> = {
   "Witch Bolt": "Connect to a target with crackling lightning energy."
 };
 const tabs = [
+  { id: 'home', label: 'Home', Icon: House },
   { id: 'adventure', label: 'Adventure', Icon: Compass },
-  { id: 'party', label: 'Player', Icon: Users },
-  { id: 'bastion', label: 'Bastion', Icon: Castle },
+  { id: 'party', label: 'Player', Icon: UserRound },
+  { id: 'bastion', label: 'Keep', Icon: Castle },
   { id: 'journal', label: 'Journal', Icon: BookOpen },
-  { id: 'magic-items', label: 'Magic Items', Icon: BookOpen },
+  { id: 'magic-items', label: 'Magic Items', Icon: WandSparkles },
   { id: 'map', label: 'Map', Icon: Map },
   { id: 'settings', label: 'Settings', Icon: Settings },
   { id: 'development', label: 'Developer', Icon: Blocks },
-] as const;
+] as const satisfies ReadonlyArray<{id:NavigationTabId;label:string;Icon:typeof House}>;
 
 function Adventure({ campaign, fullHistory, onToggleHistory, onAdventureChange, onTacticalDm, onInspectScene, onStartOpening, onRetryAction, onShopClose, onShopPrepare, onShopRevise, onShopSettle, onShopDiscuss, onUsePotion, saving, openingError, narrationSpeed, showDmRecommendations=true, development = false }: { campaign: Campaign | null; fullHistory: boolean; onToggleHistory: () => void; onAdventureChange:(next:Campaign,message:string)=>Promise<boolean>|boolean|void; onTacticalDm:(message?:string)=>Promise<void>; onInspectScene:(message:string)=>void; onStartOpening:()=>Promise<void>; onRetryAction:()=>Promise<void>; onShopClose:()=>Promise<void>; onShopPrepare:(items:{itemId:string;quantity:number}[],merchant:import('../game/frontierShop').MerchantType)=>Promise<void>; onShopRevise:(items:{itemId:string;quantity:number}[])=>Promise<void>;onShopSettle:(confirmed:boolean)=>Promise<void>; onShopDiscuss:(items:{itemId:string;quantity:number}[],merchant:import('../game/frontierShop').MerchantType)=>Promise<void>; onUsePotion:(request:Omit<HealingPotionRequest,'rollDie'>)=>Promise<boolean>; saving:boolean; openingError:string|null; narrationSpeed:NarrationSpeed;showDmRecommendations?:boolean; development?:boolean }) {
   const endRef = useRef<HTMLDivElement>(null);
@@ -526,6 +528,16 @@ const localCampaignStorage=createCombatLabSessionStorage(baseCampaignStorage,{
 export function App() {
   const [activeView, setActiveView] = useState<View>('adventure');
   const [navigationOpen,setNavigationOpen]=useState(false);
+  const [navigationOrder,setNavigationOrder]=useState<NavigationTabId[]>(()=>{
+    try{return sanitizeNavigationOrder(JSON.parse(localStorage.getItem(NAVIGATION_ORDER_STORAGE_KEY)||'null'));}
+    catch{return sanitizeNavigationOrder(null);}
+  });
+  const changeNavigationOrder=(order:readonly NavigationTabId[])=>{
+    const safe=sanitizeNavigationOrder(order);
+    setNavigationOrder(safe);
+    try{localStorage.setItem(NAVIGATION_ORDER_STORAGE_KEY,JSON.stringify(safe));}catch{/* Continue using unsaved session preference. */}
+  };
+  const orderedTabs=navigationOrder.map(id=>tabs.find(tab=>tab.id===id)!);
   const adventureScrollPosition=useRef<number|null>(null);
   const mainScrollRef=useRef<HTMLElement>(null);
   useEffect(()=>{
@@ -2124,7 +2136,13 @@ export function App() {
       <header className={sceneMode?'relative z-50 shrink-0 border-b border-white/10 bg-ink/95 px-3 pb-1.5 pt-[max(.45rem,env(safe-area-inset-top))] backdrop-blur':'relative z-50 shrink-0 border-b border-white/10 bg-ink/95 px-5 pb-4 pt-[max(1.2rem,env(safe-area-inset-top))] backdrop-blur'}>
         <div className="flex items-center justify-between gap-3"><div><div className="flex items-center gap-2"><button type="button" aria-label="Open navigation menu" aria-expanded={navigationOpen} aria-controls="four-keeps-navigation" onClick={()=>setNavigationOpen(open=>!open)} className="rounded-lg border border-white/20 p-2 text-gold" title="Navigate"><img src="/four-keeps-emblem.svg" alt="" aria-hidden="true" className="h-[26px] w-[26px] object-contain" /></button><h1 className={sceneMode?"text-base font-semibold tracking-tight text-parchment":"text-xl font-semibold tracking-tight text-parchment"}>Four Keeps</h1>{campaign?.combatLab&&!sceneMode&&<span aria-label="Combat Lab session" className="ml-1 rounded border border-gold/35 px-1.5 py-0.5 text-[10px] font-semibold text-gold" title={'Test encounter · '+campaign.combatLab.seed}>TEST<span className="sr-only"> · Seed: {campaign.combatLab.seed}</span></span>}</div></div></div>
         {navigationOpen&&<button type="button" aria-label="Close navigation menu" onClick={()=>setNavigationOpen(false)} className="fixed inset-0 z-20 h-dvh w-screen cursor-default bg-transparent" />}
-        {navigationOpen&&<nav id="four-keeps-navigation" aria-label="Primary navigation" className="absolute left-4 top-full z-30 mt-1 w-56 rounded-xl border border-gold/30 bg-panel p-2 shadow-2xl"><button type="button" onClick={()=>{void abandonUnsentMerchantCart();setNavigationOpen(false);setPortalScreen("home");setNotice('')}} className="flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left text-sm text-parchment hover:bg-white/10"><Compass size={19}/>Home</button><div className="my-1 border-t border-white/10"/>{tabs.map(({id,label,Icon})=><button key={id} type="button" onClick={()=>{if(activeView==='adventure'&&id!=='adventure')adventureScrollPosition.current=mainScrollRef.current?.scrollTop??0;if(id!=='adventure')void abandonUnsentMerchantCart();setActiveView(id);setNavigationOpen(false);setNotice('')}} aria-current={activeView===id?'page':undefined} className={`flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left text-sm ${activeView===id?'bg-gold/15 text-gold':'text-parchment hover:bg-white/10'}`}><Icon size={19}/>{label}</button>)}
+        {navigationOpen&&<nav id="four-keeps-navigation" aria-label="Primary navigation" className="absolute left-4 top-full z-30 mt-1 w-56 rounded-xl border border-gold/30 bg-panel p-2 shadow-2xl">
+          {orderedTabs.map(({id,label,Icon})=><button key={id} type="button" onClick={()=>{
+            if(id==='home'){void abandonUnsentMerchantCart();setNavigationOpen(false);setPortalScreen('home');setNotice('');return;}
+            if(activeView==='adventure'&&id!=='adventure')adventureScrollPosition.current=mainScrollRef.current?.scrollTop??0;
+            if(id!=='adventure')void abandonUnsentMerchantCart();
+            setActiveView(id);setNavigationOpen(false);setNotice('');
+          }} aria-current={id!=='home'&&activeView===id?'page':undefined} className={`flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left text-sm ${id!=='home'&&activeView===id?'bg-gold/15 text-gold':'text-parchment hover:bg-white/10'}`}><Icon size={19}/>{label}</button>)}
           {campaign?.combatLab&&<><div className="my-1 border-t border-gold/30"/><button type="button" aria-label="Return to adventure" onClick={()=>{setNavigationOpen(false);returnFromCombatLab();}} className="flex min-h-11 w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-gold hover:bg-white/10"><Compass size={19}/><span className="min-w-0"><span className="block font-semibold">Return to Adventure</span><span className="block truncate text-[10px] text-parchment/65">Leave TEST · {campaign.combatLab.seed}</span></span></button></>}
         </nav>}
         {sceneMode&&sceneCombat&&<div className="mt-1 flex items-center justify-between gap-2" aria-label="Compact initiative order">
@@ -2191,6 +2209,22 @@ export function App() {
           <h2 className="font-serif text-lg">App controls</h2>
           <button type="button" onClick={() => window.location.reload()} className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-gold/40 px-4 py-3 text-sm font-semibold text-gold focus-visible:outline focus-visible:outline-2 focus-visible:outline-gold"><RefreshCw size={18}/>Reload App</button>
           <p className="text-xs text-parchment/65">Reload Four Keeps without closing the Home Screen app. Saved campaigns and purchases remain on this device. Unsaved text may be lost.</p>
+        </section>
+        <section aria-label="Navigation order settings" className="mb-5 rounded-xl border border-white/15 bg-panel p-4 space-y-3">
+          <div className="flex items-center justify-between gap-2">
+            <h2 className="font-serif text-lg">Navigation order</h2>
+            <button type="button" className="min-h-11 rounded-lg border border-gold/40 px-3 text-sm text-gold" onClick={()=>changeNavigationOrder(NAVIGATION_TAB_IDS)}>Reset order</button>
+          </div>
+          <p className="text-xs text-parchment/70">Arrange the hamburger menu with the arrows. This order is saved on this device for all adventures.</p>
+          <div className="space-y-1">{navigationOrder.map((id,index)=>{
+            const tab=tabs.find(item=>item.id===id)!;
+            const Icon=tab.Icon;
+            return <div key={id} className="flex min-h-11 items-center gap-2 rounded border border-white/15 px-2">
+              <span className="flex min-w-0 flex-1 items-center gap-2 text-sm"><Icon size={18} className="shrink-0 text-gold"/><span className="truncate">{tab.label}</span></span>
+              <button type="button" aria-label={'Move '+tab.label+' up'} disabled={index===0} className="flex h-9 w-9 items-center justify-center rounded border border-white/20 disabled:opacity-30" onClick={()=>changeNavigationOrder(moveNavigationItem(navigationOrder,id,-1))}><ArrowUp size={16}/></button>
+              <button type="button" aria-label={'Move '+tab.label+' down'} disabled={index===navigationOrder.length-1} className="flex h-9 w-9 items-center justify-center rounded border border-white/20 disabled:opacity-30" onClick={()=>changeNavigationOrder(moveNavigationItem(navigationOrder,id,1))}><ArrowDown size={16}/></button>
+            </div>;
+          })}</div>
         </section>
         <section aria-label="Scene action bar settings" className="mb-5 rounded-xl border border-white/15 bg-panel p-4 space-y-3">
           <h2 className="font-serif text-lg">Scene action bar</h2>

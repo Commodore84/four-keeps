@@ -1292,7 +1292,7 @@ test('mobile hamburger navigation includes magic items and separate developer to
  await menu.click();
  const nav=page.getByRole('navigation',{name:'Primary navigation'});
  await expect(nav.getByRole('button')).toHaveCount(9);
- await expect(nav.getByRole('button',{name:'Bastion',exact:true})).toBeVisible();
+ await expect(nav.getByRole('button',{name:'Keep',exact:true})).toBeVisible();
  await expect(nav.getByRole('button',{name:'Magic Items',exact:true})).toBeVisible();
  await expect(nav.getByRole('button',{name:'Home',exact:true})).toBeVisible();
  await expect(page.locator('header > div').first().getByRole('button',{name:'Home',exact:true})).toHaveCount(0);
@@ -1313,6 +1313,40 @@ test('mobile hamburger navigation includes magic items and separate developer to
  const bounds=await menu.boundingBox();
  expect(bounds).not.toBeNull();
  expect(bounds!.x+bounds!.width).toBeLessThanOrEqual(376);
+});
+
+test('iPhone navigation icons and custom order survive reload and reset',async({page})=>{
+ await page.setViewportSize({width:375,height:812});
+ await page.goto('/four-keeps/');
+ await navigate(page,'Settings');
+ const section=page.getByLabel('Navigation order settings');
+ await expect(section.getByRole('button',{name:'Move Home up'})).toBeDisabled();
+ await section.getByRole('button',{name:'Move Keep up'}).click();
+ await section.getByRole('button',{name:'Move Home down'}).click();
+ const menu=page.getByRole('button',{name:'Open navigation menu'});
+ await menu.click();
+ const nav=page.getByRole('navigation',{name:'Primary navigation'});
+ await expect(nav.getByRole('button')).toHaveText([
+   'Adventure','Home','Keep','Player','Journal','Magic Items','Map','Settings','Developer',
+ ]);
+ await expect(nav.getByRole('button',{name:'Home'}).locator('svg.lucide-house')).toHaveCount(1);
+ await expect(nav.getByRole('button',{name:'Player'}).locator('svg.lucide-user-round')).toHaveCount(1);
+ await expect(nav.getByRole('button',{name:'Keep'}).locator('svg.lucide-castle')).toHaveCount(1);
+ await expect(nav.getByRole('button',{name:'Magic Items'}).locator('svg.lucide-wand-sparkles')).toHaveCount(1);
+ await page.getByRole('button',{name:'Close navigation menu'}).click({position:{x:320,y:350}});
+ await page.screenshot({path:'test-results/v30-navigation-settings-iphone.png'});
+ await page.reload();
+ await navigate(page,'Settings');
+ await page.getByRole('button',{name:'Open navigation menu'}).click();
+ await expect(page.getByRole('navigation',{name:'Primary navigation'}).getByRole('button')).toHaveText([
+   'Adventure','Home','Keep','Player','Journal','Magic Items','Map','Settings','Developer',
+ ]);
+ await page.getByRole('button',{name:'Close navigation menu'}).click({position:{x:320,y:350}});
+ await page.getByLabel('Navigation order settings').getByRole('button',{name:'Reset order'}).click();
+ await page.getByRole('button',{name:'Open navigation menu'}).click();
+ await expect(page.getByRole('navigation',{name:'Primary navigation'}).getByRole('button')).toHaveText([
+   'Home','Adventure','Player','Keep','Journal','Magic Items','Map','Settings','Developer',
+ ]);
 });
 
 test('Home navigation is inside the hamburger menu, not beside it',async({page})=>{

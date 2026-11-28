@@ -1,5 +1,5 @@
 import {test,expect,type Page} from '@playwright/test';
-async function navigate(page:Page,tab:'Adventure'|'Player'|'Journal'|'Map'|'Bastion'|'Settings'|'Developer'){
+async function navigate(page:Page,tab:'Adventure'|'Player'|'Journal'|'Map'|'Keep'|'Settings'|'Developer'){
  const menu=page.getByRole('button',{name:'Open navigation menu'});
  await menu.waitFor({state:'visible',timeout:2500}).catch(()=>{});
  if(await menu.count()===0){if(tab==='Settings'){await page.getByRole('button',{name:'Settings',exact:true}).click();return;}throw new Error('Navigation menu is unavailable on the portal screen');}
@@ -3469,7 +3469,7 @@ test('iPhone NPC independently rolls sealed Investigation, discovers clue and pe
 test('iPhone text-first Bastion establishes a level-five headquarters, constructs and saves rooms and orders',async({page})=>{
  test.setTimeout(160000);
  await createAndImport(page,'rogue');
- await navigate(page,'Bastion');
+ await navigate(page,'Keep');
  const place=page.getByLabel('Bastion location');
  await expect(place).toContainText('The future stronghold');
  await place.getByLabel('Bastion name').fill('Stonewatch Keep');
@@ -3492,7 +3492,7 @@ test('iPhone text-first Bastion establishes a level-five headquarters, construct
  });
  await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();
  await page.getByRole('button',{name:'Continue Adventure'}).click();
- await navigate(page,'Bastion');
+ await navigate(page,'Keep');
  await expect(place).toContainText('Establish your Bastion');
  await place.getByLabel('Starting Cramped room').selectOption('Bedroom');
  await place.getByLabel('Starting Roomy room').selectOption('Storage');
@@ -3528,7 +3528,7 @@ test('iPhone text-first Bastion establishes a level-five headquarters, construct
  await page.screenshot({path:'test-results/text-first-bastion-level5-iphone.png'});
  await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();
  await page.getByRole('button',{name:'Continue Adventure'}).click();
- await navigate(page,'Bastion');
+ await navigate(page,'Keep');
  await expect(place).toContainText('Stonewatch Keep');
  await expect(place).toContainText('Kitchen');
  await expect(place).toContainText('Ongoing work');
@@ -3544,7 +3544,7 @@ test('iPhone text-first Bastion establishes a level-five headquarters, construct
  });
  await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();
  await page.getByRole('button',{name:'Continue Adventure'}).click();
- await navigate(page,'Bastion');
+ await navigate(page,'Keep');
  await expect.poll(async()=> (await saved(page)).bastion.construction.length).toBe(0);
  const elapsed=await saved(page);
  expect(elapsed.bastion.facilities.find((x:any)=>x.name==='Kitchen')?.size).toBe('Roomy');
@@ -3565,7 +3565,7 @@ test('iPhone Garden harvest produces stored supplies that must be collected at t
  });
  await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();
  await page.getByRole('button',{name:'Continue Adventure'}).click();
- await navigate(page,'Bastion');
+ await navigate(page,'Keep');
  const place=page.getByLabel('Bastion location');
  await place.getByLabel('Bastion name').fill('Wayfarer Lodge');
  await place.getByLabel('Bastion region').fill('Dasahi');
@@ -3593,7 +3593,7 @@ test('iPhone Garden harvest produces stored supplies that must be collected at t
  });
  await page.reload();await page.getByRole('button',{name:'Campaigns',exact:true}).click();
  await page.getByRole('button',{name:'Continue Adventure'}).click();
- await navigate(page,'Bastion');
+ await navigate(page,'Keep');
  await expect.poll(async()=>(await saved(page)).bastion.stores?.[0]?.name).toBe('Potion of Healing');
  const harvested=await saved(page);
  expect(harvested.bastion.orders[0].status).toBe('resolved');
