@@ -1941,3 +1941,86 @@ test('iPhone Monk Weapon Lab uses actual class and selected ordinary weapon with
  expect(training.combat.classicAdventure.origin).toBe('dm');
  expect((await readAllCampaigns(page))[0]).toEqual(original);
 });
+
+test('iPhone carried Dagger can be drawn for a stab then stowed to shoot a held Shortbow',async({page})=>{
+ test.setTimeout(90000);
+ await page.setViewportSize({width:390,height:844});
+ await page.goto('/four-keeps/');
+ await createLegacyCampaign(page,'Ranged weapon switching test');
+ await page.evaluate(async()=>{
+  const db=await new Promise<IDBDatabase>((resolve,reject)=>{
+   const r=indexedDB.open('four-keeps-local',1);
+   r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);
+  });
+  const tx=db.transaction('campaigns','readwrite'),store=tx.objectStore('campaigns');
+  const items=await new Promise<any[]>(resolve=>{const r=store.getAll();r.onsuccess=()=>resolve(r.result);});
+  const c=items[0];
+  c.characterIdentity={name:'Bow-and-Dagger Fighter',classId:'fighter',speciesId:'human',
+   backgroundId:'soldier',draftId:'weapon-switch',pronouns:'',appearance:'',personality:'',backstory:''};
+  c.character={...c.character,classId:'fighter',level:5,proficiencyBonus:3,
+   scores:{...c.character.scores,str:12,dex:16},
+   weaponProficiencies:['Simple','Martial']};
+  c.inventoryLedger={currency:{CP:0,SP:0,EP:0,GP:0,PP:0},
+   gear:[{name:'Shortbow',quantity:1},{name:'Dagger',quantity:2},{name:'Arrows',quantity:20}]};
+  c.encounterLoadout={weaponId:'shortbow'};
+  store.put(c);
+  await new Promise<void>((resolve,reject)=>{tx.oncomplete=()=>resolve();tx.onerror=()=>reject(tx.error);});
+  db.close();
+ });
+ await page.reload();
+ await page.getByRole('button',{name:'Campaigns',exact:true}).click();
+ await page.getByRole('button',{name:'Continue Adventure'}).click();
+ const [original]=await readAllCampaigns(page);
+ await navigate(page,'Developer');
+ await page.getByLabel('Combat Lab').getByRole('button',{name:'Generate Random Encounter'}).click();
+ await page.getByRole('button',{name:'Roll initiative (d20 + DEX)'}).click();
+ await page.evaluate(id=>{
+  const key='four-keeps-combat-lab-session:'+id;
+  const lab=JSON.parse(localStorage.getItem(key)!);
+  const p=lab.combat.playerPosition;
+  lab.combat.enemyPosition={x:p.x+1,y:p.y};
+  lab.combat.enemyHp=100;lab.combat.enemyMaxHp=100;
+  lab.combat.selectedEnemy='first';
+  lab.combat.order=['Nighthawk',lab.combat.enemyName];lab.combat.turnIndex=0;
+  localStorage.setItem(key,JSON.stringify(lab));
+ },original.id);
+ await page.reload();
+ await page.getByRole('button',{name:'Campaigns',exact:true}).click();
+ await page.getByRole('button',{name:'Resume test encounter'}).click();
+ await page.getByRole('button',{name:'Scene action: Attack'}).click();
+ const panel=page.getByRole('region',{name:'Confirm combat action'});
+ await expect(panel.getByLabel('Held weapons')).toContainText('Shortbow');
+ await expect(panel.getByLabel('Held weapons')).toContainText('Empty');
+ const dagger=panel.getByRole('button',{name:/^Dagger 1d4/});
+ await expect(dagger).toBeEnabled();
+ await expect(dagger).toContainText('draw Dagger');
+ await expect(panel.getByRole('button',{name:/^Dagger \(Thrown\)/})).toBeEnabled();
+ await page.screenshot({path:'test-results/iphone-carried-dagger-shortbow-attack-picker.png'});
+ // Force a natural miss; no damage roll dialog should interrupt Extra Attack.
+ await page.evaluate(()=>{
+  const native=crypto.getRandomValues.bind(crypto);
+  crypto.getRandomValues=((array:Uint32Array)=>{
+   if(array instanceof Uint32Array&&array.length===1){array[0]=0;return array;}
+   return native(array);
+  }) as typeof crypto.getRandomValues;
+ });
+ await dagger.click();
+ await panel.getByRole('button',{name:'Confirm',exact:true}).click();
+ await expect.poll(async()=> (await readScopedLab(page,original.id))?.combat?.weaponHands?.off).toBe('dagger');
+
+ await page.getByRole('button',{name:'Scene action: Attack'}).click();
+ await expect(panel.getByLabel('Held weapons')).toContainText('Shortbow · Dagger');
+ const bow=panel.getByRole('button',{name:/^Shortbow 1d6/});
+ await expect(bow).toBeEnabled();
+ await expect(bow).toContainText('stow Dagger');
+ await bow.click();
+ await panel.getByRole('button',{name:'Confirm',exact:true}).click();
+ await expect.poll(async()=> (await readScopedLab(page,original.id))?.combat?.attackCountThisTurn).toBe(2);
+ const now=await readScopedLab(page,original.id);
+ expect(now.combat.weaponHands).toEqual({main:'shortbow'});
+ expect(now.combat.objectInteractionUsed).toBe(false);
+ expect(now.inventoryLedger.gear.find((g:{name:string})=>g.name==='Dagger').quantity).toBe(2);
+ await page.reload();
+ expect((await readScopedLab(page,original.id)).combat.weaponHands).toEqual({main:'shortbow'});
+ expect((await readAllCampaigns(page))[0]).toEqual(original);
+});

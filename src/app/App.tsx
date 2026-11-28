@@ -1,4 +1,4 @@
-import {prepareOrdinaryWeaponAttack} from '../game/campaign';
+import {prepareOrdinaryWeaponAttack,stowCombatWeapon} from '../game/campaign';
 import {CombatDeploymentMap} from './CombatDeploymentMap';
 import {BastionPlace} from './BastionPlace';
 import {ExplorationSceneMap} from './ExplorationSceneMap';
@@ -65,7 +65,7 @@ import { addExchange, addNote, addRoll, beginDuel, adjustEquipment, rollDuelInit
 import { localCampaignStorage as baseCampaignStorage,subscribeCampaignSaveStatus,type CampaignSaveStatus } from '../game/storage';
 import {createCombatLabSessionStorage} from '../game/combatLabStorage';
 import { availableCombatMovement, combatHideStatus, combatWeaponChoices } from '../game/combat-ui';
-import {equippedOrdinaryAttacks} from '../game/ordinaryWeaponCombat';
+import {accessibleOrdinaryAttacks,combatHeldWeapons} from '../game/ordinaryWeaponCombat';
 import {ITEMS as ORDINARY_ITEMS} from '../game/creationEquipment';
 import type { View } from '../game/types';
 import { emptyWorld } from '../game/world';
@@ -1693,9 +1693,9 @@ export function App() {
     if(campaign.combat?.attack&&campaign.combat.attack.phase!=='resolved'){setNotice('Resolve the previous attack before starting another.');return;}
     setSaving(true);
     try{
-      const chosen=campaign.characterIdentity?equippedOrdinaryAttacks(campaign).find(item=>item.id===weapon):undefined;
+      const chosen=campaign.characterIdentity?accessibleOrdinaryAttacks(campaign).find(item=>item.id===weapon):undefined;
       const selected=campaign.characterIdentity?
-        (()=>{if(!chosen)throw Error('The weapon must be equipped and owned.');return prepareOrdinaryWeaponAttack(campaign,chosen.itemId??'unarmed',chosen.mode);})():
+        (()=>{if(!chosen)throw Error('The weapon must be carried and owned.');return prepareOrdinaryWeaponAttack(campaign,chosen.itemId??'unarmed',chosen.mode);})():
         takeDuelTurnAction(campaign,weapon==='shortbow'?'shortbow':weapon==='throw-dagger'?'throw-dagger':'attack');
       const next=rollDuelAttack(selected,'hit');
       await localCampaignStorage.save(next);
@@ -1703,6 +1703,17 @@ export function App() {
       setPendingCombatAction(null);setSelectedWeapon(null);
       setNotice(publicCombatText(next.journal[next.journal.length-1].text));
     }catch(error){setNotice('Combat: '+String(error));}finally{setSaving(false);}
+  }
+  async function stowHeldWeapon(hand:'main'|'off'){
+    if(!campaign||saving)return;
+    setSaving(true);
+    try{
+      const next=stowCombatWeapon(campaign,hand);
+      await localCampaignStorage.save(next);
+      setCampaign(next);setCampaigns(items=>items.map(entry=>entry.id===next.id?next:entry));
+      setSelectedWeapon(null);
+      setNotice(publicCombatText(next.journal[next.journal.length-1].text));
+    }catch(error){setNotice('Stow weapon: '+String(error));}finally{setSaving(false);}
   }
   async function owlAction(action:'help'|'dash'|'disengage'|'dodge'){
     if(!campaign||saving)return;setSaving(true);
@@ -2071,7 +2082,11 @@ export function App() {
     const action=!c.actionUsed&&!c.attack;
     const bonus=!c.bonusActionUsed;
     if(owl) return id==='help'?!!c.owl&&!c.owl.actionUsed: ['dash','disengage','dodge'].includes(id)?!!c.owl&&!c.owl.actionUsed:false;
-    if(id==='attack'||id==='dodge'||id==='ready'||id==='search'||id==='study'||id==='influence')return action;
+    if(id==='attack')return campaign?.characterIdentity?
+      (combatWeaponChoices(c,campaign).choices.some(choice=>choice.eligible)||
+       (!c.objectInteractionUsed&&!!Object.values(combatHeldWeapons(campaign)).find(Boolean))):
+      action;
+    if(id==='dodge'||id==='ready'||id==='search'||id==='study'||id==='influence')return action;
     if(id==='hide')return combatHideStatus(c).available;
     if(id==='dash'||id==='disengage')return action||bonus;
     if(id==='steady-aim')return bonus&&!c.movementUsed;
@@ -2553,7 +2568,8 @@ export function App() {
           <ScenePortal active={sceneMode} targetId="scene-action-panel"><div className={(sceneMode&&!sceneMoreOpen?'scene-choices-only ':'')+(sceneMode?'scene-context-actions ':'')+(sceneMode&&sceneMoreOpen?'grid grid-cols-4 gap-1.5':'grid grid-cols-2 gap-2')} aria-label="2024 D&D actions">
             {([
               ['attack','Attack',activeCombatToken==='owl'?false:campaign.characterIdentity?
-                combatWeaponChoices(campaign.combat!,campaign).choices.some(choice=>choice.eligible):
+                (combatWeaponChoices(campaign.combat!,campaign).choices.some(choice=>choice.eligible)||
+                  (!campaign.combat!.objectInteractionUsed&&!!Object.values(combatHeldWeapons(campaign)).find(Boolean))):
                 !campaign.combat!.actionUsed&&!campaign.combat!.attack],
               ['dash','Dash',activeCombatToken==='owl'?!!campaign.combat!.owl&&!campaign.combat!.owl.actionUsed:(!campaign.combat!.actionUsed&&!campaign.combat!.attack)||!campaign.combat!.bonusActionUsed],
               ['disengage','Disengage',activeCombatToken==='owl'?!!campaign.combat!.owl&&!campaign.combat!.owl.actionUsed:(!campaign.combat!.actionUsed&&!campaign.combat!.attack)||!campaign.combat!.bonusActionUsed],
@@ -2608,7 +2624,11 @@ export function App() {
             {pendingCombatAction==='attack'&&attackChoice!=='weapon'?(()=>{const c=campaign.combat!,p=c.playerPosition??{x:2,y:4},e=c.selectedEnemy==='second'&&c.secondEnemy?c.secondEnemy.position:c.enemyPosition??{x:6,y:4},adjacent=Math.max(Math.abs(p.x-e.x),Math.abs(p.y-e.y))<=1;return <div className="space-y-2"><p className="text-xs text-parchment/70">Unarmed Strike · Target must be within 5 feet.</p>{attackChoice==='shove'?<div className="grid grid-cols-2 gap-2"><button type="button" disabled={saving||!adjacent} className="rounded border border-gold p-2 disabled:opacity-35" onClick={()=>{void performShove('prone');setPendingCombatAction(null);}}>Knock Prone</button><button type="button" disabled={saving||!adjacent} className="rounded border border-gold p-2 disabled:opacity-35" onClick={()=>{void performShove('push');setPendingCombatAction(null);}}>Push 5 ft</button></div>:<button type="button" disabled={saving||!adjacent||(c.selectedEnemy==='second'?!!c.secondEnemy?.grappled:!!c.enemyGrappled)} className="w-full rounded border border-gold p-2 disabled:opacity-35" onClick={()=>{void grappleTest('grapple');setPendingCombatAction(null);}}>Attempt Grapple</button>}</div>;})():pendingCombatAction==='hide'?<p>Roll Stealth against DC 15. Uses your Bonus Action when available, otherwise your Action. Cover and blocked line of sight are required.</p>:pendingCombatAction==='attack'&&attackChoice==='weapon' ? <div className="space-y-2">
               <p className="text-parchment/80">Choose a weapon before confirming your attack.</p>
               {(()=>{const {distance,choices,peek}=combatWeaponChoices(campaign.combat!,campaign);return <>
-                <p className="text-xs text-parchment/70">Target: {distance} ft away. {campaign.characterIdentity?'Only your equipped weapons and unarmed strikes are available. Change equipment on the Character sheet outside combat.':'Dagger throw: 20/60 ft (Disadvantage beyond 20 ft). Unavailable weapons stay visible.'}</p>
+                <p className="text-xs text-parchment/70">Target: {distance} ft away. {campaign.characterIdentity?'Held weapons and reachable carried weapons appear here. The game applies legal draw/stow interactions.':'Dagger throw: 20/60 ft (Disadvantage beyond 20 ft). Unavailable weapons stay visible.'}</p>
+                {campaign.characterIdentity&&(()=>{const hands=combatHeldWeapons(campaign),name=(id?:string)=>ORDINARY_ITEMS.find(item=>item.id===id)?.name??id??'Empty';return <div className="space-y-1" aria-label="Held weapons">
+                  <p className="text-xs text-parchment/80">In hands: {name(hands.main)} · {hands.off?name(hands.off):campaign.encounterLoadout?.shieldId?'Shield':'Empty'}</p>
+                  {!campaign.combat!.objectInteractionUsed&&<div className="flex flex-wrap gap-2">{(['main','off'] as const).filter(hand=>!!hands[hand]).map(hand=><button key={hand} type="button" disabled={saving} className="rounded border border-white/30 px-2 py-1 text-xs disabled:opacity-40" onClick={()=>void stowHeldWeapon(hand)}>Stow {name(hands[hand])}</button>)}</div>}
+                </div>;})()}
                 {peek&&<p className="text-xs text-emerald-300" role="status">Hidden behind cover · Peek and shoot from an open side. The shot reveals your position; no movement is spent.</p>}
                 <div className="grid grid-cols-2 gap-2">{choices.map(choice=><button key={choice.id} type="button"
                   disabled={!choice.eligible} title={choice.reason}
@@ -2618,7 +2638,7 @@ export function App() {
                   <span className={`mt-1 block text-xs font-semibold ${choice.roll==='Advantage'?'text-emerald-300':choice.roll==='Disadvantage'?'text-rose-300':'text-parchment/80'}`}>{choice.roll}</span>
                   {choice.reason&&<span className="mt-1 block text-xs text-parchment/75">{choice.reason}</span>}
                 </button>)}</div>
-                {!choices.some(choice=>choice.eligible)&&<p>No weapon currently available. Check distance and ammunition.</p>}
+                {!choices.some(choice=>choice.eligible)&&<p>No attack available. Check range, ammunition and free hands, or stow a weapon.</p>}
               </>;})()}
             </div> : pendingCombatAction==='attack'?null:<p className="text-parchment/80">{({'steady-aim':'Bonus action · Advantage on your next attack this turn. Your speed becomes 0 until the turn ends.','cunning-dash':'Bonus Action · Gain additional movement equal to your speed.',dash:'Action · Gain additional movement equal to your speed.','cunning-disengage':'Cunning Action · Avoid opportunity attacks this turn.',disengage:'Action · Avoid opportunity attacks this turn.',dodge:'Action · Attacks against you have disadvantage.',end:'End your turn and advance initiative. Any unused action, bonus action, movement, or unfinished attack is forfeited.',search:'Search for clues.',study:'Study a creature or object.',influence:'Attempt to influence a creature.',ready:'Declare a trigger and response.',utilize:'Use equipment.'} as const)[pendingCombatAction]}</p>}
             <div className="grid grid-cols-2 gap-2"><button type="button" disabled={saving} className="rounded-lg border border-white/40 p-2.5" onClick={()=>setPendingCombatAction(null)}>Cancel</button><button type="button" disabled={saving||(pendingCombatAction==='attack'&&(attackChoice!=='weapon'||!selectedWeapon||!combatWeaponChoices(campaign.combat!,campaign).choices.some(choice=>choice.id===selectedWeapon&&choice.eligible)))||(pendingCombatAction==='hide'&&(!canNighthawkHide(campaign.combat!)||(campaign.combat!.bonusActionUsed&&(campaign.combat!.actionUsed||!!campaign.combat!.attack))))} className={`rounded-lg bg-gold p-2.5 font-semibold text-ink disabled:opacity-40 ${pendingCombatAction==='attack'&&attackChoice!=='weapon'?'hidden':''}`} onClick={()=>{if(pendingCombatAction==='hide'){if(!canNighthawkHide(campaign.combat!)){setNotice('Move out of every living enemy’s sight before hiding.');return;}if(campaign.combat!.bonusActionUsed&&(campaign.combat!.actionUsed||!!campaign.combat!.attack)){setNotice('Hide requires an available Action or Bonus Action.');return;}void stealthTest('hide',campaign.combat!.bonusActionUsed?'action':'bonus');setPendingCombatAction(null);}else if(pendingCombatAction==='attack'&&selectedWeapon)void confirmWeaponAttack(selectedWeapon);else void combatAction(pendingCombatAction as Parameters<typeof combatAction>[0]);}}>Confirm</button></div>

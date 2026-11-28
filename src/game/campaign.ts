@@ -16,7 +16,7 @@ import {finishSubclassRest,resolveSubclassDamage,canApplyCondition,selectFiendRe
 import { prototypeNighthawk, abilityModifier, type CharacterStats, type Skill, skillAbility } from './checks';
 import { emptyWorld, mergeWorld, normalizeWorld, type WorldState } from './world';
 import {validBastionState,type BastionState} from './bastion';
-import {ordinaryAttackProfile,equippedOrdinaryAttacks,spendOrdinaryWeaponAmmo,canOrdinaryActionAttack,type OrdinaryAttackMode,type OrdinaryWeaponAttack} from './ordinaryWeaponCombat';
+import {ordinaryAttackProfile,accessibleOrdinaryAttacks,planOrdinaryWeaponAttack,combatHeldWeapons,spendOrdinaryWeaponAmmo,canOrdinaryActionAttack,type OrdinaryAttackMode,type OrdinaryWeaponAttack} from './ordinaryWeaponCombat';
 import {ITEMS} from './creationEquipment';
 export type ClassicAdventureOpponent={id:string;name:string;hp:number;maxHp:number;speed:number;attackBonus:number;damageDice:string;damageModifier:number;ac:number;perceptionBonus?:number;
  /** The printed ranged action, if any. Older saved encounters remain valid. */
@@ -112,7 +112,7 @@ export interface Campaign {
   xpAwards?: { id: string; amount: number; reason: string }[];
   levelOneSnapshot?: { character: CharacterStats; xp: number; xpAwards: { id: string; amount: number; reason: string }[] };
   encounterRecaps?: {id:string;date:string;outcome:string;rounds:number;damage:number;movement:number;attacks:number;hits:number;criticalHits:number;sneakDamage:number;finishingBlows:number}[];
-  combat?: { battlefield?:Battlefield; /** Optional pre-initiative entry choices, never free in-combat movement. */ entryOptions?:{label:string;square:{x:number;y:number}}[]; secondStart?:{x:number;y:number}; owl?:{position:{x:number;y:number};hp:number;movementUsed:number;actionUsed:boolean;helpTarget?:'first'|'second';helpRound?:number}; stats?:{damage:number;movement:number;attacks:number;hits:number;criticalHits:number;sneakDamage:number;finishingBlows:number}; journalStartIndex?:number; status:'awaiting-initiative'|'initiative-set'|'completed'; enemyName:string; enemyInitiative:number; selectedEnemy?:'first'|'second'; secondEnemy?:{name:string;initiative:number;position:{x:number;y:number};hp:number;maxHp:number;detected:boolean;prone?:boolean;grappled?:boolean}; playerInitiative?:number; round:number; order?:string[]; turnIndex?:number; movementUsed?:number; actionUsed?:boolean; objectInteractionUsed?:boolean; bonusActionUsed?:boolean; spellSlotExpendedThisTurn?:boolean; pendingSpellSave?:{spell:'Mind Sliver'|'Tasha’s Hideous Laughter';target:'first'|'second'}; mindSliverPenalty?:{target:'first'|'second';expiresRound:number}; laughterTarget?:'first'|'second'; lastSpellSave?:{spell:string;target:string;roll:number;total:number;dc:number;success:boolean;damage?:number}; lastAction?:string; arrowsRemaining?:number; daggersAvailable?:number; daggersThrown?:number; reactionUsed?:boolean; enemyReactionUsed?:boolean; secondEnemyReactionUsed?:boolean; playerOpportunity?:{route?:{x:number;y:number}[];routeIndex?:number;remainingEnemyIds?:('first'|'second')[];enemyId?:'first'|'second';from:{x:number;y:number};to:{x:number;y:number};cost:number;phase:'roll-to-hit'|'roll-damage'|'resolved';d20?:number;total?:number;hit?:boolean;damage?:number;critical?:boolean}; reactionAttack?:{phase:'roll-to-hit'|'roll-damage'|'resolved';d20?:number;total?:number;hit?:boolean;critical?:boolean;damage?:number}; opportunity?:{from:{x:number;y:number};to:{x:number;y:number}}; attack?:{target?:'first'|'second';trueStrike?:boolean;weapon?:'dagger'|'shortbow';weaponId?:string;attackMode?:OrdinaryAttackMode;weaponSnapshot?:OrdinaryWeaponAttack; thrown?:boolean; disadvantage?:boolean; phase:'roll-to-hit'|'roll-damage'|'resolved'; d20?:number; firstD20?:number; total?:number; hit?:boolean; critical?:boolean; damage?:number; weaponDamageRolls?:number[]; sneakAttackRolls?:number[]; sneakAttackDamage?:number; advantage?:boolean; secondD20?:number}; steadyAim?:boolean; movementAllowance?:number; disengaged?:boolean; enemyHp?:number; enemyMaxHp?:number; outcome?:'nonlethal-victory'|'player-defeated'; enemyLastTurn?:string; trainingStartingHp?:number; playerPosition?:{x:number;y:number}; enemyPosition?:{x:number;y:number}; trainingAllyAdjacent?:boolean; enemyProne?:boolean; enemyGrappled?:boolean; lastGrappleResult?:string; playerProne?:boolean; playerGrappled?:boolean; playerHidden?:boolean; lastKnownPlayerPosition?:{x:number;y:number}; hideRoll?:number; hideTotal?:number; hideResult?:string; enemySearchResult?:string; lastSkillAction?:{action:'Search'|'Study'|'Influence';skill:string;roll:number;total:number;description:string}; readiedAction?:{trigger:string;response:string;declaredRound:number;weapon?:'dagger'|'throw-dagger'|'shortbow';spell?:'Mind Sliver'}; pendingEnemyGrapple?:boolean; pendingPlayerEscape?:boolean; lastPlayerGrappleResult?:string; pendingEnemyShove?:boolean; lastPlayerShoveSave?:string; lastShoveSave?:{passed:boolean;dc:number;outcome:'prone'|'push';effectApplied:boolean}; sneakAttackUsedThisTurn?:boolean; sneakAttackEligible?:boolean;lightAttackWeaponId?:string;attackCountThisTurn?:number;loadingAttackThisAction?:boolean; classicAdventure?:{origin:'dm';actionId?:string;scenarioLocation:string;first:ClassicAdventureOpponent;second?:ClassicAdventureOpponent} };
+  combat?: { battlefield?:Battlefield; /** Optional pre-initiative entry choices, never free in-combat movement. */ entryOptions?:{label:string;square:{x:number;y:number}}[]; secondStart?:{x:number;y:number}; owl?:{position:{x:number;y:number};hp:number;movementUsed:number;actionUsed:boolean;helpTarget?:'first'|'second';helpRound?:number}; stats?:{damage:number;movement:number;attacks:number;hits:number;criticalHits:number;sneakDamage:number;finishingBlows:number}; journalStartIndex?:number; status:'awaiting-initiative'|'initiative-set'|'completed'; enemyName:string; enemyInitiative:number; selectedEnemy?:'first'|'second'; secondEnemy?:{name:string;initiative:number;position:{x:number;y:number};hp:number;maxHp:number;detected:boolean;prone?:boolean;grappled?:boolean}; playerInitiative?:number; round:number; order?:string[]; turnIndex?:number; movementUsed?:number; actionUsed?:boolean; objectInteractionUsed?:boolean; weaponHands?:{main?:string;off?:string}; bonusActionUsed?:boolean; spellSlotExpendedThisTurn?:boolean; pendingSpellSave?:{spell:'Mind Sliver'|'Tasha’s Hideous Laughter';target:'first'|'second'}; mindSliverPenalty?:{target:'first'|'second';expiresRound:number}; laughterTarget?:'first'|'second'; lastSpellSave?:{spell:string;target:string;roll:number;total:number;dc:number;success:boolean;damage?:number}; lastAction?:string; arrowsRemaining?:number; daggersAvailable?:number; daggersThrown?:number; reactionUsed?:boolean; enemyReactionUsed?:boolean; secondEnemyReactionUsed?:boolean; playerOpportunity?:{route?:{x:number;y:number}[];routeIndex?:number;remainingEnemyIds?:('first'|'second')[];enemyId?:'first'|'second';from:{x:number;y:number};to:{x:number;y:number};cost:number;phase:'roll-to-hit'|'roll-damage'|'resolved';d20?:number;total?:number;hit?:boolean;damage?:number;critical?:boolean}; reactionAttack?:{phase:'roll-to-hit'|'roll-damage'|'resolved';d20?:number;total?:number;hit?:boolean;critical?:boolean;damage?:number}; opportunity?:{from:{x:number;y:number};to:{x:number;y:number}}; attack?:{target?:'first'|'second';trueStrike?:boolean;weapon?:'dagger'|'shortbow';weaponId?:string;attackMode?:OrdinaryAttackMode;weaponSnapshot?:OrdinaryWeaponAttack; thrown?:boolean; disadvantage?:boolean; phase:'roll-to-hit'|'roll-damage'|'resolved'; d20?:number; firstD20?:number; total?:number; hit?:boolean; critical?:boolean; damage?:number; weaponDamageRolls?:number[]; sneakAttackRolls?:number[]; sneakAttackDamage?:number; advantage?:boolean; secondD20?:number}; steadyAim?:boolean; movementAllowance?:number; disengaged?:boolean; enemyHp?:number; enemyMaxHp?:number; outcome?:'nonlethal-victory'|'player-defeated'; enemyLastTurn?:string; trainingStartingHp?:number; playerPosition?:{x:number;y:number}; enemyPosition?:{x:number;y:number}; trainingAllyAdjacent?:boolean; enemyProne?:boolean; enemyGrappled?:boolean; lastGrappleResult?:string; playerProne?:boolean; playerGrappled?:boolean; playerHidden?:boolean; lastKnownPlayerPosition?:{x:number;y:number}; hideRoll?:number; hideTotal?:number; hideResult?:string; enemySearchResult?:string; lastSkillAction?:{action:'Search'|'Study'|'Influence';skill:string;roll:number;total:number;description:string}; readiedAction?:{trigger:string;response:string;declaredRound:number;weapon?:'dagger'|'throw-dagger'|'shortbow';spell?:'Mind Sliver'}; pendingEnemyGrapple?:boolean; pendingPlayerEscape?:boolean; lastPlayerGrappleResult?:string; pendingEnemyShove?:boolean; lastPlayerShoveSave?:string; lastShoveSave?:{passed:boolean;dc:number;outcome:'prone'|'push';effectApplied:boolean}; sneakAttackUsedThisTurn?:boolean; sneakAttackEligible?:boolean;lightAttackWeaponId?:string;attackCountThisTurn?:number;loadingAttackThisAction?:boolean; classicAdventure?:{origin:'dm';actionId?:string;scenarioLocation:string;first:ClassicAdventureOpponent;second?:ClassicAdventureOpponent} };
   pendingAftermath?: { opponent: string; playerDefeated: boolean };
   postCombatFollowUp?: import('./postCombatFollowUp').PostCombatFollowUp;
   questPayouts?: import('./encounterRewardResolution').QuestPayout[];
@@ -1300,18 +1300,18 @@ export function advanceDuelTestEnemyTurn(campaign:Campaign):Campaign {
  return {...campaign,concentration:campaign.concentration?.spell==='Readied Mind Sliver'?undefined:campaign.concentration,combat:{...combat,readiedAction:undefined,turnIndex:combat.order.indexOf('Nighthawk'),round:nextRound,movementUsed:0,actionUsed:false,bonusActionUsed:false,lastAction:undefined,attack:undefined},updatedAt:now,journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',text:'TEST ONLY: '+combat.enemyName+' turn skipped without an attack, damage, or other effect. Nighthawk can act again.',createdAt:now}]};
 }
 
-/** Attack through the existing classic battlefield turn/roll engine, using
- * an owned item in the saved loadout (never a sample Rogue loadout). */
+/** Attack through the existing classic battlefield/roll engine, using
+ * an owned weapon in hand or one legally drawn during this attack. */
 export function prepareOrdinaryWeaponAttack(campaign:Campaign,itemId:string,mode:OrdinaryAttackMode):Campaign {
  requireLegacyNighthawk(campaign);
  if(!campaign.characterIdentity)throw Error('Use the original prototype attacks for a prototype character.');
  const c=campaign.combat;
  if(!c||c.status!=='initiative-set'||c.order?.[c.turnIndex??0]!=='Nighthawk')throw Error('Not the player turn.');
  if(c.attack&&c.attack.phase!=='resolved')throw Error('Resolve the previous attack first.');
- const choice=equippedOrdinaryAttacks(campaign).find(item=>item.itemId===itemId&&item.mode===mode||
+ const choice=accessibleOrdinaryAttacks(campaign).find(item=>item.itemId===itemId&&item.mode===mode||
   item.id==='unarmed'&&itemId==='unarmed'&&mode==='unarmed'||
   item.id==='unarmed:monk-bonus'&&itemId==='unarmed'&&mode==='monk-bonus');
- if(!choice)throw Error('Equip and own the weapon before attacking.');
+ if(!choice)throw Error('The weapon must be carried and owned.');
  if(choice.action==='action'&&!canOrdinaryActionAttack(campaign))throw Error('Attack action already exhausted this turn.');
  if(choice.action==='bonus'&&(c.bonusActionUsed||
   choice.mode==='offhand'&&(!c.actionUsed||!c.lightAttackWeaponId||
@@ -1326,15 +1326,17 @@ export function prepareOrdinaryWeaponAttack(campaign:Campaign,itemId:string,mode
  if(choice.ranged&&!firing&&!!c.battlefield)throw Error('No unobstructed line of fire.');
  if(distance>choice.maximumRange)throw Error(choice.name+' is out of range.');
  if(choice.ammoName&&choice.count<=0)throw Error('No '+choice.ammoName+' remaining.');
- if(choice.ammoName&&!!campaign.encounterLoadout?.shieldId)throw Error('A free hand is required to load ammunition. Unequip the shield.');
- if(choice.ammoName&&!!campaign.encounterLoadout?.offhandWeaponId)throw Error('A free hand is required to load ammunition. Stow the other weapon.');
+
  if(choice.mode==='thrown'&&choice.count<=0)throw Error('No '+choice.name+' remaining.');
  if(c.battlefield&&battlefieldCover(c.battlefield,origin,foe)==='total')throw Error('Target has total cover.');
+ const hands=planOrdinaryWeaponAttack(campaign,choice);
+ if(!hands.eligible)throw Error(hands.reason??'Cannot ready this weapon.');
  const original=choice.itemId?ITEMS.find(item=>item.id===choice.itemId):undefined;
  if(choice.action==='action'&&original?.properties?.includes('Loading')&&c.loadingAttackThisAction)
   throw Error('Loading weapons can fire only once with an Attack action.');
  const isLight=choice.action==='action'&&!!original?.properties?.includes('Light');
- const next={...c,actionUsed:choice.action==='action'?true:c.actionUsed,
+ const next={...c,weaponHands:hands.hands,objectInteractionUsed:hands.objectInteractionUsed,
+  actionUsed:choice.action==='action'?true:c.actionUsed,
   bonusActionUsed:choice.action==='bonus'?true:c.bonusActionUsed,
   lightAttackWeaponId:isLight?choice.itemId:c.lightAttackWeaponId,
   attackCountThisTurn:choice.action==='action'?(c.attackCountThisTurn??0)+1:c.attackCountThisTurn,
@@ -1347,7 +1349,29 @@ export function prepareOrdinaryWeaponAttack(campaign:Campaign,itemId:string,mode
  const now=new Date().toISOString();
  return {...campaign,combat:next,updatedAt:now,
   journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',createdAt:now,
-   text:'Prepares '+choice.name+' ('+choice.damageDice+'), '+distance+' ft. Roll to hit.'}]};
+   text:(hands.interactions.length?hands.interactions.join('; ')+'. ':'')+
+    'Prepares '+choice.name+' ('+choice.damageDice+'), '+distance+' ft. Roll to hit.'}]};
+}
+
+/** Stow a currently held weapon as the standard once-per-turn object
+ * interaction. Does not consume the Attack action or a Bonus Action. */
+export function stowCombatWeapon(campaign:Campaign,hand:'main'|'off'):Campaign {
+ requireLegacyNighthawk(campaign);
+ const c=campaign.combat;
+ if(!campaign.characterIdentity||!c||c.status!=='initiative-set'||
+  c.order?.[c.turnIndex??0]!=='Nighthawk')
+  throw Error('You can stow weapons only during your own combat turn.');
+ if(c.objectInteractionUsed)throw Error('Your free object interaction was already used this turn.');
+ if(c.attack&&c.attack.phase!=='resolved')throw Error('Finish the current attack first.');
+ const held=combatHeldWeapons(campaign);
+ const weaponId=held[hand];
+ if(!weaponId)throw Error('There is no weapon in that hand.');
+ const name=ITEMS.find(item=>item.id===weaponId)?.name??weaponId;
+ const now=new Date().toISOString();
+ return {...campaign,combat:{...c,weaponHands:{...held,[hand]:undefined},
+   objectInteractionUsed:true,lastAction:'Stow '+name},updatedAt:now,
+  journal:[...campaign.journal,{id:crypto.randomUUID(),kind:'system',
+   text:'Stows '+name+' using the free object interaction; Attack action remains available.',createdAt:now}]};
 }
 
 export function rollDuelAttack(campaign:Campaign,kind:'hit'|'damage',applySneakAttack?:boolean):Campaign {

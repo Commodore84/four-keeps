@@ -1,6 +1,6 @@
 import { canNighthawkHide, combatRangedFiringPosition, trainingCoverBlocksSight, trainingTerrain, type Campaign } from './campaign';
 import {isConcealedFrom} from './tacticalEnemyAI';
-import {equippedOrdinaryAttacks,canOrdinaryActionAttack} from './ordinaryWeaponCombat';
+import {accessibleOrdinaryAttacks,planOrdinaryWeaponAttack,canOrdinaryActionAttack} from './ordinaryWeaponCombat';
 import {ITEMS} from './creationEquipment';
 
 type Combat = NonNullable<Campaign['combat']>;
@@ -57,9 +57,10 @@ export function combatWeaponChoices(c:Combat,campaign?:Campaign){
  const firing=combatRangedFiringPosition(c,e),origin=firing?.position??p;
  const distance=5*Math.max(Math.abs(origin.x-e.x),Math.abs(origin.y-e.y));
  if(campaign?.characterIdentity){
-  const profiles=equippedOrdinaryAttacks(campaign);
+  const profiles=accessibleOrdinaryAttacks(campaign);
   const actualMeleeDistance=5*Math.max(Math.abs(p.x-e.x),Math.abs(p.y-e.y));
   const choices=profiles.map(profile=>{
+   const handPlan=planOrdinaryWeaponAttack(campaign,profile);
    const range=profile.ranged?distance:actualMeleeDistance;
    const near=range<=5;
    const long=profile.ranged&&range>profile.normalRange;
@@ -78,20 +79,20 @@ export function combatWeaponChoices(c:Combat,campaign?:Campaign){
    const actionBlocked=pending||duplicates||loading||(profile.action==='action'?!canOrdinaryActionAttack(campaign):
     !!c.bonusActionUsed||profile.mode==='offhand'&&(!c.actionUsed||!c.lightAttackWeaponId));
    const missingAmmo=!!profile.ammoName&&profile.count<=0;
-   const needsLoadingHand=!!profile.ammoName&&
-    (!!campaign.encounterLoadout?.shieldId||!!campaign.encounterLoadout?.offhandWeaponId);
+
    const outOfRange=range>profile.maximumRange;
    const coverBlocked=profile.ranged&&!!c.battlefield&&!firing;
    const reason=actionBlocked?'Action not available':
     missingAmmo?'No '+profile.ammoName+' remaining':
-    needsLoadingHand?'A free hand is required to load ammunition':
+    !handPlan.eligible?handPlan.reason:
     outOfRange?'Out of range ('+profile.maximumRange+' ft maximum)':
     coverBlocked?'No clear attack line':
     profile.mode==='thrown'&&profile.count<=0?'No '+profile.name+' remaining':undefined;
    return {id:profile.id,label:profile.name,detail:profile.damageDice+' damage · '+
     (profile.ranged?profile.normalRange+'/'+profile.maximumRange:profile.reach)+' ft'+
     (profile.ammoName?' · 1 '+profile.ammoName:'')+
-    (!profile.proficient?' · Not proficient':''),
+    (!profile.proficient?' · Not proficient':'')+
+    (handPlan.interactions.length?' · '+handPlan.summary:' · Held'),
     roll,eligible:!reason,reason,count:profile.count};
   });
   return {distance,choices,peek:!!firing?.peek};

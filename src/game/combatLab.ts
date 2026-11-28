@@ -121,7 +121,8 @@ export function makeCombatLabEncounter(environment:SoloEncounterId,seed:string,o
      characterIdentity:structuredClone(source.characterIdentity),
      ...(source.characterBuild?{characterBuild:structuredClone(source.characterBuild)}:{}),
      ...(source.equipment?{equipment:structuredClone(source.equipment)}:{}),
-     ...(source.inventoryLedger?{inventoryLedger:structuredClone(source.inventoryLedger)}:{})
+     ...(source.inventoryLedger?{inventoryLedger:structuredClone(source.inventoryLedger)}:{}),
+     ...(source.encounterLoadout?{encounterLoadout:structuredClone(source.encounterLoadout)}:{})
    }:{}),
    adventureSession:{status:'exploring',site:'frontier',characterSource:'campaign-character',
      visited:['frontier'],interactions:[],

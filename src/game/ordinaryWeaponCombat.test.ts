@@ -53,6 +53,10 @@ describe('ordinary weapons use owned, explicitly equipped gear in classic combat
    expect(next.combat?.attack?.weaponSnapshot?.itemId).toBe(item.id);
    expect(next.combat?.attack?.weaponSnapshot?.damageDice).toBe(primary!.damageDice);
    expect(next.combat?.actionUsed).toBe(true);
+   const stowed={...c,encounterLoadout:{},combat:{...c.combat!,weaponHands:{}}};
+   const fromBelt=combatWeaponChoices(stowed.combat!,stowed).choices.find(o=>o.id===primary!.id);
+   expect(fromBelt,item.name+' carried but not held').toBeDefined();
+   expect(fromBelt?.eligible,item.name+' should be drawable for its attack').toBe(true);
   }
  });
  it('does not offer the sample dagger or shortbow to a Monk without those weapons equipped',()=>{
@@ -60,8 +64,8 @@ describe('ordinary weapons use owned, explicitly equipped gear in classic combat
   const choices=combatWeaponChoices(c.combat!,c).choices;
   expect(choices.map(c=>c.id)).toEqual(['unarmed','unarmed:monk-bonus']);
   expect(choices.every(c=>c.eligible)).toBe(true);
-  expect(()=>prepareOrdinaryWeaponAttack(c,'dagger','melee')).toThrow('Equip and own');
-  expect(()=>prepareOrdinaryWeaponAttack(c,'shortbow','ranged')).toThrow('Equip and own');
+  expect(()=>prepareOrdinaryWeaponAttack(c,'dagger','melee')).toThrow('carried and owned');
+  expect(()=>prepareOrdinaryWeaponAttack(c,'shortbow','ranged')).toThrow('carried and owned');
  });
  it('uses Monk Dexterity, Martial Arts dice, and independent Bonus Action unarmed strikes',()=>{
   const c=arena('quarterstaff','monk',1,5);
