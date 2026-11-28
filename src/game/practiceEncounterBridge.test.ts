@@ -53,14 +53,16 @@ describe('reinstated Begin Practice Encounter handoff',()=>{
   expect(restored.combat?.secondEnemy?.hp).toBe(7);
   expect(restored.companionEncounter).toBe(saved.companionEncounter);
  });
- it('preserves existing combats and opens the same classic arena for Fighter and Monk baseline weapon tests',()=>{
+ it('retains real Fighter and Monk encounter paths while enabling only their disposable Combat Lab copies',()=>{
   const source=original();
   const current={...source,combat:{status:'awaiting-initiative',enemyName:'Training Dummy',enemyInitiative:4,round:1}} as Campaign;
   expect(restorePracticeEncounter(current)).toBe(current);
   for(const classId of ['fighter','monk']){
    const imported={...source,characterIdentity:{...source.characterIdentity!,classId}} as Campaign;
-   const converted=restorePracticeEncounter(imported);
-   expect(converted).not.toBe(imported);
+   expect(restorePracticeEncounter(imported)).toBe(imported);
+   const lab={...imported,combatLab:{environment:'warehouse-vermin' as const,seed:'lab-weapon-test',createdAt:'2026-11-28T00:00:00.000Z'}};
+   const converted=restorePracticeEncounter(lab);
+   expect(converted).not.toBe(lab);
    expect(converted.characterIdentity?.classId).toBe(classId);
    expect(converted.combat?.classicAdventure?.origin).toBe('dm');
    expect(converted.combat?.status).toBe('awaiting-initiative');
