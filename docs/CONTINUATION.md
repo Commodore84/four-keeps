@@ -6,11 +6,17 @@ Read this document **before starting any continuation task**. Also read [RELEASE
 
 **Copy this block verbatim into every new Four Keeps continuation prompt or Proceed button, before the feature request:**
 
-> Continue Four Keeps in `Commodore84/four-keeps`. FIRST use the GitHub connection to read `docs/CONTINUATION.md` and `docs/RELEASE_CHECKS.md` from the current working branch. Recover the existing Vercel sandbox `four-keeps-m1-b2` using `get_named_sandbox(resume:true)`; verify its `/vercel/four-keeps` checkout, GitHub connectivity, and available test runner. A local container error such as `Could not resolve host: github.com` is NOT a reason to stop or demand another chat. Preserve dirty work; create an isolated worktree from the verified candidate SHA. If the sandbox is unavailable, investigate alternate Vercel sessions and GitHub-connected execution before reporting a specific blocker. Verify current foundation/candidate SHAs rather than assuming old ones. Run the full required release checks and only publish after exact-SHA CI and Vercel READY. Do not ask me to start another chat because one execution environment failed.
+> Continue Four Keeps in `Commodore84/four-keeps`. FIRST use the GitHub connection to read `docs/CONTINUATION.md` and `docs/RELEASE_CHECKS.md` from the current working branch. Recover the existing Vercel sandbox `four-keeps-m1-b2` using `get_named_sandbox(resume:true)`; verify its `/vercel/four-keeps` checkout, GitHub connectivity, and available test runner. A local container error such as `Could not resolve host: github.com` is NOT a reason to stop or demand another chat. Preserve dirty work; create an isolated worktree from the verified candidate SHA. If the sandbox is unavailable, investigate alternate Vercel sessions and GitHub-connected execution before reporting a specific blocker. Verify current foundation/candidate SHAs rather than assuming old ones. Classify the diff using the current Tier 1/Tier 2 policy in RELEASE_CHECKS.md. For low-risk Tier 1 UI work, use targeted TypeScript/build/Vitest/iPhone checks and exact-SHA Vercel READY without mandatory full CI. For Tier 2 gameplay, persistence, or uncertain-risk work, run the full exact-SHA CI gate and require Vercel READY. Publish only with a protected fast-forward. Do not ask me to start another chat because one execution environment failed.
 
 **Chat capacity warning in every Four Keeps handoff:** Approximately every five user requests (not tool calls), offer an approximate estimate of remaining user requests in the current chat. Distinguish short conversational requests from development-heavy ones, and warn before major development if a fresh chat is safer. Never claim to know exact remaining tokens or a hard request limit. Preserve this instruction in each continuation prompt. This is a conversation-management estimate, not an executable repository check.
 
 **Handoff generator rule:** Never produce a Four Keeps Proceed button or new-chat continuation prompt that omits the preamble above. Keep the exact feature requirements after it. This file is a repository convention; it cannot automatically inject text into ChatGPT messages, so the continuation author must include it explicitly.
+
+## Active risk-based test and release policy (2026-11-28)
+
+**Read [RELEASE_CHECKS.md](RELEASE_CHECKS.md), especially "Current release policy — risk-based tiers", before every development request.** The user explicitly approved a permanent two-tier process to avoid spending approximately 15 minutes on small icon/label/layout work. Use **Tier 1** targeted TypeScript, build, relevant Vitest and iPhone Playwright, screenshot, and READY exact-SHA preview for routine UI changes, then protected fast-forward without full-suite CI. Use **Tier 2** complete exact-SHA release verification for gameplay, persistence, rules, economy, DM/API changes, or uncertain risk. Batch cosmetic work; occasionally run comprehensive integration checks. Documentation-only updates need review and protected promotion, not a full application build.
+
+This policy **supersedes older blanket release-gate instructions in this file**, including historical v29 feature notes. Do not add a full-suite `verify/*` ref for a clearly bounded Tier 1 change just because earlier continuations did so. Preserve all unrelated dirty work and existing systems. Report which tier was used and what tests actually ran.
 
 ## Recover the actual state
 1. Query GitHub for the current HEAD of `feat/clean-app-shell`; never assume a SHA copied from an earlier chat is still current.
@@ -35,12 +41,12 @@ A `Could not resolve host: github.com` error from one shell is **not** proof tha
 ## Development and publication
 - Work on an isolated branch. Audit relevant source, tests and rules once, then implement related changes in substantial batches.
 - Reuse the recovered environment, dependencies, rules research and fixtures. Add regression tests during implementation and run them together with TypeScript after the batch. Retest affected checks when fixing a concrete failure.
-- Use the **full exact-SHA release gate** in RELEASE_CHECKS.md for final regression coverage. Use the authoritative CI run for the full suite and avoid duplicating it locally. Inspect relevant mobile evidence when the UI changes.
+- Apply the **risk-based Tier 1 or Tier 2 release policy** in RELEASE_CHECKS.md. For Tier 2, use the authoritative exact-SHA CI run for the full suite and avoid duplicating it locally. Inspect relevant mobile evidence when the UI changes.
 - Diagnose any failed release check before retrying. Keep the branch isolated and continue through verification and publication. Resolve routine implementation decisions independently.
-- Create only one fresh `verify/*` ref from the finished candidate SHA for a release attempt; inspect full CI, including iPhone Playwright artifacts.
-- Publish by protected, non-forced fast-forward only after successful verification; confirm exact-SHA Vercel READY.
+- For Tier 2, create one fresh `verify/*` ref from the finished candidate SHA; inspect full CI, including iPhone Playwright artifacts. Tier 1 needs no full-suite verification ref.
+- Publish by protected, non-forced fast-forward only after completing the **applicable** tier checks; confirm exact-SHA Vercel READY.
 - Never use a documentation-only GitHub API edit as evidence that runtime behavior has been implemented.
-- If any required check is unavailable or fails, keep changes isolated and report what is done, unverified, and blocked.
+- If any check required **for the chosen tier** is unavailable or fails, keep changes isolated and report what is done, unverified, and blocked.
 
 ## Continuation handoff format
 Every new-chat handoff should include:
