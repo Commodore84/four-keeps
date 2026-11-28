@@ -1,6 +1,7 @@
 import {newCampaign,type Campaign} from './campaign';
 import {reviewCharacter} from './creationReview';
 import {ITEMS} from './creationEquipment';
+import {ammunitionNamesForWeapon} from './weaponAttackProfile';
 import {isHealingPotion} from './healingPotions';
 import {isStrengthPotion} from './temporaryEffects';
 import type {CharacterStats} from './checks';
@@ -104,10 +105,10 @@ export function makeCombatLabEncounter(environment:SoloEncounterId,seed:string,o
  const starting=newCampaign(title,id,now);
  const lab:CombatLabRecord={environment,seed,createdAt:now,...(originCampaignId?{originCampaignId}:{})};
  // Use the same classic combat handoff as real DM-confirmed tactical encounters.
- // Clone a Rogue's sheet/gear into a distinct lab campaign only; do not persist
+ // Clone the actual imported sheet/gear into a distinct lab campaign; do not persist
  // anything back to the source adventure.
  const source=origin&&!origin.combatLab?origin:null;
- const canUseSheet=source?.characterIdentity?.classId==='rogue'&&!!source?.character;
+ const canUseSheet=!!source?.characterIdentity&&!!source.character;
  const staged:Campaign={
    ...starting,combatLab:lab,location:'Combat Lab',
    ...(source?.familiar?{familiar:{...structuredClone(source.familiar),status:'active' as const,hp:1}}:{ }),
@@ -154,4 +155,29 @@ export function replayCombatLabGeometry(record:CombatLabRecord){
  const generated=generateBattlefield(record.environment,record.seed);
  if(!validateGeneratedBattlefield(generated))throw Error('Saved test seed no longer generates a valid battlefield.');
  return generated;
+}
+
+
+/** Test-only weapon selection. Grants the chosen standard item and matching
+ * practice ammunition to the disposable Lab clone, never to its source.
+ * The existing classic encounter, map, and saved combat engine stay intact. */
+export function withCombatLabTrainingWeapon(lab:Campaign,weaponId:string):Campaign{
+ if(!isCombatLab(lab)||!lab.characterIdentity)throw Error('An imported character in Combat Lab is required.');
+ const weapon=ITEMS.find(item=>item.category==='weapon'&&item.id===weaponId);
+ if(!weapon)throw Error('Choose an ordinary catalog weapon.');
+ const ledger=lab.inventoryLedger;
+ if(!ledger)throw Error('Combat Lab inventory is missing.');
+ const gear=ledger.gear.map(row=>({...row}));
+ const ensure=(name:string,minimum:number)=>{
+  const row=gear.find(entry=>entry.name.toLowerCase()===name.toLowerCase());
+  if(row)row.quantity=Math.max(row.quantity,minimum);
+  else gear.push({name,quantity:minimum});
+ };
+ ensure(weapon.name,1);
+ const ammunition=ammunitionNamesForWeapon(weapon);
+ if(ammunition.length)ensure(ammunition[0],20);
+ const twoHanded=weapon.properties?.includes('Two-Handed')||weapon.properties?.includes('Two-Handed unless mounted');
+ return {...lab,inventoryLedger:{...ledger,gear},
+  encounterLoadout:{...lab.encounterLoadout,weaponId:weapon.id,offhandWeaponId:undefined,
+   shieldId:twoHanded||ammunition.length?undefined:lab.encounterLoadout?.shieldId}};
 }

@@ -1899,3 +1899,45 @@ test('Combat Lab shows and resolves a thrown dagger at 30 feet without touching 
  await expect(page.getByText(/Thrown dagger → Training Dummy/)).toHaveCount(0);
  await expect(page.getByLabel('Combat Lab session')).toBeVisible();
 });
+
+test('iPhone Monk Weapon Lab uses actual class and selected ordinary weapon without rewriting adventure',async({page})=>{
+ test.setTimeout(85000);
+ await page.setViewportSize({width:390,height:844});
+ await page.goto('/four-keeps/');
+ await createLegacyCampaign(page,'Monk weapon source');
+ await page.evaluate(async()=>{
+  const db=await new Promise<IDBDatabase>((resolve,reject)=>{
+   const r=indexedDB.open('four-keeps-local',1);
+   r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);
+  });
+  const tx=db.transaction('campaigns','readwrite'),store=tx.objectStore('campaigns');
+  const items=await new Promise<any[]>(resolve=>{const r=store.getAll();r.onsuccess=()=>resolve(r.result);});
+  const c=items[0];
+  c.characterIdentity={name:'Test Monk',classId:'monk',speciesId:'human',backgroundId:'hermit',
+   draftId:'monk-weapon-test',pronouns:'',appearance:'',personality:'',backstory:''};
+  c.character={...c.character,classId:'monk',scores:{...c.character.scores,str:10,dex:16,wis:16},weaponProficiencies:['Simple']};
+  c.inventoryLedger={currency:{CP:0,SP:0,EP:0,GP:0,PP:0},gear:[]};
+  c.encounterLoadout={};
+  store.put(c);
+  await new Promise<void>((resolve,reject)=>{tx.oncomplete=()=>resolve();tx.onerror=()=>reject(tx.error);});
+  db.close();
+ });
+ await page.reload();
+ await page.getByRole('button',{name:'Campaigns',exact:true}).click();
+ await page.getByRole('button',{name:'Continue Adventure'}).click();
+ const [original]=await readAllCampaigns(page);
+ await navigate(page,'Developer');
+ const lab=page.getByLabel('Combat Lab');
+ await expect(lab.getByLabel('Test weapon (optional)')).toBeVisible();
+ await lab.getByLabel('Test weapon (optional)').selectOption('quarterstaff');
+ await page.screenshot({path:'test-results/monk-weapon-lab-developer-iphone.png'});
+ await lab.getByRole('button',{name:'Launch Weapon Test'}).click();
+ await expect(page.getByRole('button',{name:'Roll initiative (d20 + DEX)'})).toBeVisible();
+ const training=await readScopedLab(page,original.id);
+ expect(training.characterIdentity.classId).toBe('monk');
+ expect(training.characterIdentity.name).toBe('Test Monk');
+ expect(training.encounterLoadout.weaponId).toBe('quarterstaff');
+ expect(training.inventoryLedger.gear.some((row:{name:string;quantity:number})=>row.name==='Quarterstaff'&&row.quantity>0)).toBe(true);
+ expect(training.combat.classicAdventure.origin).toBe('dm');
+ expect((await readAllCampaigns(page))[0]).toEqual(original);
+});

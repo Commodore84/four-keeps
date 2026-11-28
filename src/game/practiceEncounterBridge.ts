@@ -7,9 +7,9 @@ import {TACTICAL_PROFILES,type ScenarioActor} from './combatScenario';
  * their saved state into the *existing* Begin Practice Encounter combat.
  * This is deliberately idempotent and never overwrites an active classic fight.
  *
- * The historical practice rules currently support a Rogue and up to two
- * opponents. Unsupported classes/groups stay on their existing engine rather
- * than silently losing actors or abilities.
+ * The classic renderer accepts a player of any class for baseline weapon and
+ * unarmed attacks. Multi-ally and >2-foe encounters remain on their existing
+ * system rather than silently losing actors.
  */
 export function restorePracticeEncounter(campaign:Campaign):Campaign {
  if(campaign.combat||campaign.pendingAftermath||campaign.companionEncounter?.status==='completed')return campaign;
@@ -19,8 +19,6 @@ export function restorePracticeEncounter(campaign:Campaign):Campaign {
  if(!scenario)return campaign;
  const foes=scenario.actors.filter(actor=>actor.side==='enemies');
  if(!foes.length||foes.length>2||scenario.actors.some(actor=>actor.side==='allies'))return campaign;
- const playerClass=recovered.characterIdentity?.classId??recovered.character?.classId??'rogue';
- if(playerClass!=='rogue')return campaign;
  const stored=recovered.companionEncounter;
  const active=!!phase&&stored?.status==='active';
  const initiative=(id:string)=>phase?.initiative.find(entry=>entry.actor===id)?.total

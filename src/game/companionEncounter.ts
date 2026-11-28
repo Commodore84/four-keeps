@@ -1005,9 +1005,9 @@ export function setPlayerLoadout(campaign:Campaign,slot:EquipmentSlot,itemId:str
 
 function validateEquipmentHands(campaign:Campaign,loadout:NonNullable<Campaign['encounterLoadout']>):void {
  const weapon=ITEMS.find(item=>item.id===loadout.weaponId);
- if(loadout.shieldId&&weapon?.properties?.includes('Two-Handed'))throw Error('Unequip the shield or two-handed weapon first.');
+ if(loadout.shieldId&&(weapon?.properties?.includes('Two-Handed')||weapon?.properties?.includes('Two-Handed unless mounted')))throw Error('Unequip the shield or two-handed weapon first.');
  if(ownedMagicWearables(campaign).some(item=>item.worn&&item.id.startsWith('wand-'))&&
-  (weapon?.properties?.includes('Two-Handed')||weapon&&loadout.shieldId))throw Error('Put away the wand first.');
+  ((weapon?.properties?.includes('Two-Handed')||weapon?.properties?.includes('Two-Handed unless mounted'))||weapon&&loadout.shieldId))throw Error('Put away the wand first.');
  if(loadout.offhandWeaponId){
   const offhand=ITEMS.find(item=>item.id===loadout.offhandWeaponId);
   if(loadout.shieldId||!weapon?.properties?.includes('Light')||!offhand?.properties?.includes('Light'))throw Error('A second weapon requires two Light weapons and an available hand.');

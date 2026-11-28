@@ -1,3 +1,4 @@
+import {prepareOrdinaryWeaponAttack} from '../game/campaign';
 import {CombatDeploymentMap} from './CombatDeploymentMap';
 import {BastionPlace} from './BastionPlace';
 import {ExplorationSceneMap} from './ExplorationSceneMap';
@@ -45,7 +46,7 @@ import {frontierMerchantContext} from '../game/frontierShop';
 import {mergeWorld} from '../game/world';
 import {travelAdventure,proposeAdventureEncounter,recoverWarehouseRatEncounter,type AdventureSite} from '../game/adventureSession';
 import {restorePracticeEncounter} from '../game/practiceEncounterBridge';
-import {makeCombatLabEncounter,sampleRandomCombatLab,isCombatLab} from '../game/combatLab';
+import {makeCombatLabEncounter,sampleRandomCombatLab,isCombatLab,withCombatLabTrainingWeapon} from '../game/combatLab';
 import {queuePostCombatFollowUp,recoverPostCombatFollowUp,commitPostCombatFollowUp} from '../game/postCombatFollowUp';
 import {settleClassicVictory,recoverClassicVictoryRewards,claimQuestPayment} from '../game/encounterRewardResolution';
 import {openingIntentForCampaign,prepareAdventureOpening,commitAdventureOpening,needsAdventureOpening,adventureMemory,prepareAdventureAction, pauseAdventureForClarification, answerAdventureClarification,commitAdventureAction} from '../game/adventureOrchestrator';
@@ -64,6 +65,8 @@ import { addExchange, addNote, addRoll, beginDuel, adjustEquipment, rollDuelInit
 import { localCampaignStorage as baseCampaignStorage,subscribeCampaignSaveStatus,type CampaignSaveStatus } from '../game/storage';
 import {createCombatLabSessionStorage} from '../game/combatLabStorage';
 import { availableCombatMovement, combatHideStatus, combatWeaponChoices } from '../game/combat-ui';
+import {equippedOrdinaryAttacks} from '../game/ordinaryWeaponCombat';
+import {ITEMS as ORDINARY_ITEMS} from '../game/creationEquipment';
 import type { View } from '../game/types';
 import { emptyWorld } from '../game/world';
 import { prototypeNighthawk, abilities, abilityModifier, skillAbility, skillModifier, savingThrowModifier, rogueSneakAttackDice, rollCheck, describeCheck, type Skill, type RollMode } from '../game/checks';
@@ -1356,6 +1359,7 @@ export function App() {
     try{const next={...campaign,inventoryLedger:ledger,updatedAt:new Date().toISOString()};await localCampaignStorage.save(next);setCampaign(next);setCampaigns(items=>items.map(entry=>entry.id===next.id?next:entry));}
     catch(error){setNotice('Inventory: '+String(error));}finally{setSaving(false);}
   }
+  const [testWeaponId,setTestWeaponId]=useState('');
   async function generateRandomTestEncounter(){
     if(saving||loading)return;
     setSaving(true);
@@ -1365,7 +1369,8 @@ export function App() {
         :campaign;
       if(!source||isCombatLab(source))throw Error('Select your adventure first.');
       const {environment,seed}=sampleRandomCombatLab(()=>crypto.getRandomValues(new Uint32Array(1))[0]);
-      const next=makeCombatLabEncounter(environment,seed,source);
+      const generated=makeCombatLabEncounter(environment,seed,source);
+      const next=testWeaponId&&source.characterIdentity?withCombatLabTrainingWeapon(generated,testWeaponId):generated;
       // Save under this adventure, without changing its story, HP, inventory or Journal.
       await localCampaignStorage.save(next);
       setCampaign(next);setActiveView('adventure');setPortalScreen('adventure');
@@ -1576,7 +1581,7 @@ export function App() {
   const owlHelpPosition=campaign?.combat?.owl?.position;
   const owlHelpEnemy=activeOwlTarget==='second'?campaign?.combat?.secondEnemy?.position:campaign?.combat?.enemyPosition;
   const owlHelpInRange=owlHelpTargetAlive&&!!owlHelpPosition&&!!owlHelpEnemy&&Math.max(Math.abs(owlHelpPosition.x-owlHelpEnemy.x),Math.abs(owlHelpPosition.y-owlHelpEnemy.y))<=1;
-  const [selectedWeapon,setSelectedWeapon]=useState<'dagger'|'throw-dagger'|'shortbow'|null>(null);
+  const [selectedWeapon,setSelectedWeapon]=useState<string|null>(null);
   const [attackChoice,setAttackChoice]=useState<'weapon'|'shove'|'grapple'>('weapon');
   const [pendingCombatAction,setPendingCombatAction]=useState<'hide'|'attack'|'dodge'|'steady-aim'|'cunning-dash'|'cunning-disengage'|'disengage'|'dash'|'magic'|'utilize'|'search'|'study'|'influence'|'ready'|'end'|null>(null);
   async function repeatLaughterSave(){
@@ -1683,12 +1688,15 @@ export function App() {
       setNotice(publicCombatText(next.journal[next.journal.length-1].text));
     }catch(error){setNotice('Utilize: '+String(error));}finally{setSaving(false);}
   }
-  async function confirmWeaponAttack(weapon:'dagger'|'throw-dagger'|'shortbow'){
+  async function confirmWeaponAttack(weapon:string){
     if(!campaign||saving)return;
-    if(campaign.combat?.actionUsed||campaign.combat?.attack){setNotice('Attack already used this turn. You may still use an available Bonus Action.');setPendingCombatAction(null);return;}
+    if(campaign.combat?.attack&&campaign.combat.attack.phase!=='resolved'){setNotice('Resolve the previous attack before starting another.');return;}
     setSaving(true);
     try{
-      const selected=takeDuelTurnAction(campaign,weapon==='shortbow'?'shortbow':weapon==='throw-dagger'?'throw-dagger':'attack');
+      const chosen=campaign.characterIdentity?equippedOrdinaryAttacks(campaign).find(item=>item.id===weapon):undefined;
+      const selected=campaign.characterIdentity?
+        (()=>{if(!chosen)throw Error('The weapon must be equipped and owned.');return prepareOrdinaryWeaponAttack(campaign,chosen.itemId??'unarmed',chosen.mode);})():
+        takeDuelTurnAction(campaign,weapon==='shortbow'?'shortbow':weapon==='throw-dagger'?'throw-dagger':'attack');
       const next=rollDuelAttack(selected,'hit');
       await localCampaignStorage.save(next);
       setCampaign(next);setCampaigns(items=>items.map(item=>item.id===next.id?next:item));
@@ -2289,11 +2297,19 @@ export function App() {
         </>}
         {activeView === 'development' && <section aria-label="Combat Lab" className="mb-3 rounded-xl border border-gold/35 bg-panel p-3 space-y-2">
           <h2 className="font-serif text-lg">Combat Lab</h2>
-          <p className="text-xs text-parchment/70">A random warehouse, roadside or ruins with varied enemy positions and physical objects. Runs on the main encounter engine, using your Rogue sheet or the prototype Rogue. Test saves never alter your adventure.</p>
-          <button type="button" disabled={saving||loading||!campaign} onClick={()=>void generateRandomTestEncounter()} className="w-full min-h-11 rounded-lg bg-gold px-3 py-2 font-semibold text-ink disabled:opacity-40">Generate Random Encounter</button>
+          <p className="text-xs text-parchment/70">A random warehouse, roadside or ruins with varied enemy positions and physical objects. Runs on the original encounter engine, using your current character and saved equipment. Test saves never alter your adventure.</p>
+          {campaign?.characterIdentity&&<label className="block space-y-1 text-sm" htmlFor="weapon-lab-choice">
+            <span>Test weapon (optional)</span>
+            <select id="weapon-lab-choice" value={testWeaponId} onChange={event=>setTestWeaponId(event.target.value)} className="w-full rounded-lg border border-white/25 bg-ink p-2.5">
+              <option value="">Current equipped loadout</option>
+              {ORDINARY_ITEMS.filter(item=>item.category==='weapon').map(item=><option key={item.id} value={item.id}>{item.name}</option>)}
+            </select>
+            <span className="block text-xs text-parchment/60">A selected weapon and matching ammunition exist only in the disposable test encounter.</span>
+          </label>}
+          <button type="button" disabled={saving||loading||!campaign} onClick={()=>void generateRandomTestEncounter()} className="w-full min-h-11 rounded-lg bg-gold px-3 py-2 font-semibold text-ink disabled:opacity-40">{testWeaponId&&campaign?.characterIdentity?'Launch Weapon Test':'Generate Random Encounter'}</button>
           {campaign?.combatLab&&<div className="space-y-1 text-xs text-parchment/70" aria-label="Current test seed"><p>Active test · {campaign.combatLab.environment.replaceAll('-', ' ')} · Seed: <code>{campaign.combatLab.seed}</code></p></div>}
         </section>}
-        {activeView === 'development' && <details aria-label="Development section" open={!!campaign?.characterIdentity} className="mb-5 rounded-xl border border-white/15 bg-panel p-4">
+        {activeView === 'development' && <details aria-label="Development section" className="mb-5 rounded-xl border border-white/15 bg-panel p-4">
           <summary className="cursor-pointer font-serif text-lg">Legacy tools and diagnostics</summary>
           <div className="mt-4 space-y-4">
         <section className="space-y-4" aria-label="Development tools"><h2 className="font-serif text-2xl">Development tools</h2><p className="text-sm text-parchment/65">Test-only features. Normal adventures and character sheets remain separate.</p><div className="rounded-xl border border-gold/30 bg-panel p-3 space-y-2" aria-label="Legacy campaign creation"><h3 className="font-semibold">Legacy prototype campaign (testing only)</h3><p className="text-xs text-parchment/65">Creates an isolated Nighthawk prototype for legacy regression testing. Normal new adventures require a validated character.</p><label className="block text-sm">New campaign name<input value={newTitle} onChange={event=>setNewTitle(event.target.value)} className="mt-2 w-full rounded-lg border border-white/20 bg-ink p-3"/></label><button type="button" onClick={()=>void createLegacyDevelopmentCampaign()} disabled={saving||loading||!newTitle.trim()} className="rounded-lg bg-gold px-3 py-2 font-semibold text-ink disabled:opacity-40">New</button></div>{content.adventure && cloneElement(content.adventure,{development:true})}{!campaign?.characterIdentity && cloneElement(content.party,{development:true})}</section>
@@ -2525,7 +2541,7 @@ export function App() {
                 {!!campaign.combat.attack.sneakAttackRolls?.length&&<span className="text-xs text-parchment/65">Sneak Attack</span>}
                 {(campaign.combat.attack.sneakAttackRolls??[]).map((die,i)=><span key={i} className="inline-flex min-w-9 justify-center rounded border border-emerald-400/50 bg-emerald-400/10 px-2 py-1 font-semibold text-emerald-200">{die}</span>)}
               </div>
-              <p className="text-sm text-parchment/80">{[...(campaign.combat.attack.weaponDamageRolls??[]),...(campaign.combat.attack.sneakAttackRolls??[])].join(' + ')} + {abilityModifier((campaign.character??prototypeNighthawk).scores.dex)} DEX = <strong>{campaign.combat.attack.damage}</strong></p>
+              <p className="text-sm text-parchment/80">{[...(campaign.combat.attack.weaponDamageRolls??[]),...(campaign.combat.attack.sneakAttackRolls??[])].join(' + ')} + {campaign.combat.attack.weaponSnapshot?.damageModifier??abilityModifier((campaign.character??prototypeNighthawk).scores.dex)} {campaign.combat.attack.weaponSnapshot?'ability modifier':'DEX'}{campaign.combat.attack.sneakAttackDamage?' + '+campaign.combat.attack.sneakAttackDamage+' Sneak Attack':''} = <strong>{campaign.combat.attack.damage}</strong></p>
             </div>}
             {campaign.combat.attack.phase==='roll-to-hit'&&<button type="button" disabled={saving} className="w-full rounded-lg bg-gold p-3 font-semibold text-ink" onClick={()=>void rollCombatAttack('hit')}>Roll Attack</button>}
             {campaign.combat.attack.phase==='roll-damage'&&<button type="button" disabled={saving} className="w-full rounded-lg bg-gold p-3 font-semibold text-ink" onClick={()=>void rollCombatAttack('damage')}>{campaign.combat.sneakAttackEligible?'Roll Damage + Sneak Attack':'Roll Damage'}</button>}
@@ -2536,7 +2552,9 @@ export function App() {
           
           <ScenePortal active={sceneMode} targetId="scene-action-panel"><div className={(sceneMode&&!sceneMoreOpen?'scene-choices-only ':'')+(sceneMode?'scene-context-actions ':'')+(sceneMode&&sceneMoreOpen?'grid grid-cols-4 gap-1.5':'grid grid-cols-2 gap-2')} aria-label="2024 D&D actions">
             {([
-              ['attack','Attack',activeCombatToken==='owl'?false:!campaign.combat!.actionUsed&&!campaign.combat!.attack],
+              ['attack','Attack',activeCombatToken==='owl'?false:campaign.characterIdentity?
+                combatWeaponChoices(campaign.combat!,campaign).choices.some(choice=>choice.eligible):
+                !campaign.combat!.actionUsed&&!campaign.combat!.attack],
               ['dash','Dash',activeCombatToken==='owl'?!!campaign.combat!.owl&&!campaign.combat!.owl.actionUsed:(!campaign.combat!.actionUsed&&!campaign.combat!.attack)||!campaign.combat!.bonusActionUsed],
               ['disengage','Disengage',activeCombatToken==='owl'?!!campaign.combat!.owl&&!campaign.combat!.owl.actionUsed:(!campaign.combat!.actionUsed&&!campaign.combat!.attack)||!campaign.combat!.bonusActionUsed],
               ['dodge','Dodge',activeCombatToken==='owl'?!!campaign.combat!.owl&&!campaign.combat!.owl.actionUsed:!campaign.combat!.actionUsed&&!campaign.combat!.attack],
@@ -2589,8 +2607,8 @@ export function App() {
             {pendingCombatAction==='attack'&&<div className="grid grid-cols-3 gap-2">{(['weapon','shove','grapple'] as const).map(choice=><button key={choice} type="button" className={`rounded border p-2 text-xs ${attackChoice===choice?'border-gold bg-gold/20':'border-white/30'}`} onClick={()=>setAttackChoice(choice)}>{choice==='weapon'?'Weapon':choice==='shove'?'Shove':'Grapple'}</button>)}</div>}
             {pendingCombatAction==='attack'&&attackChoice!=='weapon'?(()=>{const c=campaign.combat!,p=c.playerPosition??{x:2,y:4},e=c.selectedEnemy==='second'&&c.secondEnemy?c.secondEnemy.position:c.enemyPosition??{x:6,y:4},adjacent=Math.max(Math.abs(p.x-e.x),Math.abs(p.y-e.y))<=1;return <div className="space-y-2"><p className="text-xs text-parchment/70">Unarmed Strike · Target must be within 5 feet.</p>{attackChoice==='shove'?<div className="grid grid-cols-2 gap-2"><button type="button" disabled={saving||!adjacent} className="rounded border border-gold p-2 disabled:opacity-35" onClick={()=>{void performShove('prone');setPendingCombatAction(null);}}>Knock Prone</button><button type="button" disabled={saving||!adjacent} className="rounded border border-gold p-2 disabled:opacity-35" onClick={()=>{void performShove('push');setPendingCombatAction(null);}}>Push 5 ft</button></div>:<button type="button" disabled={saving||!adjacent||(c.selectedEnemy==='second'?!!c.secondEnemy?.grappled:!!c.enemyGrappled)} className="w-full rounded border border-gold p-2 disabled:opacity-35" onClick={()=>{void grappleTest('grapple');setPendingCombatAction(null);}}>Attempt Grapple</button>}</div>;})():pendingCombatAction==='hide'?<p>Roll Stealth against DC 15. Uses your Bonus Action when available, otherwise your Action. Cover and blocked line of sight are required.</p>:pendingCombatAction==='attack'&&attackChoice==='weapon' ? <div className="space-y-2">
               <p className="text-parchment/80">Choose a weapon before confirming your attack.</p>
-              {(()=>{const {distance,choices,peek}=combatWeaponChoices(campaign.combat!);return <>
-                <p className="text-xs text-parchment/70">Target: {distance} ft away. Dagger throw: 20/60 ft (Disadvantage beyond 20 ft). Unavailable weapons stay visible.</p>
+              {(()=>{const {distance,choices,peek}=combatWeaponChoices(campaign.combat!,campaign);return <>
+                <p className="text-xs text-parchment/70">Target: {distance} ft away. {campaign.characterIdentity?'Only your equipped weapons and unarmed strikes are available. Change equipment on the Character sheet outside combat.':'Dagger throw: 20/60 ft (Disadvantage beyond 20 ft). Unavailable weapons stay visible.'}</p>
                 {peek&&<p className="text-xs text-emerald-300" role="status">Hidden behind cover · Peek and shoot from an open side. The shot reveals your position; no movement is spent.</p>}
                 <div className="grid grid-cols-2 gap-2">{choices.map(choice=><button key={choice.id} type="button"
                   disabled={!choice.eligible} title={choice.reason}
@@ -2603,7 +2621,7 @@ export function App() {
                 {!choices.some(choice=>choice.eligible)&&<p>No weapon currently available. Check distance and ammunition.</p>}
               </>;})()}
             </div> : pendingCombatAction==='attack'?null:<p className="text-parchment/80">{({'steady-aim':'Bonus action · Advantage on your next attack this turn. Your speed becomes 0 until the turn ends.','cunning-dash':'Bonus Action · Gain additional movement equal to your speed.',dash:'Action · Gain additional movement equal to your speed.','cunning-disengage':'Cunning Action · Avoid opportunity attacks this turn.',disengage:'Action · Avoid opportunity attacks this turn.',dodge:'Action · Attacks against you have disadvantage.',end:'End your turn and advance initiative. Any unused action, bonus action, movement, or unfinished attack is forfeited.',search:'Search for clues.',study:'Study a creature or object.',influence:'Attempt to influence a creature.',ready:'Declare a trigger and response.',utilize:'Use equipment.'} as const)[pendingCombatAction]}</p>}
-            <div className="grid grid-cols-2 gap-2"><button type="button" disabled={saving} className="rounded-lg border border-white/40 p-2.5" onClick={()=>setPendingCombatAction(null)}>Cancel</button><button type="button" disabled={saving||(pendingCombatAction==='attack'&&(attackChoice!=='weapon'||!selectedWeapon||!combatWeaponChoices(campaign.combat!).choices.some(choice=>choice.id===selectedWeapon&&choice.eligible)))||(pendingCombatAction==='hide'&&(!canNighthawkHide(campaign.combat!)||(campaign.combat!.bonusActionUsed&&(campaign.combat!.actionUsed||!!campaign.combat!.attack))))} className={`rounded-lg bg-gold p-2.5 font-semibold text-ink disabled:opacity-40 ${pendingCombatAction==='attack'&&attackChoice!=='weapon'?'hidden':''}`} onClick={()=>{if(pendingCombatAction==='hide'){if(!canNighthawkHide(campaign.combat!)){setNotice('Move out of every living enemy’s sight before hiding.');return;}if(campaign.combat!.bonusActionUsed&&(campaign.combat!.actionUsed||!!campaign.combat!.attack)){setNotice('Hide requires an available Action or Bonus Action.');return;}void stealthTest('hide',campaign.combat!.bonusActionUsed?'action':'bonus');setPendingCombatAction(null);}else if(pendingCombatAction==='attack'&&selectedWeapon)void confirmWeaponAttack(selectedWeapon);else void combatAction(pendingCombatAction as Parameters<typeof combatAction>[0]);}}>Confirm</button></div>
+            <div className="grid grid-cols-2 gap-2"><button type="button" disabled={saving} className="rounded-lg border border-white/40 p-2.5" onClick={()=>setPendingCombatAction(null)}>Cancel</button><button type="button" disabled={saving||(pendingCombatAction==='attack'&&(attackChoice!=='weapon'||!selectedWeapon||!combatWeaponChoices(campaign.combat!,campaign).choices.some(choice=>choice.id===selectedWeapon&&choice.eligible)))||(pendingCombatAction==='hide'&&(!canNighthawkHide(campaign.combat!)||(campaign.combat!.bonusActionUsed&&(campaign.combat!.actionUsed||!!campaign.combat!.attack))))} className={`rounded-lg bg-gold p-2.5 font-semibold text-ink disabled:opacity-40 ${pendingCombatAction==='attack'&&attackChoice!=='weapon'?'hidden':''}`} onClick={()=>{if(pendingCombatAction==='hide'){if(!canNighthawkHide(campaign.combat!)){setNotice('Move out of every living enemy’s sight before hiding.');return;}if(campaign.combat!.bonusActionUsed&&(campaign.combat!.actionUsed||!!campaign.combat!.attack)){setNotice('Hide requires an available Action or Bonus Action.');return;}void stealthTest('hide',campaign.combat!.bonusActionUsed?'action':'bonus');setPendingCombatAction(null);}else if(pendingCombatAction==='attack'&&selectedWeapon)void confirmWeaponAttack(selectedWeapon);else void combatAction(pendingCombatAction as Parameters<typeof combatAction>[0]);}}>Confirm</button></div>
           </div>}
 </div>}</div>)}
           </div></ScenePortal>
